@@ -1,0 +1,121 @@
+/* Copyright (c) Oracle Corporation 1994.  All Rights Reserved */
+
+/*****************************************************************************
+  NAME
+    pdfdoc72.vrf - V3 analysis/product configuration script for the
+	      Windows 95 pdfdoc72 product
+
+  DESCRIPTION
+    This script checks dependencies and environment settings for the
+    installation of the Windows 95 pdfdoc72 product
+	
+  OWNER
+	Bryan Sabol
+
+  MODIFIED	MM/DD/YY	Reason
+	Ctow	  03/14/96  Allow for CD installation of On-Line Documentation
+	LMurphy 08/31/95	Removed parent hierarchy
+	LMurphy 06/01/95	Modified for use with Windows 95 doc10
+	LMurphy 01/24/94        Modified for use with On-Line Help
+  	bsabol	03/21/94	Created
+*****************************************************************************/
+
+{
+        { doit = execute("%installer_home%\%operating_system%.vrf"); }
+	[
+	'UNBOUND_VARIABLE:
+	{
+                if (operating_system == "win95")
+                    required_version = product_version(w95instver);
+                if (operating_system == "nt")
+                    required_version = product_version(ntinstver);
+                if (operating_system == "windows")
+                    required_version = product_version(wininstver);
+		temp = explode(required_version,".");
+		required_version = implode(list(first(temp),first(rest(temp)),
+                                        first(rest(rest(temp))),
+                                        first(rest(rest(rest(temp))))),".");
+		signal('failure,instantiate(nls("instver_too_early1","The version of the Installer currently running is %%installer_version%%. The installation you have chosen requires version %%required_version%% or later. Please run version %%required_version%% or later in order to perform this installation.")));
+	}
+	]
+
+	if (doit)
+	{
+
+		/*****************************
+		Set the VRF-INS script ratchet
+		******************************/
+
+                vrf_ratchet = "1.2.0.0.0";
+
+		permit_retry_operations = FALSE;
+
+		{ install_type = install_type; }
+		['UNBOUND_VARIABLE: install_type = nls("custom_install","Custom Install");]
+
+		{ bundle_name = bundle_name; }
+		['UNBOUND_VARIABLE: bundle_name = "";]
+
+		{ oracle_group_name = oracle_group_name; }
+		['UNBOUND_VARIABLE: oracle_group_name = nls("oracle_group_name","Oracle for Windows 95");] 
+
+                pol_doc_name = nls("pol_doc_name","Oracle Documentation");
+                polite_group_name = "ES Client";
+                installing_scripts = nls("installing_scripts",
+                             "Installing %%product_label%% Scripts...");
+		installing_files = nls("installing_files",
+                             "Installing %%product_label%% Files...");
+		installing_acrobat = nls("installing_files", "Installing Acrobat Installer...");
+		modifying_config = nls("modifying_config",
+                               "Modifying Windows Environment Variables...");
+		registering = nls("registering","Registering %%product_label%%...");
+                install_acrobat = nls("install_acrobat","In order to view Oracle7 Documentation you must separately install Adobe Acrobat Reader.  After exiting this installation, run Adobe's installation program, Acroread.exe, located in the Acrobat directory of your release media.");
+
+		/* Added 3/14/96 to allow for CD installation of online documentation -- ctow */
+
+            prod_size = stringify(sum(doc), TRUE);
+
+            selection_title  = nls("selection_title",  "%%product_label%%");
+            selection_prompt = nls("selection_prompt", "Online documentation requires several megabytes of disk space.%carriage_return%%carriage_return%You can install online documentation files to be read from hard disk or, to conserve disk space, you can install them to be read from CD.%carriage_return%%carriage_return%Choose where you want your documentation files located:");
+            selection_help   = nls("selection_help",   "Selecting CD-ROM will allow you to read %%product_label%% from the CD-ROM drive.%carriage_return%Selecting Hard Drive will install %%product_label%% on your hard drive which requires %%prod_size%% bytes of disk space.%carriage_return%An item may be selected by clicking on the item with the mouse or by moving the cursor to the item and pressing the space bar.");
+
+	
+		install_list = list();
+		add(install_list, "CD-ROM");
+		add(install_list, "Hard Drive (requires %prod_size% bytes)");
+		dflt_install = first(install_list);
+
+		cd_install = single_selection_dialog(instantiate(selection_prompt),
+								 install_list,
+								 dflt_install,
+								 instantiate(selection_title),
+								 instantiate(selection_help));
+
+		if (cd_install == "CD-ROM")
+		{
+			temp_dir = product_location(current_product);
+			pdfdoc_loc = "%product_home%\%temp_dir%";
+			doc1 = "doc";
+			doc2 = "dummy";
+		}
+		else {
+			pdfdoc_loc = "%ORACLE_HOME%\DOC";
+			doc1 = "dummy";
+			doc2 = "doc";
+		}
+		
+		/***************************
+		Return appropriate file size
+		****************************/
+
+		if (cd_install == "CD-ROM")
+			return(sum(deinst, cddoc));
+		else 
+			return(sum(deinst, acroread, doc));
+	}
+	else
+	{
+		refresh_map_file = FALSE;
+		return(0);
+	}
+}
