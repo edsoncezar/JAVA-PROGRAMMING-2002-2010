@@ -1,0 +1,426 @@
+Please visit our sponsor
+    //**************************************
+    // Name: General-Purpose MySQL
+    // Description:Accepts database & hostname from user and then HTTP username and password. Uses this to connect to a MySQL database. Produces a form based on the tables it finds there to allow the user to do SELECTs, INSERTs, and DELETEs. by Jack McKinney
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php_track_vars?>
+    <?
+    # $Header: /usr/local/www/docs/lorentz.com/RCS/mysql.php3,v 1.24 1998/07/28 15:04:13 franklin Exp $
+    #
+    # Author: Jack McKinney jackmc@lorentz.com
+    #
+    # You may redistribute this as long as you leave this attribution in.
+    #
+    # This script accepts a hostname and database name from the user and then
+    # uses HTTP basic authentication to get a username and password from the
+    # user. It tries to connect to the named mysql database on the named host
+    # using the supplied username and password. If it fails, it prompts the
+    # user for a new username and password.
+    #
+    # Once successful, the script queries the database for all tables, and then
+    # queries each table for all fields. It outputs a form that has a section
+    # each each table listing each field.
+    #
+    # The user can then fill in some or all of the fields, and press one of three
+    # supplied buttons, SELECT, INSERT, DELETE, to take an appropriate action.
+    # In using SELECT, there are several special options:
+    #
+    # If the value supplied is prefixed by an <, =, >, or ~, then that specific
+    # comparison is used instead of the default = (~ becomes LIKE).
+    #
+    # If the value begins with a '$', the remainder is taken as a field name
+    # in this or another table (i.e., it is not quoted), so that an inner join or
+    # self-join can be performed.
+    #
+    # FUTURE
+    #
+    # - Limit number of results returned per page.
+    # - Have option to show query as well as results.
+    # - Have option to not perform query (i.e., use above option to preview first)
+    # - Have option to enter own query in a TEXTAREA (preferably combined with
+    #previous option: display query in a TEXTAREA for editing).
+    # - Ability to click on a record and have the original form displayed with
+    #this data filled in (for updates and future inserts).
+    # - Add UPDATE. Hmmm... tricky, tricky, tricky.
+    # - Add a create table interface (probably in a second script).
+    # - Add a place to type in special expressions to select (e.g.,
+    #ROOM.LENGTH*ROOM.WIDTH AS AREA)
+    #
+    function bad_auth()
+    {
+    global $database;
+    Header("WWW-authenticate: basic realm=\"Database ".$database."\"");
+    Header("HTTP/1.0 401 Unauthorized");
+    $title = "Invalid login";
+    echo "<HTML>\n";
+    echo " <HEAD>\n";
+    echo " <TITLE>Authorization Required</TITLE>\n";
+    echo " </HEAD>\n";
+    echo " <BODY BGCOLOR=#FFFFFF TEXT=#000000>\n";
+    echo " I need a username and password with which to access the database.<P>\n";
+    echo " </BODY>\n";
+    echo "</HTML>\n";
+    exit;
+    }
+    $database=$HTTP_POST_VARS["DATABASE"];
+    $hostname=$HTTP_POST_VARS["HOSTNAME"];
+    if(!$database)
+    {
+    ?>
+    <HTML>
+    <HEAD>
+    <TITLE>MySQL/PHP Interface</TITLE>
+    </HEAD>
+    <BODY BGCOLOR=#FFFFFF TEXT=#000000>
+    <CENTER>
+    <FORM ACTION=<? echo $SCRIPT_NAME ?> METHOD=POST>
+    <TABLE>
+    <TR>
+    <TD>Hostname:</TD>
+    <TD><INPUT TYPE=TEXT NAME=HOSTNAME VALUE="localhost" SIZE=40>
+    </TR>
+    <TR>
+    <TD>Database:</TD>
+    <TD><INPUT TYPE=TEXT NAME=DATABASE SIZE=40>
+    </TR>
+    <TR>
+    <TD COLSPAN=2 ALIGN=CENTER><INPUT TYPE=SUBMIT NAME=SHOW VALUE=SHOW></TD>
+    </TR>
+    </TABLE>
+    </FORM>
+    </BODY>
+    </HTML>
+    <?
+    exit;
+    }
+    if(!isset($PHP_AUTH_USER)) bad_auth();
+    $username = $PHP_AUTH_USER;
+    $password = $PHP_AUTH_PW;
+    $dblink = @mysql_pconnect($hostname,$username,$password);
+    if(!$dblink) bad_auth();
+    ?>
+    <HTML>
+    <HEAD>
+    <TITLE><?echo "$database@$hostname"?></TITLE>
+    </HEAD>
+    <BODY BGCOLOR=#FFFFFF TEXT=#000000>
+    <CENTER>
+    <H1><? echo "$database@$hostname" ?></H1>
+    <?
+    $tableh = mysql_list_tables($database);
+    if(!$tableh)
+    {
+    ?> 
+    Could not read list of tables
+    </CENTER>
+    </BODY>
+    </HTML>
+    <?
+    exit;
+    }
+    $tableno = mysql_num_rows($tableh);
+    if(!$tableno)
+    {
+    ?> 
+    MySQL claims this database is empty!
+    </CENTER>
+    </BODY>
+    </HTML>
+    <?
+    exit;
+    }
+    for($i=0;$i<$tableno;$i++)
+    {
+    $table = mysql_tablename($tableh,$i);
+    $fieldh = mysql_list_fields($database,$table);
+    $fieldno = mysql_num_fields($fieldh);
+    for($j=0;$j<$fieldno;$j++)
+    {
+    $name = mysql_field_name($fieldh,$j);
+    $tables[$table][$name]["type"] = mysql_field_type($fieldh,$j);
+    $tables[$table][$name]["len"] = mysql_field_len($fieldh,$j);
+    }
+    mysql_free_result($fieldh);
+    }
+    mysql_free_result($tableh);
+    if($HTTP_POST_VARS["SELECT"]) $command = "SELECT";
+    if($HTTP_POST_VARS["INSERT"]) $command = "INSERT";
+    if($HTTP_POST_VARS["DELETE"]) $command = "DELETE";
+    if($command)
+    {
+    if(!mysql_select_db($database,$dblink))
+    {
+    $error = mysql_error($dblink);
+    ?>
+    <H1><FONT COLOR=#0000AA>MySQL at <? echo $hostname ?> returned an error:</FONT></H1>
+    </CENTER>
+    <FONT COLOR=#DD0000>
+    <PRE>
+    <? echo $error ?>
+    </PRE>
+    </BODY>
+    </HTML>
+    <? 
+    exit;
+    }
+    $parts = $HTTP_POST_VARS["PARTS"];
+    for($part=1;$part <= $parts;$part++)
+    {
+    $ftable = $HTTP_POST_VARS["TABLE".$part];
+    $ffield = $HTTP_POST_VARS["FIELD".$part];
+    $fdatum = $HTTP_POST_VARS["DATUM".$part];
+    $faction = $HTTP_POST_VARS["ACTION".$part];
+    if(strlen($fdatum))
+    {
+    $qdata[$ftable][$ffield] = $fdatum;
+    $kludge[$ftable] = $ftable;
+    if(ereg("^[$]([^$][^.]*).",$fdatum,$re) || ereg("^[<>=~] *[$]([^.]+).",$fdatum,$re))
+    $kludge[$re[1]] = $re[1];
+    }
+    $qaction[$ftable][$ffield] = $faction;
+    }
+    if($qdata)
+    {
+    $tablecount = count($kludge);
+    if($command == "SELECT")
+    {
+    for(reset($kludge);$stable = key($kludge);next($kludge))
+    {
+    $sfields = $qaction[$stable];
+    for(reset($sfields);$sfield = key($sfields);next($sfields))
+    {
+    $action = $sfields[$sfield];
+    if($tablecount > 1) $sfield = "$stable.$sfield";
+    if($action != "IGNORE" && $select) $select .= ",";
+    if($action == "SELECT") $select .= $sfield;
+    if($action == "DISTINCT") $select .= "DISTINCT $sfield";
+    if($action == "ORDERBY")
+    {
+    $select .= $sfield;
+    if($orderby) $orderby .= ",";
+    $orderby .= $sfield;
+    }
+    if($action == "SUM") $select .= "sum($sfield)";
+    if($action == "COUNT") $select .= "count($sfield)";
+    if($action == "AVG") $select .= "avg($sfield)";
+    if($action == "MIN") $select .= "min($sfield)";
+    if($action == "MAX") $select .= "max($sfield)";
+    }
+    }
+    }
+    if($command == "SELECT" || $command == "DELETE")
+    {
+    for(reset($qdata);$qtable = key($qdata);next($qdata))
+    {
+    if($command == "DELETE")
+    {
+    $from = $qtable;
+    $where = "";
+    }
+    $qfields = $qdata[$qtable];
+    for(reset($qfields);$qfield = key($qfields);next($qfields))
+    {
+    $cmp = "=";
+    $qdatum = $qfields[$qfield];
+    # ereg_replace("''","''''",$qdatum);
+    if(ereg("^([<>=~]) +(.*)",$qdatum,$re))
+    {
+    $cmp = $re[1];
+    if($cmp == "~") $cmp = "LIKE";
+    $qdatum = $re[2];
+    }
+    if($command == "SELECT" && ereg("^[$]([^$].*)",$qdatum,$re))
+    {
+    $qdatum = $re[1];
+    if($tablecount > 1 && !ereg("\.",$qdatum))
+    $qdatum = "$qtable.$qdatum";
+    }
+    else
+    if($tables[$qtable][$qfield]["type"] != "int")
+    {
+    $qdatum = "'$qdatum'";
+    }
+    if($tablecount > 1) $qfield = "$qtable.$qfield";
+    if($where) $where .= "\n AND ";
+    $where .= "$qfield $cmp $qdatum";
+    }
+    if($command == "DELETE")
+    $query .= "DELETE FROM $qtable WHERE $where\n\n";
+    }
+    if($command == "SELECT")
+    {
+    $from = join($kludge,",");
+    $query = "SELECT $select\nFROM $from\nWHERE $where\n";
+    if($orderby) $query .= "ORDER BY $orderby\n";
+    }
+    }
+    else if($command == "INSERT")
+    {
+    for(reset($qdata);$qtable = key($qdata);next($qdata))
+    {
+    $qfields = $qdata[$qtable];
+    for(reset($qfields);$qfield = key($qfields);next($qfields))
+    {
+    $qdatum = $qfields[$qfield];
+    if($tables[$qtable][$qfield]["type"] != "int")
+    $qdatum = "'$qdatum'";
+    if($columns) $columns .= ",";
+    $columns .= $qfield;
+    if($values) $values .= ",";
+    $values .= $qdatum;
+    }
+    $query .= "INSERT INTO $qtable ($columns)\nVALUES ($values)\n\n";
+    }
+    }
+    echo "<TABLE><TR><TD><PRE>$query</PRE></TD></TR></TABLE>\n";
+    $start = microtime();
+    $result = mysql_query($query,$dblink);
+    $end = microtime();
+    $start = explode(" ",$start);
+    $end = explode(" ",$end);
+    $interval = round(0.5 + 1000*($end[1]-$start[1] + $end[0]-$start[0]));
+    if(!$result)
+    {
+    $error = mysql_error($dblink);
+    ?> 
+    <H1><FONT COLOR=#0000AA>MySQL at <? echo $hostname ?> returned an error:</FONT></H1>
+    </CENTER>
+    <FONT COLOR=#DD0000>
+    <PRE>
+    <? echo $error ?>
+    </PRE>
+    </BODY>
+    </HTML>
+    <?
+    exit;
+    }
+    if($command == "SELECT")
+    {
+    $colno = mysql_num_fields($result);
+    $rowno = mysql_num_rows($result);
+    if($rowno != 1) $s = "s";
+    echo "<TABLE BORDER>\n <TR>\n";
+    echo " <TR><TD COLSPAN=$colno ALIGN=CENTER>$rowno result$s, $interval msec</TD></TR>\n";
+    for($i=0;$i<$colno;$i++)
+    {
+    $name = mysql_field_name($result,$i);
+    echo " <TD><B>$name</B></TD>\n";
+    }
+    echo " </TR>\n";
+    while($rowno--)
+    {
+    echo " <TR>\n";
+    $row = mysql_fetch_row($result);
+    for($i=0;$i<$colno;$i++)
+    {
+    $value = $row[$i];
+    if(!$value) $value = "&nbsp;";
+    echo " <TD>$value</TD>\n";
+    }
+    echo " </TR>\n";
+    }
+    echo "</TABLE>\n";
+    }
+    else
+    {
+    if($command == "INSERT") $action = "added";
+    if($command == "DELETE") $action = "deleted";
+    $rows = mysql_affected_rows($dblink);
+    $s = "s";
+    if($rows == 1) $s = "";
+    echo "$rows row$s $action, $interval msec";
+    }
+    }
+    ?>
+    </CENTER>
+    </BODY>
+    </HTML>
+    <?
+    exit;
+    }
+    ?> 
+    <FORM ACTION=<? echo $SCRIPT_NAME ?> METHOD=POST>
+    <INPUT TYPE=HIDDEN NAME=DATABASE VALUE="<? echo $database ?>">
+    <INPUT TYPE=HIDDEN NAME=HOSTNAME VALUE="<? echo $hostname ?>">
+    <?
+    $parts = 0;
+    for(reset($tables);$table = key($tables);next($tables))
+    {
+    echo "<HR>\n";
+    echo "<TABLE>\n";
+    echo " <TR>\n";
+    echo " <TD COLSPAN=3 ALIGN=CENTER><B>$table</TD>\n";
+    echo " </TR>\n";
+    $fields = $tables[$table];
+    for(reset($fields); $field = key($fields); next($fields))
+    {
+    $type = $fields[$field]["type"];
+    $len = $fields[$field]["len"];
+    $parts++;
+    echo " <TR>\n";
+    echo " <TD>$field</TD>\n";
+    ?>
+    <TD>
+    <SELECT NAME=ACTION<? echo $parts ?>>
+    <OPTION VALUE=SELECT SELECTED>Select
+    <OPTION VALUE=DISTINCT>Select Distinct
+    <OPTION VALUE=ORDERBY>Order By
+    <OPTION VALUE=SUM>sum()
+    <OPTION VALUE=COUNT>count()
+    <OPTION VALUE=AVG>avg()
+    <OPTION VALUE=MIN>min()
+    <OPTION VALUE=MAX>max()
+    <OPTION VALUE=IGNORE>Don't Select
+    </SELECT>
+    </TD>
+    <? 
+    if($type == "int" || $type == "real")
+    {
+    $size=10;
+    $maxlength=40;
+    }
+    else if($type == "string")
+    {
+    $size = $len;
+    if($size > 40) $size = 40;
+    $maxlength = $len;
+    $type .= "[".$len."]";
+    }
+    echo " <TD>\n";
+    echo "<INPUT TYPE=HIDDEN NAME=FIELD$parts VALUE='$field'>\n";
+    echo "<INPUT TYPE=HIDDEN NAME=TABLE$parts VALUE='$table'>\n";
+    echo "<INPUT TYPE=TEXT NAME=DATUM$parts SIZE=$size MAXLENGTH=$maxlength>\n";
+    echo " </TD>\n";
+    echo " <TD><I>(".$type.")</I></TD>\n";
+    echo " </TR>\n";
+    }
+    echo " </TABLE>\n";
+    }
+    ?> 
+    <HR>
+    <TABLE>
+    <TR>
+    <TD><INPUT TYPE=SUBMIT NAME=SELECT VALUE="Select"></TD>
+    <TD><INPUT TYPE=SUBMIT NAME=INSERT VALUE="Insert"></TD>
+    <TD><INPUT TYPE=SUBMIT NAME=DELETE VALUE="Delete"></TD>
+    </TR>
+    </TABLE>
+    </CENTER>
+    <INPUT TYPE=HIDDEN NAME=PARTS VALUE=<? echo $parts ?>>
+    </FORM>
+    </BODY>
+    </HTML>
+
+		
+

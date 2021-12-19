@@ -1,0 +1,82 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.planet-source-code.com/vb/scripts/ShowCodeAsText.asp?txtCodeId=326&lngWId=5 -->
+<HTML><HEAD>
+<META http-equiv=Content-Type content="text/html; charset=windows-1252">
+<META content="MSHTML 5.50.4134.100" name=GENERATOR></HEAD>
+<BODY><XMP>--**************************************
+-- Name: Concatenate Strings
+-- Description:Construct ntext field which is comming like a description field for E-Commerce Products Table for Mas90 users.
+-- By: Dumitru Radu
+--
+--
+-- Inputs:None
+--
+-- Returns:None
+--
+--Assumes:In Mas90 database client-server manager the extended description table has the following structure: 
+WEBEXT (WebExtendedDescriptiontable)
+ItemNumbervarchar(15),
+SequenceNumbervarchar(10),
+CommentText varchar(100)
+where description text is divided into many lines, each having the same ItemNumber and incremented SequenceNumber, depend how long is the description, each having 100 characters.
+The purpose is to get all rows into one longdescription field ntext type into the WEBIM table. Necessary fields are:
+WEBIM (WebInventoryManagementTable)
+ItemNumber varchar(15),
+LongDescription ntext
+--
+--Side Effects:None
+--This code is copyrighted and has limited warranties.
+--Please see http://www.Planet-Source-Code.com/xq/ASP/txtCodeId.326/lngWId.5/qx/vb/scripts/ShowCode.htm
+--for details.
+--**************************************
+
+CREATE PROC pWebExt
+as
+DECLARE
+@ItemNumber varchar(15),
+@ItemNumberID int,
+@MaxItemNumberID int,
+@CommentText varchar(3000),
+@SeqNumberID int,
+@MaxSeqNumber int
+/* create temporary index for loop*/
+CREATE TABLE #AllItemNumber (
+		ItemNumberID int IDENTITY(1,1) NOT NULL,
+		ItemNumber varchar(25)
+		)
+INSERT #AllItemNumber (ItemNumber)
+SELECT DISTINCT ITEM_NUMBE as ItemNumber
+FROM WEBEXT 
+ORDER BY ITEM_NUMBE
+/*set the min and max for loop*/
+SET @ItemNumberID = 1
+SET @MaxItemNumberID = (SELECT MAX(ItemNumberID) FROM #AllItemNumber) 
+
+
+    BEGIN TRAN
+    WHILE @ItemNumberID < @MaxItemNumberID + 1
+    	BEGIN
+    		SET @ItemNumber = (SELECT ItemNumber FROM #AllItemNumber WHERE ItemNumberID = @ItemNumberID)
+    		IF @@rowcount = 1
+    			BEGIN
+    /*next loop for sequence*/
+    			SET @SeqNumberID = 1
+    			SET @MaxSeqNumber = (SELECT MAX(SEQ_NUMBER) FROM WEBEXT WHERE ITEM_NUMBE = @ItemNumber)
+    				SET @CommentText = ''
+    				WHILE @SeqNumberID <= @MaxSeqNumber
+    				BEGIN
+    					SET @CommentText = @CommentText + (SELECT COMMENT_TE from WEBEXT WHERE ITEM_NUMBE = @ItemNumber AND CAST(SEQ_NUMBER as INT) = @SeqNumberID)
+    					SET @SeqNumberID = @SeqNumberID + 1
+    				END
+    				UPDATE WEBIM 
+    /*remove some unnecessary extra characters used for CrLf in Mas90*/
+    				SET EXTEND_DESC = REPLACE(@CommentText,'~;~',' ')
+    				WHERE ITEM_NUMBE = @ItemNumber
+    				PRINT @ItemNumberID
+    			END
+    		SET @ItemNumberID = @ItemNumberID + 1 
+    	END
+    COMMIT TRAN
+    DROP TABLE #AllItemNumber
+
+		</XMP></BODY></HTML>

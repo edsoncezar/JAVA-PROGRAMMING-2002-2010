@@ -1,0 +1,291 @@
+            File Information
+
+            Verifying link...
+
+            Register Your DAP
+
+Please visit our sponsor
+    //**************************************
+    // Name: SQLAdmin for PHP3
+    // Description:SQL Administration User Interface for the Web. by Alessandro Vernet
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?
+    /***************************************************************************
+    *SQLAdmin v2.0 - An SQL Administration User Interface for the Web *
+    * Copyright (C) 1997-98 Alessandro Vernet <avernet@scdi.org>*
+    ***************************************************************************
+    *This library is free software; you can redistribute it and/or *
+    *modify it under the terms of the GNU Library General Public*
+    *License as published by the Free Software Foundation; either *
+    *version 2 of the License, or (at your option) any later version. *
+    * *
+    *This library is distributed in the hope that it will be useful,*
+    *but WITHOUT ANY WARRANTY; without even the implied warranty of*
+    *MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU *
+    *Library General Public License for more details. *
+    * *
+    *You should have received a copy of the GNU Library General Public *
+    *License along with this library; if not, write to the *
+    *Free Software Foundation, Inc., 59 Temple Place - Suite 330, *
+    *Boston, MA 02111-1307, USA. *
+    ***************************************************************************/
+    /* TODO:
+    * - Add sort order.
+    * - Add simple view.
+    * - Add some documentation.
+    */
+    /* LIMITATIONS:
+    * - Works only with mSQL.
+    */
+    /* HISTORY:
+    * - 97-11-05 (avernet) Corrected a bug with quote.
+    * - 98-01-01 (avernet) Added a sortColumn parameter to
+    *administrationTable function.
+    * - 98-03-14 (avernet) Added function addTable to enable users to
+    *add (but not modify) en entry to the database.
+    * - 98-05-19 (avernet) Submitted to PX.
+    * - 98-10-11 (avernet) Now SQLAdmin works with PHP3. The PHP2 version
+    *will not be mainteained anymore.
+    * - 98-10-11 (avernet) SQLAdmin is now distributed under the LGPL
+    *instead of MPL.
+    */
+    function escapeforhtml ($string)
+    {
+    $result = $string;
+    $result = ereg_replace ("\"", "&quot;", $result);
+    $result = ereg_replace ("<", "&lt;", $result);
+    $result = ereg_replace (">", "&gt;", $result);
+    return $result;
+    }
+    function displayTuple ($fieldsNumber, $fieldNames,
+    $fieldLengths, $values, $mode)
+    {
+    $result = "";
+    $result .= "<FORM METHOD=\"post\"><TABLE BORDER><TR>" .
+    "<TD BGCOLOR=\"#CCCCFF\">";
+    $result .= "<TABLE CELLSPACING=\"0\" CELLPADDING=\"0\">";
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $result .= "<TR><TD>" . $fieldNames [$fieldIndex] . "</TD><TD>";
+    if ($fieldLengths [$fieldIndex] <= 128)
+    {
+    $result .= "<INPUT TYPE=\"text\" NAME=\"" .
+    $fieldNames [$fieldIndex] . "\" VALUE=\"" .
+    $values [$fieldIndex] . "\" SIZE=\"64\">";
+    }
+    else
+    {
+    $result .= "<TEXTAREA NAME=\"" .
+    $fieldNames [$fieldIndex] . "\"" .
+    " COLS=\"64\" ROWS=\"10\" WRAP=\"virtual\">" .
+    escapeforhtml ($values [$fieldIndex]) . "</TEXTAREA>";
+    }
+    $result .= "<INPUT TYPE=\"hidden\" NAME=\"old-" .
+    $fieldNames [$fieldIndex] .
+    "\" VALUE=\"" . escapeforhtml ($values [$fieldIndex]) . "\">" .
+    "</TD></TR>";
+    $fieldIndex++;
+    }
+    $result .= "<TR><TD ALIGN=\"center\" COLSPAN=\"2\">";
+    if ($mode == "modify")
+    {
+    $result .= "<INPUT TYPE=\"submit\" NAME=\"remove\" VALUE=\"Remove\">";
+    $result .= "<INPUT TYPE=\"submit\" NAME=\"update\" VALUE=\"Update\">";
+    }
+    else
+    { $result .= "<INPUT TYPE=\"submit\" NAME=\"add\" VALUE=\"Add\">"; }
+    $result .= "</TABLE></TD></TR></TABLE></FORM>";
+    return $result;
+    }
+    function fieldFromType ($text, $type)
+    {
+    if ($type == "int" || $type == "uint" || $type =="real")
+    { $result = $text; }
+    else
+    { $result = "'" . AddSlashes ($text) . "'"; }
+    return $result;
+    }
+    function executeMsql ($database, $command)
+    {
+    /*echo "<TT>" . $command . "</TT><HR>";*/
+    msql ($database, $command);
+    }
+    function handleRemove ($database, $table, $fieldsNumber,
+    $fieldNames, $fieldLengths, $fieldTypes)
+    {
+    global $remove;
+    if ($remove != "")
+    {
+    $command = "DELETE FROM " . $table . " WHERE ";
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $fieldName = "old-" . $fieldNames [$fieldIndex];
+    global $$fieldName;
+    $command .= $fieldNames [$fieldIndex] . "=" .
+    fieldFromType ($$fieldName, $fieldTypes [$fieldIndex]);
+    if ($fieldIndex != $fieldsNumber - 1)
+    { $command .= " AND "; }
+    $fieldIndex++;
+    }
+    executeMsql ($database, $command);
+    }
+    }
+    function handleUpdate ($database, $table, $fieldsNumber,
+    $fieldNames, $fieldLengths, $fieldTypes)
+    {
+    global $update;
+    if ($update != "")
+    {
+    $command = "UPDATE " . $table . " SET ";
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $fieldName = $fieldNames [$fieldIndex];
+    global $$fieldName;
+    $command .= $fieldName . "=" .
+    fieldFromType ($$fieldName, $fieldTypes [$fieldIndex]);
+    if ($fieldIndex != $fieldsNumber - 1)
+    { $command .= ", "; }
+    $fieldIndex++;
+    }
+    $command .= " WHERE ";
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $fieldName = "old-" . $fieldNames [$fieldIndex];
+    global $$fieldName;
+    $command .= $fieldNames [$fieldIndex] . "=" .
+    fieldFromType ($$fieldName, $fieldTypes [$fieldIndex]);
+    if ($fieldIndex != $fieldsNumber - 1)
+    { $command .= " AND "; }
+    $fieldIndex++;
+    }
+    executeMsql ($database, $command);
+    }
+    }
+    function handleAdd ($database, $table, $fieldsNumber,
+    $fieldNames, $fieldLengths, $fieldTypes)
+    {
+    global $add;
+    if ($add != "")
+    {
+    $command = "INSERT INTO " . $table . " (";
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $command .= $fieldNames [$fieldIndex];
+    if ($fieldIndex != $fieldsNumber - 1)
+    { $command .= ", "; }
+    $fieldIndex++;
+    }
+    $command .= ") VALUES (";
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $fieldName = $fieldNames [$fieldIndex];
+    global $$fieldName;
+    $command .= fieldFromType ($$fieldName, $fieldTypes [$fieldIndex]);
+    if ($fieldIndex != $fieldsNumber - 1)
+    { $command .= ", "; }
+    $fieldIndex++;
+    }
+    $command .= ")";
+    executeMsql ($database, $command);
+    }
+    }
+    function displayRemoveUpdate ($database, $table, $sortColumn,
+    $fieldsNumber, $fieldNames, $fieldLengths)
+    {
+    $result = "";
+    if ($sortColumn != "")
+    { $sortColumn = " ORDER BY " . $sortColumn; }
+    $msqlresult = msql ($database, "SELECT * FROM " . $table . $sortColumn);
+    $tuplesNumber = msql_numrows ($msqlresult);
+    $tupleIndex = 0;
+    while ($tupleIndex < $tuplesNumber)
+    {
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $values [$fieldIndex] = msql_result ($msqlresult, $tupleIndex,
+    $fieldNames [$fieldIndex]);
+    $fieldIndex++;
+    }
+    $result .= displayTuple ($fieldsNumber, $fieldNames,
+    $fieldLengths, $values, "modify");
+    $tupleIndex++;
+    }
+    return $result;
+    }
+    function displayAdd ($fieldsNumber, $fieldNames, $fieldLengths)
+    {
+    $result = "";
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $values [$fieldIndex] = "";
+    $fieldIndex++;
+    }
+    $result .= displayTuple ($fieldsNumber, $fieldNames,
+    $fieldLengths, $values, "add");
+    msql_close ();
+    return $result;
+    }
+    function administrationTable ($database, $table, $sortColumn)
+    {
+    $result = "";
+    msql_connect ("localhost");
+    $msqlresult = msql ($database, "SELECT * FROM " . $table);
+    $fieldsNumber = msql_numfields ($msqlresult); 
+    $msqlresult = msql_listfields ($database, $table);
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $fieldNames [$fieldIndex] = msql_fieldname ($msqlresult, $fieldIndex);
+    $fieldLengths [$fieldIndex] = msql_fieldlen ($msqlresult, $fieldIndex);
+    $fieldTypes [$fieldIndex] = msql_fieldtype ($msqlresult, $fieldIndex);
+    $fieldIndex++;
+    }
+    handleRemove ($database, $table, $fieldsNumber, $fieldNames, $fieldLengths, $fieldTypes);
+    handleUpdate ($database, $table, $fieldsNumber, $fieldNames, $fieldLengths, $fieldTypes);
+    handleAdd ($database, $table, $fieldsNumber, $fieldNames, $fieldLengths, $fieldTypes);
+    $result .= displayRemoveUpdate ($database, $table, $sortColumn, $fieldsNumber, $fieldNames, $fieldLengths);
+    $result .= displayAdd ($fieldsNumber, $fieldNames, $fieldLengths);
+    return $result;
+    }
+    function addTable ($database, $table)
+    {
+    $result = "";
+    msql_connect ("localhost");
+    $msqlresult = msql ($database, "SELECT * FROM " . $table);
+    $fieldsNumber = msql_numfields ($msqlresult); 
+    $msqlresult = msql_listfields ($database, $table);
+    $fieldIndex = 0;
+    while ($fieldIndex < $fieldsNumber)
+    {
+    $fieldNames [$fieldIndex] = msql_fieldname ($msqlresult, $fieldIndex);
+    $fieldLengths [$fieldIndex] = msql_fieldlen ($msqlresult, $fieldIndex);
+    $fieldTypes [$fieldIndex] = msql_fieldtype ($msqlresult, $fieldIndex);
+    $fieldIndex++;
+    }
+    handleAdd ($database, $table, $fieldsNumber, $fieldNames, $fieldLengths, $fieldTypes);
+    $result .= displayAdd ($fieldsNumber, $fieldNames, $fieldLengths);
+    return $result;
+    }
+    ?>
+
+		
+

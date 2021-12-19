@@ -1,0 +1,1384 @@
+<HTML>
+<HEAD>
+<TITLE>Day 18 -- Multithreading</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Day&nbsp;18</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Multithreading</FONT></H1>
+<P>
+<I><B>by Charles L. Perkins and Michael Morrison</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#ThreadFundamentals">
+Thread Fundamentals</A>
+<LI><A HREF="#TheProblemwithParallelism">
+The Problem with Parallelism</A>
+<LI><A HREF="#ThinkingMultithreaded">
+Thinking Multithreaded</A>
+<UL>
+<LI><A HREF="#PointsAboutPoints">
+Points About Points</A>
+<LI><A HREF="#ProtectingaClassVariable">
+Protecting a Class Variable</A>
+</UL>
+<LI><A HREF="#CreatingandUsingThreads">
+Creating and Using Threads</A>
+<UL>
+<LI><A HREF="#TheTTFONTSIZEFACECourierRunnableFONTTTFONTSIZEInterfaceFONT">
+The <TT>Runnable</TT>
+Interface</FONT></A>
+<LI><A HREF="#TTFONTSIZEFACECourierThreadTesterFONTTT">
+<TT>ThreadTester</TT></A>
+<LI><A HREF="#TTFONTSIZEFACECourierNamedThreadTesterFONTTT">
+<TT>NamedThreadTester</TT>
+</A>
+</UL>
+<LI><A HREF="#KnowingWhenaThreadHasStopped">
+Knowing When a Thread Has Stopped</A>
+<LI><A HREF="#ThreadScheduling">
+Thread Scheduling</A>
+<UL>
+<LI><A HREF="#PreemptiveVersusNonpreemptive">
+Preemptive Versus Nonpreemptive</A>
+<LI><A HREF="#TestingYourScheduler">
+Testing Your Scheduler</A>
+</UL>
+<LI><A HREF="#Summary">
+Summary</A>
+<LI><A HREF="#QampABR">
+Q&amp;A<BR>
+</A>
+</UL>
+
+<HR>
+<P>
+One of the major features in the Java programming environment
+and runtime system is the multithreaded architecture shared by
+both. Multithreading, which is a fairly recent construct in the
+computer science world, is a very powerful means of enhancing
+and controlling program execution. Today's lesson takes a look
+at how the Java language supports multithreading through the use
+of threads. You'll learn all about the different classes that
+enable Java to be a threaded language, along with many of the
+issues surrounding the effective use of threads.
+<P>
+To better understand the importance of threads, imagine that you're
+using your favorite text editor on a large file. When it starts
+up, does it need to examine the entire file before it lets you
+begin editing? Does it need to make a copy of the file? If the
+file is huge, this can be a nightmare. Wouldn't it be nicer for
+it to show you the first page, allowing you to begin editing,
+and somehow (in the background) complete the slower tasks necessary
+for initialization? Threads allow exactly this kind of within-the-program
+parallelism.
+<P>
+Perhaps the best example of threading (or lack of it) is a Web
+browser. Can your browser download an indefinite number of files
+and Web pages at once while still enabling you to continue browsing?
+While these pages are downloading, can your browser download all
+the pictures, sounds, and so forth in parallel, interleaving the
+fast and slow download times of multiple Internet servers? Multithreaded
+browsers can do all these things by virtue of their internal usage
+of threads.
+<P>
+Today you'll learn about the following primary issues surrounding
+threads:
+<UL>
+<LI>Thread fundamentals
+<LI>How to &quot;think multithreaded&quot;
+<LI>How to protect your methods and variables from unintended
+thread conflicts
+<LI>How to create, start, and stop threads and threaded classes
+<LI>How the scheduler works in Java
+</UL>
+<P>
+Let's begin today's lesson by defining what a thread is.
+<H2><A NAME="ThreadFundamentals"><FONT SIZE=5 COLOR=#FF0000>
+Thread Fundamentals</FONT></A></H2>
+<P>
+The multithreading support in Java revolves around the concept
+of a thread. So what exactly is a thread? Put simply, a <I>thread</I>
+is a single stream of execution within a process. Okay, maybe
+that wasn't so simple. It might be better to start off by explaining
+exactly what a process is. A <I>process</I> is a program executing
+within its own address space. Java is a multiprocessing system,
+meaning that it supports many processes running concurrently in
+their own address spaces. You may be more familiar with the term
+multitasking, which describes a scenario very similar to multiprocessing.
+As an example, consider the variety of applications typically
+running at once in a graphical environment. Most Windows 95 users
+typically run a variety of applications together at once, such
+as Microsoft Word, CD Player, Windows Messaging, Volume Control,
+and of course Solitaire. These applications are all processes
+executing within the Windows 95 environment. So you can think
+of processes as being analogous to applications, or standalone
+programs; each process in a system is given its own space in memory
+to execute.
+<P>
+<UL>
+<li>A <I>process</I> is a program executing within its own address
+space.<BR>
+<li>A <I>thread</I> is a single stream of execution within a process.
+</ul>
+<P>
+A thread is a sequence of code executing within the context of
+a process. As a matter of fact, threads cannot execute on their
+own; they require the overhead of a parent process to run. Within
+each of the processes typically running, there are no doubt a
+variety of threads executing. For example, Word may have a thread
+in the background automatically checking the spelling of what
+is being written, while another thread may be automatically saving
+changes to the document. Like Word, each application (process)
+can be running many threads that are performing any number of
+tasks. The significance here is that threads are always associated
+with a particular process.
+<P>
+Judging by the fact that I've described threads and processes
+using Windows 95 as an example, you've probably guessed that Java
+isn't the first system to employ the use of threads. That's true,
+but Java is the first major programming language to incorporate
+threads at the heart of the language itself. Typically, threads
+are implemented at the system level, requiring a platform-specific
+programming interface separate from the core programming language.
+Since Java is presented as both a language and a runtime system,
+the Sun architects were able to integrate threads into both. The
+end result is that you are able to make use of Java threads in
+a standard, cross-platform fashion.
+<H2><A NAME="TheProblemwithParallelism"><FONT SIZE=5 COLOR=#FF0000>
+The Problem with Parallelism</FONT></A></H2>
+<P>
+If threading is so wonderful, why doesn't every system have it?
+Many modern operating systems have the basic primitives needed
+to create and run threads, but they are missing a key ingredient:
+The rest of their environment is not <I>thread safe</I>. A thread-safe
+environment is one that allows threads to safely coexist with
+each other peacefully. Imagine that you are in a thread, one of
+many, and each of you is sharing some important data managed by
+the system. If you were managing that data, you could take steps
+to protect it (as you'll see later today), but the system is managing
+it. Now visualize a piece of code in the system that reads some
+crucial value, thinks about it for a while, and then adds <TT>1</TT>
+to the value:
+<BLOCKQUOTE>
+<PRE>
+if (crucialValue &gt; 0) {
+    . . .                 // think about what to do
+    crucialValue += 1;
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Remember that any number of threads may be calling on this part
+of the system at once. The disaster occurs when two threads have
+both executed the <TT>if</TT> test
+before either has incremented <TT>crucialValue</TT>.
+In that case, the value is clobbered by them both with the same
+<TT>crucialValue += 1</TT>, and one
+of the increments has been lost. This may not seem so bad on the
+surface, but imagine if the crucial value affects the state of
+the screen as it is being displayed. Now, unfortunate ordering
+of the threads can cause the screen to be updated incorrectly.
+In the same way, mouse or keyboard events can be lost, databases
+can be inaccurately updated, and general havoc can ensue.
+<P>
+This disaster is inescapable if any significant part of the system
+has not been written with threads in mind. Therein lies the reason
+why there are few mainstream threaded environments-the large effort
+required to rewrite existing libraries for thread safety. Luckily,
+Java was written from scratch with this is mind, and every Java
+class in its library is thread safe. Thus, you now have to worry
+only about your own synchronization and thread-ordering problems
+because you can assume that the Java system will do the right
+thing.
+<P>
+Synchronized sections of code are called <I>critical sections</I>,
+implying that access to them is critical to the successful threaded
+execution of the program. Critical sections are also sometimes
+referred to as <I>atomic operations</I>, meaning that they appear
+to other threads as if they occur at once. In other words, just
+as an atom is a discrete unit of matter, atomic operations effectively
+act like a discrete operation to other threads, even though they
+may really contain many operations inside.
+<P>
+<I>Critical sections</I>, or <I>atomic operations</I>, are synchronized
+sections of code that appear to happen &quot;all at once&quot;-exactly
+at the same time-to other threads. This results in only one thread
+being able to access code in a critical section at a time.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Some readers may wonder what the fundamental problem really is. Can't you just make the <TT>...</TT> area in the previous example smaller and smaller to reduce or eliminate the problem? Without atomic operations, the answer is no. Even if the <TT>...</TT> 
+took zero time, you must first look at the value of some variable to make any decision and then change something to reflect that decision. These two steps can never be made to happen at the same time without an atomic operation. Unless you're given one by 
+the system, it's literally impossible to create your own.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Even the one line <TT>crucialValue += 1</TT> involves three steps: get the current value, add one to it, and store it back. (Using <TT>++crucialValue</TT> doesn't help either.) All three steps need to happen &quot;all at once&quot; (atomically) to be safe. 
+Special Java primitives, at the lowest levels of the language, provide you with the basic atomic operations you need to build safe, threaded programs.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="ThinkingMultithreaded"><FONT SIZE=5 COLOR=#FF0000>
+Thinking Multithreaded</FONT></A></H2>
+<P>
+Getting used to threads takes a little while and a new way of
+thinking. Rather than imagining that you always know exactly what's
+happening when you look at a method you've written, you have to
+ask yourself some additional questions. What will happen if more
+than one thread calls into this method at the same time? Do you
+need to protect it in some way? What about your class as a whole?
+Are you assuming that only one of its methods is running at the
+same time?
+<P>
+Often you make such assumptions, and a local instance variable
+will be messed up as a result. Since common wisdom dictates that
+we learn from our mistakes, let's make a few mistakes and then
+try to correct them. First, here's the simplest case:
+<BLOCKQUOTE>
+<PRE>
+public class ThreadCounter {
+    int crucialValue;
+
+    public void countMe() {
+        crucialValue += 1;
+    }
+
+    public int howMany() {
+        return crucialValue;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+This code shows a class used to count threads that suffers from
+the most pure form of the &quot;synchronization problem&quot;:
+The <TT>+=</TT> takes more than one
+step, and you may miscount the number of threads as a result.
+(Don't worry about how threads are created yet; just imagine that
+a whole bunch of them are able to call <TT>countMe()</TT>,
+at once, but at slightly different times.) Java allows you to
+fix this situation:
+<BLOCKQUOTE>
+<PRE>
+public class SafeThreadCounter {
+    int crucialValue;
+
+    public synchronized void countMe() {
+        crucialValue += 1;
+    }
+
+    public int howMany() {
+        return crucialValue;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>synchronized</TT> keyword
+tells Java to make the block of code in the method thread safe.
+This means that only one thread will be allowed inside this method
+at once, and others will have to wait until the currently running
+thread is finished with it before they can begin running it. This
+implies that synchronizing a large, long-running method is almost
+always a bad idea. All your threads would end up stuck at this
+bottleneck, waiting single file to get their turn at this one
+slow method.
+<P>
+It's even worse than you might think for unsynchronized variables.
+Because the compiler can keep them around in CPU registers during
+computations, and a thread's registers can't be seen by other
+threads, a variable can be updated in such a way that <I>no possible
+order</I> of thread updates could have produced the result. This
+is completely incomprehensible to the programmer, but it can happen.
+To avoid this bizarre case, you can label a variable <TT>volatile</TT>,
+meaning that you know it will be updated asynchronously by multiprocessor-like
+threads. Java then loads and stores it each time it's needed and
+does not use CPU registers.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+All variables are assumed to be thread safe unless you specifically mark them as <TT>volatile</TT>. Keep in mind that using <TT>volatile</TT> is an extremely rare event. In fact, in the 1.0.2 release, the Java API does not use <TT>volatile</TT> anywhere.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="PointsAboutPoints">
+Points About Points</A></H3>
+<P>
+The method <TT>howMany()</TT> in the
+last example doesn't need to be synchronized because it simply
+returns the current value of an instance variable. A method higher
+in the call chain-one that uses the value returned from <TT>howMany()</TT>-
+may need to be synchronized, though. Listing 18.1 contains an
+example of a thread in need of this type of synchronization.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.1. The </B><TT><B>Point</B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+ 1: public class Point {      //redefines class Point from package java.awt
+ 2:     private float x, y;   //OK since we're in a different package here
+ 3: 
+ 4:     public float x() {        // needs no synchronization
+ 5:         return x;
+ 6:     }
+ 7: 
+ 8:     public float y() {        // ditto
+ 9:         return y;
+10:     }
+11:     . . .    // methods to set and change x and y
+12: }
+13: 
+14: public class UnsafePointPrinter {
+15:     public void print(Point p) {
+16:         System.out.println(&quot;The point's x is &quot; + p.x()
+17:                                 + &quot; and y is &quot; + p.y() + &quot;.&quot;);
+18:     }
+19: }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The methods analogous to <TT>howMany()</TT>
+are <TT>x()</TT> and <TT>y()</TT>.
+They need no synchronization because they just return the values
+of member variables. It is the responsibility of the caller of
+<TT>x()</TT> and <TT>y()</TT>
+to decide whether it needs to synchronize itself-and in this case,
+it does. Although the method <TT>print()</TT>
+simply reads values and prints them out, it reads <I>two</I> values.
+This means that there is a chance that some other thread, running
+between the call to <TT>p.x()</TT>
+and the call to <TT>p.y()</TT>, could
+have changed the value of <TT>x</TT>
+and <TT>y</TT> stored inside the <TT>Point
+p</TT>. Remember, you don't know how many other threads
+have a way to reach and call methods in this <TT>Point</TT>
+object! &quot;Thinking multithreaded&quot; comes down to being
+careful any time you make an assumption that something has <I>not</I>
+happened between two parts of your program (even two parts of
+the same line, or the same expression, such as the string <TT>+</TT>
+expression in this example).
+<H4><TT>TryAgainPointPrinter</TT>
+</H4>
+<P>
+You could try to make a safe version of <TT>print()</TT>
+by simply adding the <TT>synchronized</TT>
+keyword modifier to it, but instead, let's try a slightly different
+approach:
+<BLOCKQUOTE>
+<PRE>
+public class TryAgainPointPrinter {
+    public void print(Point p) {
+        float safeX, safeY;
+
+        synchronized(this) {
+            safeX = p.x();     // these two lines now
+            safeY = p.y();     // happen atomically
+        }
+        System.out.print(&quot;The point's x is &quot; + safeX
+                                  + &quot; y is &quot; + safeY);
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>synchronized</TT> statement
+takes an argument that says what object you would like to lock
+to prevent more than one thread from executing the enclosed block
+of code at the same time. Here, you use <TT>this</TT>
+(the instance itself), which is exactly the object that would
+have been locked by the <TT>synchronized</TT>
+method as a whole if you had changed <TT>print()</TT>
+to be like your safe <TT>countMe()</TT>
+method. You have an added bonus with this new form of synchronization:
+You can specify exactly what part of a method needs to be safe,
+and the rest can be left unsafe.
+<P>
+Notice how you took advantage of this freedom to make the protected
+part of the method as small as possible, while leaving the <TT>String</TT>
+creations, concatenations, and printing (which together take a
+small but finite amount of time) outside the &quot;protected&quot;
+area. This is both good style (as a guide to the reader of your
+code) and more efficient, because fewer threads get stuck waiting
+to get into protected areas.
+<H4><TT>SafePointPrinter</TT></H4>
+<P>
+The astute reader, though, may still be worried by the last example.
+It seems as if you made sure that no one executes <I>your</I>
+calls to <TT>x()</TT> and <TT>y()</TT>
+out of order, but have you prevented the <TT>Point
+p</TT> from changing out from under you? If the answer
+is no, you still have not completely solved the problem. It turns
+out that you really do need the full power of the <TT>synchronized</TT>
+statement:
+<BLOCKQUOTE>
+<PRE>
+public class SafePointPrinter {
+    public void print(Point p) {
+        float safeX, safeY;
+
+        synchronized(p) {     // no one can change p
+            safeX = p.x();    // while these two lines
+            safeY = p.y();    // are happening atomically
+        }
+        System.out.print(&quot;The point's x is &quot; + safeX
+                                  + &quot; y is &quot; + safeY);
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Now you've got it! You actually needed to protect the <TT>Point
+p</TT> from changes, so you lock it by providing it as
+the argument to your <TT>synchronized</TT>
+statement. Now when <TT>x()</TT> and
+<TT>y()</TT> are called together,
+they can be sure to get the current <TT>x</TT>
+and <TT>y</TT> of the <TT>Point
+p</TT>, without any other thread being able to call a modifying
+method between. You're still assuming, however, that the <TT>Point
+p</TT> has properly protected <I>itself</I>. You can always
+assume this about system classes-but <I>you</I> wrote this <TT>Point</TT>
+class. You can make sure it's okay by writing the only method
+that can change <TT>x</TT> and <TT>y</TT>
+inside <TT>p</TT> yourself:
+<BLOCKQUOTE>
+<PRE>
+public class  Point {
+    private float x, y;
+
+    . . .        // the x() and y() methods
+
+    public synchronized void setXAndY(float  newX,  float  newY) {
+        x = newX;
+        y = newY;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+By making <TT>synchronized</TT> the
+only &quot;set&quot; method in <TT>Point</TT>,
+you guarantee that any other thread trying to grab the <TT>Point
+p</TT> and change it out from under you has to wait. You've
+locked the <TT>Point</TT> <TT>p</TT>
+with your <TT>synchronized(p)</TT>
+statement, and any other thread has to lock the same <TT>Point</TT>
+<TT>p</TT> via the implicit <TT>synchronized(this)</TT>
+statement that is executed when <TT>p</TT>
+enters <TT>setXAndY()</TT>. So at
+last you are thread safe.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+By the way, if Java had some way of returning more than one value at once, you could write a <TT>synchronized getXAndY()</TT> method for <TT>Point</TT> that returns both values safely. In the current Java language, such a method could return a new, unique 
+<TT>Point</TT> to guarantee to its callers that no one else has a copy that might be changed. This sort of trick can be used to minimize the parts of the system that need to worry about synchronization.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="ProtectingaClassVariable">
+Protecting a Class Variable</A></H3>
+<P>
+Suppose you want a class variable to collect some information
+across all a class's instances:
+<BLOCKQUOTE>
+<PRE>
+public class StaticCounter {
+    private static int crucialValue;
+
+    public synchronized void countMe() {
+        crucialValue += 1;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Is this safe? If <TT>crucialValue</TT>
+were an instance variable, it would be. Because it's a class variable,
+however, and there is only one copy of it for all instances; you
+can still have multiple threads modifying it by using different
+<I>instances</I> of the class. (Remember that the <TT>synchronized</TT>
+modifier locks the <TT>this</TT> object-an
+instance.) Luckily, you now know the technique required to solve
+this:
+<BLOCKQUOTE>
+<PRE>
+public class StaticCounter {
+    private static int crucialValue;
+
+    public void countMe() {
+        synchronized(getClass()) {   // can't directly name StaticCounter
+            crucialValue += 1;       // the (shared) class is now locked
+        }
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The trick is to &quot;lock&quot; on a different object-not on
+an instance of the class, but on the class itself. Because a class
+variable is &quot;inside&quot; a class, just as an instance variable
+is inside an instance, this shouldn't be all that unexpected.
+In a similar way, classes can provide global resources that any
+instance (or other class) can access directly by using the class
+name and lock by using that same class name. In the last example,
+<TT>crucialValue</TT> was used from
+within an instance of <TT>StaticCounter</TT>,
+but if <TT>crucialValue</TT> were
+declared <TT>public</TT> instead,
+from anywhere in the program, it would be safe to say the following:
+<BLOCKQUOTE>
+<PRE>
+synchronized(Class.forName(&quot;StaticCounter&quot;)) {
+    StaticCounter.crucialValue += 1;
+}<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The direct use of another class's (object's) member variable is really bad style-it's used here simply to demonstrate a point quickly. <TT>StaticCounter</TT> would normally provide a <TT>countMe()</TT>-like class method of its own to do this sort of dirty 
+work.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+You can now begin to appreciate how much work the Java team has
+done for you by thinking all these hard thoughts for each and
+every class (and method!) in the Java class library.
+<H2><A NAME="CreatingandUsingThreads"><FONT SIZE=5 COLOR=#FF0000>
+Creating and Using Threads</FONT></A></H2>
+<P>
+Now that you understand the power (and the dangers) of having
+many threads running at once, how are those threads actually created?
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Warning</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The system itself always has a few daemon</FONT> threads</FONT> running, one of which is constantly doing the tedious task of garbage collection for you in the background. There is also a main user thread that listens for events from your mouse and 
+keyboard. If you're not careful, you can sometimes lock up this main thread. If you do, no events are sent to your program and it appears to be dead. A good rule of thumb is that whenever you're doing something that can</FONT> be done in a separate thread, 
+it probably should</FONT> be. Threads in Java are relatively cheap to create, run, and destroy, so don't use them too sparingly.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Because there is a class <TT>java.lang.Thread</TT>,
+you might guess that you could create a thread of your own by
+subclassing it-and you are right:
+<BLOCKQUOTE>
+<PRE>
+public class MyFirstThread extends Thread { // a.k.a., java.lang.Thread
+    public void run() {
+        . . .              // do something useful
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+You now have a new type of thread called <TT>MyFirstThread</TT>,
+which does something useful when its <TT>run()</TT>
+method is called. Of course, no one has created this thread or
+called its <TT>run()</TT> method,
+so at this point it is just a class eager to become a thread.
+To actually create and run an instance of your new thread class,
+you write the following:
+<BLOCKQUOTE>
+<PRE>
+MyFirstThread aMFT = new MyFirstThread();
+aMFT.start();    // calls our run() method
+</PRE>
+</BLOCKQUOTE>
+<P>
+What could be simpler? You create a new instance of your thread
+class and then ask it to start running. Whenever you want to stop
+the thread, you do this:
+<BLOCKQUOTE>
+<PRE>
+aMFT.stop();
+</PRE>
+</BLOCKQUOTE>
+<P>
+Besides responding to <TT>start()</TT>
+and <TT>stop()</TT>, a thread can
+also be temporarily suspended and later resumed:
+<BLOCKQUOTE>
+<PRE>
+Thread  t = new Thread();
+t.suspend();
+. . .         // do something special while t isn't running
+t.resume();
+</PRE>
+</BLOCKQUOTE>
+<P>
+A thread will automatically <TT>suspend()</TT>
+and then <TT>resume()</TT> when it's
+first blocked at a synchronized point and then later unblocked
+(when it's that thread's &quot;turn&quot; to run).
+<H3><A NAME="TheTTFONTSIZEFACECourierRunnableFONTTTFONTSIZEInterfaceFONT">
+The <TT>Runnable</TT>
+Interface</FONT></A></H3>
+<P>
+This is all well and good if every time you want to create a thread
+you have the luxury of being able to place it under the <TT>Thread</TT>
+class in the single-inheritance Java class tree. But what if it
+more naturally belongs under some other class, from which it needs
+to inherit most of its implementation? The interfaces you learned
+about on <A HREF="ch16.htm">Day 16</A>, &quot;Packages and Interfaces,&quot; come to
+the rescue:
+<BLOCKQUOTE>
+<PRE>
+public class MySecondThread extends ImportantClass implements Runnable {
+    public void run() {
+        . . .              // do something useful
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+By implementing the interface <TT>Runnable</TT>,
+you declare your intention to run in a separate thread. In fact,
+the <TT>Thread</TT> class is itself
+an implementation of this interface, as you might expect from
+the design discussions on <A HREF="ch16.htm">Day 16</A>. As you also might guess from
+the example, the <TT>Runnable</TT>
+interface defines only one method: <TT>run()</TT>.
+As in <TT>MyFirstThread</TT>, you
+expect someone to create an instance of a thread and somehow call
+your <TT>run()</TT> method. Here's
+how this is accomplished using the interface approach to thread
+creation:
+<BLOCKQUOTE>
+<PRE>
+MySecondThread  aMST = new MySecondThread();
+Thread          aThread = new Thread(aMST);
+aThread.start();   // calls our run() method, indirectly
+</PRE>
+</BLOCKQUOTE>
+<P>
+First, you create an instance of <TT>MySecondThread</TT>.
+Then, by passing this instance to the constructor creating the
+new thread, you make it the target of that thread. Whenever that
+new thread starts up, its <TT>run()</TT>
+method calls the <TT>run()</TT> method
+of the target it was given (assumed by the thread to be an object
+that implements the <TT>Runnable</TT>
+interface). When <TT>start()</TT>
+is called on <TT>aThread</TT>, your
+<TT>run()</TT> method is indirectly
+called. You can stop <TT>aThread</TT>
+with <TT>stop()</TT>. If you don't
+need to use the <TT>Thread</TT> object
+or instance of <TT>MySecondThread</TT>
+explicitly, here's a one-line shortcut:
+<BLOCKQUOTE>
+<PRE>
+new Thread(new MySecondThread()).start();<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+As you can see, the class name <TT>MySecondThread</TT> is a bit of a misnomer-it does not descend from <TT>Thread</TT>, nor is it actually the thread that you <TT>start()</TT> and <TT>stop()</TT>. It could have been called <TT>MySecondThreadedClass</TT> or 
+<TT>ImportantRunnableClass</TT> to be more clear on this point.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="TTFONTSIZEFACECourierThreadTesterFONTTT">
+<TT>ThreadTester</TT></A></H3>
+<P>
+Listing 18.2 contains a longer example of creating and using threads.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.2. The </B><TT><B>SimpleRunnable</B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+ 1: public class SimpleRunnable implements Runnable {
+ 2:     public void run() {
+ 3:         System.out.println(&quot;in thread named '&quot;
+ 4:                              + Thread.currentThread().getName() + &quot;'&quot;);
+ 5:     }  // any other methods run() calls are in current thread as well
+ 6: }
+ 7: 
+ 8: public class ThreadTester {
+ 9:     public static void main(String argv[]) {
+10:         SimpleRunnable aSR = new SimpleRunnable();
+11: 
+12:         while (true) {
+13:             Thread t = new Thread(aSR);
+14: 
+15:             System.out.println(&quot;new Thread() &quot; + (t == null ?
+16:                                              &quot;fail&quot; : &quot;succeed&quot;) + &quot;ed.&quot;);
+17:             t.start();
+18:             try { t.join(); } catch (InterruptedException ignored) { }
+19:                          // waits for thread to finish its run() method
+20:         }
+21:     }
+22: }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You may be worried that only one instance of the class <TT>SimpleRunnable</TT> is created, but many new threads are using it. Don't they get confused? Remember to separate in your mind the <TT>aSR</TT> instance (and the methods it understands) from the 
+various threads of execution that can pass through it. <TT>aSR</TT>'s methods provide a template for execution, and the multiple threads created are sharing that template. Each remembers where it is executing and whatever else it needs to make it distinct 
+from the other running threads. They all share the same instance and the same methods. That's why you need to be so careful, when adding synchronization, to imagine numerous threads running rampant over each of your methods.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The class method <TT>currentThread()</TT>
+can be called to get the thread in which a method is currently
+executing. If the <TT>SimpleRunnable</TT>
+class were a subclass of <TT>Thread</TT>,
+its methods would know the answer already (<I>it</I> is the thread
+running). Because <TT>SimpleRunnable</TT>
+simply implements the interface <TT>Runnable</TT>,
+however, and counts on someone else (<TT>ThreadTester</TT>'s
+<TT>main()</TT>) to create the thread,
+its <TT>run()</TT> method needs another
+way to get its hands on that thread. Often, you'll be deep inside
+methods called by your <TT>run()</TT>
+method when suddenly you need to get the current thread. The class
+method shown in the example works, no matter where you are.
+<P>
+The example then calls <TT>getName()</TT>
+on the current thread to get the thread's name (usually something
+helpful, such as <TT>Thread-23</TT>)
+so it can tell the world in which thread <TT>run()</TT>
+is running. The final thing to note is the use of the method <TT>join()</TT>,
+which, when sent to a thread, means &quot;I'm planning to wait
+forever for you to finish your <TT>run()</TT>
+method.&quot; You don't want to use this approach without good
+reason: If you have anything else important you need to get done
+in your thread any time soon, you can't count on how long the
+joined thread might take to finish. In the example, the <TT>run()</TT>
+method is short and finishes quickly, so each loop can safely
+wait for the previous thread to die before creating the next one.
+Here's the output produced:
+<BLOCKQUOTE>
+<PRE>
+new Thread() succeeded.
+in thread named 'Thread-1'
+new Thread() succeeded.
+in thread named 'Thread-2'
+new Thread() succeeded.
+in thread named 'Thread-3'
+^C
+</PRE>
+</BLOCKQUOTE>
+<P>
+Incidentally, Ctrl+C was pressed to interrupt the program, because
+it otherwise would continue on forever.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Warning</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You can do some reasonably disastrous things with your knowledge of threads. For example, if you're running in the main thread of the system and, because you think you are in a different thread, you accidentally say the following:</BLOCKQUOTE>
+<BLOCKQUOTE>
+Thread.currentThread().stop();</BLOCKQUOTE>
+<BLOCKQUOTE>
+it has unfortunate consequences for your (soon-to-be-dead) program!</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="TTFONTSIZEFACECourierNamedThreadTesterFONTTT">
+<TT>NamedThreadTester</TT>
+</A></H3>
+<P>
+If you want your threads to have particular names, you can assign
+them yourself by using another form of <TT>Thread</TT>'s
+constructor:
+<BLOCKQUOTE>
+<PRE>
+public class NamedThreadTester {
+    public static void main(String argv[]) {
+        SimpleRunnable aSR = new SimpleRunnable();
+
+        for (int i = 1; true; ++i) {
+            Thread t = new Thread(aSR, &quot;&quot; + (100 - i) 
+                                           + &quot; threads on the wall...&quot;);
+
+            System.out.println(&quot;new Thread() &quot; + (t == null ?
+                                             &quot;fail&quot; : &quot;succeed&quot;) + &quot;ed.&quot;);
+            t.start();
+            try { t.join(); } catch (InterruptedException ignored) { }
+        }
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+This version of <TT>Thread</TT>'s
+constructor takes a target object, as before, and a string, which
+names the new thread. Here's the output:
+<BLOCKQUOTE>
+<PRE>
+new Thread() succeeded.
+in thread named '99 threads on the wall...'
+new Thread() succeeded.
+in thread named '98 threads on the wall...'
+new Thread() succeeded.
+in thread named '97 threads on the wall...'
+^C
+</PRE>
+</BLOCKQUOTE>
+<P>
+Naming a thread is one easy way to pass it some information. This
+information flows from the parent thread to its new child. It's
+also useful, for debugging purposes, to give threads meaningful
+names (such as <TT>network input</TT>)
+so that when they appear during an error-in a stack trace, for
+example-you can easily identify which thread caused the problem.
+You might also think of using names to help group or organize
+your threads, but Java actually provides you with a <TT>ThreadGroup</TT>
+class to perform this function.
+<P>
+The <TT>ThreadGroup</TT> class is
+used to manage a group of threads as a single unit. This provides
+you with a means to finely control thread execution for a series
+of threads. For example, the <TT>ThreadGroup</TT>
+class provides <TT>stop</TT>, <TT>suspend</TT>,
+and <TT>resume</TT> methods for controlling
+the execution of all the threads in the group. Thread groups can
+also contain other thread groups, allowing for a nested hierarchy
+of threads. Another benefit to using thread groups is that they
+can keep threads from being able to affect other threads, which
+is useful for security.
+<H2><A NAME="KnowingWhenaThreadHasStopped"><FONT SIZE=5 COLOR=#FF0000>
+Knowing When a Thread Has Stopped</FONT></A></H2>
+<P>
+Let's imagine a different version of the last example, one that
+creates a thread and then hands the thread off to other parts
+of the program. Suppose the program would then like to know when
+that thread dies so that it can perform some cleanup operation.
+If <TT>SimpleRunnable</TT> were a
+subclass of <TT>Thread</TT>, you might
+try to catch <TT>stop()</TT> whenever
+it's sent-but look at <TT>Thread</TT>'s
+declaration of the <TT>stop()</TT>
+method:
+<BLOCKQUOTE>
+<PRE>
+public final void stop() { . . . }
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>final</TT> here means that
+you can't override this method in a subclass. In any case, <TT>SimpleRunnable</TT>
+is <I>not</I> a subclass of <TT>Thread</TT>,
+so how can this imagined example possibly catch the death of its
+thread? The answer is to use the following magic:
+<BLOCKQUOTE>
+<PRE>
+public class SingleThreadTester {
+    public static void main(String argv[]) {
+        Thread t = new Thread(new SimpleRunnable());
+
+        try {
+            t.start();
+            someMethodThatMightStopTheThread(t);
+        } catch (ThreadDeath aTD) {
+            . . .          // do some required cleanup
+            throw aTD;     // re-throw the error
+        }
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+You understand most of this magic from yesterday's lesson. All
+you need to know is that if the thread created in the example
+dies, it throws an error of class <TT>ThreadDeath</TT>.
+The code catches that error and performs the required cleanup.
+It then rethrows the error, allowing the thread to die. The cleanup
+code is not called if the thread exits normally (its <TT>run()</TT>
+method completes), but that's fine; you posited that the cleanup
+was needed only when <TT>stop()</TT>
+was used on the thread.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Threads can die in other ways-for example, by throwing exceptions that no one catches. In these cases, <TT>stop()</TT> is never called and the previous code is not sufficient. Because unexpected exceptions can come out of nowhere to kill a thread, 
+multithreaded programs that carefully catch and handle all their exceptions are more predictable and robust, and they're easier to debug.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="ThreadScheduling"><FONT SIZE=5 COLOR=#FF0000>
+Thread Scheduling</FONT></A></H2>
+<P>
+You might be wondering how any software system can be truly threaded
+when running on a machine with a single CPU. If there is only
+one physical CPU in a computer system, it's impossible for more
+than one machine code instruction to be executed at a time. This
+means that no matter how hard you try to rationalize the behavior
+of a multithreaded system, only one thread is really being executed
+at a particular time. The reality is that multithreading on a
+single CPU system, like the systems most of us use, is at best
+a good illusion. The good news is that the illusion works so well
+most of the time that we feel pretty comfortable in the fact that
+multiple threads are really running in parallel.
+<P>
+The illusion of parallel thread execution on a system with a single
+CPU is often managed by giving each thread an opportunity to execute
+a little bit of code at regular intervals. This approach is known
+as <I>timeslicing</I>, which refers to the way each thread gets
+a little of the CPU's time to execute code. When you speed up
+this whole scenario to millions of instructions per second, the
+whole effect of parallel execution comes across pretty well.
+<P>
+The general task of managing and executing multiple threads in
+an environment such as this is known as <I>scheduling</I>. Likewise,
+the part of the system that decides the real-time ordering of
+threads is called the <I>scheduler</I>.
+<H3><A NAME="PreemptiveVersusNonpreemptive">
+Preemptive Versus Nonpreemptive</A></H3>
+<P>
+Normally, any scheduler has two fundamentally different ways of
+looking at its job: nonpreemptive scheduling and preemptive time
+slicing.
+<P>
+With <I>nonpreemptive scheduling</I>, the scheduler runs the current
+thread forever, requiring that thread to explicitly tell it when
+it is safe to start a different thread. With <I>preemptive time
+slicing</I>, the scheduler runs the current thread until it has
+used up a certain tiny fraction of a second, and then &quot;preempts&quot;
+it, suspends it, and resumes another thread for the next tiny
+fraction of a second.
+<P>
+Nonpreemptive scheduling is very courtly, always asking for permission
+to schedule, and is quite valuable in extremely time-critical
+real-time applications where being interrupted at the wrong moment,
+or for too long, could mean crashing an airplane. 
+<P>
+However, most modern schedulers use preemptive time slicing because
+it generally has made writing multithreaded programs much easier.
+For one thing, it does not force each thread to decide exactly
+when it should &quot;yield&quot; control to another thread. Instead,
+every thread can just run blindly on, knowing that the scheduler
+will be fair about giving all the other threads their chance to
+run.
+<P>
+However, it turns out that this approach is still not the ideal
+way to schedule threads; you've given up a little too much control
+to the scheduler. The final touch many modern schedulers add is
+to allow you to assign each thread a priority. This creates a
+total ordering of all threads, making some threads more &quot;important&quot;
+than others. Being higher priority often means that a thread gets
+run more often or for a longer period of time, but it always means
+that it can interrupt other, lower-priority threads, even before
+their &quot;time slice&quot; has expired.
+<P>
+A good example of a low-priority thread is the garbage collection
+thread in the Java runtime system. Even though garbage collection
+is a very important function, it is not something you want hogging
+the CPU. Since the garbage collection thread is a low-priority
+thread, it chugs along in the background, freeing up memory as
+the processor allows it. This may result in memory being freed
+a little slower, but it allows more time-critical threads, such
+as the user input handling thread, full access to the CPU. You
+may be wondering what happens if the CPU stays busy and the garbage
+collector never gets to clean up memory. Does the runtime system
+run out of memory and crash? No. This brings up one of the neat
+aspects of threads and how they work. If a high-priority thread
+can't access a resource it needs, such as memory, it enters a
+wait state until memory becomes available. When all memory is
+gone, all the threads running will eventually go into a wait state,
+thereby freeing up the CPU to execute the garbage collection thread,
+which in turn frees up memory. And the circle of threaded life
+continues!
+<P>
+The current Java release (1.0.2) does not precisely specify the
+behavior of its scheduler. Threads can be assigned priorities,
+and when a choice is made between several threads that all want
+to run, the highest-priority thread wins. However, among threads
+that are all the same priority, the behavior is not well defined.
+In fact, the different platforms on which Java currently runs
+have different behaviors-some behaving more like a preemptive
+scheduler, and some more like a nonpreemptive scheduler.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+This incomplete specification of the scheduler is terribly annoying and, presumably, will be corrected in a later release. Not knowing the fine details of how scheduling occurs is perfectly all right, but not knowing whether equal-priority threads must 
+explicitly yield or face running forever is not all right. For example, all the threads you have created so far are equal-priority threads so you don't know their basic scheduling behavior!</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="TestingYourScheduler">
+Testing Your Scheduler</A></H3>
+<P>
+To find out what kind of scheduler you have on your system, try
+out the following code:
+<BLOCKQUOTE>
+<PRE>
+public class RunnablePotato implements Runnable {
+    public void run() {
+        while (true)
+            System.out.println(Thread.currentThread().getName());
+    }
+}
+
+public class PotatoThreadTester {
+    public static void main(String argv[]) {
+        RunnablePotato aRP = new RunnablePotato();
+
+        new Thread(aRP, &quot;one potato&quot;).start();
+        new Thread(aRP, &quot;two potato&quot;).start();
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+If your system employs a nonpreemptive scheduler, this code results
+in the following output:
+<BLOCKQUOTE>
+<PRE>
+one potato
+one potato
+one potato
+. . .
+</PRE>
+</BLOCKQUOTE>
+<P>
+This output will go on forever or until you interrupt the program.
+For a preemptive scheduler that uses time slicing, this code will
+repeat the line <TT>one potato</TT>
+a few times, followed by the same number of <TT>two
+potato</TT> lines, over and over:
+<BLOCKQUOTE>
+<PRE>
+one potato
+one potato
+...
+one potato
+two potato
+two potato
+...
+two potato
+. . .
+</PRE>
+</BLOCKQUOTE>
+<P>
+This output will also go on forever or until you interrupt the
+program. What if you want to be sure the two threads will take
+turns, regardless of the type of system scheduler? You rewrite
+<TT>RunnablePotato</TT> as follows:
+<BLOCKQUOTE>
+<PRE>
+public class RunnablePotato implements Runnable {
+    public void run() {
+        while (true) {
+            System.out.println(Thread.currentThread().getName());
+            Thread.yield();  // let another thread run for a while
+        }
+    }
+}<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Normally you would have to use <TT>Thread.currentThread().yield()</TT> to get your hands on the current thread, and then call <TT>yield()</TT>. Because this pattern is so common, however, the <TT>Thread</TT> class can be used as a shortcut.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The <TT>yield()</TT> method explicitly
+gives any other threads that want to run a chance to begin running.
+(If there are no threads waiting to run, the thread that made
+the <TT>yield()</TT> simply continues.)
+In our example, there's another thread that's just <I>dying</I>
+to run, so when you now execute the class <TT>ThreadTester</TT>,
+it should output the following:
+<BLOCKQUOTE>
+<PRE>
+one potato
+two potato
+one potato
+two potato
+one potato
+two potato
+. . .
+</PRE>
+</BLOCKQUOTE>
+<P>
+This output will be the same regardless of the type of scheduler
+you have.
+<P>
+To see whether thread priorities are working on your system, try
+this code:
+<BLOCKQUOTE>
+<PRE>
+public class PriorityThreadTester {
+    public static void main(String argv[]) {
+        RunnablePotato aRP = new RunnablePotato();
+        Thread         t1  = new Thread(aRP, &quot;one potato&quot;);
+        Thread         t2  = new Thread(aRP, &quot;two potato&quot;);
+
+        t2.setPriority(t1.getPriority() + 1);
+        t1.start();
+        t2.start();   // at priority Thread.NORM_PRIORITY + 1
+    }
+}<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The values representing the lowest, normal, and highest priorities that threads can be assigned are stored in constant class members of the <TT>Thread</TT> class: <TT>Thread.MIN_PRIORITY</TT>, <TT>Thread.NORM_PRIORITY</TT>, and 
+<TT>Thread.MAX_PRIORITY</TT>. The system assigns new threads, by default, the priority <TT>Thread.NORM_PRIORITY</TT>. Priorities in Java are currently defined in a range from <TT>1</TT> to <TT>10</TT>, with <TT>5</TT> being normal, but you shouldn't depend 
+on these values; use the class variables or tricks like the one shown in this example.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+If <TT>one potato</TT> is the first
+line of output, your system does not preempt using thread priorities.
+Why? Imagine that the first thread (<TT>t1</TT>)
+has just begun to run. Even before it has a chance to print anything,
+along comes a higher-priority thread (<TT>t2</TT>)
+that wants to run as well. That higher-priority thread should
+preempt (interrupt) the first and get a chance to print <TT>two
+potato</TT> before <TT>t1</TT>
+finishes printing anything. In fact, if you use the <TT>RunnablePotato</TT>
+class that never <TT>yield()</TT>s,
+<TT>t2</TT> stays in control forever,
+printing <TT>two potato</TT> lines,
+because it's a higher priority than <TT>t1</TT>
+and it never yields control. If you use the latest <TT>RunnablePotato</TT>
+class (with <TT>yield()</TT>), the
+output is alternating lines of <TT>one potato</TT>
+and <TT>two potato</TT> as before,
+but starting with <TT>two potato</TT>.
+<P>
+Listing 18.3 contains a good, illustrative example of how complex
+threads behave.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.3. The </B><TT><B>ComplexThread</B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+ 1: public class ComplexThread extends Thread {
+ 2:     private int delay;
+ 3: 
+ 4:     ComplexThread(String name, float seconds) {
+ 5:         super(name);
+ 6:         delay = (int) seconds * 1000;   // delays are in milliseconds
+ 7:         start();                        // start up ourself!
+ 8:     }
+ 9: 
+10:     public void run() {
+11:         while (true) {
+12:             System.out.println(Thread.currentThread().getName());
+13:             try {
+14:                 Thread.sleep(delay);
+15:             } catch (InterruptedException e) {
+16:                 return;
+17:             }
+18:         }
+19:     }
+20: 
+21:     public static void main(String argv[]) {
+22:         new ComplexThread(&quot;one potato&quot;,   1.1F);
+23:         new ComplexThread(&quot;two potato&quot;,   1.3F);
+24:         new ComplexThread(&quot;three potato&quot;, 0.5F);
+25:         new ComplexThread(&quot;four&quot;,         0.7F);
+26:     }
+27: }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+This example combines the thread and its tester into a single
+class. Its constructor takes care of naming and starting itself
+because it is now a thread. The <TT>main()</TT>
+method creates new instances of its own class because the class
+is a subclass of <TT>Thread</TT>.
+The <TT>run()</TT> method is also
+more complicated because it now uses, for the first time, a method
+that can throw an unexpected exception.
+<P>
+The <TT>Thread.sleep()</TT> method
+forces the current thread to <TT>yield()</TT>
+and then waits for at least the specified amount of time to elapse
+before allowing the thread to run again. It might be interrupted
+by another thread, however, while it's sleeping. In such a case,
+it throws an <TT>InterruptedException</TT>.
+Now, because <TT>run()</TT> is not
+defined as throwing this exception, you must &quot;hide&quot;
+the fact by catching and handling it yourself. Because interruptions
+are usually requests to stop, you should exit the thread, which
+you can do by simply returning from the <TT>run()</TT>
+method.
+<P>
+This program should output a repeating but complex pattern of
+four different lines, where every once in a great while you see
+the following:
+<BLOCKQUOTE>
+<PRE>
+. . .
+one potato
+two potato
+three potato
+four
+. . .
+</PRE>
+</BLOCKQUOTE>
+<P>
+You should study the pattern output to prove to yourself that
+true parallelism is going on inside Java programs. You may also
+begin to appreciate that, if even this simple set of four threads
+can produce such complex behavior, many more threads must be capable
+of producing near chaos if not carefully controlled. Luckily,
+Java provides the synchronization and thread-safe libraries you
+need to control that chaos.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>
+Summary</FONT></A></H2>
+<P>
+Today you have learned that multithreading is desirable and powerful,
+but introduces many new problems-methods and variables now need
+to be <I>protected</I> from thread conflicts-that can lead to
+chaos if not carefully controlled. By &quot;thinking multithreaded,&quot;
+you can detect the places in your programs that require <TT>synchronized</TT>
+statements (or modifiers) to make them thread safe. A series of
+<TT>Point</TT> examples demonstrates
+the various levels of safety you can achieve, and <TT>ThreadTesters</TT>
+shows how subclasses of <TT>Thread</TT>,
+or classes that implement the <TT>Runnable</TT>
+interface, are created and run to generate multithreaded programs.
+<P>
+You have also learned today how to use <TT>yield()</TT>,
+<TT>start()</TT>, <TT>stop()</TT>,
+<TT>suspend()</TT>, and <TT>resume()</TT>
+on your threads, and how to catch <TT>ThreadDeath</TT>
+whenever it happens. You have learned about preemptive and nonpreemptive
+scheduling, both with and without priorities, and how to test
+your Java system to see which of them your scheduler is using.
+<P>
+You are now armed with enough information to write the most complex
+of programs: multithreaded ones. As you get more comfortable with
+threads, you may begin to use the <TT>ThreadGroup</TT>
+class or the enumeration methods of <TT>Thread</TT>
+to get your hands on all the threads in the system and manipulate
+them. Don't be afraid to experiment; you can't permanently break
+anything, and you only learn by trying.
+<H2><A NAME="QampABR"><FONT SIZE=5 COLOR=#FF0000>
+Q&amp;A<BR>
+</FONT></A></H2>
+
+<TABLE>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>If they're so important to Java, why haven't threads appeared throughout the entire book?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>Actually, they have. Every standalone program written so far has &quot;created&quot; at least one thread, the one in which it is running. (Of course the system created that thread for it 
+automatically.)
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>How exactly do these threads get created and run? What about applets?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>When a simple standalone Java program starts up, the system creates a main thread, and its <TT>run()</TT> method calls your <TT>main()</TT> method to start your program-you do nothing to get 
+that thread. Likewise, when a simple applet loads into a Java-enabled browser, a thread has already been created by the browser, and its <TT>run()</TT> method calls your <TT>init()</TT> and <TT>start()</TT> methods to start your program. In either case, a 
+new thread of some kind was created somewhere by the Java environment itself.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>I know the current Java release is still a little fuzzy about the scheduler's behavior, but what's the word from Sun?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>Here's the scoop, as relayed by Arthur van Hoff at Sun: The way Java schedules threads &quot;&#133;depends on the platform. It is usually preemptive, but not always time sliced. Priorities are 
+not always observed, depending on the underlying implementation.&quot; This final clause gives you a hint that all this confusion is an implementation problem, and that in some future release, the design and implementation will both be clear about 
+scheduling behavior.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>My parallel friends tell me I should worry about something called &quot;deadlock.&quot; Should I?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>Not for simple multithreaded programs. However, in more complicated programs, one of the biggest worries does become one of avoiding a situation in which one thread has locked an object and is 
+waiting for another thread to finish, while that other thread is waiting for the first thread to release that same object before it can finish. That's a deadlock-both threads will be stuck forever. Mutual dependencies like this involving more than two 
+threads can be quite intricate, convoluted, and difficult to locate, much less rectify. They are one of the main challenges in writing complex multithreaded programs.
+</TD></TR>
+</TABLE>
+</CENTER>
+<HR>
+
+<CENTER><P><A HREF="ch17.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch19.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

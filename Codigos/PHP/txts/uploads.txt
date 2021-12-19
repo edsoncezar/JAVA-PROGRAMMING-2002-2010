@@ -1,0 +1,177 @@
+            File Information
+
+            Verifying link...
+
+            Register Your DAP
+
+Please visit our sponsor
+    //**************************************
+    // Name: Upload ODBC table
+    // Description:This program allows you to upload an ODBC ressource - i.e. an MS-Access database to a MySQL server. The table must already exist on MySQL It will figure out which fields are defined in the MySQL table and then upload the coresponding field from the ODBC ressource. If you give it no arguments. It will show you a list of tables in the MySQL database by Søren Roug
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php
+    /*
+    * This include file defines the functions html_header and html_footer
+    */
+    require("design.inc");
+    $mysqldb = "concord";
+    function nonfatal_error($message)
+    {
+    printf("<H1>%s</H1>\n",$message);
+    }
+    function upload_records($odbcfd,$myfd,$mysqldb,$table)
+    {
+    /*
+    * Figure out which columns the mysql database has
+    */
+    $fieldlist = mysql_list_fields($mysqldb,$table);
+    $numof = mysql_num_fields($fieldlist);
+    for($i = 0; $i < $numof; $i++)
+    {
+    $fieldname = mysql_field_name($fieldlist,$i);
+    if($i == 0)
+    $columnlist = $fieldname;
+    else
+    $columnlist = $columnlist . "," . $fieldname;
+    $fieldtype = mysql_field_type($fieldlist,$i);
+    switch($fieldtype)
+    {
+    case "string":
+    case "datetime":
+    $fieldquotes[$fieldname] = "'";
+    break;
+    default:
+    $fieldquotes[$fieldname] = "";
+    break;
+    }
+    }
+    /*
+    * Query the ODBC database and loop through the result.
+    */
+    $res = odbc_exec($odbcfd,"SELECT * FROM $table");
+    if($res == 0)
+    {
+    nonfatal_error("Couldn't exec SELECT statement on ODBC database");
+    return(0);
+    }
+    /*
+    * Now we know we can query the ODBC database we can delete the records from
+    the Mysql
+    * database
+    */
+    mysql_db_query($mysqldb,"DELETE FROM $table",$myfd);
+    $rowinx = 0;
+    while(odbc_fetch_row($res))
+    {
+    /*
+    * Generate the SQL INSERT STATEMENT
+    */
+    for($i = 0; $i < $numof; $i++)
+    {
+    $fieldname = mysql_field_name($fieldlist,$i);
+    if($i == 0)
+    $vallist = $fieldquotes[$fieldname] .
+    addslashes(odbc_result($res,$fieldname)) .
+    $fieldquotes[$fieldname] ;
+    else
+    $vallist = $vallist . "," . $fieldquotes[$fieldname] .
+    addslashes(odbc_result($res,$fieldname)) .
+    $fieldquotes[$fieldname] ;
+    }
+    $cmd = "INSERT INTO $table ($columnlist) VALUES ($vallist)";
+    if($rowinx % 10 == 0)
+    echo "<br>";
+    printf("%06s\n",$rowinx);
+    if(mysql_db_query($mysqldb,$cmd,$myfd) == 0)
+    {
+    nonfatal_error(mysql_error());
+    }
+    $rowinx++;
+    }
+    return(1);
+    }
+    /*-----------------------------------------------------------------
+    * Start of the program
+    */
+    /*
+    * Connect to the MySQL server
+    */
+    $myfd = mysql_connect("atilia","guest","xxxx");
+    if($myfd <= 0)
+    {
+    nonfatal_error("Couldn't open MySQL database");
+    exit($myfd);
+    }
+    /*
+    * Connect to the ODBC ressource.
+    * The DSN must be defined in the executing computer's ODBC tables
+    */
+    $odbcfd = odbc_connect("ConcAccess","x","e");
+    if($odbcfd <= 0)
+    {
+    nonfatal_error("Couldn't open ODBC database");
+    exit($odbcfd);
+    }
+    function list_tables($mysqldb)
+    {
+    echo "<UL>\n";
+    $tables= mysql_list_tables($mysqldb);
+    for($i = 0; $i < mysql_num_rows($tables);$i++)
+    {
+    printf("<LI>Upload table <A HREF=\"upload.php3?table=%s\">%s</A>\n",
+    mysql_tablename($tables,$i),
+    mysql_tablename($tables,$i));
+    }
+    echo "</UL>\n";
+    }
+    switch ($table)
+    {
+    case "":
+    html_header("Update Database on mysql");
+    ?>
+    <P>This page allows you to upload tables from the MS-Access database to the
+    database
+    on the webserver. There <I>might</I> be some uploading errors. This is the
+    reason
+    you can only upload one table at a time. You should select a table and then
+    look at the
+    result for errors.</P>
+    <?php
+    list_tables($mysqldb);
+    break;
+    default:
+    html_header("Uploading $table");
+    echo ("Row ## Row ## Row ## Row ## Row ## Row ## Row ## Row ## Row ##
+    Row ##<br>\n");
+    $tables= mysql_list_tables($mysqldb);
+    $dotable=0;
+    for($i = 0; $i < mysql_num_rows($tables); $i++)
+    if(mysql_tablename($tables,$i) == $table)
+    {
+    $dotable=1;
+    }
+    if($dotable == 1)
+    upload_records($odbcfd,$myfd,$mysqldb,$table);
+    else
+    nonfatal_error("There was no such table");
+    list_tables($mysqldb);
+    break;
+    }
+    odbc_close($odbcfd);
+    mysql_close($myfd);
+    html_footer();
+    ?>
+
+		
+

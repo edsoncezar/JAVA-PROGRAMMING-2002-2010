@@ -1,0 +1,196 @@
+            File Information
+
+            Verifying link...
+
+            Register Your DAP
+
+Please visit our sponsor
+    //**************************************
+    // Name: SyBASE Classes
+    // Description:Database and Recordset classes fo SyBASE Usage is obvious. By Razvan Stanescu
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php
+    // 
+    //	Author: Razvan STANESCU <pappy@gecad.ro> 
+    //
+    //	You may use this code as long as you leave this note
+    //
+    //
+    //	Usage example
+    //
+    //	require("sybase.php3");
+    //
+    //	$sybdb = new CSybDb("SYBASE", "http_user", "http_pass", "http_db");
+    //	$sybrs = new CSybRs("select * from http_log", $sybdb);
+    //
+    //	$sybrs->display();	//	... or do anything else
+    //
+    //	$sybrs->destroy();
+    //	$sybdb->destroy();
+    //
+    class CSybDb
+    {
+    	var		$sybdb;
+    	function CSybDb($server, $user, $pass, $dbname = "")
+    	{
+    		$this->sybdb = sybase_connect($server, $user, $pass);
+    		if( $this->valid() && $dbname != "" ) {
+    			if( !sybase_select_db($dbname, $this->sybdb) ) {
+    				destroy();
+    				}
+    			}
+    	}
+    	function destroy()
+    	{
+    		if( $this->valid() ) {
+    			sybase_close($this->sybdb);
+    			}
+    		$this->sybdb = 0;
+    	}
+    	function valid()
+    	{
+    		return $this->sybdb != 0;
+    	}
+    };
+    class CSybRs
+    {
+    	var		$recs;
+    	var		$rows;
+    	var		$cols;
+    	var		$crow;
+    	var		$rarr;
+    	var		$fail;
+    	function CSybRs($query, $sybdb)
+    	{
+    		$this->recs = 0;
+    		$this->rows = 0;
+    		$this->cols = 0;
+    		$this->fail = 1;
+    		$this->crow = 0;
+    		if( !$sybdb->valid() ) return;
+    		$this->recs = sybase_query($query, $sybdb->sybdb);
+    		if( !$this->recs ) return;
+    		$this->rows = sybase_num_rows($this->recs);
+    		$this->cols = sybase_num_fields($this->recs);
+    		$this->fail = 0;
+    	}
+    	function destroy()
+    	{
+    		if( !$this->recs ) return;
+    		// sybase_freeresult($this->recs);
+    		$this->recs = 0;
+    	}
+    	function valid()
+    	{
+    		return !$this->fail && $this->recs != 0;
+    	}
+    	function seek($nrow)
+    	{
+    		if( !$this->valid() ) return 0;
+    		if( $this->bof() && $this->eof() ) return 0;
+    		if( sybase_data_seek($this->recs, $nrow) ) {
+    			$this->crow = $nrow;
+    			$this->rarr = sybase_fetch_array($this->recs);
+    			if( $this->rarr ) {
+    				return 1;
+    				}
+    			}
+    		$this->fail = 1;
+    		return 0;
+    	}
+    	function eof()
+    	{
+    		return $this->crow == $this->rows;
+    	}
+    	function bof()
+    	{
+    		return $this->crow < 0;
+    	}
+    	function first()
+    	{
+    		$this->crow = 0;
+    		if( !$this->seek($this->crow) ) {
+    			// mark as bof
+    			$this->crow = -1;
+    			}
+    	}
+    	function prev()
+    	{
+    		if( $this->bof() ) return;
+    		$this->crow--;
+    		if( $this->bof() ) return;
+    		if( !$this->seek($this->crow) ) {
+    			// mark as bof
+    			$this->crow = -1;
+    			}
+    	}
+    	function next()
+    	{
+    		if( $this->eof() ) return;
+    		$this->crow++;
+    		if( $this->eof() ) return;
+    		$this->rarr = sybase_fetch_array($this->recs);
+    		if( !$this->rarr ) {
+    			// mark as eof
+    			$this->crow = $this->rows;
+    			}
+    	}
+    	function last()
+    	{
+    		$this->crow = $this->rows - 1;
+    		if( !$this->seek($this->crow) ) {
+    			// mark as eof
+    			$this->crow = $this->rows;
+    			}
+    	}
+    	function valueof($col)
+    	{
+    		if( !$this->valid() ) return;
+    		return $this->rarr[$col];
+    	}
+    	function showheader($col, $fmt = "")
+    	{
+    		$fld = sybase_fetch_field($this->recs, $col);
+    		printf("\t<th %s>%s</th>\n", $fmt, is_string($col) ? $col : $fld->name);
+    	}
+    	function showvalue($col, $fmt = "", $def = "&nbsp;")
+    	{
+    		$v = $this->valueof($col);
+    		printf("\t<td %s>%s</td>\n", $fmt, $v == "" ? $def : $v);
+    	}
+    	function display()
+    	{
+    		if( !$this->valid() ) return;
+    		printf("<table cellspacing=1 cellpadding=1 border=1>\n");
+    		printf("<tr>\n");
+    		for( $c = 0; $c < $this->cols; $c++ ) {
+    			$this->showheader($c);
+    			}
+    		printf("</tr>\n");
+    		$this->first();
+    		while( !$this->eof() ) {
+    			printf("<tr>\n");
+    			for( $c = 0; $c < $this->cols; $c++ ) {
+    				$this->showvalue($c);
+    				}
+    			printf("</tr>\n");
+    			$this->next();
+    			}
+    		printf("</table>\n");
+    	}
+    };
+    ?>
+
+		
+

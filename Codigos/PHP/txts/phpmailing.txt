@@ -1,0 +1,333 @@
+            File Information
+
+            Verifying link...
+
+            Register Your DAP
+
+Please visit our sponsor
+    //**************************************
+    // Name: PHP mailing list
+    // Description:Users sign up on one page w/name and email. Email is checked for auth. Name and email added to Mysql database. "Broadcaster" fills out a form page with header, body, and footer of the email. Header and footer are saved for later. Mail is sent to all users in the database with a personal "Dear (name they entered)" at the top of the email. Sender can upload text, log off, and the script will continue to send out all emails. Sleep function for slowing down send rate. Log file written upon script completion of unsendable emails. Uses php mail() function (sendmail). by David Fox
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php
+    ////////////////// mailing_list.php3 /////////////////////////
+    ///////////////////////// SIGNUP PAGE ///////////////////////////////////////////////////////
+    /* All code by David Fox except validateEmail function
+    Use it happily, anywhere, with credits.
+    You use this signup with send_mailing_list.php3 which sends the newsletter.
+    What would be really cool, since the letters will already be customized w/ the users name (if they enter it), is
+    another database table with user preferences linked to the mailing_list table. That would allow you to program some
+    cool stuff in send_mailing_list.php3 to add even more personalization... such as new products, headlines, whatever
+    the user actually wants to see. You could put checkboxes or dropdowns in here to select stuff.
+    REQUIRED:
+    MySQL table creation SQL:
+    
+    CREATE TABLE mailing_list (id INT(30) NOT NULL PRIMARY KEY AUTO_INCREMENT, email VARCHAR(100) NOT NULL, name VARCHAR(100), timestamp TIMESTAMP, UNIQUE (email));
+    validateEmail function
+    By: Jon S. Stevens jon@clearink.com
+    Copyright 1998 Jon S. Stevens, Clear Ink
+    This code has all the normal disclaimers.
+    It is free for any use, just keep the credits intact.
+    It will return an array. $return[0] is whether it was a valid 
+    email or not and $return[1] is the SMTP error message if there was one.*/
+    function validateEmail ($email){
+    global $SERVER_NAME;
+    $return = array(false, "" );
+    list ($user, $domain) = split("@", $email, 2);
+    $arr = explode(".", $domain);
+    $count = count ($arr);
+    $tld = $arr[$count - 2] . "." . $arr[$count - 1];
+    if(checkdnsrr($tld, "MX")) {
+    if(getmxrr($tld, $mxhosts, $weight)) {
+    for($i = 0; $i < count($mxhosts); $i++){
+    $fp = fsockopen($mxhosts[$i], 25);
+    if ($fp){
+    $s = 0;
+    $c = 0;
+    $out = "";
+    set_socket_blocking($fp, false);
+    do {
+    $out = fgets($fp, 2500);
+    if(ereg("^220", $out)){
+    $s = 0;
+    $out = "";
+    $c++;
+    }
+    else if(($c > 0) && ($out == "")){ 
+    break; 
+    }
+    else { 
+    $s++;
+    }
+    if($s == 9999) { 
+    break;
+    }
+    } while($out == "");
+    set_socket_blocking($fp, true);
+    fputs($fp, "HELO $SERVER_NAME\n");
+    $output = fgets ($fp, 2000);
+    fputs($fp, "MAIL FROM: <info@" . $tld . ">\n" );
+    $output = fgets($fp, 2000);
+    fputs($fp, "RCPT TO: <$email>\n");
+    $output = fgets($fp, 2000);
+    if(ereg( "^250", $output )) {
+    $return[0] = true;
+    } 
+    else {
+    $return[0] = false;
+    $return[1] = $output;
+    }
+    fputs ($fp, "QUIT\n");
+    fclose($fp);
+    if($return[0] == true){ 
+    break; 
+    }
+    }
+    }
+    }
+    }
+    return $return;
+    }
+    // format the email body so it has soft returns after set number chars
+    function format_mail($str, $char_len) {
+    // $char_len = number of characters till return
+    $str = stripslashes($str);
+    while(strlen($str) != 0) {
+    $len = strrpos(substr($str, 0, $char_len - 1), " ");
+    // in case of no spaces
+    if(!$len) { 
+    $len = $char_len - 1;
+    }
+    $str_out .= substr($str, 0, $len) . "\n";
+    $str = substr($str, $len, strlen($str));
+    }
+    return $str_out;
+    }
+    ////////////// END FUNCTIONS ////////////////////////////////
+    define("SENDER", "newsletter@mydomin.com");
+    define("SUBJECT", "Newsletter confirmation email");
+    define("DATABASE", "mydb");
+    define("HOST", "localhost");
+    define("USER", "httpd");
+    define("PASSWORD", "");
+    // It would make sense to put this into a file... maybe so you could build an administrative interface to change it...
+    $body = "This is a confirmation email to verify your subscription to the newsletter.";
+    // put in carriage returns so email is cool.. wrap at 76 chars
+    $body = format_mail($body, 76);
+    if($action){
+    if($address) {
+    // does it at least LOOK like an email address?
+    if(eregi("([_\.0-9a-z-]+@)([0-9a-z][0-9a-z-]+\.)+([a-z]{2,3})", $address)) {
+    // it does.. lets see if it REALLY is w/ Jon's cool function.
+    $ary_address = validateEmail($address);
+    
+    if($ary_address[0]) {
+    // it IS an email address... or at least an email server. Put it in the database.
+    // Use replace so we don't duplicate email addresses (unique field). 
+    $db_link = @mysql_connect(HOST, USER, PASSWORD) or $errors[] = mysql_error();
+    @mysql_select_db(DATABASE, $db_link) or $errors[] = mysql_error();
+    // could set this as the default in the database.. but you'd have to check anyway.
+    if(!$name) { $name = "Subscriber"; }
+    // SQL
+    $sql = "REPLACE INTO mailing_list (email, name) VALUES('" . $address . "','" . $name . "')";
+    $db_results = @mysql_query($sql, $db_link) or $errors[] = mysql_error();
+    // check for db errors
+    if(!$errors) {
+    $confirm = True;
+    if($confirmation) {
+    // send confirmation email 
+    if(@mail($address, SUBJECT, $body, "From: " . SENDER)){
+    $message = "Thank you. You will receive a confirmation email soon to verify your subscription";
+    }
+    else {
+    // couldn't send mail, but db action was OK
+    $message = "You have been successfully subscribed, but here was a problem sending your confirmation email.<br>You should, however receive your newsletter soon.";
+    }
+    }
+    else {
+    $message = "Thank you. You should receive your newsletter soon.";
+    }
+    }
+    else {
+    // db error message
+    $confirm = False;
+    $message = "There was an error processing your subscription. Please wait a moment, and try again.<br>";
+    }
+    }
+    else { 
+    // validateEmail came back false, display error. 
+    $confirm = False;
+    $message = "Your email address appears to be a valid, but does not respond.<br>";
+    $message .= "Please check to see that the address is a valid email address";
+    }
+    }
+    else {
+    // ereg test failed. It doesn't even LOOK like an email address.
+    $confirm = False;
+    $message = "This does not appear to be a valid email address.<br>Please check to see that the address has been entered properly.<br>";
+    }
+    }
+    // they didn't enter anything
+    else { $message = "You must enter an email address to subscribe!"; }
+    }
+    else {
+    // default message
+    $message = "Enter your email address to sign up for the mailing list.";
+    }
+    print("<center>\n");
+    print($message);
+    if(!$confirm){
+    // form
+    print("<form action=\"mailing_list.php3\" method=\"post\">\n");
+    print("<h1>newsletter signup </h1>\n");
+    print("<table cellspacing=\"2\" cellpadding=\"3\" border=\"1\">\n");
+    print("<tr><td>Your email address:</td><td><input type=\"text\" name=\"address\" size=\"35\" value=\"" . $address . "\"></td></tr><br>");
+    print("<tr><td>Your name:</td><td><input type=\"text\" name=\"name\" size=\"35\" value=\"" . $name . "\"></td></tr>");
+    print("<tr align=\"center\"><td colspan=\"2\">Click here to receive a confirmation email &nbsp;<input type=\"checkbox\" name=\"confirmation\" value=\"true\" checked></td></tr>");
+    print("<tr align=\"center\" bgcolor=\"#cccccc\"><td colspan=\"2\"><input type=\"submit\" name=\"action\" value=\"signup!\"></td></tr></table>");
+    print("</form><center>");
+    }
+    ?>
+    <?php
+    /////////////////// send_mailing_list.php3 /////////////////////////
+    /*Quick broadcast mailing list sender. Works with mailing_list.php3
+    Code by David Fox.
+    Use it happily, anywhere, with credits. 
+    Better yet.. expand it into something better */
+    function format_mail($str, $char_len) {
+    // $char_len = number of characters till return
+    $str = stripslashes($str);
+    while(strlen($str) != 0) {
+    $len = strrpos(substr($str, 0, $char_len - 1), " ");
+    // in case of no spaces
+    if(!$len) { 
+    $len = $char_len - 1;
+    }
+    $str_out .= substr($str, 0, $len) . "\n";
+    $str = substr($str, $len, strlen($str));
+    }
+    return $str_out;
+    }
+    ////////////// END FUNCTIONS ////////////////////////////////
+    define("SENDER", "newsletter@mydomain.com");
+    define("DATABASE", "mydb");
+    define("HOST", "localhost");
+    define("USER", "httpd");
+    define("PASSWORD", "");
+    define("SLEEP", 1); // amount of seconds to sleep between mailings. Usefull for mellowing out your mailing rate to be nice to the server. Can be zero.
+    // the script is set to contiue executing after you log off.. so set and forget.
+    // where you want the header and footer files to live
+    define("NEWSLETTER_FILE_PATH", "text/");
+    if($action && $subject && $body) {
+    // save the header and footer for later
+    if($file = @fopen(NEWSLETTER_FILE_PATH . "news_header.txt", "w")) {
+    if(!@fputs($file, $header)) {
+    print("Header file could not be written to.<br>");
+    }
+    fclose($file);
+    }
+    else {
+    print("Header file could not be opened/created<br>");
+    }
+    if($file = @fopen(NEWSLETTER_FILE_PATH . "news_footer.txt", "w")) {
+    if(!@fputs($file, $footer)) {
+    print("Footer file could not be written to.<br>");
+    }
+    fclose($file);
+    }
+    else {
+    print("Footer file could not be opened/created<br>");
+    }
+    // format the newsletter w/ soft returns at 76 chars
+    $body = format_mail($body, 76);
+    if($header) { $header = format_mail($header, 76); }
+    if($footer) { $footer = format_mail($footer, 76); }
+    // db connect and select
+    $db_link = mysql_connect(HOST, USER, PASSWORD) or die(mysql_error());
+    mysql_select_db(DATABASE, $db_link) or die(mysql_error());
+    // query.. get all the subscribers
+    $sql = "SELECT email, name, timestamp FROM mailing_list";
+    $db_results = mysql_query($sql, $db_link) or die(mysql_error());
+    // fill up the buffer so flush() will work. As soon as user sees. sending mail... they can be sure the text has been uploaded.
+    print("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;");
+    print("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;");
+    print("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>");
+    // Ignore user abort so user can disconnect and have a snack while mail is being sent.
+    ignore_user_abort();
+    print("SENDING MAIL...........<p>");
+    flush();
+    // send the mail one at a time. sleep if specified. 
+    while($row = mysql_fetch_row($db_results)) {
+    set_time_limit(SLEEP + 30);
+    if(mail($row[0], $subject, "Dear " . $row[1] . ",\n\n" . $header . "\n\n" . $body . "\n\n" . $footer, "From: " . SENDER)){
+    print($row[0] . "... sent<br>\n");
+    }
+    else{ $errors[] = $row[0]; }
+    if(SLEEP) { sleep(SLEEP); }
+    }
+    // display any mails that weren't sent. write log.
+    $file = @fopen(NEWSLETTER_FILE_PATH . "send_log.txt", "w");
+    if($errors) {
+    print("Some mail could not be sent:<p>\n");
+    for($i = 0; $i < count($errors); $i++) {
+    @fputs($file, $errors[$i] . " could not be sent.\n");
+    print($errors[$i] . " could not be sent.<br>\n");
+    }
+    }
+    else {
+    // no errors. yea.
+    print("List was sent out without errors.<br>");
+    @fputs($file, "List was sent out without errors.\n");
+    }
+    fclose($file);
+    }
+    else {
+    // Either the page is coming up fresh or there's no body or subject
+    print("<center>");
+    if($action) {
+    if(!$body) { print("There is no text in the body.<br>"); }
+    if(!$subject) { print("There is no text in the subject line.<br>"); }
+    }
+    print("<form action=\"send_mailing_list.php3\" method=\"post\">\n");
+    print("<h1>send newsletter</h1> <p>\n");
+    print("<table cellspacing=\"2\" cellpadding=\"3\" border=\"1\">\n\t<tr>\n\t\t<td align=\"right\">Subject of this newsletter:</td>\n\t\t<td><input type=\"text\" name=\"subject\" size=\"35\" value=\"" . $subject . "\"></td>\n\t</tr>\n");
+    // Header input. If a header already exists, the text will appear inside
+    print("\t<tr>\n\t\t<td align=\"right\">Header Text:</td>\n\t\t<td><textarea cols=\"35\" rows=\"5\" name=\"header\">");
+    if($header) {
+    print($header);
+    }
+    else {
+    $file = NEWSLETTER_FILE_PATH . "news_header.txt";
+    if(file_exists($file)){ include($file); }
+    }
+    print("</textarea></td>\n\t</tr>\n");
+    // Body input
+    print("\t<tr>\n\t\t<td align=\"right\">Newsletter Body:</td>\n\t\t<td><textarea cols=\"35\" rows=\"5\" name=\"body\">" . $body . "</textarea>");
+    // Footer input. If a footer already exists, the text will appear inside
+    print("\t<tr>\n\t\t<td align=\"right\">Footer Text:</td>\n\t\t<td><textarea cols=\"35\" rows=\"5\" name=\"footer\">");
+    if($footer) {
+    print($footer);
+    }
+    else {
+    $file = NEWSLETTER_FILE_PATH . "news_footer.txt";
+    if(file_exists($file)){ include($file); }
+    }
+    print("</textarea></td>\n\t</tr>\n");
+    print("\t<tr bgcolor=\"#cccccc\">\n\t\t<td colspan=\"2\" align=\"center\"><input type=\"submit\" name=\"action\" value=\"send!\"></td>\n\t</tr>");
+    print("</table></form><center>");
+    }
+    ?>
+
+		
+

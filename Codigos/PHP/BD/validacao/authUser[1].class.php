@@ -1,0 +1,74 @@
+<?php
+/******************************************************************************************************
+Classe:    		Authentix
+Versão:			1.02
+Autor:     		Gustavo Sampaio Villa
+E-mail:    		php@sitework.com.br
+Site:      		www.sitework.com.br
+
+Descrição: 		O grande objetivo dessa classe é facilitar a validação de usuários
+		   		para acesso à áreas restritas.
+		   		Não é necessário criar tabelas específicas no banco de dados,
+		   		nem mesmo fazer alterações no Script.
+		   
+Fluxograma:		Para a utilização dessa classe é necessário que você utilize um
+				formulário com dados a serem preenchidos na ordem:
+				Identificação do usuário, Senha e um botão de submit que enviará os dados a
+				outra rotina chamada autenticação. O script armazena as informações e verifica se o usuário
+				existe. Retorna True caso o usuário tenha sido autenticado e false caso não.
+				
+Descrição: 		authUser($BDLogin, $BDSenha, $BDTabela, $LoginInformado, $senhaInformada);
+				$BDLogin: Nome do campo do banco de dados que será usado para identificar o usuário
+				$BDSenha: Nome do campo do banco de dados que contém a senha do usuário
+				$BDTabela: Tabela do banco de dados onde esses campos estão contidos
+				$LoginInformado: String contendo o login informado pelo usuário
+				$senhaInformada: String contendo a senha informada pelo usuário
+				
+Exemplo: 		$authUsr = new authUser("inst_Email", "inst_Senha", "tbl_Usuarios", $_POST["frmEmail"], $_POST["frmSenha"]);
+
+******************************************************************************************************/
+
+class authUser {
+	
+	var $bdUsr, $bdPwd, $bdTbl, $frmUsr, $frmPwd;
+
+
+	/*
+	authUser($bdUser, $bdPwd, $bdTbl, $frmUsr, $frmPwd)
+	Método construtor que armazena as informações passadas
+	*/
+	function authUser($bdUser, $bdPwd, $bdTbl, $frmUsr, $frmPwd){
+		$this->bdUsr  = $bdUser;
+		$this->bdPwd  = $bdPwd;
+		$this->bdTbl  = $bdTbl;
+		$this->frmUsr = $frmUsr;
+		$this->frmPwd = $frmPwd;
+	}
+
+	/*
+	bool verifica()
+	Método que faz a verificação se o login informado e a senha existem no banco de dados.
+	Caso afirmativo e se nunhuma sessão ainda foi criada, ele autentica o usuário.
+	Retorna True caso o usuário tenha sido aprovado ou False caso tenha sido rejeitado.
+	*/
+	function verifica(){
+		session_start();
+		
+		if (!isset($HTTP_SESSION_VARS["usuario"])){
+			$sql   = "select ". $this->bdUsr ." from ". $this->bdTbl ." where ". $this->bdUsr ."='". $this->frmUsr ."' and ". $this->bdPwd ."='". $this->frmPwd ."'";
+			$query = mysql_query($sql);
+			$usuario = mysql_fetch_row($query);
+			$count = mysql_num_rows($query);
+			
+			if ($count == 1){
+				session_register("usuario");
+				return(true);
+			} else {
+				return(false);
+			}
+		} else {
+			return(true);
+		}
+	}	
+}
+?>

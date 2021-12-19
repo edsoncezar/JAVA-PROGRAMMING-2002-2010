@@ -1,0 +1,234 @@
+Please visit our sponsor
+    //**************************************
+    // Name: Database independence object wrapper
+    // Description:This is a database abstraction layer, so that code can be written to run with any database. If you wish to switch database types, just change a parameter in the abstraction class ... not your entire code!! Currently supports mysql and postgres, I hope to add oracle and others. If you have any comments/suggestions, pls email me at manik@post1.com by Manik Surtani
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php
+    //-------------------------------------------------------
+    // DATABASE.INDEPENDENCE.OBJECT.WRAPPER
+    // VERSION 0.30
+    // VERSION DATE: 15th July 1999
+    //-------------------------------------------------------
+    // Author: Manik Surtani <manik@post1.com>
+    //-------------------------------------------------------
+    //-------------------------------------------------------
+    // This version currently supports POSTGRESQL and MYSQL
+    // databases. More support to be added sometime .... !!
+    //-------------------------------------------------------
+    // This wrapper provides 'physical' database connectivity
+    // and works as the link between the php3-based web site 
+    // and the selected database. 
+    //-------------------------------------------------------
+    // set the database TYPE. 
+    //$database_type==1 --> POSTGRES
+    //$database_type==2 --> MYSQL
+    $database_type=2;
+    /*
+    ---------------------------------------------------------
+    "class resultSet" deals with a recordset produced by a
+    databse query.
+    ---------------------------------------------------------
+    */
+    class resultSet {
+    var $element = array();
+    var $column_name = array();
+    var $numrows;
+    var $numcols;
+    function getColumn_by_name($rowNum,$colName) {
+    $j=-1;
+    for($i=0;$i<$this->numcols;$i++)
+    {
+    if ($this->column_name[$i]==$colName) { $j=$i; }
+    }
+    if ($j!=-1) { return $this->element[$rowNum][$j];} else { return ""; }
+    }
+    function getColumn_by_num($rowNum,$colNum) {
+    return $this->element[$rowNum][$colNum];
+    }
+    function getColName($column) {
+    return $this->column_name[$column];
+    }
+    function getNumRows() {
+    return $this->numrows;
+    }
+    function getNumCols() {
+    return $this->numcols;
+    }
+    }
+    /*
+    ---------------------------------------------------------
+    "class ConnInfo" provides a connection details object which returns information
+    given on a connection parameter to a database.
+    ---------------------------------------------------------
+    */
+    class ConnectionInfo {
+    var $cdbname;
+    var $cusername;
+    var $cpassword;
+    var $chost;
+    var $cport;
+    function SplitThis($cparam) {
+    $tok = strtok($cparam," ");
+    while($tok) {
+    $pos=strpos($tok,"=");
+    $type=substr($tok,0,$pos);
+    switch ($type) {
+    case "dbname":
+    $this->cdbname=substr($tok,$pos+1);
+    break;
+    case "host":
+    $this->chost=substr($tok,$pos+1);
+    break;
+    case "port":
+    $this->cport=substr($tok,$pos+1);
+    break;
+    case "username":
+    $this->cusername=substr($tok,$pos+1);
+    break;
+    case "password":
+    $this->cpassword=substr($tok,$pos+1);
+    break;
+    }
+    $tok = strtok(" ");
+    } 
+    }
+    function dbName() { return $this->cdbname; }
+    function Host() { return $this->chost; }
+    function Port() { return $this->cport; }
+    function UserName() { return $this->cusername; }
+    function Password() { return $this->cpassword; }
+    
+    }
+    /*
+    ---------------------------------------------------------
+    "class connection" provides functionality to deal with the
+    actual database.
+    ---------------------------------------------------------
+    */
+    class connection {
+    var $my_connection;
+    var $my_temp_resultID;
+    var $my_temp_result_object = new resultSet;
+    function open($p1, $p2 = "", $p3 = "", $p4 = "", $p5="" ) {
+    global $database_type;
+    $ok = false;
+    if (($p2 == "") && ($p3 == "") && ($p4 == "") && ($p5 == "") && ($database_type==1))
+    {
+    	$this->my_connection=pg_connect($p1);
+    	$ok = true;
+    }
+    if (($p5 == "") && ($database_type==2))
+    {
+    $connINF = new ConnectionInfo;
+    $connINF->SplitThis($p1);
+    $p1=$connINF->Host();
+    $p2=$connINF->UserName();
+    $p3=$connINF->Password();
+    $p4=$connINF->dbName();
+    	$this->my_connection=mysql_connect($p1, $p2, $p3);
+    	mysql_select_db($p4,$this->my_connection);
+    	$ok = true;
+    }
+    if (!($ok))
+    {
+    	print "\n\nTHERE WAS AN ERROR CONNECTING.\n\n";
+    }
+    }	
+    function close() {
+    global $database_type;
+    if ($database_type==1)
+    	{
+    	pg_close($this->my_connection);
+    	}
+    if ($database_type==2)
+    	{
+    	mysql_close($this->my_connection);
+    	}
+    }
+    function runActionQuery($someSQL)
+    {
+    global $database_type;
+    // cleanup SQL for PHP versions! (sic)
+    if (substr($someSQL,strlen($someSQL)-1,1)==";") {
+    	 $someSQL=substr($someSQL,0,strlen($someSQL)-1);
+    	}
+    	if ($database_type==1)
+    	{
+    	pg_exec($this->my_connection, $someSQL);
+    	}
+    	
+    	if ($database_type==2)
+    	{
+    	mysql_query($someSQL, $this->my_connection);
+    	}
+    }
+    function runSQL($someSQL)	
+    {
+    	global $database_type;
+    // cleanup SQL for PHP versions! (sic)
+    if (substr($someSQL,strlen($someSQL)-1,1)==";") {
+    	 $someSQL=substr($someSQL,0,strlen($someSQL)-1);
+    	}
+    	if ($database_type==1)
+    	{
+    	
+    		$this->my_temp_resultID = pg_exec($this->my_connection, $someSQL);
+    		$this->my_temp_result_object->numrows = pg_numrows($this->my_temp_resultID);
+    		$this->my_temp_result_object->numcols = pg_numfields($this->my_temp_resultID);
+    // fill column_names from resultset
+    		for ($j=0; $j < $this->my_temp_result_object->numcols; $j++)
+    		{
+    			$this->my_temp_result_object->column_name[$j] = pg_fieldname($this->my_temp_resultID, $j);
+    		}
+    // fill data elements from resultset
+    		for ($i=0; $i < $this->my_temp_result_object->numrows; $i++)
+    		{
+    			for ($j=0; $j < $this->my_temp_result_object->numcols; $j++)
+    			{
+    $this->my_temp_result_object->element[$i][$j] = pg_result($this->my_temp_resultID, $i, $j);
+    			}
+    		}
+    		return $this->my_temp_result_object;
+    pg_freeresult($this->my_temp_resultID);
+    	}
+    if ($database_type==2)
+    	{
+    	$this->my_temp_resultID = mysql_query($someSQL, $this->my_connection);
+    	$this->my_temp_result_object->numrows = mysql_num_rows($this->my_temp_resultID);
+    	$this->my_temp_result_object->numcols = mysql_num_fields($this->my_temp_resultID);
+    		
+    // fill column_names from resultset
+    	for ($j=0; $j < $this->my_temp_result_object->numcols; $j++)
+    	{
+    		$this->my_temp_result_object->column_name[$j] = mysql_fieldname($this->my_temp_resultID, $j);
+    	}
+    // fill data elements from resultset
+    	for ($i=0; $i < $this->my_temp_result_object->numrows; $i++)
+    		{
+    		$x = mysql_fetch_row($this->my_temp_resultID);
+    		for ($j=0; $j < $this->my_temp_result_object->numcols; $j++)
+    			{
+    			$this->my_temp_result_object->element[$i][$j] = $x[$j];
+    			}
+    		}
+    	return $this->my_temp_result_object;
+    	mysql_free_result($this->my_temp_resultID);
+    	}
+    	
+    	}
+    } 
+    ?>
+
+		
+

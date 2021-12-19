@@ -1,0 +1,201 @@
+            File Information
+
+            Verifying link...
+
+            Register Your DAP
+
+Please visit our sponsor
+    //**************************************
+    // Name: Database tree layout
+    // Description:This code displays a graphical tree (similar to that of Windows' Explorer) from the contents of a database table.
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php // -*- C++ -*-
+    /* Here are the database definitions (for Solid) that i use in this code.
+    * It should not be hard to adapt it to another database.
+    */
+    /*
+    CREATE TABLE dirent_types (
+    	id	INTEGER NOT NULL,
+    	icon	VARCHAR(50),
+    	name	VARCHAR(50),
+    	PRIMARY KEY(id)
+    );
+    INSERT INTO dirent_types VALUES(1, 'folderclosed', 'Directory');
+    INSERT INTO dirent_types VALUES(2, 'document', 'File');
+    CREATE TABLE directory (
+    	id	INTEGER NOT NULL,
+    	parent	INTEGER REFERENCES directory(id),
+    	name	VARCHAR(200),
+    	icon	VARCHAR(50),
+    	typeINTEGER REFERENCES dirent_types(id),
+    	url	VARCHAR(200),
+    	PRIMARY KEY(id)
+    );
+    DROP INDEX directory_idx;
+    CREATE UNIQUE INDEX directory_idx ON directory(parent, name);
+    CREATE SEQUENCE dirent_id;
+    "CREATE PROCEDURE insert_dir_entry
+    	(name VARCHAR, parent INTEGER, type INTEGER)
+    	RETURNS(id INTEGER)
+    BEGIN
+    	EXEC SQL WHENEVER SQLERROR ABORT;
+    	EXEC SEQUENCE dirent_id.NEXT INTO id;
+    	EXEC SQL PREPARE c_insert
+    		INSERT INTO directory
+    			(id, parent, type, name)
+    			VALUES(?, ?, ?, ?);
+    	EXEC SQL EXECUTE c_insert USING (id, parent, type, name);
+    	EXEC SQL DROP c_insert;
+    END";
+    CALL insert_dir_entry('My Computer', NULL, 1);
+    CALL insert_dir_entry('Network Neighbourhood', NULL, 1);
+    CALL insert_dir_entry('lucifer.guardian.no', 2, 1);
+    CALL insert_dir_entry('rafael.guardian.no', 2, 1);
+    CALL insert_dir_entry('uriel.guardian.no', 2, 1);
+    CALL insert_dir_entry('Control Panel', NULL, 1);
+    CALL insert_dir_entry('Services', 6, 1);
+    CALL insert_dir_entry('Apache', 7, 2);
+    CALL insert_dir_entry('Solid Server 2.2', 7, 2);
+    */
+    function icon($icon, $name = '', $width = 0, $height = 0) {
+    global $DOCUMENT_ROOT;
+    $icon_loc = '/pics/menu';
+    $file = "$DOCUMENT_ROOT$icon_loc/$icon.gif";
+    if (!$width || !$height) {
+    	$iconinfo = getimagesize($file);
+    	if (!$width) {
+    	$width = $iconinfo[0];
+    	}
+    	if (!$height) {
+    	$height = $iconinfo[1];
+    	}
+    }
+    printf('<img%s border=0 align=top src="/pics/menu/%s.gif" '.
+    	'width="%d" height="%d">', $name ? " name=\"$name\"" : '',
+    	$icon, $width, $height);
+    }
+    /*
+    * Displays, recursively, the contents of a tree given a starting
+    * point.
+    *
+    * Parameters:
+    *$parent - the parent node (not listed in the directory). Node
+    * 0 is the root node.
+    *
+    *$maxdepth (optional) - maximum number of recursion levels. -1
+    * (the default value) means no limits.
+    *
+    *$ancestors (optional) - an array of the ancestor nodes in the
+    * current branch of the tree, with the node closest to the
+    * top at index 0.
+    *
+    * Global variables used:
+    *$child_nodes
+    *$node_data
+    *$last_child
+    *
+    * Global variables modified:
+    *The array pointers in $child_nodes will be modified.
+    */
+    function display_directory($parent, $showdepth = 0, $ancestors = false) {
+    global $child_nodes, $node_data, $last_child;
+    reset($child_nodes[$parent]);
+    $size = sizeof($child_nodes[$parent]);
+    $lastindex = $size - 1;
+    if (!$ancestors) {
+    	$ancestors = array();
+    }
+    $depth = sizeof($ancestors);
+    printf('<div id="node_%d" class="dirEntry" visibility="%s">',
+    	$parent, $showdepth > 0 ? 'show' : 'hide');
+    while (list($index, $node) = each($child_nodes[$parent])) {
+    	/*
+    	 For each of the uptree nodes:
+    	 If an uptree node is not the last one on its depth
+    	 of the branch, there should be a line instead of a blank
+    	 before this node's icon.
+    	 */
+    	for ($i = 0; $i < $depth; $i++) {
+    	$up_parent = (int)$node_data[$ancestors[$i]]['parent'];
+    	$last_node_on_generation = $last_child[$up_parent];
+    	$uptree_node_on_generation = $ancestors[$i];
+    	if ($last_node_on_generation == $uptree_node_on_generation) {
+    		icon("blank");
+    	} else {
+    		icon("line");
+    	}
+    	}
+    	if ($child_nodes[$node]) { // has children, i.e. it is a folder
+    	$conn_icon = "plus";
+    	$expand = true;
+    	} else {
+    	$conn_icon = "join";
+    	$expand = false;
+    	}
+    	if ($index == $lastindex) {
+    	$conn_icon .= "bottom";
+    	} elseif ($depth == 0 && $index == 0) {
+    	$conn_icon .= "top";
+    	}
+    	if ($expand) {
+    	printf("<a href=\"javascript:document.layers['node_%d'].visibility='show'\">", $node);
+    	}
+    	icon($conn_icon, "connImg_$node");
+    	if ($expand) {
+    	print("</a>");
+    	}
+    	$icon = $node_data[$node]['icon'];
+    	if (!$icon) {
+    	$type = $node_data[$node]['type'];
+    	$icon = $GLOBALS['dirent_icons'][$type];
+    	}
+    	icon($icon, "nodeImg_$node");
+    	$name = $node_data[$node]['name'];
+    	printf('&nbsp;<font size="%d">%s</font><br%c>', -1, $name, 10);
+    	if ($child_nodes[$node]) {
+    	$newdepth = $showdepth;
+    	if ($newdepth > 0) {
+    		$newdepth--;
+    	}
+    	$new_ancestors = $ancestors;
+    	$new_ancestors[] = $node;
+    	display_directory($node, $newdepth, $new_ancestors);
+    	}
+    }
+    print("</div\n>");
+    }
+    function setup_directory($parent, $maxdepth)
+    {
+    global $dirent_icons, $child_nodes, $node_data, $last_child;
+    $dirent_icons = sql_assoc('SELECT id,icon FROM dirent_types');
+    $query = 'SELECT id,parent,type,icon,name '.
+    	 'FROM directory '.
+    	 'ORDER BY parent,name';
+    $child_nodes = array();
+    $node_data = array();
+    $res = sql($query);
+    while (list($id, $parent, $type, $icon, $name) = db_fetch_row($res)) {
+    	$child_nodes[(int)$parent][] = $id;
+    	$node_data[$id] = array('id' => $id,
+    				'parent' => $parent,
+    				'type' => $type,
+    				'icon' => $icon,
+    				'name' => $name);
+    	$last_child[(int)$parent] = $id;
+    }
+    }
+    ?>
+
+		
+

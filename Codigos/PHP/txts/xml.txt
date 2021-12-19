@@ -1,0 +1,143 @@
+            File Information
+
+            Verifying link...
+
+            Register Your DAP
+
+Please visit our sponsor
+    //**************************************
+    // Name: XML DB Schema Interpreter
+    // Description:An easy to use class for handling your database schemas (table layout/design etc). Store the schema as an XML file and use this class to parse the file and (optionally) execute the SQL that's generated. Can be used for entire databases or single tables. Works with MySQL, but as there is only one function that deals with DB specific commands, it could be changed to work with other database software very easily. See http://www.heyes-computing.net/scripts/ for a zip/tar with example schema and script. by Richard Heyes
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php
+    /***************************************
+    ** Title........: XML Database Interpreter
+    ** Filename.....: xml.db.interpreter.php
+    ** Author.......: Richard Heyes
+    ** Version......: 1.0
+    ** Notes........:
+    ** Last changed.: 7/8/2000
+    ** Last change..:
+    ***************************************/
+    class xml_dbas{
+    var $xml;
+    var $data;
+    var $temp_sql;
+    var $table_options;
+    var $sql= array();
+    var $fields = array();
+    var $sql_errors = array();
+    /***************************************
+    ** Constructor function. Creates the xml
+    ** parser.
+    ***************************************/
+    function xml_dbas(){
+    $this->xml = xml_parser_create();
+    xml_set_object($this->xml, &$this);
+    }
+    /***************************************
+    ** Accessor function for $sql
+    ***************************************/
+    function get_sql(){
+    return $this->sql;
+    }
+    /***************************************
+    ** Accessor function for $sql_errors
+    ***************************************/
+    function get_sql_errors(){
+    return $this->sql_errors;
+    }
+    /***************************************
+    ** Accessor function for $data
+    ***************************************/
+    function get_data(){
+    return $this->data;
+    }
+    /***************************************
+    ** Start element function.
+    ***************************************/
+    function start_element($xml, $element, $attributes){
+    switch($element){
+    case 'DATABASE': if(isset($attributes['IF_NOT_EXISTS']) AND $attributes['IF_NOT_EXISTS'] == 'yes') $if_not_exists = 'IF NOT EXISTS '; else $if_not_exists = '';
+    $this->sql[] = 'CREATE DATABASE '.$if_not_exists.$attributes['NAME'];
+    $this->sql[] = 'USE '.$attributes['NAME'];
+    break;
+    case 'TABLE':if(isset($attributes['TEMPORARY']) AND $attributes['TEMPORARY'] == 'yes') $temporary = 'TEMPORARY '; else $temporary = '';
+    if(isset($attributes['IF_NOT_EXISTS']) AND $attributes['IF_NOT_EXISTS'] == 'yes') $if_not_exists = 'IF NOT EXISTS '; else $if_not_exists = '';
+    if(isset($attributes['OPTIONS'])AND $attributes['OPTIONS'] != '') $this->table_options = ' '.$attributes['OPTIONS']; else $this->table_options = '';
+    $this->temp_sql = 'CREATE '.$temporary.'TABLE '.$if_not_exists.$attributes['NAME'].' (';
+    break;
+    case 'FIELD':$temp_var = $attributes['NAME'].' '.$attributes['TYPE'].'('.$attributes['SIZE'].')';
+    if(isset($attributes['NULL']) AND $attributes['NULL'] == 'no') $temp_var.= ' NOT NULL'; else $temp_var .= ' NULL';
+    if(isset($attributes['DEFAULT'])) $temp_var .= " DEFAULT '".$attributes['DEFAULT']."'";
+    if(isset($attributes['EXTRA']))$temp_var .= ' '.$attributes['EXTRA'];
+    $this->fields[] = $temp_var;
+    break;
+    case 'KEY': if(isset($attributes['TYPE']) AND $attributes['TYPE'] == 'primary') $this->fields[] = 'PRIMARY KEY ('.$attributes['FIELD'].')';
+    if(isset($attributes['TYPE']) AND $attributes['TYPE'] == 'unique') $this->fields[] = 'UNIQUE '.$attributes['NAME'].' ('.$attributes['FIELD'].')';
+    if(isset($attributes['TYPE']) AND $attributes['TYPE'] == 'index')$this->fields[] = 'INDEX '.$attributes['NAME'].' ('.$attributes['FIELD'].')';
+    break;
+    default: break;
+    }
+    }
+    /***************************************
+    ** End element function.
+    ***************************************/
+    function end_element($xml, $element){
+    switch($element){
+    case 'TABLE':$this->sql[] = $this->temp_sql.implode(', ', $this->fields).')'.$this->table_options;
+    $this->temp_sql = '';
+    $this->fields= array();
+    break;
+    default: break;
+    }
+    }
+    /***************************************
+    ** Retrieve the schema of the database.
+    ** Second argument:
+    ** TRUE = is file
+    ** FALSE = is data
+    ***************************************/
+    function set_schema($data, $is_file){
+    if($is_file == TRUE){
+    if($fp = fopen($data, 'r')){
+    $this->data = fread($fp, filesize($data));
+    fclose($fp);
+    }else{
+    return('Error: Unable to open file.');
+    }
+    }else{
+    $this->data = $data;
+    }
+    }
+    /***************************************
+    ** Parse the bugger.
+    ***************************************/
+    function parse_schema(){
+    xml_parser_set_option($this->xml, XML_OPTION_CASE_FOLDING, TRUE);
+    xml_set_element_handler($this->xml, 'start_element', 'end_element');
+    xml_parse($this->xml, $this->data);
+    }
+    /***************************************
+    ** Function to execute the sql.
+    ***************************************/
+    function create_dbas($host, $user, $pass, $database = ''){
+    $connection = mysql_connect($host, $user, $pass);
+    if($database != '') mysql_select_db($database, $connection);
+    for($i=0; $i<count($this->sql); $i++) mysql_query($this->sql[$i], $connection) OR $this->sql_errors[] = mysql_error($connection);
+    }
+    } // End of class.
+    ?>
+		
+

@@ -1,0 +1,252 @@
+Please visit our sponsor
+
+    //**************************************
+    // for :OnlineUsers
+    //**************************************
+    SEE http://www.sloppycode.net/sloppycode/#php for the full source code (properly formatted), manual and download.
+    /*
+    * @title OnlineUsers Class, incorporating DataProducer class
+    * @date 22.09.01
+    * @author C.Small
+    * @version 1
+    * From an original written by Genesis <freedomfighter2015@home.com>
+    * Turned into a class with one setup method by me.
+    */
+
+    //**************************************
+    // Name: OnlineUsers
+    // Description:Track how many users are on your website with this easy to use class. The system uses a lightweight mySQL table, and is fully configurable.
+    // By: sloppycode
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:Requirements - mySQL,php 4+
+    //
+    //Side Effects:None
+    //This code is copyrighted and has limited warranties.
+    //Please see http://www.Planet-Source-Code.com/xq/ASP/txtCodeId.422/lngWId.8/qx/vb/scripts/ShowCode.htm
+    //for details.
+    //**************************************
+    
+    <?
+    /*
+    ************************************************************************
+    * © Sloppycode.net All rights reserved.
+    *
+    * This is a standard copyright header for all source code appearing
+    * at sloppycode.net. This application/class/script may be redistributed,
+    * as long as the above copyright remains intact. 
+    * Comments to sloppycode@sloppycode.net
+    ************************************************************************
+    */
+    /*
+    * @title OnlineUsers Class, incorporating DataProducer class
+    * @date 22.09.01
+    * @author C.Small
+    * @version 1
+    * From an original written by Genesis <freedomfighter2015@home.com>
+    * Turned into a class with one setup method by me.
+    */
+    /**
+    * DataProducer class
+    */
+    class DataProducer
+    {
+    	
+    		function doDataProducer($startTag,$endTag,$data,$contents)
+    		{
+    			return $this->privateDataProducer($startTag,$endTag,$data,$contents);
+    		}
+    		function doSingleDataProducer($data,$contents)
+    		{
+    			return $this->privateSingleDataProducer($data,$contents);
+    		}
+    		function openTemplate($filename)
+    		{
+    			return $this->privateopenTemplate($filename);
+    		}
+    		function privateDataProducer($startTag,$endTag,$data,$contents)
+    		{
+    				// Get start and end points
+    				$start = strpos($contents,$startTag);
+    				$end= strpos($contents,$endTag,$startTag);
+    				
+    				// Retrieve everything before start tag
+    				$prefix = substr($contents,0,$start);
+    				$prefix = rtrim($prefix);
+    				
+    				// Retrieve everything after end tag. Make it starts at the end of end-tag
+    				$suffix = substr($contents,$end + strlen($endTag),strlen($contents) - ($end + strlen($endTag)));
+    				$suffix = ltrim($suffix);
+    				
+    				// Retrieve data template. make sure it starts at the end of the start-tag.
+    				$dataTemplate = substr($contents,$start + strlen($startTag),$end - ($start + strlen($startTag)));
+    				
+    				// New method implemented here
+    				for ($i=0; $i <= sizeof($data) -1;$i++)
+    				{
+    					$tempReplace = $dataTemplate;
+    					$tempReplace = rtrim($tempReplace);
+    					
+    					$keys = array_keys($data[$i]);
+    					foreach($keys as $keyname)
+    					{
+    						if (!empty($data[$i][$keyname]))
+    						{
+    							$tempReplace = str_replace("<".$keyname.">",$data[$i][$keyname],$tempReplace);
+    						} else{
+    							$tempReplace = str_replace("<".$keyname.">","",$tempReplace);
+    						}
+    					}
+    					$build .= $tempReplace;
+    				}
+    				
+    				return $prefix . $build . $suffix;
+    		}
+    		/**
+    		 *
+    		 */
+    		function privateSingleDataProducer($data,$contents)
+    		{
+    			$result = $contents;
+    			foreach ($data as $tagname => $value)
+    			{
+    				$result = str_replace("<".$tagname.">",$value,$result);
+    			}
+    			return $result;
+    		}
+    		/**
+    		 *
+    		 */
+    		function privateOpenTemplate($filename)
+    		{		
+    				$fHnd = @fopen($filename,"r") or die("<br><b>Unable to open template: ".$filename."</b>");
+    				$contents = @fread($fHnd,filesize($filename)) or die("<br><b>Unable to open template: ".$filename."</b>");
+    				fclose($fHnd);
+    				
+    				return $contents;
+    		}
+    }
+    Class OnlineUsers Extends DataProducer
+    {
+    	// Public
+    	var $host;
+    	var $username;
+    	var $password;
+    	var $dbname;
+    	var $tablename;
+    	var $timeout;
+    	
+    	// Private
+    	var $conn;
+    	var $db;
+    	var $totalusers;
+    	
+    	function dbconnect()
+    	{
+    		$this->conn= mysql_connect($this->host,$this->username,$this->password);
+    	}
+    	
+    	function setup($createdb)
+    	{
+    		// Create database if specified
+    		if ($createdb)
+    		{
+    			$SQL= "CREATE DATABASE IF NOT EXISTS ".$this->dbname;
+    			$result = mysql_query($SQL);
+    		}
+    		
+    		// Connect to specified db + drop table if it exists
+    		$this->db = mysql_select_db($this->dbname,$this->conn);
+    	 $SQL= "DROP TABLE IF EXISTS users_online";
+    		$result = mysql_query($SQL);
+    		
+    		// Create table with tablename
+    	 $SQL= "CREATE TABLE ".$tablename." (
+    	 id int(11) auto_increment primary key not null,
+    	 ip varchar(15),
+    	 time int(11))";
+    		$result = mysql_query($SQL);
+    	}
+    	function updateAddUser()
+    	{
+    		$this->db = mysql_select_db($this->dbname,$this->conn);
+    		
+    		$current_seconds = date(U);
+    		$deadline_seconds = $current_seconds - ($this->timeout * 60);
+    		$timeout_seconds = $this->timeout * 60;
+    		
+    		// Delete users that aren't connected anymore, according to $timeout;
+    		$SQL = "DELETE FROM ".$this->tablename." WHERE time between 0 AND ".$deadline_seconds;
+    		$result = mysql_query($SQL);	
+    		$user_ip = getenv("REMOTE_ADDR");
+    		
+    		$SQL = "SELECT id FROM ".$this->tablename." WHERE ip='".$user_ip."'";
+    		$result = mysql_query($SQL);
+    		// Update them or add them
+    		if (mysql_num_rows($result) == 1)
+    		{
+    			$SQL = "UPDATE ".$this->tablename." SET time='".$current_seconds."' WHERE ip='".$user_ip."'";
+    			$result = mysql_query($SQL);
+    		} else {
+    			$SQL = "INSERT INTO ".$this->tablename." (ip,time) VALUES ('".$user_ip."','".$current_seconds."')";
+    			$result = mysql_query($SQL);
+    		}
+    	}
+    	function showFullInfo($lookuphosts,$contents)
+    	{
+    		$this->db = mysql_select_db($this->dbname,$this->conn);
+    		$current_seconds = date(U);
+    		
+    		$this->getUsersOnline();
+    		$tags['totalusers'] = $this->totalusers;
+    		$tags['timeout_seconds'] = $this->timeout * 60;
+    		$tags['timeout_minutes'] = $this->timeout;
+    		$contents = $this->doSingleDataProducer($tags,$contents);
+    		unset($tags);
+    		
+    		$SQL = "SELECT ip,time FROM ".$this->tablename;
+    		$result = mysql_query($SQL);
+    		while ($RS = mysql_fetch_array($result))
+    		{
+    			// Check it's not immediate
+    			if (($current_seconds - $RS[1]) <1)
+    			{
+    				$tags['seconds_ago'] = " 0";
+    			} else{
+    				$tags['seconds_ago'] = $current_seconds - $RS[1];
+    			}
+    			
+    			$tags['ipaddress']= $RS[0];
+    			
+    			// Lookup IP host name if specified
+    			if ($lookuphosts)
+    			{
+    				$tags['host'] = gethostbyaddr($RS[0]);
+    			}
+    			$rows[] = $tags;
+    			unset($tags);
+    		}
+    		$contents = $this->doDataProducer("<user_details>","</user_details>",$rows,$contents);
+    		return $contents;
+    	}
+    	
+    	function getUsersOnline()
+    	{
+    		$this->db = mysql_select_db($this->dbname,$this->conn);
+    		
+    		// Get number of users online
+    		$SQL = "SELECT count(ip) FROM ".$this->tablename;
+    		$result = mysql_query($SQL);
+    		$RS = mysql_fetch_row($result);
+    		$this->totalusers = $RS[0];
+    		return $RS[0];
+    	}
+    }
+    ?>
+
+		
+

@@ -1,0 +1,200 @@
+            File Information
+
+            Verifying link...
+
+            Register Your DAP
+
+Please visit our sponsor
+    //**************************************
+    // Name: Simple DBM database
+    // Description:Handles insert/delete/update to a dbm file. Can specify file and field list. No search/sort. A quick 'n dirty script. Possibly to be used as a starting point for DBM related coding :-( by Satheesh Babu
+    // By: PHP Code Exchange
+    //
+    //
+    // Inputs:None
+    //
+    // Returns:None
+    //
+    //Assumes:None
+    //
+    //Side Effects:None
+    //**************************************
+    
+    <?php
+    /*
+    * A simple script to manage a dbm file database
+    *No query/sort facility
+    * Just a quick dirty hack I put together to make something get
+    * going real fast. Code to handle field separator in data is not
+    * good... General indentation and style is way off too :-)
+    * Still, if it is useful...
+    *
+    * V.Satheesh Babu, vsbabu@csoft.net http://csoft.net/~vsbabu
+    */
+    // specify the database file here
+    $dbm = dbmopen("tst.db", "c");
+    // The directory where this file exists should be
+    // writably by httpd user...
+    // specify field separator and field headings
+    $field_separator = ":" ;
+    $fields = array ( "field1","field2","field3");
+    function print_one_record($w_mykey,$w_fields) {
+    	global $fields;
+    	if( $w_mykey)print("<H3>Modify Record</H3>\n");
+    	print("<FORM NAME=entdetails ACTION=\"$PHP_SELF\" METHOD=\"POST\">\n");
+    	print("<TABLE BORDER=\"0\" CELLSPACING=\"1\" CELLPADDING=\"0\">\n");
+    	/* we must make mykey a field, only if it is NOT defined */
+    	if ( $w_mykey )
+    		print("<TR><TH><B>Key</B></TH>\n<TH>".
+    		"<INPUT NAME=\"mykey\" TYPE=\"HIDDEN\" VALUE=\"$w_mykey\"><B>".
+    		"$w_mykey</B></TH></TR>\n");
+    	else
+    		print("<TR><TH><B>Key</B></TH>\n<TD>".
+    		"<INPUT NAME=\"mykey\" TYPE=\"TEXT\" VALUE=\"\" SIZE=35>".
+    		"</TD>\n</TR>\n");
+    	for ($i=0;$i < count($fields) ; $i++) {
+    		print("<TR>\n".
+    				"<TH>$fields[$i]</TH>\n".
+    				"<TD>".
+    				"<INPUT NAME=\"$fields[$i]\" TYPE=\"TEXT\" VALUE=\"");
+    				if ($w_fields[$i] != "")
+    					print ("$w_fields[$i]");
+    				else
+    					print ("");
+    				print("\" SIZE=35></TD>\n".
+    				"</TR>\n");
+    	}
+    		print("<TR><TD COLSPAN=\"2\">");
+    		print("<INPUT TYPE=\"RESET\" NAME=\"reset\" VALUE=\"Clear\">\n");
+    		if ( !$w_mykey ) {
+    			print("<INPUT TYPE=\"SUBMIT\" NAME=\"sub\" VALUE=\"Add\">\n");
+    		} else {
+    			print("<INPUT TYPE=\"SUBMIT\" NAME=\"del\" VALUE=\"Delete\">\n");
+    			print("<INPUT TYPE=\"SUBMIT\" NAME=\"sub\" VALUE=\"Update\">\n");
+    		}
+    		print ("</TD></TR></TABLE></FORM>\n");
+    		return;
+    	}
+    function verify_data(&$w_mykey,&$w_fields){
+    	/* for any error, show the error and ask user to go back */
+    	global $field_separator;
+    	global $fields;
+    	trim($w_mykey); ereg_replace("\n","",$w_mykey);
+    	ereg_replace($field_separator," ",$w_mykey);
+    	for ($i=0;$i < count($fields) ; $i++) {
+    	trim($w_fields[$i]);ereg_replace("\n","",$w_fields[$i]);
+    	ereg_replace($field_separator," ",$w_fields[$i]);
+    	}
+    	// add other checks as you need
+    	if ( $w_mykey == "") {
+    		$err = 1;
+    		echo "ERROR : Key cannot be null\n";
+    	}
+    return $err;
+    }
+    /*
+    * when we start, read the file and show all records
+    * Each mykey has a link, which will lead to update/delete
+    * At the bottom, there is a add new record form
+    */
+    function print_front_page($mydbm) {
+    	/* may be some header here? */
+    	global $field_separator;
+    	global $fields;
+    	print("<small><i>Click on # to edit/delete.</i></small>\n");
+    	print("<TABLE WIDTH=\"100%\" BORDER=\"0\" CELLSPACING=\"1\"".
+    		"CELLPADDING=\"0\">\n");
+    	print("<TR><TH><B>#</B></TH><TH><B>Key</B></TH>\n");
+    	for ($i=0;$i < count($fields) ; $i++)
+    		print("<TH><B>$fields[$i]</B></TH>\n");
+    	print("</TR>\n");
+    	$mykey = dbmfirstkey($mydbm);
+    	$recno=0;
+    	while ($mykey) {
+    		$record[$mykey]=dbmfetch($mydbm,$mykey);
+    		$mykey = dbmnextkey($mydbm,$mykey);
+    	}
+    	if ( count($record) > 0 ) {
+    	asort($record);
+    	for(reset($record);$mykey=key($record); next($record)){
+    		$recno++;
+    		$w_fields= explode($field_separator,$record[$mykey]);
+    		print("<TR><TH><A HREF=\"$PHP_SELF?mykey=$mykey\"><B>$recno</B></A></TH>\n");
+    		print("<TD><B>$mykey</B></TH>\n");
+    	 for ($i=0;$i < count($fields) ; $i++)
+    			print("<TD>&nbsp;$w_fields[$i]&nbsp;</TD>\n");
+    		print("</TR>\n");
+    	}
+    	}
+    	print("</TABLE>\n");
+    	print("<A NAME=\"addit\"></A><BR><BR><BR><H3>Add Record</H3>\n");
+    	print_one_record("","");
+    	return;
+    }
+    // Main
+    // force page from outside cache
+    header("Expires: Mon, 26 Jul 1997 05:00:00 GMT");
+    header("Last-Modified: " . gmdate("D, d M Y H:i:s") . "GMT");
+    header("Cache-Control: no-cache, must-revalidate");
+    header("Pragma: no-cache");
+    /*
+    * if no mykey is there, read the database, print the add form
+    * and exit
+    * if mykey is there and action is none, fetch and show the form
+    * if the mykey is there and action is update,
+    * update - then go to the front page
+    * if the mykey is there and action is delete,
+    * delete - then go to the front page
+    * if the mykey is there and action is add, check and add, front page
+    */
+    	$to_print_frontpage = 1;
+    	if ( $del ) $action = "delete";
+    	if ( $sub == "Add" ) $action = "add";
+    	if ( $sub == "Update" ) $action = "update";
+    	if( $mykey ) {
+    	 for ($i=0;$i < count($fields) ; $i++)
+    			$w_fields[$i] = ${$fields[$i]};
+    		if( $action=="update") {
+    			/* update database */
+    			if (0==verify_data($mykey,$w_fields)) {
+    				$record=implode($field_separator,$w_fields);
+    				dbmreplace($dbm,$mykey,$record);
+    			} else {
+    				print_one_record($mykey,$w_fields);
+    				$to_print_frontpage=0;
+    			}
+    		} elseif ( $action=="delete") {
+    			/* delete from database */
+    			if (dbmdelete($dbm,$mykey)){
+    				print("<B>Record for $mykey could not be deleted</B>\n");
+    			}
+    		} elseif ( $action=="add") {
+    			/* insert into database */
+    			/* we better verify things here first*/
+    			if (0==verify_data($mykey,$w_fields)) {
+    				$record=implode($field_separator,$w_fields);
+    				if (1==dbminsert($dbm,$mykey,$record)){
+    					print("<B>Key $mykey already exists with these values</B>\n");
+    					$record=dbmfetch($dbm,$mykey);
+    					$w_fields= explode($field_separator,$record);
+    					print_one_record($mykey,$w_fields);
+    					$to_print_frontpage=0;
+    				}
+    			} else {
+    				print_one_record($mykey,$w_fields);
+    				$to_print_frontpage=0;
+    			}
+    		} else {
+    			/* no action, just do a fetch and display */
+    			$record=dbmfetch($dbm,$mykey);
+    			$w_fields= explode($field_separator,$record);
+    			print_one_record($mykey,$w_fields);
+    			$to_print_frontpage=0;
+    		}
+    	}
+    	if( $to_print_frontpage==1 )print_front_page($dbm);
+    	dbmclose($dbm);
+    ?>
+
+		
+

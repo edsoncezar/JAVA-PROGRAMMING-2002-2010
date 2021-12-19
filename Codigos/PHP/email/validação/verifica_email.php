@@ -1,0 +1,22 @@
+<?
+/* Validação de e-mail by Felipe Lopes v.2.0 - 2001
+** php4@mailbr.com.br
+** php.phpgo.com
+** para usar o script, basta incluí-lo na página que se quer fazer
+** a validação do e-mail com o seguinte código:
+** require("verifica_email.php");
+** e então chamar a função da seguinte forma:
+** verifica_email($variavel_q_contem_o_email)
+** essa função retornará true se o e-mail estiver correto e, se não estiver, false.
+*/
+
+function verifica_email($email){
+if (ereg("^([0-9,a-z,A-Z]+)([.,_]([0-9,a-z,A-Z]+))*[@]([0-9,a-z,A-Z]+)([.,_,-]([0-9,a-z,A-Z]+))*[.]([0-9,a-z,A-Z]){2}([0-9,a-z,A-Z])?$", $email)){
+return true;
+}else{
+    return false;
+}
+
+}
+
+?>
