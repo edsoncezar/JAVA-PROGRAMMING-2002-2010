@@ -1,0 +1,300 @@
+#!/usr/bin/perl
+############################################################################
+#  Copyright (c) 2001 Stefano Corsi <ippo@madeinlinux.com>                 #
+#                                                                          #
+#  You may distribute under the terms of either the GNU General Public     #
+#  License or the Artistic License, as specified in the Perl README file.  #
+############################################################################
+
+### La versione
+my $VERSION=0.01;
+
+### Librerie
+use strict;
+
+### Se DEBUG
+my $DEBUG = 0;
+
+### I file di input e output
+my $INFILE = $ARGV[0];
+my $OUTFILE = $ARGV[1];
+
+### Il buffer per l'output
+my $OUTPUT = "";
+
+### La symbol table per le defines
+my $SYMTAB = {};
+
+### Se stampare o no a causa degli ifdef...
+my $noprint = 0;
+
+### ___BEGIN___ ###
+
+### Controlliamo i parametri necessari
+($ARGV[0] && $ARGV[1]) || do {
+	print stderr "Syntax: pipipi <infile> <outfile>\n";
+	exit -1;
+};
+
+### Cominciamo dal primo file
+include($INFILE);
+
+if ($DEBUG) {
+	### Stampa la symbol table
+	print "### Symbol table dump ###\n";
+	for (keys(%$SYMTAB)) {
+		print "$_: $SYMTAB->{$_}\n";
+	}
+}
+
+### Stampa il risultato finale 
+open OUTFILE, ">$OUTFILE";
+print OUTFILE $OUTPUT;
+close OUTFILE;
+
+### ___END___ ###
+
+sub parse {
+
+	my $line = shift;
+
+	### Analizziamo la linea ...
+	SWITCH: {
+
+		### Include
+		$line =~ /^\+\+\+include\([\s]*([^\s]*)[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "Inclusione di $1\n";
+			}
+			include($1);
+			last SWITCH;
+		};		
+
+		### Define semplice con un solo parametro
+		$line =~ /^\+\+\+define\([\s]*([^\s^,]*)[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "Define di $1\n";
+			}
+			pushsymbol($1, 1);
+			last SWITCH;
+		};
+
+		### Define complesso con due parametri
+		$line =~ 
+		/^\+\+\+define\([\s]*([^\s^,]*)[\s]*,[\s]*\"([^"]*)\"[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "Define di $1 come $2\n";
+			}			
+			pushsymbol($1, $2);
+			last SWITCH;
+		};
+
+		### ifdef
+		$line =~ /^\+\+\+ifdef\([\s]*([^\s^,]*)[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "ifdef di $1\n";
+			}
+			$noprint = 1;
+			if (defn($1)) {
+				$noprint = 0;	
+			}
+			last SWITCH;
+		};
+
+		### endif
+		$line =~ /^\+\+\+endif/ && do {
+			if ($DEBUG) {
+				print "endif\n";
+			}
+			$noprint = 0;
+			last SWITCH;
+		};
+
+		### (symbolo)
+		$line =~ /\+\+\+\(([^\s^,]*)\)/ && do {
+			if ($DEBUG) {
+				print "Simbolo: $1 (valore: $SYMTAB->{$1})\n";
+			}
+			my $tmp = dosymbol($1, $line);
+			parse($tmp);
+			last SWITCH;
+		};
+
+		### Default
+		($OUTPUT .= $line) unless $noprint;
+
+	}
+
+}
+
+sub include {
+	
+	my $incfile = shift;
+	local *INCFILE;
+
+	### Apre il file di include	
+	(open INCFILE, "$incfile") || die "*** Can't open include file $incfile";
+
+	### Per tutte le linee di INCFILE
+	while (<INCFILE>) {
+		parse($_);
+	}
+
+	### Chiude il file di include
+	close INCFILE;
+
+}
+
+sub pushsymbol {
+	
+	my $symbol = shift;
+	my $value = shift;
+	
+	$SYMTAB->{$symbol} = $value;	
+
+}
+
+sub dosymbol {
+	
+	my $symbol = shift;
+	my $line = shift;
+
+	my $value = $SYMTAB->{$symbol};
+	$line =~ s/\+\+\+\($symbol\)/$value/g;
+
+	if ($DEBUG) {
+		print "Ho sostituito $value a $symbol\n";
+	}
+
+	return $line;
+
+}
+
+sub defn {
+	
+	my $symbol = shift;
+
+	if ($SYMTAB->{$symbol}) {
+		return 1;
+	} 
+	return undef;
+
+}
+
+=head1 NAME
+
+pipipi - a simple perl pre-processor a la cpp (but much simpler!)
+
+=head1 DESCRIPTION
+
+PiPiPi (Perl Pre Processor) is a small script that gives you some of the 
+functionalities of his big brother cpp, the C pre processor.
+
+Pipipi implements this basic pre processor features:
+
+- File inclusion (with recursive behaviour: an include file can include
+other files...)
+- Limited symbol definition
+- Very limited ifdef behaviour (without nested ifdefs ...)
+
+Pipipi suffers of the following known problems or limitations
+
+- Little or none error checking
+- Simple syntax parsing
+- Lot of bugs probably
+
+=head1 README
+
+WHAT IS PiPiPi (pronounced peepeepee in Italian)?
+
+PiPiPi (Perl Pre Processor) is a small script that gives you some of the 
+functionalities of his big brother cpp, the C pre processor.
+
+I wrote it because I often need to create a set of scripts that shares a
+common header and a common footer. When I change the header or 
+the footer, I don't want to change all the scripts already written. 
+This is my solutions. Someone probably will have better solutions.
+
+Pipipi implements this basic pre processor features:
+
+- File inclusion (with recursive behaviour: an include file can include
+other files...)
+- Limited symbol definition
+- Very limited ifdef behaviour (without nested ifdefs ...)
+
+Pipipi suffers of the following known problems or limitations
+
+- Little or none error checking
+- Simple syntax parsing
+- Lot of bugs probably
+
+INVOCATION
+
+pipipi <infile> <outfile>
+
+where infile is the main source file, containing all the inclusions, and
+outfile is the output file resulting from pipipi parsing.
+
+SYNTAX
+
+File inclusion:
+
++++include(filename)
+
+Symbol definition:
+
++++define(symbol)
++++define(symbol, "value")
+
+Note: you have to use \"\" quotes to define symbols with values. Otherwise
+it will mess it up...
+
+You can also define symbols with other symbols:
+
++++define(car1, "ford")
++++define(car2, "mercedes")
++++define(cars, "+++(car1) and +++(car2)")
+
+print "Two famous cars: +++(cars)";
+ 
+
+Ifdef conditionals:
+
++++ifdef(symbol)
+... code ...
++++endif
+
+EXAMPLE
+
+To see pipipi in action with the templates you find in the distribution dir
+you have to type: 
+	pipipi body.plt out.pl
+	perl out.pl
+
+REMARK
+
+pipipi is meant to be used with perl, but can be used anywhere you need a simple
+pre processor with limited but useful features.
+
+Enjoy!
+
+	Stefano Corsi <ippo@madeinlinux.com>
+
+=head1 PREREQUISITES
+
+This script requires the C<strict> module.  It also requires
+C<Mail::Send 1.08>.
+
+=head1 COREQUISITES
+
+=pod OSNAMES
+
+any
+
+=pod SCRIPT CATEGORIES
+
+CPAN/Administrative
+
+=cut
+
+

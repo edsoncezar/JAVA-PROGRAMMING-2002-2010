@@ -1,0 +1,427 @@
+#!/usr/bin/perl -w
+# hgrep: 
+#   Grep headers of newsspool/maildir/mbox style files: two very special
+#   features here:
+#   1. Everything after first blank line is ignored. (In mbox files pattern
+#      matching resumes after the next line matching /^From /.)
+#   2. Continued header lines are handled properly, either as multiple lines
+#      in the output (default) or joined.
+#
+# Possible future enhancement(s): 
+#   grep MIME segment headers
+#   grep headers of attachments/bodies of type "message/rfc822"
+#   decode 8bit content in message headers (RFC1342)
+#   option to specify which headers to match on or to ignore
+#
+# Copyright 1998 Eli the Bearded. <eli+cpan@panix.com>
+#
+
+use strict;
+use integer;
+use vars qw { $VERSION %options };
+
+$VERSION = '1.0';
+
+# Set some defaults for the options.
+%options = (
+
+##   show the file name in the output, if set
+     showfile => 1,
+
+##   show the line number, if set
+     showline => 0,
+
+##   show matched text, if set
+     matches => 1,
+
+##   unlink matching files, if set
+     unlink => 0,
+
+##   put separators between matches, if set
+     separator => 0,
+
+##   join lines of continued headers, if set
+     join => 0,
+
+##   count files/matches, if set
+     count => 0,
+
+##   only show final count, if set
+     silentcount => 0,
+
+##   treat the arguments as directories and process all files in them, if set
+##   (useful for specifing newsspool directories that might otherwise be too
+##   long for a single command line)
+     readdir => 0,
+
+##   treat as mbox format, if set
+##   this meanst that rather than one header per file, there can be many, each
+##   begins after a line matching /^From /
+     mbox => 0,
+
+##   show a letter count, if set
+##   useful for knowing which letters in a mbox contributed each match
+     lcount => 0,
+
+##   show usage and exit, if set
+     help => 0,
+
+);
+
+
+
+# This is the most hackish part of this. It is a standard little bit of
+# code that will toggle 0/1 boolean values of variables based on their
+# presence in the command line. This makes for very simple options parsing
+# that *need not change at all when I add new options*.
+
+while ($ARGV[0] =~ /^--?(\w+)/) {
+  my $tmp = $1;
+  
+  if (defined ($options{$tmp})) {
+    # Toggle value
+    $options{$tmp} ^= 1;
+  } else {
+    warn "$0: Bad option: $1; use --help for help\n";
+  }
+  shift;
+}
+
+if ($options{help}) {
+  print <<"HGrepUsage";
+hgrep version $VERSION by Eli the Bearded
+
+grep through RFC822-style headers, skipping body part of message.
+Continued header lines are handled correctly.
+
+Usage:
+	hgrep [options] perlre [file ... | directory ...]
+
+Options:
+(  set)    -showfile 	       show the file name in the output
+(unset)    -showline 	       show the line number
+(  set)    -matches            show matched text
+(unset)    -unlink             unlink (delete) matching files
+(unset)    -separator          put separators between matches
+(unset)    -join               join lines of continued headers in output
+(unset)    -count              count files/matches
+(unset)    -silentcount        only show final count
+(unset)    -readdir            treat the arguments as directories and process
+            		       all files in them
+(unset)    -mbox               treat as mbox format { > 1 message per file}
+(unset)    -lcount             show a letter count {for mbox files}
+(unset)    -help               show usage and exit
+
+All options are toggles. Default values shown in (parentheses). If one
+was previously set, it is now unset, if previously unset it is not set.
+Options can be included multiple times. -unlink is a dangerous option.
+See perlre(1) for regexp help.
+
+HGrepUsage
+  exit(0);
+}
+
+# Now grab the RE from the command line.
+my $pat=shift;
+
+my $file;
+my $countm = 0;
+my $countf = 0;
+my $sep = '';	# sep is the file separator
+
+# Process the files.
+foreach $file (@ARGV) {
+  my $filename;
+  my $rc;
+
+  if ($options{readdir}) {
+    # "$file" is really a directory
+    opendir (D, $file) or die "Could not open directory $file:\n$!\n";
+    while (defined($filename=readdir(D))) {
+
+      print $sep; # print before setting, in case this is the first pass
+
+      # If we are just dealing with the current directory, don't
+      # prepend the directory to the filename.
+      if ($file eq '.') {
+        $rc = &checkfile(\$filename);
+      } else {
+        $rc = &checkfile(\"$file/$filename");
+      }
+
+      if ($options{separator} and $rc) {
+        $sep = "------\n";
+      } else {
+        $sep = '';
+      }
+    }
+    closedir D;
+  } else {
+
+    # we are just dealing with files
+    print $sep;
+    $rc = &checkfile(\$file);
+
+    if ($options{separator} and $rc) {
+      $sep = "------\n";
+    } else {
+      $sep = '';
+    }
+
+  }
+  if ($countf > 1 and $options{count}) {
+    print "$countf files with $countm matches\n";
+  }
+}
+
+# Check a file.
+sub checkfile {
+  my $file = shift;
+  my $last;
+  my $matchc;
+  my $countl;
+  my $separ = ''; # separ is the intrafile match separator
+
+  if (open(IN,"<$$file")) {
+    undef($last);
+    $matchc = 0;
+    $countl = 1;
+
+
+    while(<IN>){
+     # Since we have not choped/chomped $_, if we have anything begining with
+     # whitespace and at least two bytes, we are not at the end of the headers.
+     if (/^\s+./) {
+       # Append
+       if ($options{join}) {
+	 chomp $last;
+	 $last.=" $_"
+       } else {
+	 $last.=$_
+       }
+     } else {
+       my $field;
+       if (defined($last)) {
+         $field=0;
+
+         if ($last =~ /$pat/os) {
+	   # Found a match, do something
+
+           print $separ;
+	   chomp $last;
+	   $matchc++;
+	   $countm++;
+
+	   if ($options{showfile}) {
+	     print ":" if $field;
+	     print "$$file";
+	     $field++;
+	   }
+	   if ($options{lcount}) {
+	     print ":" if $field;
+	     print "$countl";
+	     $field++;
+	   }
+	   # Showline should print the line number of the start of the
+	   # header matched.
+	   if ($options{showline}) {
+	     print ":" if $field;
+	     print (($. - ($last =~ tr:\n::) - 1));
+	     $field++;
+	   }
+	   if ($options{matches}) {
+	     print ":" if $field;
+	     print "$last";
+	     $field++;
+	   }
+	   
+	   print "\n" if $field;
+	   $separ = "---\n" if $options{separator};
+
+	   goto ENDFILE if    (!$options{matches} or $options{unlink})
+	                   and !$options{count};
+	    
+	 } # found a match
+
+       }
+       if (/^\s$/) {
+	 last unless $options{mbox};
+	 $countl++;
+
+	 # Skip to next message
+	 while(<IN>) {
+	   last if /^From /
+	 }
+
+       }
+       # Set
+       $last=$_
+     }
+    } # while <IN>
+
+ENDFILE:
+    # $. resets on close
+    close IN;
+    unlink $$file if ($options{unlink} and $matchc);
+    print "$$file-$matchc\n" if $options{count} and !$options{silentcount};
+    $countf++ if $matchc;
+  
+    return $matchc;
+  } # if open IN
+
+  else {
+    warn "Can't open $$file: $!\n";
+    return 0;
+  }
+} # end &checkfile 
+
+__END__
+
+=head1 NAME
+
+hgrep - grep through RFC822-style headers, skipping body part of message.
+
+=head1 README
+
+hgrep - grep through RFC822-style headers, skipping body part of message.
+
+=head1 DESCRIPTION
+
+hgrep greps headers of newsspool/maildir/mbox style files with two very
+special features.
+
+   1. Everything after first blank line is ignored. (In mbox files pattern
+      matching resumes after the next line matching /^From /.)
+
+   2. Continued header lines are handled properly, either as multiple lines
+      in the output (default) or joined.
+
+=head1 USAGE
+
+	hgrep [options] perlre [file ... | directory ...]
+
+Options:
+
+=over 4
+
+=item *
+
+(  set)    -showfile 	       
+
+Show the file name in the output.
+
+=item *
+
+(unset)    -showline 	       
+
+Show the line number of start of matching header.
+
+=item *
+
+(  set)    -matches            
+
+Show matched text.
+
+=item *
+
+(unset)    -unlink            
+
+Unlink (delete) matching files. A dangerous option to use.
+
+=item *
+
+(unset)    -separator          
+
+Put separators between matches. A line with six hyphens (------) will
+appear between matching files; a line with three hyphens (---) will
+appear between matches within files.
+
+=item *
+
+(unset)    -join              
+
+Join lines of continued headers in output.
+
+=item *
+
+(unset)    -count             
+
+Count matching files and matches per file.
+
+=item *
+
+(unset)    -silentcount       
+
+With -count, only show final count rather than a count for each
+file.
+
+=item *
+
+(unset)    -readdir           
+
+Treat the arguments as directories and process all files in them.
+Useful for specifing newsspool directories that might otherwise be too
+long for a single command line.
+
+=item *
+
+(unset)    -mbox              
+
+Treat as mbox format (look for more than one message per file).
+
+=item *
+
+(unset)    -lcount            
+
+Show a letter count (for mbox files). 'Letter count' is the message
+number in the file for the match.
+
+=item *
+
+(unset)    -help              
+
+Show usage and exit.
+
+=back
+
+
+All options are toggles. Default values shown in (parentheses). If one
+was previously set, it is now unset, if previously unset it is not set.
+Options can be included multiple times. -unlink is a dangerous option.
+
+=head1 PREREQUISITES
+
+The regular expressions available are limited to your installed version
+of perl. The C<strict>, C<vars>, and C<integer> pragma modules are used.
+
+=head1 COREQUISITES
+
+No optional CPAN modules needed.
+
+=head1 OSNAMES
+
+A unix-like directory structure is assumed.
+
+=head1 SEE ALSO
+
+L<perlre>(1) for regular expression help
+
+=head1 COPYRIGHT
+
+Copyright 1998 by Eli the Bearded / Benjamin Elijah Griffin.
+Released under the same license(s) as Perl.
+
+=head1 AUTHOR
+
+Eli the Bearded originally wrote this to tool to help manage incoming
+files for a moderated newsgroup. The -unlink option was added for nuking
+spam.
+
+=pod SCRIPT CATEGORIES
+
+Mail
+News
+
+=cut
+
+

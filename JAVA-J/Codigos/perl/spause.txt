@@ -1,0 +1,675 @@
+#!/usr/bin/perl -w
+use strict;
+use vars qw(%opts $ua $lines_max @pagers @dists);
+use Term::ReadLine;
+use Getopt::Std;
+use LWP::UserAgent;
+use Config;
+use IO::Handle;
+# use the CPAN module to install distributions
+use CPAN;
+# if you want to use CPAN::QuickInstall to install
+# distributions, which dispenses with getting the
+# CPAN index files for explicitly named distributions,
+# comment out the 'use CPAN;' line above and
+# uncomment the 'use CPAN::QuickInstall' line below
+# see 'perldoc spause' for details on getting CPAN::QuickInstall
+
+#use CPAN::QuickInstall;
+
+$lines_max = $ENV{LINES} || 20;
+search_pagers();
+getopts('a:m:d:r:c:hs', \%opts);
+$ua = new LWP::UserAgent;
+$ua->agent("$0/0.1 " . $ua->agent);
+print "\n";
+TYPE: {
+  if ($opts{'a'}) {
+    get_cpanid();
+    search_shell() if defined $opts{s};
+    last TYPE;
+  }
+  if ($opts{'m'}) {
+    get_mod();
+    search_shell() if defined $opts{s};
+    last TYPE;
+  }
+  if ($opts{'d'}) {
+    get_dist();
+    search_shell() if defined $opts{s};
+    last TYPE;
+  }
+  if ($opts{'r'}) {
+    if ($opts{r} !~ /^\d+$/) {
+      print "\nPlease specify the 'recent' option by an integer\n(representing the most recent uploads in days)\n\n";
+      exit;
+    }
+    get_recent();
+    search_shell() if defined $opts{s};
+    last TYPE;
+  }
+  if ($opts{'c'}) {
+    check_mod();
+    search_shell() if defined $opts{s};
+    last TYPE;
+  }
+  if (defined $opts{'s'}) {
+    search_shell();
+    last TYPE;
+  }
+  if (defined $opts{'h'}) {
+    help();
+    last TYPE;
+    exit;
+  }
+  help();
+}
+print "\n";
+
+
+sub search_shell {
+  my $term = Term::ReadLine->new('PAUSE-search interface');
+  my $rl_package = $term->ReadLine;
+  my $prompt = 'spause> ';
+  my $OUT = $term->OUT || '';
+  select $OUT;
+  my ($rl_avail);
+  if ($rl_package eq "Term::ReadLine::Gnu") {
+    $rl_avail = 'enabled';
+  } 
+  else {
+    if ($rl_package eq 'Term::ReadLine::Perl'  ||
+	$rl_package eq 'Term::ReadLine::readline_pl') {
+      $rl_avail = 'enabled';
+    } 
+    else {
+      $rl_avail = "available (get Term::ReadKey and"
+	. " Term::ReadLine::[Perl|GNU])";
+    }
+  }
+  my $number;
+  print <<"END";
+
+Interactive interface to search PAUSE via the web.
+TermReadLine $rl_avail. Type 'help' or '?'  for help.
+
+END
+  while ( defined ($_ = $term->readline($prompt)) ) {
+    last if /^\s*(quit|exit|q)\s*$/;
+    if (/^\s*(h|help|\?)\s*$/) {
+      shell_help();
+      next;
+    }
+    print "\n";
+  TYPE: {
+      if (($opts{a} = $_) =~ s/^\s*a\s+(.*?)\s*$/$1/) {
+	if ($opts{a} =~ /\S+/) {
+	  get_cpanid();
+	}
+	else {
+	  print "Please specify an author name or ID search term\n";
+	}
+	last TYPE;
+      }
+      if (($opts{m} = $_) =~ s/^\s*m\s+(.*?)\s*$/$1/) {
+	if ($opts{m} =~ /\S+/) {
+	  get_mod();
+	}
+	else {
+	  print "Please specify a module name search term\n";
+	}
+	last TYPE;
+      }
+      if (($opts{d} = $_) =~ s/^\s*d\s+(.*?)\s*$/$1/) {
+	if ($opts{d} =~ /\S+/){
+	  get_dist();
+	}
+	else {
+	  print "Please specify a distribution search term\n";
+	}
+	last TYPE;
+      }
+      if (($opts{r} = $_) =~ s/^\s*r\s+(.*?)\s*$/$1/) {
+	 if ($opts{r} =~ /\S+/) {
+	   get_recent();
+	 }
+	else {
+	  print "Please specify a maximum age (in days)\n";
+	}
+	last TYPE;
+      }
+      if (($opts{c} = $_) =~ s/^\s*c\s+(.*?)\s*$/$1/) {
+	if ($opts{c} =~ /\S+/) {
+	  check_mod();
+	}
+	else {
+	  print "Please specify a module search term\n";
+	}
+	last TYPE;
+      }
+      if (($number = $_) =~ s/^\s*install\s+(.*?)\s*$/$1/) {
+	if ($number =~ /^\d+$/) {
+	  search_install($dists[$number]);
+	}
+	else {
+	  print "Please specify a number associated with the last successful search results\n";
+	}
+	last TYPE;
+      }
+      if (($number = $_) =~ s/^\s*l\s+(.*?)\s*$/$1/) {
+	if ($number =~ /^\d+$/) {
+	  list_mods($dists[$number]);
+	}
+	else {
+	  print "Please specify a number associated with the last successful search results\n";
+	}
+	last TYPE;
+      }
+      print qq{Sorry - "$_" not understood. Type 'help' or '?' for help.\n} if /\S/;
+    }
+    $term->addhistory($_) if (defined $_  and /\S/);
+    print "\n";
+  }
+}
+
+sub get_dist {
+  my ($count, $packname, $cpanid);
+  format DIST =
+[@<.] @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<   @<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$count, $packname, $cpanid
+.
+  
+  my $req = new HTTP::Request 'GET' => "http://theoryx5.uwinnipeg.ca/mod_perl/cpan-search?text=on&request=dist&search=$opts{d}";
+$req->header('Accept' => 'text/html');
+my $res = $ua->request($req);
+if ($res->is_success) {
+  @dists = ();
+  my @lines = split /\n/, $res->content;
+  $count = 1;
+  if (@lines > $lines_max) {
+    foreach my $pager (@pagers) {
+      open (PAGER, "| $pager") or next;
+      format_page_number PAGER 1;
+      format_name PAGER 'DIST';
+      foreach (@lines) {
+	chomp;
+	($packname, $cpanid) = split /\s+/, $_;
+	write PAGER;
+	$dists[$count] = $cpanid . '/' . $packname;
+	$count++;
+      }
+      close(PAGER) or next;
+      last;
+    }
+  }
+  else {
+    local $~ = 'DIST';
+    foreach (@lines) {
+      if (/^\s*Sorry/) {
+	print "\t", $_, "\n\n";
+	last;
+      }
+      else {
+	chomp;
+	($packname, $cpanid) = split /\s+/, $_;
+	write;
+	$dists[$count] = $cpanid . '/' . $packname;
+	$count++;	
+      }
+    }
+  }
+}
+else {
+  print "Error: " . $res->status_line . "\n";
+}
+
+}
+
+sub get_cpanid {
+  my ($cpanid, $identity);
+  format CPANID =
+@<<<<<<<<<<<<<<<   @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$cpanid, $identity
+.
+  my $req = new HTTP::Request 'GET' => "http://theoryx5.uwinnipeg.ca/mod_perl/cpan-search?text=on&request=cpanid&search=$opts{a}";
+$req->header('Accept' => 'text/html');
+my $res = $ua->request($req);
+if ($res->is_success) {
+  my @lines = split /\n/, $res->content;
+  if (@lines > $lines_max) {
+    foreach my $pager (@pagers) {
+      open (PAGER, "| $pager") or next;
+      format_name PAGER 'CPANID';
+      foreach (@lines) {
+	chomp;
+	($cpanid, $identity) = split (/\s+/, $_, 2);
+	write PAGER;
+      }
+      close(PAGER) or next;
+      last;
+    }
+  }
+  else {
+    local $~ = 'CPANID';
+    foreach (@lines) {
+      if (/^\s*Sorry/) {
+	print "\t", $_, "\n\n";
+	last;
+      }
+      else {
+	chomp;
+	($cpanid, $identity) = split (/\s+/, $_, 2);
+	write;
+      }
+    }
+  }
+}
+else {
+  print "Error: " . $res->status_line . "\n";
+}
+}
+
+sub get_mod {
+ my ($count, $modname, $location); 
+  format MOD =
+[@<.] @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<    @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$count, $modname, $location
+.
+
+  my $req = new HTTP::Request 'GET' => "http://theoryx5.uwinnipeg.ca/mod_perl/cpan-search?text=on&request=mod&search=$opts{m}";
+$req->header('Accept' => 'text/html');
+my $res = $ua->request($req);
+if ($res->is_success) {
+  @dists = ();
+  my @lines = split /\n/, $res->content;
+  $count = 1;
+  if (@lines > $lines_max) {
+    foreach my $pager (@pagers) {
+      open (PAGER, "| $pager") or next;
+      format_name PAGER 'MOD';
+      foreach (@lines) {
+	chomp;
+	($modname, $location) = split /\s+/, $_;
+	write PAGER;
+	$dists[$count] = $location;
+	$count++;
+      }
+      close(PAGER) or next;
+      last;
+    }
+  }
+  else {
+    local $~ = 'MOD';
+    foreach (@lines) {
+      if (/^\s*Sorry/) {
+	print "\t", $_, "\n\n";
+	last;
+      }
+      else {
+	chomp;
+	($modname, $location) = split /\s+/, $_;
+	write;
+	$dists[$count] = $location;
+	$count++;
+      }
+    }
+  }
+}
+else {
+  print "Error: " . $res->status_line . "\n";
+}
+
+}
+
+sub list_mods {
+  my $dist = shift;
+  (my $dist_strip = $dist) =~ s!.*/(.*)!$1!;
+  my $req = new HTTP::Request 'GET' => "http://theoryx5.uwinnipeg.ca/mod_perl/cpan-search?text=on&request=modlist&search=$dist_strip";
+  $req->header('Accept' => 'text/html');
+  my $res = $ua->request($req);
+  if ($res->is_success) {
+    print "Module list for $dist:\n\n";
+    my @lines = split /\n/, $res->content;
+    if (@lines > $lines_max) {
+      foreach my $pager (@pagers) {
+	open (PAGER, "| $pager") or next;
+	foreach (@lines) {
+	  print "\t", $_, "\n";
+	}
+	close(PAGER) or next;
+	last;
+      }
+    }
+    else {
+      foreach (@lines) {
+	print "\t", $_, "\n";
+      } 
+    }
+  }
+  else {
+    print "Error: " . $res->status_line . "\n";
+  }
+}
+
+sub get_recent {
+ my ($count, $birth, $location);
+  format RECENT =
+[@<.] @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<    @<<<<<<<<<<<<<
+$count, $location, $birth
+.
+
+ my $req = new HTTP::Request 'GET' => "http://theoryx5.uwinnipeg.ca/mod_perl/cpan-search?text=on&request=recent&age_request=$opts{r}";
+$req->header('Accept' => 'text/html');
+my $res = $ua->request($req);
+if ($res->is_success) {
+  @dists = ();
+  my @lines = split /\n/, $res->content;
+  $count = 1;
+  if (@lines > $lines_max) {
+    foreach my $pager (@pagers) {
+      open (PAGER, "| $pager") or next;
+      format_name PAGER 'RECENT';
+      foreach (@lines) {
+	chomp;
+	($location, $birth) = split /\s+/, $_;
+	write PAGER;
+	$dists[$count] = $location;
+	$count++;
+      }
+      close(PAGER) or next;
+      last;
+    }
+  }
+  else {
+    local $~ = 'RECENT';
+    foreach (@lines) {
+      chomp;
+      ($location, $birth) = split /\s+/, $_;
+      write;
+      $dists[$count] = $location;
+      $count++;
+    } 
+  }
+}
+else {
+  print "Error: " . $res->status_line . "\n";
+}
+
+}
+
+sub check_mod {
+  eval "use $opts{c}";
+  if (! $@) {
+    print "$opts{c} is installed\n\n";
+  }
+  else {
+    print "$opts{c} is not available under any of the following directories:\n\n";
+    foreach (@INC) {
+      print $_, "\n";
+    }
+  }
+}
+
+sub help {
+  print <<"EOH";
+Usage: spause [ -d | -m | -a | -r | -c ] [ -s ] search_term
+       spause [ -s | -h ]
+
+where -d specifies the search term is a distribution
+      -m specifies the search term is a module
+      -a specifies the search term is an author name or CPAN ID
+      -r list PAUSE uploads newer than the specified age (in days)
+      -c check for the local installation of the named module
+      -s launch into the interactive shell mode
+      -h print this help screen
+
+EOH
+  
+  exit;
+}
+
+sub shell_help {
+  print << 'EOH';
+
+d search_term       Search for named distribution
+m search_term       Search for named module
+a search_term       Search for CPAN author or id
+r days              List PAUSE uploads newer than the specified days
+c module_name       Check for local installation of named module
+install number      Install numbered distribution from last search
+l number            List modules in numbered distribution from last search
+h                   Print this help screen
+
+EOH
+}
+
+sub search_install {
+  my $dist = shift;
+  CPAN::Shell->install($dist);
+}
+  
+sub search_pagers {
+  push @pagers, $Config{pager};
+  if ($^O =~ /Win32/) {
+    push @pagers, qw( more less notepad );
+    unshift @pagers, $ENV{PAGER}  if $ENV{PAGER};
+  } 
+  elsif ($^O eq 'VMS') {
+    push @pagers, qw( most more less type/page );
+  } 
+  elsif ($^O eq 'os2') {
+    unshift @pagers, 'less', 'cmd /c more <';
+  }
+  else {
+    if ($^O eq 'os2') {
+      unshift @pagers, 'less', 'cmd /c more <';
+    } 
+    push @pagers, qw( more less pg view cat );
+    unshift @pagers, $ENV{PAGER}  if $ENV{PAGER};
+  }
+}
+
+__END__
+
+=head1 NAME
+
+spause - search PAUSE over the web
+
+=head1 SYNOPSIS
+
+ spause [ -d | -m | -a | -r | -c ] [ -s ] search_term
+ spause [ -s | -h ]
+
+ where -d specifies the search term is a distribution
+       -m specifies the search term is a module
+       -a specifies the search term is an author name or CPAN ID
+       -r list PAUSE additions newer than the specified age (in days)
+       -c check for the local installation of the named module
+       -s launch into the interactive shell mode
+       -h print this help screen
+
+=head1 README
+
+This script searches PAUSE (the module area of CPAN) via a database
+over the web by distribution, module, or author name, as well as listing 
+recent PAUSE uploads. In the interactive shell mode it can also install, 
+by the CPAN module, matched distributions returned from the search, as
+well as listing modules in such distributions.
+
+=head1 DESCRIPTION
+
+This script can be used to search I<PAUSE>, the modules
+area of CPAN, by distribution, module, or author name,
+as well listing the most recent uploads by a specified age.
+It also has an interactive shell mode by which distributions
+returned from a search can be installed, as well as a
+listing made of the modules contained in the distribution.
+It can also check if a given module is present on your system.
+The script uses a remote CPAN search database for retrieving the
+information, and as such is probably most useful for
+quick, specific searches. This may especially be true for
+slower network connections, where the time taken to load the
+index files of the C<CPAN> module and/or invoking a browser 
+for a web-based search may inconvenient. For more involved 
+explorations, though, the C<CPAN> module or a web-based search 
+is probably more efficient.
+
+Some examples of the use of this script are as follows.
+Note that searches by distribution, module, and author name
+are case insensitive, and that giving multiple search queries
+will require that all terms match.
+
+=over
+
+=item * List most recent PAUSE uploads in the last day
+
+ bash$ spause -r 1
+
+ [1 .] G/GE/GEOFF/Apache-RequestNotes_0.02.tar.gz    2000-03-16
+ [2 .] VKHERA/Apache-Sandwich-2.04.tar.gz            2000-03-16
+ [3 .] C/CO/CORLISS/curses_widgets_1_2.tar.gz        2000-03-16
+
+=item * List distributions with C<Syslog> in the name
+
+ bash$ spause -d Syslog
+
+ [1 .] Net-Syslog-0.03.tar.gz              L/LH/LHOWARD
+ [2 .] Syslog-0.93.tar.gz                  M/MH/MHARNISCH
+ [3 .] SyslogScan-0.32.tar.gz              RHNELSON
+ [4 .] Tie-Syslog-1.03.tar.gz              B/BR/BROCSEIB
+
+=item * List distributions with C<Syslog> and C<Tie> in the name
+
+ bash$ spause -d "Syslog tie"
+
+ [1 .] Tie-Syslog-1.03.tar.gz              B/BR/BROCSEIB
+
+=item * Get author information for C<BROCSEIB>
+
+ bash$ spause -a BROCSEIB
+
+ B/BR/BROCSEIB      Broc Seib <bseib@purdue.edu>
+
+=item * List PAUSE uploads in the last day, and then
+invoke the interactive shell
+
+ bash$ spause -r 1 -s
+
+ [1 .] G/GE/GEOFF/Apache-RequestNotes_0.02.tar.gz   2000-03-16
+ [2 .] VKHERA/Apache-Sandwich-2.04.tar.gz           2000-03-16
+ [3 .] C/CO/CORLISS/curses_widgets_1_2.tar.gz       2000-03-16
+
+ Interactive interface to search PAUSE via the web.
+ TermReadLine enabled. Type 'help' or '?'  for help.
+
+ spause>
+
+=item * List modules in the Apache-Sandwich distribution
+(numbered 2 in the most recent search results)
+
+ spause> l 2
+
+ Module list for VKHERA/Apache-Sandwich-2.04.tar.gz:
+
+       Apache::Sandwich
+
+=item * Check for local installation of Apache::Sandwich
+
+ spause> c Apache::Sandwich
+
+ Apache::Sandwich is not available under any of the following directories:
+
+ /usr/lib/perl5/5.00503/i686-linux
+ /usr/lib/perl5/5.00503
+ /usr/lib/perl5/site_perl/5.005/i686-linux
+ /usr/lib/perl5/site_perl/5.005
+ .
+
+=item * Install the Apache-Sandwich distribution
+(numbered 2 in the most recent search results)
+
+ spause> install 2
+
+  [uses the CPAN module to fetch, build, test, and install the module]
+
+=item * Check for distributions with C<lib> and C<net> in the name
+
+ spause> d lib net
+
+ [1 .] Bundle-libnet-1.00.tar.gz           GBARR
+ [2 .] libnet-1.0702.tar.gz                GBARR
+
+=item * Check for modules with C<Net> and C<ftp> in the name
+
+ spause> m Net ftp
+
+ [1 .] Net::FTP                GBARR/libnet-1.0702.tar.gz
+ [2 .] Net::FTP::A             GBARR/libnet-1.0702.tar.gz
+ [3 .] Net::FTP::dataconn      GBARR/libnet-1.0702.tar.gz
+ [4 .] Net::FTP::E             GBARR/libnet-1.0702.tar.gz
+ [5 .] Net::FTP::I             GBARR/libnet-1.0702.tar.gz
+ [6 .] Net::FTP::L             GBARR/libnet-1.0702.tar.gz
+ [7 .] Net::TFTP               GBARR/Net-TFTP-0.10.tar.gz
+
+=item * Check for local installation of C<Net::FTP>
+
+ spause> c Net::FTP
+
+ Net::FTP is installed
+
+=item * Quit the interactive session
+
+ spause> q
+
+ bash$
+
+=back
+
+In this script the CPAN module is used to install distributions.
+When invoked in this way CPAN.pm will first fetch its required 
+index files, which actually are not strictly needed 
+for installing a distribution named explicitly (with full file
+name and CPAN directory). You may want to consider using the
+CPAN::QuickInstall module, available at
+http://theoryx5.uwinnipeg.ca/auto/CPAN-QuickInstall-0.01.tar.gz,
+which dispenses with the loading of the index files - install
+this module through the normal procedure of, after unpacking,
+C<perl Makefile.PL>, C<make>, and C<make test>. A change in this
+script, as described at the top, is then required. Note that,
+with either CPAN or CPAN::QuickInstall, no check is made
+to see if the distribution to be installed is initially present
+on your system.
+
+=head1 PREREQUISITES
+
+This script uses the C<Getopt::Std>, C<Term::ReadLine>,
+C<LWP::UserAgent>, C<Config>, C<FileHandle>, and C<CPAN>
+modules.
+
+=head1 OSNAMES
+
+any
+
+=head1 SCRIPT CATEGORIES
+
+CPAN
+
+=head1 AUTHOR
+
+Randy Kobes <randy@theory.uwinnipeg.ca>.
+
+=head1 SEE ALSO
+
+L<CPAN>
+
+=head1 COPYRIGHT
+
+This script is Copyright (c) 2000, by Randy Kobes. 
+All rights reserved. You may distribute this code under the terms 
+of either the GNU General Public License or the Artistic License, 
+as specified in the Perl README file.
+
+=cut
+
+
+

@@ -1,0 +1,1804 @@
+<HTML>
+<HEAD>
+<TITLE>Day 21 -- Under the Hood</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Day&nbsp;21</FONT>
+</H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Under the Hood</FONT></H1>
+<P>
+<I><B>by Charles L. Perkins and Laura Lemay</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#TheBigPicture">
+The Big Picture</A>
+<UL>
+<LI><A HREF="#WhyItsaPowerfulVision">
+Why It's a Powerful Vision</A>
+</UL>
+<LI><A HREF="#TheJavaVirtualMachine">
+The Java Virtual Machine</A>
+<UL>
+<LI><A HREF="#AnOverview">
+An Overview</A>
+<LI><A HREF="#TheFundamentalParts">
+The Fundamental Parts</A>
+<LI><A HREF="#TheConstantPool">
+The Constant Pool</A>
+<LI><A HREF="#Limitations">
+Limitations</A>
+</UL>
+<LI><A HREF="#TheBytecodeInterpreter">
+The Bytecode Interpreter</A>
+<LI><A HREF="#JustinTimeCompilers">
+Just-in-Time Compilers</A>
+<LI><A HREF="#TheClassFileFormat">
+The Class File Format</A>
+<LI><A HREF="#MethodSignatures">
+Method Signatures</A>
+<LI><A HREF="#TheGarbageCollector">
+The Garbage Collector</A>
+<UL>
+<LI><A HREF="#TheProblem">
+The Problem</A>
+<LI><A HREF="#TheSolution">
+The Solution</A>
+<LI><A HREF="#JavasParallelGarbageCollector">
+Java's Parallel Garbage Collector</A>
+</UL>
+<LI><A HREF="#TheSecurityStory">
+The Security Story</A>
+<UL>
+<LI><A HREF="#WhyYouShouldWorry">
+Why You Should Worry</A>
+<LI><A HREF="#WhyYouMightNotHaveTo">
+Why You Might Not Have To</A>
+<LI><A HREF="#JavasAppletSecurityModel">
+Java's Applet Security Model</A>
+<LI><A HREF="#SignedApplets">
+Signed Applets</A>
+<LI><A HREF="#ComingUpinJava">
+Coming Up in Java 1.1</A>
+</UL>
+<LI><A HREF="#Summary">
+Summary</A>
+<LI><A HREF="#QampABR">
+Q&amp;A<BR>
+</A>
+</UL>
+
+<HR>
+<P>
+Today the inner workings of the Java system will be revealed.
+<P>
+You'll find out all about Java's vision, Java's virtual machine,
+those bytecodes you've heard so much about, that mysterious garbage
+collector, and why you might worry about security but don't have
+to.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The title of this chapter well describes its content; the discussion in today's lesson is quite technical and assumes that you know something about low-level languages (assembly) and compiler/interpreter design concepts.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Let's begin, however, with the big picture.
+<H2><A NAME="TheBigPicture"><FONT SIZE=5 COLOR=#FF0000>
+The Big Picture</FONT></A></H2>
+<P>
+The Java team is very ambitious. Their ultimate goal is nothing
+less than to revolutionize the way software is written and distributed.
+They've started with the Internet, where they believe much of
+the interesting software of the future will live.
+<P>
+To achieve such an ambitious goal, a large portion of the Internet
+programming community itself must be marshaled behind a similar
+goal and given the tools to help achieve it. The Java language,
+with its four S's (small, simple, safe, secure) and its flexible,
+Net-oriented environment, hopes to become the focal point for
+the rallying of this new legion of programmers.
+<P>
+To this end, Sun Microsystems has done something rather gutsy.
+What was originally a secret, tens-of-millions-of-dollars research-and-development
+project, and 100 percent proprietary, has become a free, open,
+and relatively unencumbered technology standard upon which anyone
+can build. They are literally <I>giving it away</I> and reserving
+only the rights they need to maintain and grow the standard.
+<P>
+Any truly open standard must be supported by at least one excellent,
+freely available &quot;demonstration&quot; implementation. Sun
+has already shipped the 1.0 version of Java as part of the JDK,
+and has published specifications for the language itself and for
+the virtual machine and bytecode compilers. In parallel, several
+universities, companies, and individuals have already expressed
+their intention to duplicate the Java environment based on the
+open API that Sun has created.
+<P>
+In addition, the Java runtime environment is being incorporated
+into a wide variety of operating systems and environments on different
+platforms. Microsoft and Apple have licensed Java to include the
+runtime in Windows and the MacOS. A Java runtime will be available
+on IBM systems (OS/2 and AIX) as well as on nearly every commercial
+flavor of UNIX. What this means is that applications written in
+Java will be automatically executable on these systems, without
+any other software needing to be installed. These steps have been
+significant in making Java ubiquitous as not only the language
+for the Internet but also the language for future software development.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Throughout this book, the Java runtime and the Java virtual machine are referred to interchangeably. While there are some slight differences between the two, equating them highlights the single <I>environment</I> that must be created to support Java.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Several other languages are even contemplating compiling down
+to Java bytecodes, to help support them in becoming a more robust
+and widespread standard for moving executable content around on
+the Net.
+<H3><A NAME="WhyItsaPowerfulVision">
+Why It's a Powerful Vision</A></H3>
+<P>
+One of the reasons this brilliant move on Sun's part has a real
+chance of success is the pent-up frustration of literally a whole
+generation of programmers who desperately want to share their
+code with one another. Right now, the computer science world is
+balkanized into factions at universities and companies all over
+the world, with hundreds of languages, dozens of them widely used,
+dividing and separating us all. It's the worst sort of Tower of
+Babel. Java hopes to build some bridges and help tear down that
+tower. Because it is so simple, because it's so useful for programming
+over the Internet, and because the Internet is so &quot;hot&quot;
+right now-this confluence of forces should help propel Java onto
+center stage.
+<P>
+It deserves to be there. It is the natural outgrowth of ideas
+that, since the early 1970s inside the Smalltalk group at Xerox
+PARC, have lain relatively dormant in the mainstream. Smalltalk,
+in fact, invented the first object-oriented bytecode interpreter
+and pioneered many of the deep ideas that Java builds on today.
+Those efforts were not embraced over the intervening decades as
+a solution to the general problems of software, however. Today,
+with those problems becoming so much more obvious, and with the
+Net crying out for a new kind of programming, the soil is fertile
+to grow something stronger from those old roots, something that
+just might spread like wildfire. (Is it a coincidence that Java's
+previous internal names were Green and OAK?)
+<P>
+This new vision of software is one in which the Net becomes an
+ocean of objects, classes, and the open APIs between them. Traditional
+applications have vanished, replaced by skeletal frameworks like
+the Eiffel Tower into which can be fitted any parts from this
+ocean, on demand, to suit any purpose. User interfaces will be
+mixed and matched, built in pieces and constructed to taste, whenever
+the need arises, <I>by their own users</I>. Menus of choices will
+be filled by dynamic lists of <I>all</I> the choices available
+for that function, at that exact moment, across the entire ocean
+(of the Net).
+<P>
+In such a world, software distribution is no longer an issue.
+Software will be <I>everywhere</I> and will be paid for via a
+plethora of new micro-accounting models, which charge tiny fractions
+of cents for the parts as they are assembled and used. Frameworks
+will come into existence to support entertainment, business, and
+the social (cyber-)spaces of the near future.
+<P>
+This is a dream that many of us have waited <I>all our lives</I>
+to be a part of. There are tremendous challenges to making it
+all come true, but the powerful winds of change we all feel must
+stir us into action because, at last, there is a base on which
+to build that dream-Java.
+<H2><A NAME="TheJavaVirtualMachine"><FONT SIZE=5 COLOR=#FF0000>
+The Java Virtual Machine</FONT></A></H2>
+<P>
+To make visions like this possible, Java must be ubiquitous. It
+must be able to run on any computer and any operating system-now
+and in the future. In order to achieve this level of portability,
+Java must be very precise not only about the language itself,
+but about the environment in which the language lives. You've
+seen throughout this book that the Java environment includes a
+generally useful set of packages of classes and a freely available
+implementation of them. This takes care of a part of what is needed,
+but it is crucial also to specify exactly how the runtime environment
+of Java behaves.
+<P>
+This final requirement is what has stymied many attempts at ubiquity
+in the past. If you base your system on any assumptions about
+what is beneath the runtime system, you lose. If you depend in
+any way on the computer or operating system below, you lose. Java
+solves this problem by <I>inventing</I> an abstract computer of
+its own and running on that.
+<P>
+This <I>virtual machine</I>, as it's called, and which you've
+used throughout this book as the Java bytecode interpreter, runs
+a special set of instructions, called <I>bytecodes</I>, that are
+simply a stream of formatted bytes, each of which has a precise
+specification of exactly what each bytecode does to this virtual
+machine. The virtual machine is also responsible for certain fundamental
+capabilities of Java, such as object creation and garbage collection.
+<P>
+Finally, in order to be able to move bytecodes safely across the
+Internet, you need a bulletproof model of security-and how to
+maintain it-and a precise format for how this stream of bytecodes
+can be sent from one virtual machine to another.
+<P>
+Each of these requirements is addressed in today's lesson.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Much of the following description is based closely on the latest &quot;Virtual Machine Specifications&quot; documents (and the 1.0 bytecodes), so if you delve more deeply into the details online, you should cover some familiar ground.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="AnOverview">
+An Overview</A></H3>
+<P>
+It is worth quoting the introduction to the Java virtual machine
+documentation here, because it is so relevant to the vision outlined
+earlier:
+<BLOCKQUOTE>
+The Java virtual machine specification has a purpose that is both
+like and unlike equivalent documents for other languages and abstract
+machines. It is intended to present an abstract, logical machine
+design free from the distraction of inconsequential details of
+any implementation. It does not anticipate an implementation technology
+or an implementation host. At the same time it gives a reader
+sufficient information to allow implementation of the abstract
+design in a range of technologies.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+However, the intent of the [...] Java project is to create a language
+[...] that will allow the interchange over the Internet of &quot;executable
+content,&quot; which will be embodied by compiled Java code. The
+project specifically does not want Java to be a proprietary language
+and does not want to be the sole purveyor of Java language implementations.
+Rather, we hope to make documents like this one, and source code
+for our implementation, freely available for people to use as
+they choose.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+This vision [...] can be achieved only if the executable content
+can be reliably shared between different Java implementations.
+These intentions prohibit the definition of the Java virtual machine
+from being fully abstract. Rather, relevant logical elements of
+the design have to be made sufficiently concrete to allow the
+interchange of compiled Java code. This does not collapse the
+Java virtual machine specification to a description of a Java
+implementation; elements of the design that do not play a part
+in the interchange of executable content remain abstract. But
+it does force us to specify, in addition to the abstract machine
+design, a concrete interchange format for compiled Java code.
+</BLOCKQUOTE>
+<P>
+The Java virtual machine specification consists of the following:
+<UL>
+<LI>The bytecode syntax, including opcode and operand sizes, values,
+and types, and their alignment and endian-ness
+<LI>The values of any identifiers (for example, type identifiers)
+in bytecodes or in supporting structures
+<LI>The layout of the supporting structures that appear in compiled
+Java code (for example, the constant pool)
+<LI>The Java <TT>.class</TT> file
+format 
+</UL>
+<P>
+Each of these is covered today.
+<P>
+Despite this degree of specificity, there are still several elements
+of the design that remain (purposely) abstract, including the
+following:
+<UL>
+<LI>The layout and management of the runtime data areas
+<LI>The particular garbage-collection algorithms, strategies,
+and constraints used
+<LI>The compiler, development environment, and runtime extensions
+(apart from the need to generate and read valid Java bytecodes)
+<LI>Any optimizations performed when valid bytecodes are received
+</UL>
+<P>
+These places are where the creativity of a virtual machine implementor
+has full rein.
+<H3><A NAME="TheFundamentalParts">
+The Fundamental Parts</A></H3>
+<P>
+The Java virtual machine can be divided into five fundamental
+pieces:
+<UL>
+<LI>A set of registers
+<LI>A bytecode instruction set
+<LI>A stack
+<LI>A garbage-collected heap
+<LI>An area for storing methods
+</UL>
+<P>
+Some of these might be implemented by using an interpreter, a
+native binary code compiler, or even a hardware chip-but all these
+logical, abstract components of the virtual machine must be supplied
+in <I>some</I> form in every Java system.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+`The memory areas used by the Java virtual machine are not required to be at any particular place in memory, to be in any particular order, or even to use contiguous memory. However, all but the method area must be able to represent aligned 32-bit values 
+(for example, the Java stack is 32 bits wide).</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The virtual machine, and its supporting code, is often referred
+to as the <I>runtime environment</I>, and when this book refers
+to something being done at runtime, the virtual machine is what's
+doing it.
+<H4>Java Bytecodes</H4>
+<P>
+The Java virtual machine instruction set is optimized to be small
+and compact. It is designed to travel across the Net, and so has
+traded off speed-of-interpretation for space. (Given that both
+Net bandwidth and mass storage speeds increase less rapidly than
+CPU speed, this seems like an appropriate trade-off.)
+<P>
+As mentioned, Java source code is &quot;compiled&quot; into bytecodes
+and stored in a <TT>.class</TT> file.
+On Sun's Java system, this is performed using the Java compiler
+(<TT>javac</TT>). The Java compiler
+is not exactly a traditional &quot;compiler,&quot; because it
+translates source code into bytecodes, a lower-level format that
+cannot be run directly but must be further interpreted by each
+computer. Of course, it is exactly this level of indirection that
+buys you the power, flexibility, and extreme portability of Java
+code.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Quotation marks are used around the word &quot;compiler&quot; when talking about the Java compiler because later today you will also learn about the &quot;just-in-time&quot; compiler, which acts more like the back end of a traditional compiler. The use of 
+the same word &quot;compiler&quot; for these two different pieces of Java technology is unfortunate, but somewhat reasonable, because each is really one-half (either the front or the back end) of a more traditional compiler.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+A bytecode instruction consists of a one-byte opcode that serves
+to identify the instruction involved and zero or more operands,
+each of which may be more than one byte long, that encode the
+parameters the opcode requires.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+When operands are more than one byte long, they are stored in big-endian order, high-order byte first. These operands must be assembled from the byte stream at runtime. For example, a 16-bit parameter appears in the stream as two bytes so that its value is 
+<TT>first_byte * 256 + second_byte</TT>. The bytecode instruction stream is only byte-aligned, and alignment of any larger quantities is not guaranteed (except inside the special bytecodes <TT>lookupswitch</TT> and <TT>tableswitch</TT>, which have special 
+alignment rules of their own).
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Bytecodes interpret data in the runtime memory areas as belonging
+to a fixed set of types: the primitive types you've seen several
+times before, consisting of several signed integer types (8-bit
+<TT>byte</TT>, 16-bit <TT>short</TT>,
+32-bit <TT>int</TT>, 64-bit <TT>long</TT>),
+one unsigned integer type (16-bit <TT>char</TT>),
+and two signed floating-point types (32-bit <TT>float</TT>,
+64-bit <TT>double</TT>), plus the
+type &quot;reference to an object&quot; (a 32-bit pointer-like
+type). Some special bytecodes (for example, the <TT>dup</TT>
+instructions) treat runtime memory areas as raw data, without
+regard to type. This is the exception, however-not the rule.
+<P>
+These primitive types are distinguished and managed by the Java
+compiler, not by the Java runtime environment. These types are
+not identified in memory, and therefore cannot be distinguished
+at runtime. Different bytecodes are designed to handle each of
+the various primitive types uniquely, and the compiler carefully
+chooses from this palette based on its knowledge of the actual
+types stored in the various memory areas. For example, when adding
+two integers, the compiler generates an <TT>iadd</TT>
+bytecode; for adding two floats, <TT>fadd</TT>
+is generated.
+<P>
+Specifics about the Java bytecodes themselves are contained in
+appendix D, &quot;Bytecodes Reference.&quot;
+<H4>Registers</H4>
+<P>
+The registers of the Java virtual machine are just like the registers
+inside a real computer.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>New Terms</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+<I>Registers</I> are used to temporarily store data. In the Java vritual machine registers hold the machine's state, affect its operation, and are updated after each bytecode is executed.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The following are the Java registers:
+<UL>
+<LI><TT>pc</TT>, the program counter,
+which indicates what bytecode is being executed
+<LI><TT>optop</TT>, a pointer to the
+top of the operand stack, which is used to evaluate all arithmetic
+expressions
+<LI><TT>frame</TT>, a pointer to the
+execution environment of the current method, which includes an
+activation record for this method call and any associated debugging
+information
+<LI><TT>vars</TT>, a pointer to the
+first local variable of the currently executing method
+</UL>
+<P>
+The virtual machine defines these registers to be 32 bits wide.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Because the virtual machine is primarily stack-based, it does not use any registers for passing or receiving arguments. This is a conscious choice skewed toward bytecode simplicity and compactness. It also aids efficient implementation on computer systems 
+with fewer registers. </BLOCKQUOTE>
+<BLOCKQUOTE>
+By the way, the <TT>pc</TT> register is also used when the runtime handles exceptions; <TT>catch</TT> clauses are (ultimately) associated with ranges of the <TT>pc</TT> within a method's bytecodes.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H4>The Stack</H4>
+<P>
+The Java virtual machine is stack-based. A Java stack frame is
+similar to the stack frame of a conventional programming language-it
+holds the state for a single method call. Frames for nested method
+calls are stacked on top of this frame.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>New Term</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The <I>stack</I> is used to supply parameters to bytecodes and methods, and to receive results back from them.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Each stack frame contains three (possibly empty) sets of data:
+the local variables for the method call, its execution environment,
+and its operand stack. The sizes of the first two are fixed at
+the start of a method call, but the operand stack varies in size
+as bytecodes are executed in the method.
+<P>
+Local variables are stored in an array of 32-bit slots, indexed
+by the register <TT>vars</TT>. Most
+types take up one slot in the array, but the <TT>long</TT>
+and <TT>double</TT> types each take
+up two slots.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Long and double values, stored or referenced via an index <TT>N</TT>, take up the (32-bit) slots <TT>[N]</TT> and <TT>[N]+1</TT>. These 64-bit values are therefore not guaranteed to be 64-bit-aligned. Implementors are free to decide the appropriate way to 
+divide these values between the two slots.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The <I>execution environment</I> in a stack frame helps to maintain
+the stack itself. It contains a pointer to the previous stack
+frame, a pointer to the local variables of the method call, and
+pointers to the stack's current &quot;base&quot; and &quot;top.&quot;
+Additional debugging information can also be placed into the execution
+environment.
+<P>
+The <I>operand stack</I>, a 32-bit first-in-first-out (FIFO) stack,
+is used to store the parameters and return values of most bytecode
+instructions. For example, the <TT>iadd</TT>
+bytecode expects two integers to be stored on the top of the stack.
+It pops them, adds them together, and pushes the resulting sum
+back onto the stack.
+<P>
+Each primitive data type has unique instructions that know how
+to extract, operate, and push back operands of that type. For
+example, <TT>long</TT> and <TT>double</TT>
+operands take two positions on the stack, and the special bytecodes
+that handle these operands take this into account. It is illegal
+for the types on the stack and the instruction operating on them
+to be incompatible (the Java compiler outputs bytecodes that always
+obey this rule).<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The top of the operand stack and the top of the overall Java stack are almost always the same. Thus, &quot;the stack&quot; refers to both stacks, collectively.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H4>The Heap</H4>
+<P>
+The <I>heap</I> is that part of memory from which newly created
+instances (objects) are allocated.
+<P>
+The heap is often assigned a large, fixed size when the Java runtime
+system is started, but on systems that support virtual memory,
+it can grow as needed, in a nearly unbounded fashion.
+<P>
+Because objects are automatically garbage-collected in Java, programmers
+do not have to (and, in fact, <I>cannot</I>) manually free the
+memory allocated to an object when they are finished using it.
+<P>
+Java objects are referenced indirectly in the runtime via <I>handles,</I>
+which are a kind of pointer into the heap.
+<P>
+Because objects are never referenced directly, parallel garbage
+collectors can be written that operate independently of your program,
+moving around objects in the heap at will. You'll learn more about
+garbage collection in the section &quot;The Garbage Collector,&quot;
+later in this lesson.
+<H4>The Method Area</H4>
+<P>
+Like the compiled code areas of conventional programming language
+environments, or the <TT>TEXT</TT>
+segment in a UNIX process, the <I>method area</I> stores the Java
+bytecodes that implement almost every method in the Java system.
+(Remember that some methods might be declared <TT>native</TT>,
+and thus implemented, for example, in C.) The method area also
+stores the symbol tables needed for dynamic linking as well as
+any other additional information debuggers or development environments
+that might want to associate with each method's implementation.
+<P>
+Because bytecodes are stored as byte streams, the method area
+is aligned on byte boundaries. (The other areas are all aligned
+on 32-bit word boundaries.)
+<H3><A NAME="TheConstantPool">
+The Constant Pool</A></H3>
+<P>
+In the heap, each class has an array of constants, called a <I>constant
+pool</I>, available to it. Usually created by the Java compiler,
+these constants encode all the names (of variables, methods, and
+so forth) used by any method in a class. The class contains a
+count of how many constants there are and an offset that specifies
+how far into the class description itself the array of constants
+begins. These constants are typed via specially coded bytes and
+have a precisely defined format when they appear in the <TT>.class</TT>
+file for a class. Later today, a little of this file format is
+covered, but everything is fully specified by the virtual machine
+specifications in your Java release.
+<H3><A NAME="Limitations">
+Limitations</A></H3>
+<P>
+The virtual machine, as currently defined, places some restrictions
+on legal Java programs by virtue of the choices it has made (some
+were previously described, and more will be detailed later today).
+<P>
+These limitations and their implications are
+<UL>
+<LI>32-bit pointers, which imply that the virtual machine can
+address only 4GB of memory (this may be relaxed in later releases)
+<LI>Unsigned 16-bit indices into the exception, line number, and
+local variable tables, which limits the size of a method's bytecode
+implementation to 64KB (this limitation may be eliminated in the
+final release)
+<LI>Unsigned 16-bit indices into the constant pool, which limits
+the number of constants in a class to 64KB (a limit on the complexity
+of a class)
+</UL>
+<P>
+In addition, Sun's implementation of the virtual machine uses
+so-called <TT>_quick</TT> bytecodes,
+which further limit the system. Unsigned 8-bit offsets into objects
+may limit the number of methods in a class to 256 (this limit
+may not exist in the final release), and unsigned 8-bit argument
+counts limit the size of the argument list to 255 32-bit words.
+(Although this means that you can have up to 255 arguments of
+most types, you can have only 127 of them if they're all <TT>long</TT>
+or <TT>double</TT>.)
+<H2><A NAME="TheBytecodeInterpreter"><FONT SIZE=5 COLOR=#FF0000>
+The Bytecode Interpreter</FONT></A></H2>
+<P>
+A bytecode interpreter examines each opcode byte (bytecode) in
+a method's bytecode stream, in turn, and executes a unique action
+for that bytecode. This might consume further bytes for the operands
+of the bytecode and might affect which bytecode will be examined
+next. It operates like the hardware CPU in a computer, which examines
+memory for instructions to carry out in exactly the same manner.
+It is the software CPU of the Java virtual machine.
+<P>
+Your first, naive attempt to write such a bytecode interpreter
+will almost certainly be disastrously slow. The inner loop, which
+dispatches one bytecode each time through the loop, is notoriously
+difficult to optimize. In fact, smart people have been thinking
+about this problem, in one form or another, for more than 20 years.
+Luckily, they've gotten results, all of which can be applied to
+Java.
+<P>
+The final result is that the interpreter shipped in the current
+release of Java has an extremely fast inner loop. In fact, on
+even a relatively slow computer, this interpreter can perform
+more than 590,000 bytecodes per second! This is really quite good-the
+CPU in that computer does only about 30 times better, and it has
+the advantage of using the hardware to do it.
+<P>
+This interpreter is fast enough for most Java programs (and for
+those <I>requiring</I> more speed, they can always use native
+methods-see yesterday's discussion), but what if a smart implementor
+wants to do better?
+<H2><A NAME="JustinTimeCompilers"><FONT SIZE=5 COLOR=#FF0000>
+Just-in-Time Compilers</FONT></A></H2>
+<P>
+About a decade ago, a really clever trick was discovered by Peter
+Deutsch while trying to make Smalltalk run faster. He called it
+dynamic translation during interpretation. Sun calls it &quot;just-in-time&quot;
+(or JIT) compiling, which, effectively, means converting the relatively
+slow interpreted bytecode into native machine code just before
+running it-and therefore getting very close to native performance
+out of cross-platform Java bytecode.
+<P>
+The trick is to notice that the really fast interpreter you've
+just written-in C, for example-already has a useful sequence of
+native binary code for each bytecode that it interprets: <I>the
+binary code that the interpreter itself is executing</I>. Because
+the interpreter has already been compiled from C into native binary
+code, for each bytecode that it interprets, it passes through
+a sequence of native code instructions for the hardware CPU on
+which it is running. By saving a copy of each binary instruction
+as it's executed, the interpreter can keep a running log of the
+binary code it <I>itself </I> has run to interpret a bytecode.
+It can just as easily keep a log of the set of bytecodes that
+it ran to interpret an entire method.
+<P>
+You take that log of instructions and &quot;peephole-optimize&quot;
+it, just as a smart compiler does (<I>peephole optimization</I>
+involves taking a short sequence on instructions and replacing
+them with a shorter or faster set of instructions). This eliminates
+redundant or unnecessary instructions from the log, and makes
+it look just like the optimized binary code that a good compiler
+might have produced.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+This is where the name compiler comes from, in &quot;just-in-time&quot; compiler, but it's really only the back end of a traditional compiler-the part that does code generation. By the way, the front end here is the Java compiler (<TT>javac</TT>).
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Here's where the trick comes in. The next time that method is
+run (in exactly the same way), the interpreter can now simply
+execute directly the stored log of binary native code. Because
+this optimizes the inner-loop overhead of each bytecode, as well
+as any other redundancies between the bytecodes in a method, it
+can gain a factor of 10 or more in speed. In fact, an experimental
+version of this technology at Sun has shown that Java programs
+using it can run as fast as compiled C programs.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The parenthetical qualifier in the last paragraph is needed because if anything is different about the input to the method, it takes a different path through the interpreter and must be relogged. (There are sophisticated versions of this technology that 
+solve this, and other, difficulties.) The cache of native code for a method must be invalidated whenever the method has changed, and the interpreter must pay a small cost up front each time a method is run for the first time. However, these small 
+bookkeeping costs are far outweighed by the amazing gains in speed possible.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Just-in-time compilers, often called just JIT compilers, are becoming
+increasingly popular, and many major vendors (including Microsoft
+and Symantec) are competing in this realm. Microsoft's Internet
+Explorer 3.0 ships with a JIT compiler already. You'll learn more
+about the various JIT compilers available (or soon to be) on Day
+28, &quot;Emerging Technologies.&quot;
+<H2><A NAME="TheClassFileFormat"><FONT SIZE=5 COLOR=#FF0000>
+The Class File Format</FONT></A></H2>
+<P>
+A Java <I>class file</I> is the file generated by the Java compiler
+with a <TT>.class</TT> extension.
+You won't be given the entire <TT>.class</TT>
+file format here, only a taste of what it's like. (You can read
+all about it in the release documentation.) It's mentioned here
+because it is one of the parts of Java that needs to be specified
+carefully if all Java implementations are to be compatible with
+one another, and if Java bytecodes are expected to travel across
+arbitrary networks-to and from arbitrary computers and operating
+systems-and yet arrive safely.
+<P>
+The rest of this section paraphrases, and extensively condenses,
+the latest release of the class file documentation.
+<P>
+Java class files are used to hold the compiled versions of both
+Java classes and Java interfaces. Compliant Java interpreters
+must be capable of dealing with all class files that conform to
+the following specification.
+<P>
+A Java class file consists of a stream of 8-bit bytes. All 16-bit
+and 32-bit quantities are constructed by reading in two or four
+8-bit bytes, respectively. The bytes are joined together in big-endian
+order. (Use <TT>java.io.DataInput</TT>
+and <TT>java.io.DataOutput</TT> to
+read and write class files.)
+<P>
+The class file format is presented below as a series of C-<TT>struct</TT>-like
+structures. However, unlike a C <TT>struct</TT>,
+there is no padding or alignment between pieces of the structure.
+Each field of the structure may be of variable size, and an array
+may be of variable size (in this case, some field prior to the
+array gives the array's dimension). The types <TT>u1</TT>,
+<TT>u2</TT>, and <TT>u4</TT>
+represent an unsigned 1-, 2-, or 4-byte quantity, respectively.
+<P>
+Attributes are used at several different places in the class file
+format. All attributes have the following format:
+<BLOCKQUOTE>
+<PRE>
+GenericAttribute_info {
+    u2 attribute_name;
+    u4 attribute_length;
+    u1 info[attribute_length];
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>attribute_name</TT> is a 16-bit
+index into the class's constant pool; the value of <TT>constant_pool[attribute_name]</TT>
+is a string giving the name of the attribute. The field <TT>attribute_length</TT>
+gives the length of the subsequent information in bytes. This
+length does not include the 6 bytes needed to store <TT>attribute_name</TT>
+and <TT>attribute_length</TT>. In
+the examples in the rest of this section, whenever an attribute
+is required, names of all the attributes that are currently understood
+are listed. In the future, more attributes will be added. Class
+file readers are expected to skip over and ignore the information
+in any attributes they do not understand.
+<P>
+The following pseudo-structure gives a top-level description of
+the format of a class file:
+<BLOCKQUOTE>
+<PRE>
+ClassFile {
+    u4  magic;
+    u2  minor_version
+    u2  major_version
+    u2  constant_pool_count;
+    cp_info         constant_pool[constant_pool_count - 1];
+    u2  access_flags;
+    u2  this_class;
+    u2  super_class;
+    u2  interfaces_count;
+    u2  interfaces[interfaces_count];
+    u2  fields_count;
+    field_info      fields[fields_count];
+    u2  methods_count;
+    method_info     methods[methods_count];
+    u2  attributes_count;
+    attribute_info  attributes[attribute_count];
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Here's one of the smaller structures used:
+<BLOCKQUOTE>
+<PRE>
+method_info {
+    u2  access_flags;
+    u2  name_index;
+    u2  signature_index;
+    u2  attributes_count;
+    attribute_info  attributes[attribute_count];
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Finally, here's a sample of one of the later structures in the
+class file description:
+<BLOCKQUOTE>
+<PRE>
+Code_attribute {
+    u2  attribute_name_index;
+    u2  attribute_length;
+    u1  max_stack;
+    u1  max_locals;
+    u2  code_length;
+    u1  code[code_length];
+    u2  exception_table_length;
+    {  u2   start_pc;
+       u2   end_pc;
+       u2   handler_pc;
+       u2   catch_type;
+    }  exception_table[exception_table_length];
+    u2  attributes_count;
+    attribute_info  attributes[attribute_count];
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+None of this is meant to be completely comprehensible (although
+you might be able to guess at what a lot of the structure members
+are for), but just suggestive of the sort of structures that live
+inside class files. Because the compiler and runtime sources are
+available, you can always begin with them if you actually have
+to read or write class files yourself. Therefore, you don't need
+to have a deep understanding of the details, even in that case.
+<H2><A NAME="MethodSignatures"><FONT SIZE=5 COLOR=#FF0000>
+Method Signatures</FONT></A></H2>
+<P>
+Because method signatures are used in class files, now is an appropriate
+time to explore them in the detail promised on earlier days-but
+they're probably most useful to you when writing the native methods
+of yesterday's lesson.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>New Terms</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The <I>method</I> <I>signature</I>, in this instance, is a string representing the type of method, field, or array.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+A <I>field signature</I> represents the value of an argument to
+a method or the value of a variable and is a series of bytes in
+the following grammar:
+<BLOCKQUOTE>
+<PRE>
+    &lt;field signature&gt; := &lt;field_type&gt;
+    &lt;field type&gt;      := &lt;base_type&gt; | &lt;object_type&gt; | &lt;array_type&gt;
+    &lt;base_type&gt;       := B | C | D | F | I | J | S | Z
+    &lt;object_type&gt;     := L &lt;full.ClassName&gt; ;
+    &lt;array_type&gt;      := [ &lt;optional_size&gt; &lt;field_type&gt;
+    &lt;optional_size&gt;   := [0-9]*
+</PRE>
+</BLOCKQUOTE>
+<P>
+Here are the meanings of the base types: <TT>B</TT>
+(<TT>byte</TT>), <TT>C</TT>
+(<TT>char</TT>), <TT>D</TT>
+(<TT>double</TT>), <TT>F</TT>
+(<TT>float</TT>), <TT>I</TT>
+(<TT>int</TT>), <TT>J</TT>
+(<TT>long</TT>), <TT>S</TT>
+(<TT>short</TT>), and <TT>Z</TT>
+(<TT>boolean</TT>).
+<P>
+A <I>return-type signature</I> represents the return value from
+a method and is a series of bytes in the following grammar:
+<BLOCKQUOTE>
+<PRE>
+    &lt;return signature&gt;    := &lt;field type&gt; | V
+</PRE>
+</BLOCKQUOTE>
+<P>
+The character <TT>V</TT> (<TT>void</TT>)
+indicates that the method returns no value. Otherwise, the signature
+indicates the type of the return value. An <I>argument signature</I>
+represents an argument passed to a method:
+<BLOCKQUOTE>
+<PRE>
+    &lt;argument signature&gt;  := &lt;field type&gt;
+</PRE>
+</BLOCKQUOTE>
+<P>
+Finally, a <I>method signature</I> represents the arguments that
+the method expects and the value that it returns:
+<BLOCKQUOTE>
+<PRE>
+    &lt;method_signature&gt;    := (&lt;arguments signature&gt;) &lt;return signature&gt;
+    &lt;arguments signature&gt; := &lt;argument signature&gt;*
+</PRE>
+</BLOCKQUOTE>
+<P>
+Let's try out the new rules: A method called <TT>complexMethod()</TT>
+in the class <TT>my.package.name.ComplexClass</TT>
+takes three arguments-a <TT>long</TT>,
+a <TT>boolean</TT>, and a two-dimensional
+array of <TT>short</TT>s-and returns
+<TT>this</TT>. Then its method signature
+is <TT>(JZ[[S)Lmy.package.name.ComplexClass;</TT>.
+<P>
+A method signature is often prefixed by the name of the method,
+or by its full package (using an underscore in the place of dots)
+and its class name followed by a slash (<TT>/</TT>)
+and the name of the method, to form a <I>complete method signature</I>.
+(You saw several of these generated in stub comments yesterday.)
+Now, at last, you have the full story! Thus, the following:
+<BLOCKQUOTE>
+<PRE>
+my_package_name_ComplexClass/complexMethod(JZ[[S)Lmy.package.name.ComplexClass;
+</PRE>
+</BLOCKQUOTE>
+<P>
+is the full, complete method signature of <TT>complexMethod()</TT>.
+(Phew!)
+<H2><A NAME="TheGarbageCollector"><FONT SIZE=5 COLOR=#FF0000>
+The Garbage Collector</FONT></A></H2>
+<P>
+Decades ago, programmers in both the Lisp and Smalltalk communities
+realized how extremely valuable it is to be able to ignore memory
+deallocation. They realized that, although allocation is fundamental,
+deallocation is forced on the programmer by the laziness of the
+system-<I>it</I> should be able to figure out what is no longer
+useful, and get rid of it. In relative obscurity, these pioneering
+programmers developed a whole series of garbage collectors to
+perform this job, each getting more sophisticated and efficient
+as the years went by. Finally, now that the mainstream programming
+community has begun to recognize the value of this automated technique,
+Java can become the first really widespread application of the
+technology those pioneers developed.
+<H3><A NAME="TheProblem">
+The Problem</A></H3>
+<P>
+Imagine that you're a programmer in a C-like language (probably
+not too difficult for you, because these languages are the dominant
+ones right now). Each time you create something, anything, <I>dynamically</I>
+in such a language, you are completely responsible for tracking
+the life of that object throughout your program and mentally deciding
+when it will be safe to deallocate it. This can be quite a difficult
+(sometimes impossible) task, because any of the other libraries
+or methods you've called might have &quot;squirreled away&quot;
+a pointer to the object, unbeknownst to you. When it becomes impossible
+to know, you simply choose <I>never</I> to deallocate the object,
+or at least to wait until every library and method call involved
+has completed, which could be nearly as long.
+<P>
+The uneasy feeling you get when writing such code is a natural,
+healthy response to what is inherently an unsafe and unreliable
+style of programming. If you have tremendous discipline-and so
+does everyone who writes every library and method you call-you
+can, in principle, survive this responsibility without too many
+mishaps. But aren't you human? Aren't they? There must be some
+small slips in this perfect discipline due to error. What's worse,
+such errors are virtually undetectable, as anyone who's tried
+to hunt down a stray pointer problem in C will tell you. What
+about the thousands of programmers who don't have that sort of
+discipline?
+<P>
+Another way to ask this question is: Why should any programmers
+be forced to have this discipline when it is entirely possible
+for the system to remove this heavy burden from their shoulders?
+<P>
+Software engineering estimates have recently shown that for every
+55 lines of production C-like code in the world, there is one
+bug. This means that your electric razor has about 80 bugs, and
+your TV, 400. Soon they will have even more, because the size
+of this kind of embedded computer software is growing exponentially.
+When you begin to think of how much C-like code is in your car's
+engine, it should give you pause.
+<P>
+Many of these errors are due to the misuse of pointers, by misunderstanding
+or by accident, and to the early, incorrect freeing of allocated
+objects in memory. Java addresses both of these-the former by
+eliminating explicit pointers from the Java language altogether,
+and the latter by including, in every Java system, a garbage collector
+that solves the problem.
+<H3><A NAME="TheSolution">
+The Solution</A></H3>
+<P>
+Imagine a runtime system that tracks each object you create, notices
+when the last reference to it has vanished, and frees the object
+for you. How could such a thing actually work?
+<P>
+One brute-force approach, tried early in the days of garbage collecting,
+is to attach a reference counter to every object. When the object
+is created, the counter is set to <TT>1</TT>.
+Each time a new reference to the object is made, the counter is
+incremented, and each time such a reference disappears, the counter
+is decremented. Because all such references are controlled by
+the language-as variables and assignments, for example-the compiler
+can tell whenever an object reference might be created or destroyed,
+just as it does in handling the scoping of local variables, and
+thus it can assist with this task. The system itself maintains
+a set of root objects that are considered too important to be
+freed. The class <TT>Object</TT> is
+one example of such a V.I.P. object. (V.I.O.?) Finally, all that's
+needed is to test, after each decrement, whether the counter has
+hit <TT>0</TT>. If it has, the object
+is freed.
+<P>
+If you think carefully about this approach, you will soon convince
+yourself that it is definitely correct when it decides to free
+anything. It is so simple that you can immediately tell that it
+will work. The low-level hacker in you might also feel that if
+it's <I>that</I> simple, it's probably not fast enough to run
+at the lowest level of the system-and you'd be right.
+<P>
+Think about all the stack frames, local variables, method arguments,
+return values, and local variables created in the course of even
+a few hundred milliseconds of a program's life. For each of these
+tiny, nano-steps in the program, an extra increment (at best)
+or decrement, test, and deallocation (at worst) will be added
+to the running time of the program. In fact, the first garbage
+collectors were slow enough that many predicted they could never
+be used at all!
+<P>
+Luckily, a whole generation of smart programmers has invented
+a big bag of tricks to solve these overhead problems. One trick
+is to introduce special &quot;transient object&quot; areas that
+don't need to be reference counted. The best of these generational
+scavenging garbage collectors today can take less than 3 percent
+of the total time of your program-a remarkable feat if you realize
+that many other language features, such as loop overheads, can
+be as large or larger!
+<P>
+There are other problems with garbage collection. If you are constantly
+freeing and reclaiming space in a program, won't the heap of objects
+soon become fragmented, with small holes everywhere and no room
+to create new, large objects? Because the programmer is now free
+from the chains of manual deallocation, won't he create even more
+objects than usual?
+<P>
+What's worse, there is another way that this simple reference
+counting scheme is inefficient: in space rather than time. If
+a long chain of object references eventually comes full circle,
+back to the starting object, each object's reference count remains
+at least <TT>1</TT> <I>forever</I>.
+None of these objects will ever be freed!
+<P>
+Together, these problems imply that a good garbage collector must,
+every once in a while, step back to compact or clean up wasted
+memory.
+<P>
+Memory compaction occurs when a garbage collector steps back and
+reorganizes memory, eliminating the holes created by fragmentation.
+Compacting memory is simply a matter of repositioning objects
+one by one into a new, compact grouping that places them all in
+a row, leaving all the free memory in the heap in one big piece.
+<P>
+Cleaning up the circular garbage still lying around after reference
+counting is called <I>marking and sweeping</I>. A mark-and-sweep
+of memory involves first marking every root object in the system
+and then following all the object references inside those objects
+to new objects to mark, and so on, recursively. Then, when you
+have no more references to follow, you &quot;sweep away&quot;
+all the unmarked objects and compact memory as before.
+<P>
+The good news is that this solves the space problems you were
+having. The bad news is that when the garbage collector steps
+back and does these operations, a nontrivial amount of time passes
+during which your program is unable to run-all its objects are
+being marked, swept, rearranged, and so forth, in what seems like
+an uninterruptible procedure. Your first hint to a solution is
+the word &quot;seems.&quot;
+<P>
+Garbage collecting can actually be done a little at a time, between
+or in parallel with normal program execution, thus dividing up
+the large amount of time needed to step back into the numerous
+so-small-you-don't-notice-them chunks of time that happen between
+the cracks. (Of course, years of smart thinking went into the
+abstruse algorithms that make all this possible!)
+<P>
+One final problem that might worry you a little has to do with
+these object references. Aren't these references scattered throughout
+your program and not just buried in objects? Even if they're only
+in objects, don't they have to be changed whenever the object
+they point to is moved by these procedures? The answer to both
+of these questions is a resounding <I>yes</I>, and overcoming
+them is the final hurdle to making an efficient garbage collector.
+<P>
+There are really only two choices. The first, brute force, assumes
+that all the memory containing object references needs to be searched
+on a regular basis, and whenever the object references found by
+this search match objects that have moved, the old reference is
+changed. This assumes that there are &quot;hard&quot; pointers
+in the heap's memory-ones that point directly to other objects.
+By introducing various kinds of &quot;soft&quot; pointers, including
+pointers that are like forwarding addresses, the algorithm improves
+greatly. Although these brute-force approaches sound slow, it
+turns out that modern computers can do them fast enough to be
+useful.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You might wonder how the brute-force techniques identify object references. In early systems, references were specially tagged with a <I>pointer bit</I> so they could be unambiguously located. Now, so-called conservative garbage collectors simply assume 
+that if it looks like an object reference, it is-at least for the purposes of the mark-and-sweep. Later, when actually trying to update it, they can find out whether it really is an object reference.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The final approach to handling object references, and the one
+Java currently uses, is also one of the very first ones tried.
+It involves using 100 percent soft pointers. An object reference
+is actually a handle, sometimes called an <I>OOP</I>, to the real
+pointer, and a large object table exists to map these handles
+into the actual object reference. Although this does introduce
+extra overhead on almost every object reference (some of which
+can be eliminated by clever tricks, as you might guess), it's
+not too high a price to pay for this incredibly valuable level
+of indirection.
+<P>
+This indirection allows the garbage collector, for example, to
+mark, sweep, move, or examine one object at a time. Each object
+can be independently moved out from under a running Java program
+by changing only the object table entries. This not only allows
+the step-back phase to happen in the tiniest steps, but it makes
+a garbage collector that runs literally in parallel with your
+program much easier to write. This is what the Java garbage collector
+does.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Warning</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You need to be very careful about garbage collection when you're doing critical, real-time programs (such as those mentioned yesterday that legitimately require native methods)-but how often will your Java code be flying a commercial airliner in real time, 
+anyway?</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="JavasParallelGarbageCollector">
+Java's Parallel Garbage Collector</A></H3>
+<P>
+Java applies almost all these advanced techniques to give you
+a fast, efficient, parallel garbage collector. Running in a separate
+thread, it cleans up the Java environment of almost all trash
+(it is conservative), silently and in the background; is efficient
+in both space and time; and never steps back for more than a small
+amount of time. You should never need to know it's there.
+<P>
+By the way, if you want to force a full mark-and-sweep garbage
+collection to happen soon, you can do so simply by calling the
+<TT>System.gc()</TT> method. You might
+want to do this if you just freed up a majority of the heap's
+memory in circular garbage, and want it all taken away quickly.
+You might also call this whenever you're idle, as a hint to the
+system about when it would be best to come and collect the garbage.
+<P>
+Ideally, you'll never notice the garbage collector, and all those
+decades of programmers beating their brains out on your behalf
+will simply let you sleep better at night-and what's wrong with
+that?
+<H2><A NAME="TheSecurityStory"><FONT SIZE=5 COLOR=#FF0000>
+The Security Story</FONT></A></H2>
+<P>
+Speaking of sleeping well at night, if you haven't stepped back
+yet and said, &quot;My goodness! You mean Java programs will be
+running rampant on the Internet!?!&quot; you better do so now,
+for it is a legitimate concern. In fact, it is one of the major
+technical stumbling blocks (the others being mostly social and
+economic) to achieving the dream of ubiquity and code sharing
+for Java mentioned earlier in today's lesson.
+<H3><A NAME="WhyYouShouldWorry">
+Why You Should Worry</A></H3>
+<P>
+Any powerful, flexible technology can be abused. As the Net becomes
+mainstream and widespread, it, too, will be abused. Already, there
+have been many blips on the security radar screens of those of
+us who worry about such things, warning that (at least until today)
+not enough attention has been paid by the computer industry (or
+the media) to solving some of the problems that this new world
+brings with it. One of the benefits of constructively solving
+security once and for all will be a flowering unseen before in
+the virtual communities of the Net; whole new economies based
+on people's attention and creativity will spring to life, rapidly
+transforming our world in new and positive ways.
+<P>
+The downside to all this new technology is that we (or someone!)
+must worry long and hard about how to make the playgrounds of
+the future safe for our children, and for us. Fortunately, Java
+is a big part of the answer.
+<H3><A NAME="WhyYouMightNotHaveTo">
+Why You Might Not Have To</A></H3>
+<P>
+What gives me any confidence that the Java language and environment
+will be <I>safe</I>, that it will solve the technically daunting
+and extremely thorny problems inherent in any good form of security,
+especially for networks?
+<P>
+One simple reason is the history of the people, and the company,
+who created Java. Many of them are the very smart programmers
+referred to throughout the book, who helped pioneer many of the
+ideas that make Java great and who have worked hard over the decades
+to make techniques such as garbage collection a mainstream reality.
+They are technically capable of tackling and solving the hard
+problems that need to be solved.
+<P>
+Sun Microsystems, the company, has been pushing networks as the
+central theme of all its software for more than a decade. Sun
+has the engineers and the commitment needed to solve these hard
+problems, because these same problems are at the very center of
+both its future business and its vision of the future, in which
+networking is the center of everything-and global networks are
+nearly useless without good security. Just this year, Sun has
+advanced the state of the art in easy-to-use Internet security
+with its new SunScreen products, and it has assigned Whitfield
+Diffie to oversee them, who is the man who discovered the underlying
+ideas on which essentially <I>all</I> interesting forms of modern
+encryption are based.
+<P>
+Enough on deep background. What does the Java environment provide
+<I>right now</I> that helps me feel secure?
+<H3><A NAME="JavasAppletSecurityModel">
+Java's Applet Security Model</A></H3>
+<P>
+Java protects you against potential &quot;nasty&quot; Java code
+via a series of interlocking defenses that, together, form an
+imposing barrier to any and all such attacks.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Warning</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Of course no one can protect you from your own ignorance or carelessness. If you're the kind of person who blindly downloads binary executables from your Internet browser and runs them you need read no farther! You are already in more danger than Java will 
+ever pose.</BLOCKQUOTE>
+<BLOCKQUOTE>
+As a user of this powerful new medium, the Internet, you should educate yourself to the possible threats this new and exciting world entails. In particular, downloading &quot;auto running macros&quot; or reading e-mail with &quot;executable 
+attachments&quot; is just as much a threat as downloading binaries from the Net and running them.</BLOCKQUOTE>
+<BLOCKQUOTE>
+Java does not introduce any new dangers here, but by being the first mainstream use of executable and mobile code on the Net, it is responsible for making people suddenly aware of the dangers that have always been there. Java is already, as you will soon 
+see, much less dangerous than any of these common activities on the Net, and can be made safer still over time. Most of these other (dangerous) activities can never be made safe. So please, do not do them!</BLOCKQUOTE>
+<BLOCKQUOTE>
+A good rule of thumb on the Net is: Don't download anything that you plan to execute (or that will be automatically executed for you) except from someone (or some company) you know well and with whom you've had positive, personal experience. If you don't 
+care about losing all the data on your hard drive, or about your privacy, you can do anything you like, but for most of us, this rule should be law.</BLOCKQUOTE>
+<BLOCKQUOTE>
+Fortunately, Java allows you to relax that law. You can run Java applets from anyone, anywhere, in relative safety.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Java's powerful security mechanisms act at four different levels
+of the system architecture. First, the Java language itself was
+designed to be safe, and the Java compiler ensures that source
+code doesn't violate these safety rules. Second, all bytecodes
+executed by the runtime are screened to be sure that they also
+obey these rules. (This layer guards against having an altered
+compiler produce code that violates the safety rules.) Third,
+the class loader ensures that classes don't violate namespace
+or access restrictions when they are loaded into the system. Finally,
+API-specific security prevents applets from doing destructive
+things. This final layer depends on the security and integrity
+guarantees from the other three layers.
+<P>
+Let's now examine each of these layers in turn.
+<H4>The Language and the Compiler</H4>
+<P>
+The Java language and its compiler are the first line of defense.
+Java was designed to be a safe language.
+<P>
+Most other C-like languages have facilities to control access
+to object-like structures, but also have ways to gain unorthodox
+access to objects (or to parts of objects), usually by (mis-)using
+pointers. This introduces two fatal security flaws to any system
+built on these languages. One is that no object can protect itself
+from outside modification, duplication, or <I>spoofing</I> (other
+objects pretending to be that object). Another is that a language
+with powerful pointers is more likely to have serious bugs that
+compromise security. These pointer bugs, where a pointer starts
+modifying some other object's memory, were responsible for most
+of the public (and not-so-public) security problems on the Internet
+this past decade.
+<P>
+Java eliminates these threats in one stroke by eliminating pointers
+from the language altogether. There are still pointers of a kind-object
+references-but these are carefully controlled to be safe: they
+are unforgeable, and all casts are checked for legality before
+being allowed. In addition, powerful new array facilities in Java
+not only help to offset the loss of pointers, but add additional
+safety by strictly enforcing array bounds, catching more bugs
+for the programmer (bugs that, in other languages, might lead
+to unexpected and, therefore, bad-guy-exploitable problems).
+<P>
+The language definition, and the compilers that enforce it, create
+a powerful barrier to any Java programmer with evil intentions.
+<P>
+Because an overwhelming majority of the Net-savvy software on
+the Internet may soon be Java, its safe language definition and
+compilers help to guarantee that most of this software has a solid,
+secure base. With fewer bugs, Net software will be more predictable-a
+property that thwarts attacks.
+<H4>Verifying the Bytecodes</H4>
+<P>
+What if that programmer with evil intentions gets a little more
+determined, and rewrites the Java compiler to suit his nefarious
+purposes? The Java runtime, getting the lion's share of its bytecodes
+from the Net, can never tell whether those bytecodes were generated
+by a trustworthy compiler. Therefore, it must <I>verify</I> that
+they meet all the safety requirements.
+<P>
+Before running any bytecodes, the runtime subjects them to a rigorous
+series of tests that vary in complexity from simple format checks
+all the way to running a theorem prover to make certain that they
+are playing by the rules. These tests verify that the bytecodes
+do not forge pointers, violate access restrictions, access objects
+as other than what they are (<TT>InputStream</TT>
+objects are always used as <TT>InputStream</TT>
+objects, and never as anything else), call methods with inappropriate
+argument values or types, nor overflow the stack.
+<P>
+Consider the following Java code sample:
+<BLOCKQUOTE>
+<PRE>
+public class VectorTest {
+    public int  array[];
+
+    public int  sum() {
+        int[]  localArray = array;
+        int    sum        = 0;
+
+        for (int  i = localArray.length;  -i &gt;= 0;  )
+            sum += localArray[i];
+        return sum;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The bytecodes generated when this code is compiled look something
+like the following:
+<BLOCKQUOTE>
+<PRE>
+    aload_0              Load this
+    getfield #10         Load this.array
+    astore_1             Store in localArray
+    iconst_0             Load 0
+    istore_2             Store in sum
+    aload_1              Load localArray
+    arraylength          Gets its length
+    istore_3             Store in i
+A:  iinc 3 -1            Subtract 1 from i
+    iload_3              Load i
+    iflt B               Exit loop if  &lt; 0
+    iload_2              Load sum
+    aload_1              Load localArray
+    iload_3              Load i
+    iaload               Load localArray[i]
+    iadd                 Add sum
+    istore_2             Store in sum
+    goto A               Do it again
+B:  iload_2              Load sum
+    ireturn              Return it<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The excellent examples and descriptions in this section of the book are paraphrased from the tremendously informative &quot;Low Level Security in Java&quot; paper by Frank Yellin. You can read this document at <TT><A 
+HREF="http://java.sun.com:80/sfaq/verifier.html">http://java.sun.com:80/sfaq/verifier.html</A></TT>.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H5>Extra Type Information and Requirements</H5>
+<BLOCKQUOTE>
+Java bytecodes encode more type information than is strictly necessary
+for the interpreter. Even though, for example, the <TT>aload</TT>
+and <TT>iload</TT> opcodes do exactly
+the same thing, <TT>aload</TT> is
+always used to load an object reference and <TT>iload</TT>
+used to load an integer. Some bytecodes (such as <TT>getfield</TT>)
+include a symbol table reference-and that symbol table has <I>even
+more </I>type information. This extra type information allows
+the runtime system to guarantee that Java objects and data aren't
+illegally manipulated.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Conceptually, before and after each bytecode is executed, every
+slot in the stack and every local variable has some type. This
+collection of type information-all the slots and local variables-is
+called the <I>type state</I> of the execution environment. An
+important requirement of the Java type state is that it must be
+determinable statically by induction-that is, before any program
+code is executed. As a result, as the runtime system reads bytecodes,
+each is required to have the following inductive property: given
+only the type state before the execution of the bytecode, the
+type state afterward must be fully determined.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Given <I>straight-line</I> bytecodes (no branches) and starting
+with a known stack state, the state of each slot in the stack
+is therefore always known. For example, starting with an empty
+stack:
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+iload_1                Load integer variable. Stack type state is I.
+iconst 5               Load integer constant. Stack type state is II.
+iadd                   Add two integers, producing an integer. 
+                       Stack type state is I.<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Smalltalk and PostScript bytecodes do not have this restriction. Their more dynamic type behavior does create additional flexibility in those systems, but Java needs to provide a secure execution environment. It must therefore know all types <I>at all 
+times</I> in order to guarantee a certain level of security.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<BLOCKQUOTE>
+Another requirement made by the Java runtime is that when a set
+of bytecodes can take more than one path to arrive at the same
+point, all such paths must arrive there with exactly the same
+type state. This is a strict requirement, and implies, for example,
+that compilers cannot generate bytecodes that load all the elements
+of an array onto the stack. (Because each time through such a
+loop the stack's type state changes, the start of the loop-&quot;the
+same point&quot; in multiple paths-would have more than one type
+state, which is not allowed.)
+</BLOCKQUOTE>
+<H5>The Verifier</H5>
+<BLOCKQUOTE>
+Bytecodes are checked for compliance with all these requirements,
+using the extra type information in the class file, by a part
+of the runtime called the <I>verifier</I>. It examines each bytecode
+in turn, constructing the full type state as it goes, and verifies
+that all the types of parameters, arguments, and results are correct.
+Thus, the verifier acts as a gatekeeper to your runtime environment,
+letting in only those bytecodes that pass muster.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Warning</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The verifier is <I>the crucial piece</I> of Java's security, and it depends on your having a correctly implemented (no bugs, intentional or otherwise) runtime system. As of this writing, only Sun is producing Java runtimes (and licensing them to companies 
+such as Netscape and Microsoft for use in their browsers), and they are secure. In the future, however, you should be careful when downloading or buying another company's (or individual's) version of the Java runtime environment. Eventually, Sun will 
+implement validation suites for runtimes, compilers, and so forth to be sure that they are safe and correct. In the meantime, <I>caveat emptor</I>! Your runtime is the base on which all the rest of Java's security is built, so make sure it is a good, 
+solid, secure base.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<BLOCKQUOTE>
+When bytecodes have passed the verifier, they are guaranteed not
+to do any of the following: cause any operand stack under- or
+overflows; use parameter, argument, or return types incorrectly;
+illegally convert data from one type to another (from an integer
+to a pointer, for example); or access any object's fields illegally
+(that is, the verifier checks that the rules for <TT>public</TT>,
+<TT>private</TT>, <TT>package</TT>,
+and <TT>protected</TT> are obeyed).
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+As an added bonus, because the interpreter can now count on all
+these facts being true, it can run much faster than before. All
+the required checks for safety have been done up front, so it
+can run at full throttle. In addition, object references can now
+be treated as capabilities, because they are unforgeable-capabilities
+allow, for example, advanced security models for file I/O and
+authentication to be safely built on top of Java.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Because you can now trust that a <TT>private</TT> variable really is private, and that no bytecode can perform some magic with casts to extract information from it (such as your credit card number), many of the security problems that might arise in other, 
+less safe environments simply vanish! These guarantees also make erecting barriers against destructive applets possible, and easier. Because the Java system doesn't have to worry about dangerous bytecodes, it can get on with creating the other levels of 
+security it wants to provide to you.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H4>The Class Loader</H4>
+<P>
+The <I>class loader</I> is another kind of gatekeeper, albeit
+a higher-level one. The verifier is the security of last resort.
+The class loader is the security of first resort.
+<P>
+When a new class is loaded into the system, it is placed into
+(lives in) one of several different <I>realms</I>. Commonly, there
+are three possible realms: your local computer, the firewall-guarded
+local network on which your computer is located, and the Internet
+(the global Net). Each of these realms is treated differently
+by the class loader.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Actually, there can be as many realms as your desired level of security (or paranoia) requires. This is because the class loader is under your control. As a programmer, you can make your own class loader that implements your own peculiar brand of security. 
+(This is a radical step; you may have to give the users of your program a whole bunch of classes-and they give you a whole lot of trust-to accomplish this.)</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+In particular, the class loader never allows a class from a less
+protected realm to replace a class from a more protected realm.
+The file system's I/O primitives, about which you should be <I>very</I>
+worried (and rightly so), are all defined in a local Java class,
+which means that they all live in the local-computer realm. Thus,
+no class from outside your computer (from either the supposedly
+trustworthy local network or from the Internet) can take the place
+of these classes and spoof Java code into using nasty versions
+of these primitives. In addition, classes in one realm cannot
+call upon the methods of classes in other realms, unless those
+classes have explicitly declared those methods <TT>public</TT>.
+This implies that classes from other than your local computer
+cannot even <I>see</I> the file system I/O methods, much less
+call them, unless you or the system wants them to.
+<P>
+In addition, every new applet loaded from the network is placed
+into a separate package-like namespace. This means that applets
+are protected even from each other! No applet can access another's
+methods (or variables) without its cooperation. Applets from inside
+the firewall can even be treated differently from those outside
+the firewall, if you like.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Actually, it's all a little more complex than this. In the current release, an applet is in a package namespace along with any other applets from that <I>source</I>. This source, or origin, is most often a host (domain name) on the Internet. This special 
+&quot;subrealm&quot; is used extensively in the next section. Depending on where the source is located, outside the firewall or inside, further restrictions may apply (or be removed entirely). This model is likely to be extended in future releases of Java, 
+providing an even finer degree of control over which classes get to do what.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The class loader essentially partitions the world of Java classes
+into small, protected little groups, about which you can safely
+make assumptions that will <I>always</I> be true. This type of
+predictability is the key to well-behaved and secure programs.
+<P>
+You've now seen the full lifetime of a method. It starts as source
+code on some computer, is compiled into bytecodes on some (possibly
+different) computer, and can then travel (as a <TT>.class</TT>
+file) into any file system or network anywhere in the world. When
+you run an applet in a Java-enabled browser (or download a class
+and run it by hand using <TT>java</TT>),
+the method's bytecodes are extracted from its <TT>.class</TT>
+file and carefully looked over by the verifier. After they are
+declared safe, the interpreter can execute them for you (or a
+code generator can generate native binary code for them using
+either the just-in-time compiler or <TT>java2c</TT>,
+and then run that native code directly).
+<P>
+At each stage, more and more security is added. The final level
+of that security is the Java class library itself, which has several
+carefully designed classes and APIs that add the final touches
+to the security of the system.
+<H4>The Security Manager</H4>
+<P>
+<TT>SecurityManager</TT> is an <TT>abstract</TT>
+class that collects, in one place, all the security policy decisions
+that the system has to make as bytecodes run. You learned before
+that you can create your own class loader. In fact, you may not
+have to, because you can subclass <TT>SecurityManager</TT>
+to perform most of the same customizations.
+<P>
+An instance of some subclass of <TT>SecurityManager</TT>
+is always installed as the current security manager. It has complete
+control over which of a well-defined set of potentially dangerous
+methods are allowed to be called by any given class. It takes
+the realms from the last section into account, the source (origin)
+of the class, and the type of the class (standalone or loaded
+by an applet). Each of these can be separately configured to have
+the effect you (the programmer) like on your Java system. Note
+that environments such as Web browsers typically already have
+a security manager in place to handle basic applet security (all
+the restrictions you've learned about so far in this book), and
+that security manager cannot be replaced or changed.
+<P>
+What is this &quot;well-defined set&quot; of methods that are
+protected?
+<P>
+File I/O is a part of the set, for obvious reasons. Applets, by
+default, can open, read, or write files on the local system.
+<P>
+Also in this protected set are the methods that create and use
+network connections, both incoming and outgoing.
+<P>
+The final members of the set are those methods that allow one
+thread to access, control, and manipulate other threads. (Of course,
+additional methods can be protected as well, by creating a new
+subclass of <TT>SecurityManager</TT>
+that handles them.)
+<H3><A NAME="SignedApplets">
+Signed Applets</A></H3>
+<P>
+There is a middle ground between the &quot;sandbox&quot; restrictions
+that applets always have and an application that can freely run
+amok on your system. This middle ground involves establishing
+where an applet comes from, so different applet sources can be
+allowed different kinds of access. 
+<P>
+For example, you might specify different groups of trusted domains
+(companies), each of which is allowed added privileges when applets
+from that group are loaded. Applets from systems on an internal
+network, for example, are more trustworthy than applets from the
+Internet at large. Some groups can be more trusted than others,
+and you might even allow groups to grow automatically by allowing
+existing members to recommend new members for admission. (The
+Java seal of approval?)
+<P>
+In any case, the possibilities are endless, as long as there is
+a secure way of recognizing the original creator of an applet.
+<P>
+You might think this problem has already been solved, because
+classes are tagged with their origin. In fact, the Java runtime
+goes far out of its way to be sure that that origin information
+is never lost-any executing method can be dynamically restricted
+by this information anywhere in the call chain. So why <I>isn't</I>
+this enough?
+<P>
+Because what you'd really like to be able to do is permanently
+&quot;tag&quot; an applet with its original creator (its true
+origin), and no matter where it has traveled, a browser could
+verify the integrity and authenticate the creator of that applet.
+<P>
+If somehow those applets were irrevocably tagged with a digital
+signature by their creator, and that signature could also guarantee
+that the applet had not been tampered with, you'd be golden.
+<P>
+Luckily, Sun is planning to do exactly that for Java, to have
+a mechanism for using public key cryptography to &quot;sign&quot;
+a fragment of code (an applet, an application, a single class)
+so that you can reliably and securely tell who created or verified
+that the piece of Java code was trustworthy. With the signature
+in place, that code could then break out of the sandbox and use
+the local system more freely. Expect this capability to become
+more popular and available in the future.
+<H3><A NAME="ComingUpinJava">
+Coming Up in Java 1.1</A></H3>
+<P>
+Promised in Java 1.1 is a set of extension APIs for managing security
+and encryption in Java. These new classes include support for
+the digital signature capabilities mentioned in the previous section,
+as well as general-purpose low-level and high-level cryptography,
+key management, access control lists, message digest hashes (MD5),
+and other tools and utilities. On <A HREF="ch27.htm">Day 27</A>, &quot;The Standard Extension
+APIs,&quot; you'll learn more about the new security classes in
+Java. 
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>
+Summary</FONT></A></H2>
+<P>
+Today you have learned about the grand vision that some of us
+have for Java, and about the exciting future it promises.
+<P>
+Under the hood, the inner workings of the virtual machine, the
+bytecode interpreter (and all its bytecodes), the garbage collector,
+the class loader, the verifier, the security manager, and the
+powerful security features of Java were all revealed.
+<P>
+You now know <I>almost</I> <FONT SIZE=1> </FONT>enough to write
+a Java runtime environment of your own-but luckily, you don't
+have to. You can simply download the latest release of Java-or
+use a Java-enabled browser to enjoy most of the benefits of Java
+right away.
+<H2><A NAME="QampABR"><FONT SIZE=5 COLOR=#FF0000>
+Q&amp;A<BR>
+</FONT></A></H2>
+<TABLE>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>Q:</FONT></B></CENTER>
+</TD><TD><B>I'm still a little unclear about why the Java language and compiler make the Net safer. Can't they just be &quot;side-stepped&quot; by nasty bytecodes?</FONT></B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>A:</FONT></B></CENTER>
+</TD><TD>Yes, they can-but don't forget that the whole point of using a safe language and compiler was to make the Net as a whole safer as more Java code is written. An overwhelming majority of this Java code will be written by honest Java programmers, who 
+will produce safe bytecodes. This makes the Net more predictable over time, and thus more secure.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>Q:</FONT></B></CENTER>
+</TD><TD><B>I know you said that garbage collection is something I don't have to worry about, but what if I want (or need) to?</FONT></B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>A:</FONT></B></CENTER>
+</TD><TD>So, you are planning to fly a plane with Java. Cool! For just such cases, there is a way to ask the Java runtime, during startup (<TT>java -noasyncgc</TT>), not to run garbage collection unless forced to, either by an explicit call 
+(<TT>System.gc()</TT>) or by running out of memory. (This can be quite useful if you have multiple threads that are messing each other up and want to stop the <TT>gc</TT> thread from getting in the way while testing them.) Don't forget that turning garbage 
+collection off means that any object you create will live a long, long time. If you're real-time, you never want to step back for a full <TT>gc</TT>-so be sure to reuse objects often, and don't create too many of them!
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>Q:</FONT></B></CENTER>
+</TD><TD><B>Is there anything else I can do to the garbage collector?</FONT></B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>A:</FONT></B></CENTER>
+</TD><TD>You can also force the <TT>finalize()</TT> methods of any recently freed objects to be called immediately via <TT>System.runFinalization()</TT>. You might want to do this if you're about to ask for some resources that you suspect might still be 
+tied up by objects that are gone but not forgotten (waiting for <TT>finalize()</TT>). This is even rarer than starting a <TT>gc</TT> by hand, but it's mentioned here for completeness.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>Q:</FONT></B></CENTER>
+</TD><TD><B>I've heard of a tool called <TT><B>java2c</B></TT></FONT><FONT FACE="Times New Roman Bold">, which would convert Java code to C code. Does this exist? Where can I get it?</FONT></B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>A:</FONT></B></CENTER>
+</TD><TD>An experimental <TT>java2c</TT> translator was rumored to exist inside Sun, but was never released. It may be released at a later date.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>Q:</FONT></B></CENTER>
+</TD><TD><B>What's the last word on Java?</FONT></B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=55><CENTER><B>A:</FONT></B></CENTER>
+</TD><TD>Java adds much more than it can ever take away. It has always done so for me, and now, I hope it will for you as well.
+<P>
+The future of the Net is filled with as-yet-undreamt horizons, and the road is long and hard, but Java is a great traveling companion.
+</TD></TR>
+</TABLE>
+</CENTER>
+<HR>
+
+<CENTER><P><A HREF="ch20.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch22.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

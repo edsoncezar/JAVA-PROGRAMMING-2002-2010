@@ -1,0 +1,367 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0052)http://www.cpan.org/authors/id/I/IP/IPPO/pipipi-0.02 -->
+<HTML><HEAD>
+<META http-equiv=Content-Type content="text/html; charset=windows-1252">
+<META content="MSHTML 5.50.4134.600" name=GENERATOR></HEAD>
+<BODY><XMP>#!/usr/bin/perl
+############################################################################
+#  Copyright (c) 2001 Stefano Corsi <ippo@madeinlinux.com>                 #
+#                                                                          #
+#  You may distribute under the terms of either the GNU General Public     #
+#  License or the Artistic License, as specified in the Perl README file.  #
+############################################################################
+#                                                                          #
+# CHANGELOG:                                                               #
+#                                                                          #
+# * Fri sep 14 22:09:57 Stefano Corsi <ippo@madeinlinux.com>               #
+# - Added support for default include dirs from command-line               #
+# - Added support for symbol definition from command line                  #
+# - Fixed some bug in symbol parsing and substitution                      #
+#                                                                          #
+############################################################################
+
+
+### La versione
+my $VERSION=0.02;
+
+### Librerie
+use strict;
+use Getopt::Long;
+
+### Se DEBUG
+my $DEBUG = 0;
+
+### Il buffer per l'output
+my $OUTPUT = "";
+
+### La symbol table per le defines
+my $SYMTAB = {};
+
+### Se stampare o no a causa degli ifdef...
+my $noprint = 0;
+
+### ___BEGIN___ ###
+
+### Gestione delle opzioni dalla command line
+my @INCLUDE_DIRS = ();
+my @DEFINES = ();
+GetOptions (
+	"include=s" => \@INCLUDE_DIRS,
+	"define=s" => \@DEFINES,
+);
+
+### Se non sono state specificate directory per
+### gli include ...
+if (@INCLUDE_DIRS eq 0) {
+	### Mettiamoci la directory corrente
+	push(@INCLUDE_DIRS, ".");
+}
+
+### I file di input e output
+my $INFILE = $ARGV[0];
+my $OUTFILE = $ARGV[1];
+
+### Gestione della definizione di simboli
+for (@DEFINES) {
+	my $def = $_;
+	$def =~ 
+	/(.*)=(.*)/ && do {
+		if ($DEBUG) {
+			print "Define di $1 come $2\n";
+		}
+		pushsymbol($1, $2);
+	};
+}
+
+### Controlliamo i parametri necessari
+($ARGV[0] && $ARGV[1]) || do {
+	print stderr "Syntax: pipipi <infile> <outfile>\n";
+	exit -1;
+};
+
+### Cominciamo dal primo file
+include($INFILE);
+
+if ($DEBUG) {
+	### Stampa la symbol table
+	print "### Symbol table dump ###\n";
+	for (keys(%$SYMTAB)) {
+		print "$_: $SYMTAB->{$_}\n";
+	}
+}
+
+### Stampa il risultato finale 
+open OUTFILE, ">$OUTFILE";
+print OUTFILE $OUTPUT;
+close OUTFILE;
+
+### ___END___ ###
+
+sub parse {
+	
+	my $line = shift;
+
+	### Analizziamo la linea ...
+	SWITCH: {
+		
+		### Include
+		$line =~ /^\+\+\+include\([\s]*([^\s]*)[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "Inclusione di $1\n";
+			}
+			include($1);
+			last SWITCH;
+		};		
+
+		### Define semplice con un solo parametro
+		$line =~ /^\+\+\+define\([\s]*([^\s^,]*)[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "Define di $1\n";
+			}
+			pushsymbol($1, 1);
+			last SWITCH;
+		};
+
+		### Define complesso con due parametri
+		$line =~ 
+		/^\+\+\+define\([\s]*([^\s^,]*)[\s]*,[\s]*\"([^"]*)\"[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "Define di $1 come $2\n";
+			}			
+			pushsymbol($1, $2);
+			last SWITCH;
+		};
+
+		### ifdef
+		$line =~ /^\+\+\+ifdef\([\s]*([^\s^,]*)[\s]*\)/ && do {
+			if ($DEBUG) {
+				print "ifdef di $1\n";
+			}
+			$noprint = 1;
+			if (defn($1)) {
+				$noprint = 0;	
+			}
+			last SWITCH;
+		};
+
+		### endif
+		$line =~ /^\+\+\+endif/ && do {
+			if ($DEBUG) {
+				print "endif\n";
+			}
+			$noprint = 0;
+			last SWITCH;
+		};
+
+		### (symbolo)
+		$line =~ /\+\+\+\(([^\s^,^\)]*)\)/ && do {
+			if ($DEBUG) {
+				print "Simbolo: $1 (valore: $SYMTAB->{$1})\n";
+			}
+			my $tmp = dosymbol($1, $line);
+			parse($tmp);
+			last SWITCH;
+		};
+
+		### Default
+		($OUTPUT .= $line) unless $noprint;
+
+	}
+
+}
+
+sub include {
+	
+	my $incfile = shift;
+	local *INCFILE;
+
+	### Apre il file di include	
+	my $found = undef;
+	LOOP: {
+		for (@INCLUDE_DIRS) {
+			if ($DEBUG) {
+				print "Cerco $incfile in $_\n";
+			}
+			if (open INCFILE, "$_/$incfile") {
+				$found = 1;	
+				last LOOP;
+			}
+		}
+	}
+	
+	$found || die "*** ERROR: Can't open include file $incfile";
+
+	### Per tutte le linee di INCFILE
+	while (<INCFILE>) {
+		parse($_);
+	}
+
+	### Chiude il file di include
+	close INCFILE;
+
+}
+
+sub pushsymbol {
+	
+	my $symbol = shift;
+	my $value = shift;
+	
+	$SYMTAB->{$symbol} = $value;	
+
+}
+
+sub dosymbol {
+	
+	my $symbol = shift;
+	my $line = shift;
+
+	my $value = $SYMTAB->{$symbol};
+	$line =~ s/\+\+\+\($symbol\)/$value/g;
+
+	if ($DEBUG) {
+		print "Ho sostituito $value a $symbol\n";
+	}
+
+	return $line;
+
+}
+
+sub defn {
+	
+	my $symbol = shift;
+
+	if ($SYMTAB->{$symbol}) {
+		return 1;
+	} 
+	return undef;
+
+}
+
+=head1 NAME
+
+pipipi - a simple perl pre-processor like cpp (but very limited)
+
+=head1 DESCRIPTION
+
+PiPiPi (Perl Pre Processor) is a small script that gives you some of the 
+functionalities of its big brother cpp, the C pre processor.
+It's useful if you have to create a set of scripts that shares a
+common header and a common footer. When you change the header or 
+the footer, you don't want to change all the scripts that you 
+have already written. PiPiPi recursively parses all include files 
+building the target script for you.
+PiPiPi has also other functionality of a typical preprocessor,
+as symbol definition and testing, basic ifdef constructs.
+
+=head1 README
+
+PiPiPi (Perl Pre Processor) is a small script that gives you some of the 
+functionalities of its big brother cpp, the C pre processor.
+It's useful if you have to create a set of scripts that shares a
+common header and a common footer. When you change the header or 
+the footer, you don't want to change all the scripts that you 
+have already written. PiPiPi recursively parses all include files 
+building the target script for you.
+PiPiPi has also othe functionality of a typical preprocessor,
+as symbol definition and testing, basic ifdef constructs.
+
+BASIC PiPiPi FEATURES
+
+- File inclusion (with recursive behaviour: an include file can include
+other files...)
+- Limited symbol definition (as cpp does with macros)
+- Very limited ifdef behaviour (without nested ifdefs ...)
+
+Pipipi suffers of the following known problems or limitations
+
+- Little or none error checking
+- Simple syntax parsing
+- Lot of bugs in a buch of code, probably
+
+INVOCATION
+
+pipipi [--options] <infile> <outfile>
+
+where infile is the main source file, containing all the inclusions, and
+outfile is the output file resulting from pipipi parsing.
+
+Options can be:
+
+--define <symbol>=<value>
+
+	for defining a symbol value at invocation.
+
+--include <dir>
+	
+	for giving one or more alternate include dir. By default, PiPiPi
+	looks for includes starting at the current directory.
+
+Example:
+	pipipi --define fruit=apple --define lang=it \
+		--include ".." --include "." start.plt output.pl
+
+	if you want pipipi to process file start.plt,
+	define symbols for "fruit" and "lang",
+	with ".." and "." (in this order) as the include search path.
+
+PiPiPi source file SYNTAX
+
+File inclusion:
+
++++include(filename)
+
+Symbol definition:
+
++++define(symbol)
++++define(symbol, "value")
+
+Note: you have to use \"\" quotes to define symbols with values. Otherwise
+it will mess it up...
+
+You can also define symbols with other symbols:
+
++++define(car1, "ford")
++++define(car2, "mercedes")
++++define(cars, "+++(car1) and +++(car2)")
+
+print "Two famous cars: +++(cars)";
+ 
+
+Ifdef conditionals:
+
++++ifdef(symbol)
+... code ...
++++endif
+
+EXAMPLE
+
+To see pipipi in action with the templates you find in the distribution dir
+you have to type: 
+	pipipi body.plt out.pl
+	perl out.pl
+
+REMARK
+
+pipipi is meant to be used with perl, but can be used anywhere you need a simple
+pre processor with limited but useful features.
+
+Enjoy!
+
+	Stefano Corsi <ippo@madeinlinux.com>
+
+=head1 PREREQUISITES
+
+This script requires the C<strict> module.
+
+=head1 COREQUISITES
+
+=pod OSNAMES
+
+any
+
+=pod SCRIPT CATEGORIES
+
+CPAN/Administrative
+
+=cut
+</XMP></BODY></HTML>

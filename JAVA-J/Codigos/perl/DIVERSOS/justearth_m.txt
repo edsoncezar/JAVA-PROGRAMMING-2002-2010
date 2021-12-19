@@ -1,0 +1,743 @@
+#!/usr/bin/perl
+##################################################################
+#set the line above this to your perl path. Usually fine as is
+# or /usr/local/bin/perl  /sbin/perl
+# make certain that the first line stays the first line!
+################################################################## 
+#  (C)2000 JustEarth.com   JustEarth Instant messenger V1.4
+#  This software is FREEWARE!
+#  This script is a moification of a script by  Synsonic@webtv.net   which i found at cgi.resourceindex.com
+#  I upgraded the html files in the perl code and added the color variables
+#  which make the script easier to customize.
+#  Do with it as you wish. It is yours
+#  to share and enjoy. Modify it, improve it, and have fun with it! 
+#  It is distributed strictly as a learning aid and JustEarth.com
+#  disclaims all warranties- including but not limited to:          
+#  fitness for a particular purpose, merchantability, loss of       
+#  business, harm to your system, etc... ALWAYS BACK UP YOUR        
+#  SYSTEM BEFORE INSTALLING ANY SCRIPT OR PROGRAM FROM ANY          
+#  SOURCE! 
+##################################################################
+
+print "Content-type: text/html\n\n";
+
+##### Variables #####
+$database = "userpass.dat";
+$messages = "data/";
+$im_program_name = "justearth_m.pl";           # if you rename the script change this
+$join_program_name = "justearth_m_join.pl";    # if you rename the join script change this
+
+#home_url is the directory of where the scripts are installed no slash at the end.
+$home_url = "http://yourserver/directory_you_made" ;
+
+#The title appears at the top of the messenger.
+$title = "Title";
+
+#the background color is the color of the page the messenger appears on
+$backgroundcolor = "#333333";
+
+#linkcolor is the color of all links on the page
+$linkcolor = "#FFFFFF";
+
+#alinkcolor is the color of the links chen clicked
+$alinkcolor = "#0099FF";
+
+#vlinkcolor is the color of the links after you have visited them
+$vlinkcolor = "#FFFFFF";
+
+#textcolor1 is the color of the main text of the messenger page
+$textcolor1 = "#FFFFFF";
+
+#textcolor2 is the color of the text in the bars at the top and bottom of messenger
+$textcolor2 = "#999999";
+
+#tablecolor1 is the color of the bars at the top and bottom of the messenger
+$tablecolor1 = "#000033";
+
+#tablecolor2 is the color of the main section of the messenger.
+$tablecolor2 = "#666666";
+
+#Last but not least Refresh is the number in seconds before the messenger automatically refreshes
+#If you cahnge this make sure that the page does not refresh too fast.
+#any messages the user is typing when the program refreshes are erased.
+$refresh = "60" ;
+
+#####################UPGRADE INFO###############################
+###IF YOU ARE UPGRADING FROM EARLIER VERSIONS to 1.3
+### COPY FROM HERE DOWN AND PASTE OVER YOUR OLD IM SCRIPT CODE
+### ALSO NOTE THAT YOU HAVE SOME NEW VARIABLES TO SET.
+### AND FOR THE ONLINE USERS FUNCTION TO WORK
+### YOU MUST HAVE a file named onlineusers.dat in the same directory as the script files.
+
+
+#timezone is the offset in hours needed to correct the time
+#for example my server is located east by one hour difference in time from me
+#so i use -1 to adjust for the difference.   you may need to play with it.
+$timezone = "-1";
+
+#timezonename is the name of the area for where the time is correct.
+#for example i call mine "(CST) USA"  representing central standard time in the USA.
+$timezonename ="(CST) USA";
+
+#this is where you would change the name of the onlneusers.dat if you changed the filename.
+$onlinelist = "onlineusers.dat";  #file for online users to be posted in.
+
+
+
+
+####################UPGRADE INFO##################################
+###if you are updating from 1.3 only. copy from here down and paste
+####over your old script in the same place.
+
+##### Done with Variables NOW CODE #####
+
+ #donated by jimmy koo yee seong  to handle carriage return in messages
+$ENV{'QUERY_STRING'} =~ s/\%0D%0A/.-br-./g;
+
+$error = 0;
+use CGI qw(param);
+$user = param("user");
+$pass = param("pass");
+$action = param("action");
+$to = param("to");
+$too = param("too");
+$visible = param("visible");
+$friend = param("friend");
+$message = param("message");
+$refreshonoff = param("refreshonoff");
+$message =~ s/\&/and/g;       #converts ampersand to and
+
+
+if ($user eq "") { &error("Missing UserName"); }
+if ($pass eq "") { &error("Missing Password"); }
+  open(DATA,"$database");
+  $data = <DATA>;
+  close(DATA);
+  @lines = split(/&/,$data);
+  $logged = "OUT";
+
+#test if the user is logged in
+  foreach $line (@lines) {
+    ($tmpuser,$tmppass) = split(/\|/,$line);
+    if ($user eq $tmpuser) {
+    if ($pass eq $tmppass) {
+      $logged = "IN";
+}
+}
+}
+#test to see if the users are logged out or if they typed the wron info
+if ($logged eq "OUT") { &error("Login Info not Correct"); }
+
+#if there are no errors
+if ($error == 0) {
+
+#ONLINE USERS PART ONE
+#check to see if user is already listed and update online user information if so
+
+$currenttime = time;
+$expiretime = time - 180;
+
+        open(WHOSON,"$onlinelist");
+        $olusers = <WHOSON>;
+        close(WHOSON);
+        @eachline = split(/&/,$olusers);
+
+        open(FILE,">$onlinelist");
+        $memberprinted = "no";
+        foreach $entry (@eachline) {
+                 chomp $entry;
+                ($oluser, $oltime) = split(/\|/, $entry);
+                    unless ($expiretime > $oltime) {
+                    if ($user ne $oluser) { print FILE "$entry&"; }
+                    elsif ($user eq $oluser) {
+                    if($visible eq "yes") {
+                    print FILE "$user|$currenttime&"; $memberprinted = "yes";
+                    }
+                    elsif ($visible eq "no") {
+                    $expireme = $currenttime - 300;
+                    print FILE "$user|$expireme&";
+                    }
+                    }
+                    }
+                } # end foreach
+        if ($memberprinted eq "no") {
+        if ($visible eq "yes") {
+        print FILE "$user|$currenttime&";}
+        elsif ($visible eq "no"){
+        $expireme = $currenttime - 300;
+        print FILE "$user|$expireme&";
+        }
+        }
+        close(FILE);
+#END ONLINE USERS PART ONE
+
+#print the messenger window
+print qq!
+<html>
+  <head>
+    <title>Welcome $user</title>
+  </head>
+  <body bgcolor="$backgroundcolor" text="$textcolor1" link="$linkcolor" vlink="$vlinkcolor" alink="$alinkcolor" leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">
+    <table width="235" border="0" cellspacing="0" cellpadding="0" height="527" align="center">
+      <tr align="left" valign="top" bgcolor="$tablecolor1">
+        <td width="50%">
+          <font face="Arial, Helvetica, sans-serif" size="2" color="$textcolor2">
+           <b> $title </b>
+          </font>
+          <font face="Arial, Helvetica, sans-serif">
+          </font>
+         </td>
+         <td width="50%">
+           <div align="right">
+             <font face="Arial, Helvetica, sans-serif" size="1" color="$textcolor2">
+               <a href="$home_url/$join_program_name">
+                 Join
+               </a>  &nbsp;
+               <a href="$home_url/$im_program_name">
+                 Login
+               </a>
+             </font>
+           </div>
+          </td>
+      </tr>
+      <tr align="left" valign="top">
+        <td colspan="2" bgcolor="$tablecolor2" height="13">
+
+            <table width="100%" border="0" cellspacing="0" cellpadding="0">
+            <tr>
+            <td>
+              <font face="Arial, Helvetica, sans-serif" size="2">
+              <b>$user</b>'s messages
+              </font>
+            </td>
+            <td align="right">
+            !;
+            if ($visible eq "yes") {
+            print qq~
+            <font face="Arial, Helvetica, sans-serif" size="1">
+            <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=no&user=$user&pass=$pass">
+            go invisible</a>  </font>
+            ~;
+            }
+            elsif ($visible eq "no") {
+            print qq~
+            <font face="Arial, Helvetica, sans-serif" size="1">
+            <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=yes&user=$user&pass=$pass">
+            go visible</a>  </font>
+            ~;
+            }
+            print qq!
+            </td></tr><tr><td colspan="2">
+            <font face="Arial, Helvetica, sans-serif" size="1">all times<b> $timezonename</b>
+            </font>
+            </td></tr></table>
+
+        </td>
+      </tr>
+      <tr align="left" valign="top" bgcolor="$tablecolor2">
+        <td colspan="2" valign="top">
+          <form>
+          <font face="Arial, Helvetica, sans-serif" size="2">
+          <textarea name="messages" cols="25" rows="10" wrap="PHYSICAL">!;
+
+open(MESSAGES,"$messages$user");
+$tmpmess = <MESSAGES>;
+close(MESSAGES);
+@messes = split(/&/,$tmpmess);
+foreach $mess (@messes) {
+  ($tmpfrom,$tmpmessage) = split(/\|/,$mess);
+  $tmpfrom =~ s/\.-br-./\n/g;
+  print "$tmpfrom\n";
+  $tmpmessage =~ s/\.-br-./\n/g;        # Added Line  donated by jimmy koo yee seong   translates carriage return back for display in message
+  print "Message: $tmpmessage\n";
+  print "_________________________\n";
+}
+print qq~
+</textarea>
+         </font>
+
+         <table width="95%" border="0" cellspacing="0" cellpadding="0"><tr><td>
+         <font face="Arial, Helvetica, sans-serif">
+            <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&user=$user&pass=$pass">
+              Refresh
+            </a>
+          </font>
+          </td><td align="right">
+         <font face="Arial, Helvetica, sans-serif"> &nbsp;
+            <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=clear&user=$user&pass=$pass">
+            Clear
+            </a>
+        </font>
+        </td></tr></table>
+        </form>
+       </td>
+      </tr>
+      <tr align="left" valign="top" bgcolor="$tablecolor2">
+        <td colspan="2" align="center" valign="top">
+
+~;
+if ($refreshonoff eq "on"){
+
+print qq~
+          <form name="redirect">
+           <font face="Arial" size="1">
+            <b>turn refresh timer</b>
+            <a href="$home_url/$im_program_name?&too=$too&refreshonoff=off&visible=$visible&user=$user&pass=$pass">off</a>
+           </font>
+           <br>
+           <font face="Arial" size="1">
+             <input type="text" size="2" name="redirect2">
+           </font>
+          </form>
+<script>
+<!--
+var targetURL="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&user=$user&pass=$pass"
+var countdownfrom=$refresh
+var currentsecond=document.redirect.redirect2.value=countdownfrom+1
+
+function countredirect(){
+
+if (currentsecond!=1){
+    currentsecond-=1
+    document.redirect.redirect2.value=currentsecond
+}
+else{
+   window.location=targetURL
+   return
+}
+   setTimeout("countredirect()",1000)
+}
+   countredirect()
+//-->
+</script>
+
+~;
+}
+else {
+print qq~
+<font face="Arial" size="1">
+            <b>turn refresh timer</b>
+            <a href="$home_url/$im_program_name?&too=$too&refreshonoff=on&visible=$visible&user=$user&pass=$pass">on</a>
+            </font> <br><br><br>
+~;
+}
+print qq~
+
+      </td>
+
+    </tr>
+    <tr align="left" valign="top" bgcolor="$tablecolor2">
+      <td colspan="2" height="11">
+        <font face="Arial, Helvetica, sans-serif" size="2">
+         <b>Send A Message: </b></font>
+~;
+         if ($too eq "dropdown"){
+print qq~
+         <font face="Arial, Helvetica, sans-serif" size="1">
+           &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+           <a href="$home_url/$im_program_name?&too=textfield&refreshonoff=$refreshonoff&visible=$visible&user=$user&pass=$pass">[textfield]</a>
+         </font>
+
+      </td>
+    </tr>
+    <tr align="left" valign="top" bgcolor="$tablecolor2">
+      <td colspan="2" height="171">
+        <form>
+          <input type="hidden" name="user" value="$user">
+          <input type="hidden" name="pass" value="$pass">
+          <input type="hidden" name="too" value="$too">
+          <input type="hidden" name="visible" value="$visible">
+          <input type="hidden" name="refreshonoff" value="$refreshonoff">
+          <font face="Arial, Helvetica, sans-serif" size="2">
+            To:&nbsp;&nbsp;
+          </font>
+          <select name="to" size="1">
+          <option selected> </option>
+~;
+         $friendappend = "sfriends";  #name to be appended to the username of the friendlist owner
+
+
+
+open(FRIEND,"$messages$user$friendappend");
+    $friendslist = <FRIEND>;
+    close(FRIEND);
+
+    if ($friendslist eq "") { print ""; }
+    elsif ($friendslist ne "") { print "<option>Friends:";
+    @friendslis = split(/&/,$friendslist);
+    foreach $friendo (@friendslis){
+
+        ($friendname,$friendnamedup) = split(/\|/,$friendo);
+        print qq!
+         <option>$friendname
+        !;
+    }
+    }
+         print "<option>------------------ ";
+         print "<option>All Users:";
+         foreach $line (@lines) {
+           ($tmpuser,$tmppass) = split(/\|/,$line);
+            print "<option>$tmpuser";
+         }
+print  "</select>";
+}
+elsif ($too eq "textfield") {
+print qq~
+         <font face="Arial, Helvetica, sans-serif" size="1">
+           &nbsp; &nbsp; &nbsp; &nbsp;
+           <a href="$home_url/$im_program_name?&too=dropdown&refreshonoff=$refreshonoff&visible=$visible&user=$user&pass=$pass">[dropdown]</a>
+         </font>
+         </td>
+    </tr>
+    <tr align="left" valign="top" bgcolor="$tablecolor2">
+      <td colspan="2" height="171">
+        <form>
+          <input type="hidden" name="user" value="$user">
+          <input type="hidden" name="pass" value="$pass">
+          <input type="hidden" name="too" value="$too">
+          <input type="hidden" name="visible" value="$visible">
+          <input type="hidden" name="refreshonoff" value="$refreshonoff">
+          <font face="Arial, Helvetica, sans-serif" size="2">
+            To:&nbsp;&nbsp;
+          </font>
+          <input type="text" name="to" value="$to">
+~;
+}
+print qq~
+        <br>
+        <font face="Arial, Helvetica, sans-serif" size="2">
+        <textarea name="message" cols="25" rows="5" wrap="PHYSICAL"></textarea>
+        </font>
+        <center>
+        <input type="submit" name="action" value="send">
+        </center>
+        <br>
+        <center>
+        <font face="Arial, Helvetica, sans-serif">
+        <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=users&user=$user&pass=$pass">Users</a>
+        &nbsp;
+        <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=onlineusers&user=$user&pass=$pass">Online Users</a>
+        &nbsp;
+        <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=listfriends&user=$user&pass=$pass">Friends</a>
+        </font>
+        </center>
+      </form>
+
+     <font face="Arial, Helvetica, sans-serif" size="1">
+~;
+
+# BEGINNING OF ACTIONS
+#SEND ACTION
+if ($action eq "send") {
+    $timenow = time;
+    $adjustedtime = $timenow + ($timezone*3600);
+    $timestamp = &dateformatshort("$adjustedtime");
+
+    open(SEND,">>$messages$to");
+    print SEND "$timestamp .-br-. From: $user|$message&";
+    close(SEND);
+    print qq~
+    <script>
+       <!--
+         var targetURL="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=sent&to=$to&user=$user&pass=$pass"
+
+         window.location=targetURL
+       //-->
+      </script>
+    ~;
+}
+#SENT ACTION
+elsif ($action eq "sent"){
+    print "<b>Sent message to $to.</b>";
+}
+#no Action
+elsif ($action eq "") {
+print qq~
+<b>System Messages</b>
+~;
+}
+#CLEAR ACTION
+elsif ($action eq "clear") {
+    open(DEL,">$messages$user");
+    print DEL "";
+    close(DEL);
+    print qq~
+       <script>
+       <!--
+         var targetURL="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=cleared&user=$user&pass=$pass"
+
+         window.location=targetURL
+       //-->
+      </script>
+    ~;
+}
+#Cleared Action
+elsif ($action eq "cleared") {
+print "<b>All Messages Cleared</b>";
+}
+#USERLIST ACTION
+elsif ($action eq "users") {
+    print qq~
+    <b>List of All Users</b><br>
+    <table valign="top" width="100%" border="0" cellspacing="0" cellpadding="0">
+    ~;
+    foreach $line (@lines) {
+    ($tmpuser,$tmppass) = split(/\|/,$line);
+
+    print qq!
+    <tr><td>
+    <font face="Arial, Helvetica, sans-serif" size="2">
+        <li>$tmpuser
+        </font>
+        </td><td align="right">
+        <font face="Arial, Helvetica, sans-serif" size="1">
+        <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=addfriend&user=$user&pass=$pass&friend=$tmpuser">ADD FRIEND  </a><br>
+        </font>
+        </td></tr>
+        !;
+}
+print "</table>";
+}
+#ONLINE USERS PART TWO
+# ONLINE USERS ACTION
+elsif ($action eq "onlineusers") {
+
+    open(FILE,"$onlinelist");
+    $onlineusrs = <FILE>;
+    close(FILE);
+    @onlineusers = split(/&/,$onlineusrs);
+    print "<b>Online Users List</b>";
+
+    $expiretime = time - 180;
+
+    foreach $person (@onlineusers) {
+    chomp $person;
+    ($ouser, $otime) = split(/\|/,$person);
+    unless ($expiretime > $otime) {
+    if ($otime > $expiretime){
+    print "<li> $ouser";
+    }
+    }
+    }
+}
+#END ONLINE USERS PART TWO
+
+##REMOVE FRIENDS ACTION
+elsif ($action eq "removefriend"){
+    $friendappend = "sfriends";  #name to be appended to the username of the friendlist owner
+    #for friendlist filename generation
+
+    open(DELFRIEND,"$messages$user$friendappend");
+    $friendline = <DELFRIEND>;
+    close(DELFRIEND);
+    @friendlin = split(/&/,$friendline);
+
+    open(DELFRIEND,">$messages$user$friendappend");
+    foreach $friends (@friendlin) {
+        ($friendname,$friendnamedup) = split(/\|/,$friends);
+        if ($friend ne $friendname) {  print DELFRIEND "$friends&"; }
+        elsif ($friend eq $friendname) { print DELFRIEND ""; }
+        }
+
+    close(DELFRIEND);
+print qq~
+    $friend removed from Friends.
+    ~;
+}
+
+
+
+#ADD FRIEND ACTION
+elsif ($action eq "addfriend"){
+    $friendappend = "sfriends";  #name to be appended to the username of the friendlist owner
+    open(ADDFRIEND,">>$messages$user$friendappend");
+    print ADDFRIEND "$friend|$friend&";
+    close(ADDFRIEND);
+    print qq~
+    $friend is added to Friends.
+    ~;
+}
+
+
+#LIST FRIENDS ACTION
+elsif ($action eq "listfriends"){
+$friendappend = "sfriends";  #name to be appended to the username of the friendlist owner
+
+print "<b> $user</b>'s <b>  friends</b> <br>";
+
+open(LISTFRIEND,"$messages$user$friendappend");
+    $friendslist = <LISTFRIEND>;
+    close(LISTFRIEND);
+    if ($friendslist eq "") { print "<li><b>no friends listed</b> "; }
+    if ($friendslist ne "") {
+    print qq~
+    <table width="100%" valign="top" border="0" cellspacing="0" cellpadding="0">
+    ~;
+    @friendslis = split(/&/,$friendslist);
+    foreach $friendo (@friendslis){
+
+        ($friendname,$friendnamedup) = split(/\|/,$friendo);
+        print qq!
+        <tr><td>
+        <font face="Arial, Helvetica, sans-serif" size="2">
+        <li>$friendname
+        </font>
+        </td><td align="right">
+        <font face="Arial, Helvetica, sans-serif" size="1">
+        <a href="$home_url/$im_program_name?&too=$too&refreshonoff=$refreshonoff&visible=$visible&action=removefriend&user=$user&pass=$pass&friend=$friendname">REMOVE FRIEND  </a><br>
+        </font>
+        </td></tr>
+        !;
+    }
+    print "</table>";
+    }
+}
+else {
+    print "";
+}
+print qq!
+      </font>
+    </td>
+  </tr>
+  <tr align="left" valign="top" bgcolor="$tablecolor1"> 
+    <td colspan="2"> &nbsp;
+    </td>
+  </tr>
+</table>
+!;
+}
+
+#This routine converts the time into a readable format like 4:20pm  (4/20/01)
+sub dateformatshort {
+    my $time = shift;
+    (my $sec,my $min,my $hour,my $mday,my $mon,my $year,my $wday,my $yday,my $isdst) = localtime($time);
+    my $ampm = "am";
+       $year = $year - 100 if ($year >= 100);
+    if ($year < 10) { $year = "0$year"; }
+    if ($mday < 10) { $mday = "0$mday"; }
+    if ($mon < 10) { $mon = "0$mon"; }
+    if ($hour > 11) {  $ampm = "pm"; }
+    if ($hour > 12) { $hour = $hour - 12; }
+    if ($hour == 0) { $hour = 12; }
+    if ($min < 10) { $min = "0$min"; }
+    if ($sec < 10) { $sec = "0$sec"; }
+    return "$hour:$min$ampm $mon/$mday/$year";
+    }
+
+#this routine is the Error message and the Default login screen.
+#if you enter a wrong password this is where you end up.
+sub error {
+$msg = shift(@_);
+++$error;
+
+#if no username or login is entered, or if there is an error print login screen
+#this is the launch page
+if ($error == 1) {
+
+print qq!
+<html>
+<head>
+<title>Login Screen</title>
+</head>
+
+<body bgcolor="$backgroundcolor" text="$textcolor1" link="$linkcolor" vlink="$vlinkcolor" alink="$alinkcolor" leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">
+<table align="center" width="235" border="0" cellspacing="0" cellpadding="0" height="192">
+  <tr align="left" valign="top" bgcolor="$tablecolor1"> 
+    <td >
+      <font face="Arial, Helvetica, sans-serif" size="2" color="$textcolor2">
+       <b> $title</b>
+      </font>
+      <font face="Arial, Helvetica, sans-serif">
+      </font>
+    </td>
+    <td >
+      <div align="right">
+       <font face="Arial, Helvetica, sans-serif" size="1" color="$textcolor2">
+        <a href="$home_url/$join_program_name" target="_self">
+          Join
+        </a>
+        &nbsp;
+       </font>
+      </div>
+    </td>
+  </tr>
+  <tr align="left" valign="top"> 
+    <td colspan="2" bgcolor="$tablecolor2" height="11">
+      <font face="Arial, Helvetica, sans-serif" size="2" color="$textcolor1">
+        CONNECT
+      </font>
+      </td>
+  </tr>
+  <tr align="left" valign="top" bgcolor="$tablecolor2"> 
+    <td colspan="2" height="128">
+      <font face="Arial, Helvetica, sans-serif" size="1" >
+        Login to your Account Here
+      </font>
+      <br>
+      <br>
+      <form method=POST>
+        <font face="Arial, Helvetica, sans-serif" size="2">
+          UserName:
+        </font>
+        <font face="Arial, Helvetica, sans-serif" size="2">
+          <input type="text" name="user" value="$user">
+        </font>
+        <br>
+        <font face="Arial, Helvetica, sans-serif" size="2">
+          Password:
+        </font>
+        <font face="Arial, Helvetica, sans-serif" size="2">
+          <input type="password" name="pass" value="$pass">
+        </font>
+          <input type="hidden" name="form" value="1">
+          <input type="hidden" name="too" value="dropdown">
+          <input type="hidden" name="refreshonoff" value="on">
+          <input type="hidden" name="visible" value="yes">
+        <br>
+        <center>
+        <input type="submit" name="submit" value="connect">
+        </center>
+      </form>
+      <br>
+      <font face="Arial, Helvetica, sans-serif" size="1">
+        Dont have an account???...
+        <a href="$home_url/$join_program_name" target="_self">
+          Join
+        </a>
+    </td>
+  </tr>
+  <tr align="left" valign="top" bgcolor="$tablecolor2"> 
+    <td width="78%" height="15" bgcolor="$tablecolor2"> </td>
+    <td width="22%" height="15"> </td>
+  </tr>
+  <tr align="left" valign="top" bgcolor="$tablecolor1">
+    <td colspan="2" height="2">
+      <font face="Arial, Helvetica, sans-serif" size="1" color="$textcolor2">&nbsp;</font>
+    </td>
+  </tr>
+</table>
+
+!;
+}
+#$msg used to be here  if it is put back it prints three times if there are three errors
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

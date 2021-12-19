@@ -1,0 +1,109 @@
+#!/usr/bin/perl
+
+# name:    blockedmail.cgi
+# version: 1.0.0
+# author:  David McNamara 2000
+# email:   me@mackers.com
+# web:     http://www.mackers.com/scripts/blockedmail/
+
+# change the following to the location of cgi-lib.pl on your system
+require "/home/mackers/cgi-lib.pl";
+# and that's it. you shouldn't need to change anything else
+
+&ReadParse;
+
+print "Content-type: text/html\n\n<html>\n<body>\n";
+
+if (($in{'USER'}) && (!$in{'logout'})) {
+print "<form action=\"blockedmail.cgi\" method=\"get\">";
+print "<input type=hidden name=\"USER\" value=\"$in{'USER'}\">";
+print "<input type=hidden name=\"PASSWORD\" value=\"$in{'PASSWORD'}\">";
+print "<input type=hidden name=\"HOST\" value=\"$in{'HOST'}\">";
+print "<input type=hidden name=\"DEBUG\" value=\"$in{'DEBUG'}\">";
+print "<input type=hidden name=\"showall\" value=\"showall\">" if ($in{'showall'});
+
+if ($in{'delete'}) {
+  $pop = new Mail::POP3Client( USER => $in{'USER'} , PASSWORD => $in{'PASSWORD'} , HOST => $in{'HOST'} , AUTH_MODE => "PASS" , DEBUG => $in{'DEBUG'});
+    $delete = substr($in{'delete'},7);
+    $pop->Delete($delete);
+    $popstate = $pop->State();
+  $pop->Close();
+}
+
+if ($in{'deleteall'}) {
+  $pop = new Mail::POP3Client( USER => $in{'USER'} , PASSWORD => $in{'PASSWORD'} , HOST => $in{'HOST'} , AUTH_MODE => "PASS" , DEBUG => $in{'DEBUG'});
+    for( $i = 1; $i <= $pop->Count(); $i++ ) {
+      $pop->Delete($i);
+    }
+    $popstate = $pop->State();
+  $pop->Close();
+}
+
+use Mail::POP3Client;
+$pop = new Mail::POP3Client( USER => $in{'USER'} , PASSWORD => $in{'PASSWORD'} , HOST => $in{'HOST'} , AUTH_MODE => "PASS" , DEBUG => $in{'DEBUG'});
+  for( $i = 1; $i <= $pop->Count(); $i++ ) {
+    $_ = $pop->List($i);
+    ($no, $size) = split(/ /);
+    $size[$no] = $size;
+    foreach( $pop->Head( $i ) ) {
+      $from[$no] = $_ if (/From/);
+      $subject[$no] = $_ if (/Subject:/);
+      #/^(From|Subject):\s+/i && print $_, "\n";
+    }
+  }
+$popstate = $pop->State();
+$pop->Close();
+
+if (($popstate eq "TRANSACTION") && (@size)) {
+
+print "<center><h3>Showing mailbox for ". $in{'USER'} . "@" . $in{'HOST'} . "</h3></center>\n";
+print "<table border=1 align=center width=\"70%\">\n";
+
+for ($i=1;$i<=(scalar @size)-1;$i++) {
+  if ($size[$i] >= 600000) {
+    print "<tr><td bgcolor=\"red\" align=center>$i<br>($size[$i])</td><td bgcolor=\"red\">$from[$i]<br>$subject[$i]</td><td bgcolor=\"red\" align=right><input type=submit name=\"delete\" value=\"Delete $i\"></td></tr>\n";
+    $shownb++;
+  }
+}  
+
+for ($i=1;$i<=(scalar @size)-1;$i++) {
+  if (($size[$i] > 100000) && ($size[$i] < 600000)) {
+    print "<tr><td bgcolor=\"yellow\" align=center>$i<br>($size[$i])</td><td bgcolor=\"yellow\">$from[$i]<br>$subject[$i]</td><td align=right bgcolor=\"yellow\"><input type=submit name=\"delete\" value=\"Delete $i\"></td></tr>\n";
+    $shownb++;
+  }
+}  
+
+for ($i=1;$i<=(scalar @size)-1;$i++) {
+  if (($size[$i] <= 100000) && ($in{'showall'})) {
+    print "<tr><td align=center>$i<br>($size[$i])</td><td>$from[$i]<br>$subject[$i]</td><td align=right><input type=submit name=\"delete\" value=\"Delete $i\"></td></tr>\n";
+    $shown++;
+  }
+}
+
+print "</table><br>\n";
+
+print "<center>There are no big messages in this mailbox.</center><br>\n" if (!$shownb);
+print "<center>Showing messages ". ($shown + $shownb) . " of ". ((scalar @size) -1) .".</center><br>\n";
+
+print "<center><input type=submit name=\"logout\" value=\"Logout\"><input type=submit name=\"showall\" value=\"Show All Messages\"><input type=submit name=\"deleteall\" value=\"Delete Entire Mailbox\"></center>\n";
+
+} elsif ($popstate ne "TRANSACTION") {
+
+print "<center>The password you supplied for ".$in{'USER'} ."@". $in{'HOST'} . " is invalid.</center><br>\n";
+
+} elsif (!@size) {
+
+print "<center>The mailbox ".$in{'USER'} ."@". $in{'HOST'} . " is empty.</center><br>\n";
+
+}
+
+print "</form>\n";
+
+} else {
+
+print "<center>Blocked Mailbox Fixer</center>\n";
+print "<center><form action=\"blockedmail.cgi\" method=\"get\">Username:<input type=text name=\"USER\"><br>Password:<input type=password name=\"PASSWORD\"><br>Server:<input type=text name=\"HOST\"><br><input type=submit value=\"Go\"></form></center>";
+
+}
+
+print "</body>\n</html>\n";

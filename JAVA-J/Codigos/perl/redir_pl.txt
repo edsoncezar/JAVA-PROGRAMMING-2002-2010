@@ -1,0 +1,130 @@
+#!/usr/local/bin/perl
+#
+# Redirection CGI
+# Ken Wronkiewicz 
+#
+# Version 1.00 - Inital release - Ken Wronkiewicz
+# Version 1.01 - Bug fix version - I forgot a space - Ken Wronkiewicz
+# Version 1.10 - Cleaned up release - Uses associative arrays
+# 		 and cleaner structure.  Added docs - 
+#		 Ken Wronkiewicz
+# Version 1.11 - Changed mail address - Ken Wronkiewicz 
+#
+# How this works -
+#  First, we check for Microsoft Internet Explorer, because it sends a
+#  Netscape HTTP_USER_AGENT.  Then, we screen out pre - 2.0 Netscape
+#  Navagators.  If the browser is none of the top two, it must be 
+#  2.0 or 3.0.  We also check for LYNX in order to send the user to the 
+#  text only page.  If the user isn't one of these, we send them to
+#  the average browser page.
+#
+# To adapt to your page - 
+# 1) Place this file, renamed index.cgi, into the directory you with to
+#    make independant
+# 2) Create four directories, avg/ ie/ ns/ and text/
+# 3) Remove your index.html and create four tailored index.html files
+#    for each of the four directories.
+# 4) Specify all pathnames without an index.html.  For example, if your
+#    netscape specific file is at "http://www.yyy.com/ns/index.html",
+#    you should specify the URL as "http://www.yyy.com/"
+#
+# To adapt to a different structure -
+#  The %Locations associative array holds the location the user is sent 
+#  to.  So, if the page you want Netscape users to go to is at
+#  "http://www.yyy.com/foo/index.html" and this is at 
+#  "http://www.yyy.com/", you want to set the value after 'NS' to 
+#  "/foo/index.html".
+#
+# If this program doesn't work -
+#  Your server might be set up improperly.  Normally, the server will
+#  try to find a file named "index.html" and then a file named "index.cgi"
+#  before it sends an FTP style directory.  So, if you get a FTP style
+#  directory instead of the page, your server is set up like this.
+#  
+#  Also, make sure that your server is set up to treat files with a .cgi
+#  extension as CGI applications.
+#
+# To support a new browser -
+#  You need to come up with a key name for it.  Just use the first few 
+#  letters of the browser name or something.  Then, you want to make a 
+#  new directory for the new browser.  Find out what HTTP_USER_AGENT 
+#  string the browser sends out and then add a test.
+#
+# To find out what HTTP_USER_AGENT your browser is sending
+#  If the URL you use is "http://www.yyy.com/", you want to
+#  go to "http://www.yyy.com/index.cgi?id".  The HTTP_USER_AGENT your
+#  browser sends will be the result of the script.
+#
+# For further help -
+#  Go to http://www.wirewd.com/wh/cgi.html
+#
+# License -
+#  This software has been written by me.  If you use it, I want to know.
+#  So tell me if you use it.  You can modify it, as long as I know
+#  about it and you give me credit.
+#  It is freely distributable.  
+#
+
+# Read the content data - Does nothing, really.  Just in case
+# somebody tries to POST something to the CGI.
+
+read(STDIN, $buffer, $ENV{'CONTENT_LENGTH'});
+
+# Set up the associative array with the list of different locations
+# that your page could possibly be.  The key associated with
+# the location comes first.  The actual location comes second.
+
+%Locations = (
+'MSIE', '/ie/index.html', #Path for the Internet Explorer page
+'NS', '/ns/index.html', #Path for the Netscape page
+'TEXT', '/text/index.html', #Path for the text-only page
+'AVG', '/avg/index.html', #Path for the average page
+# Add additional locations here - first the key and then the location.
+);
+
+# Get the HTTP_USER_AGENT variable - This is the identification string
+# that your browser sends out when it asks for a page.
+
+$Agent = $ENV{'HTTP_USER_AGENT'};
+
+# Decide which page to send the user to - This uses regular expression
+# tests to decide if a particular string is in the HTTP_USER_AGENT
+# variable and then sends the proper redirect.
+
+CHECK: {
+ if ($ENV{'QUERY_STRING'} eq "id") {&ID; last CHECK; }
+ if ($Agent =~ /MSIE/i) {&Redirect($Locations{'MSIE'}); last CHECK; }
+# Add more Internet Explorers here
+ if ($Agent =~ /^Mozilla\/1.*/i) {&Redirect($Locations{'AVG'}); last CHECK; }
+# Add more Netscape versions here
+ if ($Agent =~ /^Mozilla\/*/i) {&Redirect($Locations{'NS'}); last CHECK; }
+ if ($Agent =~ /^Lynx/i) {&Redirect($Locations{'TEXT'}); last CHECK; }
+# Add new browsers here
+ &Redirect($Locations{'AVG'});
+}
+
+# Redirect subroutine.  Given a location to redirect to, it will give you the new 
+# document.  
+
+sub Redirect {
+ local($location) = @_;
+ print "Location: $location\n\n";
+# Just in case the user's browser does not support redirections properly, we'll
+# send out a document to tell them to go to the new location.  I have yet to
+# see a browser that doesn't, but I figure it's better to be safe.
+ print "<HTML><HEAD><TITLE>Note</TITLE>\n";
+ print "<BODY><P>Go to <A HREF=\"$Locations{'TEXT'}\"></P>";
+ print "</BODY></HTML>";
+}
+
+# Testing subroutine.  Prints out the type of browser you are using.
+
+sub ID {
+  print "Content-type: text/plain\n\n";
+  print "$Agent";
+}
+
+# End of redirecton.
+
+
+

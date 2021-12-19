@@ -1,0 +1,215 @@
+#!/usr/bin/perl
+# -*- perl -*-
+
+#
+# $Id: mkprereqinst,v 1.7 2002/03/04 08:54:48 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2002 Slaven Rezic. All rights reserved.
+# This package is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: slaven.rezic@berlin.de
+# WWW:  http://www.rezic.de/eserte/
+#
+
+use Config;
+use Getopt::Long;
+use strict;
+use vars qw($VERSION);
+use ExtUtils::MakeMaker;
+
+$VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+
+my $v;
+my $exec;
+
+if (!GetOptions("v!" => \$v,
+		"exec!" => \$exec)) {
+    die <<EOF;
+usage: $0 [-v] [-exec]
+-v:    verbose
+-exec: do not create prereqinst but rather exec the generated code
+EOF
+}
+
+{
+    package ExtUtils::MakeMaker;
+    use vars qw($Makefile_PL);
+
+    sub WriteMakefile {
+	$Makefile_PL = { @_ };
+    }
+}
+
+do "Makefile.PL"; die $@ if $@;
+
+my $prereq_pm = $ExtUtils::MakeMaker::Makefile_PL->{PREREQ_PM};
+if (ref $prereq_pm ne 'HASH') {
+    warn "No prerequisites found in Makefile.PL\n";
+    exit 0;
+}
+
+my $code = "";
+
+$code .= <<EOF;
+$Config{startperl}
+# -*- perl -*-
+#
+# DO NOT EDIT, created automatically by $0\n
+# on @{[ scalar localtime ]}
+#
+
+use Getopt::Long;
+EOF
+
+$code .= <<'EOF';
+my $require_errors;
+my $use = 'cpan';
+
+if (!GetOptions("ppm"  => sub { $use = 'ppm'  },
+		"cpan" => sub { $use = 'cpan' },
+	       )) {
+    die "usage: $0 [-ppm | -cpan]\n";
+}
+
+EOF
+
+my(@installs, @ppm_installs, @requires, @modlist);
+while(my($mod, $ver) = each %$prereq_pm) {
+    my $check_mod = "require $mod";
+    if ($ver) {
+	$check_mod .= "; $mod->VERSION($ver)";
+    }
+    push @installs, "install '$mod' if !eval '$check_mod';";
+    (my $ppm = $mod) =~ s/::/-/g;
+    push @ppm_installs, "do { print STDERR 'Install $ppm'.qq(\\n); PPM::InstallPackage(package => '$ppm') or warn ' (not successful)'.qq(\\n); } if !eval '$check_mod';";
+    push @requires, "if (!eval 'require $mod;" . ($ver ? " $mod->VERSION($ver);" : "") . '\') { warn $@; $require_errors++ }';
+    push @modlist, $mod . ($ver ? " $ver" : "");
+}
+
+$code .= <<EOF;
+if (\$use eq 'ppm') {
+    require PPM;
+@{[ join("\n", map("    $_", @ppm_installs)) ]}
+} else {
+    use CPAN;
+@{[ join("\n", map("    $_", @installs)) ]}
+}
+EOF
+
+$code .= join("\n", @requires), "\n\n";
+
+$code .= 'warn "Autoinstallation of prerequisites completed\n" if !$require_errors;' . "\n";
+
+if ($exec) {
+    package Prereqinst;
+    eval $code;
+    die $@ if $@;
+} else {
+    open(F, "> prereqinst") or die "Can't write prereqinst: $!";
+    print F $code;
+    close F;
+    chmod 0755, "prereqinst";
+}
+
+if ($v) {
+    print STDERR "Dependencies: " . join(", ", @modlist) . "\n";
+}
+
+__END__
+
+=head1 NAME
+
+mkprereqinst - create a prereqinst file for perl module distributions
+
+=head1 DESCRIPTION
+
+C<mkprereqinst> creates a C<prereqinst.pl> file. The created file can
+be included to perl module and script distributions to help people to
+get and install module prerequisites through C<CPAN.pm> or C<PPM.pm>.
+
+The standard installation process of perl distributions with a
+prereqinst file will look as following:
+
+    perl Makefile.PL
+    (if there are some modules missing then execute the next line)
+    perl prereqinst
+    make all test install
+
+If the user needs superuser privileges to install something on his
+system, then C<perl prereqinst.pl> and C<make install> should be run
+as superuser.
+
+ActivePerl users may use
+
+    perl prereqinst.pl -ppm
+
+to fetch the modules through C<PPM> instead of C<CPAN>.
+
+=head2 OPTIONS
+
+C<mkprereqinst> accepts the following options:
+
+=over
+
+=item C<-v>
+
+Be verbose.
+
+=item C<-exec>
+
+Instead of creating the C<prereqinst.pl>, execute the generated code.
+
+=back
+
+=head1 BUGS and TODO
+
+The script does nasty things with C<ExtUtils::MakeMaker> and the
+C<WriteMakefile> subroutine.
+
+It is annoying to create the prereqinst.pl file if the Makefile.PL is
+interactive.
+
+OS-related or other conditions in C<PREREQ_PM> are not handled.
+
+There are problems with the mapping of perl module names to PPM
+package names.
+
+It should be possible to supply -cpan/-ppm with the -exec option.
+
+prereqinst.pl should autodetected whether the system is a CPAN or a
+PPM system. With -cpan or -ppm it will be possible to change the
+default.
+
+
+=head1 README
+
+mkprereqinst creates a prereqinst file. The created file can be
+included to perl module and script distributions to help people to get
+and install module dependecies through CPAN.pm or PPM.pm
+
+=head1 PREREQUISITES
+
+only standard perl modules
+
+=head1 COREQUISITES
+
+none
+
+=head1 OSNAMES
+
+any
+
+=head1 SCRIPT CATEGORIES
+
+CPAN
+
+=head1 SEE ALSO
+
+CPAN(3), PPM(3), ExtUtils::MakeMaker(3).
+
+=cut
+
+
+

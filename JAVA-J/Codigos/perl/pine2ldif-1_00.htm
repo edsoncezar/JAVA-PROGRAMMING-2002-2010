@@ -1,0 +1,131 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0057)http://www.cpan.org/authors/id/V/VK/VKHERA/pine2ldif-1.00 -->
+<HTML><HEAD>
+<META http-equiv=Content-Type content="text/html; charset=windows-1252">
+<META content="MSHTML 5.50.4134.600" name=GENERATOR></HEAD>
+<BODY><XMP>#! /usr/bin/perl
+use strict;
+
+use Mail::Address;
+
+my $record = '';
+my $nextline = <>;
+
+while (defined $nextline) {
+#  print "r=``$record''\nn=``$nextline''\n\n";
+
+  chomp $nextline;
+  next if $nextline =~ m/^\#/;		# skip comments
+
+  if ($nextline =~ m/^\s/) {
+    $record .= $nextline;
+  } else {
+    process($record) if $record;
+    $record = $nextline;
+  }
+} continue {
+  $nextline = <>;
+}
+
+process($record);		# last record needs to be processed too!
+
+
+sub process {
+  my ($line) = @_;
+
+  my ($alias,$cn,$email,$junk,$descr) = split /\t/,$line;
+
+  my $islist = 0;
+  my @email = ();
+
+  $email =~ s/(^\()|(\)$)//g;
+
+  if (@email = Mail::Address->parse($email)) {
+    # ok!
+  } else {
+    warn "Unable to parse address for $alias\n";
+  }
+
+  if (scalar(@email) > 1) {
+    foreach my $addr (@email) {
+      print_single_addr($addr);
+    }
+
+    $cn ||= $alias;		# if missing, use something.
+
+    print <<"EOL";
+dn: cn=$cn
+cn: $cn
+xmozillanickname: $alias
+description: $cn
+objectclass: top
+objectclass: groupOfNames
+EOL
+    foreach my $addr (@email) {
+      my $name = $addr->name || $addr->user;
+      my $emailaddr = $addr->address;
+      print "member: cn=$name,mail=$emailaddr\n";
+    }
+    print "\n"
+  } else {
+    print_single_addr($email[0],$alias);
+  }
+}
+
+sub print_single_addr {
+  my ($e,$alias) = @_;
+
+    my $name = $e->name || $alias || $e->user;
+    my $addr = $e->address;
+
+    print <<"EOP";
+dn: cn=$name,mail=$addr
+cn: $name
+EOP
+    print "xmozillanickname: $alias\n" if $alias;
+    print <<"EOP";
+mail: $addr
+xmozillausehtmlmail: FALSE
+givenname: $name
+objectclass: top
+objectclass: person
+
+EOP
+}
+
+exit(0);
+
+__END__
+=pod
+
+=head1 NAME
+
+pine2ldif - translate Pine address book to LDIF
+
+usage: C<pine2ldif> F<~/.addressbook> E<gt> F<addresses.ldif>
+
+=head1 README
+
+Reads a Pine addressbook file and writes out an LDIF file suitable for
+importing into Netscape Messenger.  Format of files is guessed from
+samples.
+
+=head1 PREREQUISITES
+
+Mail::Header
+
+=head1 SCRIPT CATEGORIES
+
+Mail
+
+=head1 AUTHOR
+
+Vivek Khera <vivek@khera.org>
+
+Copyright 2001 Vivek Khera.  This program is distributed under the
+same terms as Perl itself.  Please refer to the Perl license for
+details.
+
+=cut
+
+</XMP></BODY></HTML>

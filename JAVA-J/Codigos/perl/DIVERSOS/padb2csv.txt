@@ -1,0 +1,530 @@
+#!/usr/bin/perl
+
+my $VERSION = 1.0;
+
+#
+# Convert Palm Address datatbase to Yahoo CSV format.
+#
+# Install this file as padb2csv and csv2padb.
+#
+# For documentation use pod2text/pod2man on this file or
+# run it with '-h' arument.
+#
+#	Copyright (C) 2001 by Alexander Kolbasov
+#
+#    This program is free software; you can redistribute it and/or
+#    modify it under the terms of the Artistic License, a copy of which
+#    can be found with the Perl distribution.
+#
+#    This code is distributed in the hope that it will be useful, but
+#    WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#    Artistic License for more details.
+#
+# $Id: padb2csv,v 1.6 2001/12/13 18:48:55 akolb Exp $
+
+use strict;
+use File::Basename;
+use Getopt::Std;
+use Palm::PDB;
+use Palm::Address;
+use Text::CSV_XS;
+
+my $padb2csv = 'padb2csv';
+my $csv2padb = 'csv2padb';
+my $p2c;
+
+my $default_db = 'AddressDB.pdb';
+
+my $padb2csv_usage = <<EOU;
+Usage: $padb2csv [-v] [-h] [-o] [-e expr] [-m expr] [input_file [output_file]]
+
+\t-h:\tprint help
+\t-v:\tbe verbose: print names as they are added.
+\t-o:\toverride output file
+\t-e expr: Drop records matching expr
+\t-m expr: Only process records matching expr
+
+\tinput_file:\tPalm .pdb Address database. Use $default_db by default.
+\toutput_file:\tYahoo CSV formatted file. '-' means write to STDOUT.
+\tIf no files are given, read from $default_db and write to stdout.
+
+EOU
+
+my $csv2padb_usage = <<EOU;
+Usage: $csv2padb [-v] [-h] [-o] [-e expr] [-m expr] [input_file [output_file]]
+
+\t-h:\tprint help
+\t-v:\tbe verbose:print names as they are added. 
+\t-o:\toverride output file
+\t-e expr: Drop records matching expr
+\t-m expr: Only process records matching expr
+
+\tinput_file:\tYahoo CSV formatted address file. '-' means use STDIN.
+\toutput_file:\tPalm .pdb file. Use $default_db if no output_file is gven.
+\tIf no files are given, read from stdin and write to $default_db
+
+EOU
+
+my %opts;
+#
+# Parse arguments.
+#
+
+my $name = basename($0, ".pl");
+
+die "This program should be called either $padb2csv or $csv2padb"
+    if $name ne $padb2csv && $name ne $csv2padb;
+
+$p2c = 1 if $name eq $padb2csv;
+
+my $usage = $p2c ? $padb2csv_usage : $csv2padb_usage;
+
+getopts('hovm:e:', \%opts) || ((print STDERR $usage), exit 1);
+
+((print $usage), exit 0) if $opts{h};
+
+my $argc = @ARGV;
+
+die $usage if $argc > 2;
+
+my $verbose = 1 if $opts{v};
+my $overwrite = 1 if $opts{o};
+my $match = $opts{m};
+my $except = $opts{e};
+
+# Get input file
+my $input = ($argc ? $ARGV[0] : ($p2c ? $default_db : '-'));
+my $output = ($argc == 2 ? $ARGV[1] : ($p2c ? '-' : $default_db));
+
+# Check output file for overwrites.
+die "File $output already exist, use -o flag if want to overwrite $output\n"
+    if ($output ne '-' && ! $overwrite && stat $output);
+
+exit ($p2c ? palm2csv($input, $output): csv2palm($input, $output));
+
+sub palm2csv {
+    my ($input, $output) = @_;
+    my $OUT;
+    my ($work, $home, $fax, $other, $mail, $main, $pager, $mobile);
+    my ($work1, $home1, $fax1, $other1, $mail1, $main1, $pager1, $mobile1);
+    my ($work_p, $home_p, $fax_p, $other_p, $mail_p, $main_p, $pager_p, $mobile_p);
+    my @cats;
+    my $i = 0;
+    my $pdb = new Palm::PDB;
+    my $csv = new Text::CSV_XS;
+
+    if ($output eq '-') {
+	$OUT = \*STDOUT;
+    } else {
+	open (F, "> $output") ||
+	    die "can't open $output for writing";
+	$OUT = \*F;
+    }
+
+    # Read Palm database
+    $pdb->Load($input);
+
+    # Find indices for various mail types.
+    for (@Palm::Address::phoneLabels) {
+	$work   = $i if /Work/;
+	$home   = $i if /Home/;
+	$fax    = $i if /Fax/;
+	$other  = $i if /Other/;
+	$mail   = $i if /mail/;
+	$main   = $i if /Main/;
+	$pager  = $i if /Pager/;
+	$mobile = $i if /Mobile/;
+	$i++;;
+    }
+
+    my @categories   = @{$pdb->{appinfo}{categories}};
+
+    # Build array of categories indexed by category ID.
+    for my $c (@categories) {
+	$cats[$c->{id}] = $c->{name};
+    }
+
+    print $OUT <<EOF;
+"First","Middle","Last","Nickname","Email","Category","Distribution Lists","Yahoo! ID","Home","Work","Pager","Fax","Mobile","Other","Yahoo! Phone","Primary","Alternate Email 1","Alternate Email 2","Personal Website","Business Website","Title","Company","Work Address","Work City","Work State","Work ZIP","Work Country","Home Address","Home City","Home State","Home ZIP","Home Country","Birthday","Anniversary","Custom 1","Custom 2","Custom 3","Custom 4","Comments"
+EOF
+
+    # Parse address database
+    for my $r (@{$pdb->{records}}) {
+	my @fl;
+	my $status;
+	my $category = $cats[$r->{category}];
+
+	# Find what phoneN means
+	for ($i = 1; $i < 6; $i++) {
+	    $work1   = $i if ($r->{phoneLabel}{"phone$i"} == $work);
+	    $home1   = $i if ($r->{phoneLabel}{"phone$i"} == $home);
+	    $fax1    = $i if ($r->{phoneLabel}{"phone$i"} == $fax);
+	    $other1  = $i if ($r->{phoneLabel}{"phone$i"} == $other);
+	    $mail1   = $i if ($r->{phoneLabel}{"phone$i"} == $mail);
+	    $main1   = $i if ($r->{phoneLabel}{"phone$i"} == $main);
+	    $pager1  = $i if ($r->{phoneLabel}{"phone$i"} == $pager);
+	    $mobile1 = $i if ($r->{phoneLabel}{"phone$i"} == $mobile);
+	}
+	# Figure out various phones
+	$work_p   = $r->{fields}{"phone$work1"}   if $work1;
+	$home_p   = $r->{fields}{"phone$home1"}   if $home1;
+	$fax_p    = $r->{fields}{"phone$fax1"}    if $fax1;
+	$other_p  = $r->{fields}{"phone$other1"}  if $other1;
+	$mail_p   = $r->{fields}{"phone$mail1"}   if $mail1;
+	$main_p   = $r->{fields}{"phone$work1"}   if $main1;
+	$pager_p  = $r->{fields}{"phone$pager1"}  if $pager1;
+	$mobile_p = $r->{fields}{"phone$mobile1"} if $mobile1;
+
+	#
+	# Construct list of fields required by Yahoo CSV.
+	# Push all field values in the right order to a single list and then
+	# use csv->combine() method to convert the list into a CSV record.
+	#
+	push @fl, $r->{fields}{firstName};	# First
+	push @fl, '';			# Middle
+	push @fl, $r->{fields}{name};	# Last
+	push @fl, '';			# Nickname
+	push @fl, $mail_p;		# Mail
+	push @fl, $category;		# Category
+	push @fl, '';			# Distribution
+	push @fl, '';			# Yahoo Id
+	push @fl, $home_p;		# Home
+	push @fl, $work_p;		# Work
+	push @fl, $pager_p;		# Pager
+	push @fl, $fax_p;		# Fax
+	push @fl, $mobile_p;		# Mobile
+	push @fl, $other_p;		# Other
+	push @fl, '';			# Yahoo phone
+	push @fl, $main_p;		# Primary
+	push @fl, '';			# Alt e-mail 1
+	push @fl, '';			# Alt e-mail 2
+	push @fl, '';			# Personal website
+	push @fl, '';			# Business website
+	push @fl, $r->{fields}{title};	# Title
+	push @fl, $r->{fields}{company};# Company
+	push @fl, '';			# Work Address
+	push @fl, '';			# Work City
+	push @fl, '';			# Work State
+	push @fl, '';			# Work ZIP
+	push @fl, '';			# Work COuntry
+	push @fl, $r->{fields}{address};# Home addr
+	push @fl, $r->{fields}{city};	# Home City
+	push @fl, $r->{fields}{state};	# Home State
+	push @fl, $r->{fields}{zipCode};# Home Zip
+	push @fl, $r->{fields}{country};# Home country
+	push @fl, '';			# Birthday
+	push @fl, '';			# Anniversary
+	push @fl, $r->{fields}{custom1};# Custom1
+	push @fl, $r->{fields}{custom2};# Custom2
+	push @fl, $r->{fields}{custom3};# Custom3
+	push @fl, $r->{fields}{custom4};# Custom4
+	push @fl, $r->{fields}{note};	# Comments
+
+	$status = $csv->combine (@fl);
+
+	if (!$status) {
+	    my $err = $csv->error_input;
+	    print STDERR "parse() failed on argument: ", $err, "\n";
+	} else {
+	    $_ = $csv->string;
+
+	    # Filter out record if required
+	    next if $match && ! /$match/;
+	    next if $except && /$except/;
+
+	    # Write CSV record
+	    print $OUT "$_\n";
+	    print STDERR "$r->{fields}{firstName} $r->{fields}{name}\n" 
+		if $verbose;
+	}
+    }
+    return 0;
+}
+
+sub csv2palm {
+    my ($input, $output) = @_;
+    my $CSV;
+    my $pdb = new Palm::Address;
+    my $csv = new Text::CSV_XS;
+    my %categories = (Business => 1, Personal => 1, QuickList => 1);
+    my %phones = (Work => 0,
+		  Home => 1,
+		  Fax => 2,
+		  Other => 3,
+		  Email => 4,
+		  'Personal Website' => 5,
+		  Pager => 6,
+		  Mobile => 7);
+
+    my %phones_prim = (work => 'Work',
+		       home => 'Home',
+		       fax => 'Fax',
+		       other => 'Other',
+		       email => 'Email',
+		       pager => 'Pager',
+		       mobile => 'Mobile');
+
+    # Map Pilot fields names to Yahoo field names.
+    my %fields_map = (name	=> 'Last',
+		      firstName	=> 'First',
+		      company	=> 'Company',
+		      address	=> 'Home Address',
+		      city	=> 'Home City',
+		      state	=> 'Home State',
+		      zipCode	=> 'Home ZIP',
+		      country	=> 'Home Country',
+		      title	=> 'Title',
+		      custom1	=> 'Custom 1',
+		      custom2	=> 'Custom 2',
+		      custom3	=> 'Custom 3',
+		      custom4	=> 'Custom 4',
+		      note	=> 'Comments');
+
+    my $primary;
+
+    my @csv_phones = qw(Home Work Mobile Email Pager Fax Other);
+    push @csv_phones, 'Personal Website';
+
+    my @columns;
+    my %fields;		# Indices of each field hashed by field name
+    my $i;
+    my ($work_p, $home_p, $fax_p, $other_p, $mail_p, $main_p, $pager_p, $mobile_p);
+    #
+    # List of existing categories. Always create standard Palm categories.
+    # New categories are added to this list.
+    #
+    my %cats = (Unfiled => 0,
+		Busines => 1,
+		Personal => 2,
+		QuickList => 3);
+    
+    my $cat_id = 4;
+
+    # Get input file descriptor.
+    if ($input eq '-') {
+	$CSV = \*STDOUT;
+    } else {
+	open (F, "< $input") ||
+	    die "can't open $input for reading";
+	$CSV = \*F;
+    }
+
+    # Read and parse the header.
+    my $header = <$CSV>;
+
+    $csv->parse($header) or die "Bad header \"$header\", can't proceed!\n";
+
+    @columns = $csv->fields();
+
+    # Get field names and record index of each field into %fields.
+    for my $f (@columns) {
+	$fields{$f} = $i++;
+    }
+
+    # Add standard categories.
+    $pdb->addCategory('Business');
+    $pdb->addCategory('Personal');
+    $pdb->addCategory('QuickList');
+
+    print STDERR "Saving database to $output....\n" if $verbose;
+
+    # Process each record
+    while (<$CSV>) {
+	my @palm_phones = qw();
+	my @palm_types = qw();
+
+	# Filter records
+	next if $match && ! /$match/;
+	next if $except && /$except/;
+
+	if (! $csv->parse($_)) {
+	    print STDERR "can't parse string [$_]\n";
+	} else {
+	    @columns = $csv->fields();
+	    # Create new address record
+	    my $r = $pdb->new_Record;
+
+	    # Get category information.
+	    my $cat = $columns[$fields{'Category'}];
+	    if (($cat ne 'Unfiled') && $categories{$cat} != 1) {
+		# Add this category to the list of categories.
+		$categories{$cat} = 1;
+		$pdb->addCategory ($cat, $cat_id);
+		$cats{$cat} = $cat_id++;
+	    }
+	    # Specify record category.
+	    $r->{category} = $cats{$cat};
+
+	    # Deal with primary phone.
+	    $primary = $columns[$fields{'Primary'}];
+	    $primary = $phones_prim{$primary};
+
+	    if ($primary && $columns[$fields{$primary}]) {
+		push @palm_phones, $columns[$fields{$primary}];
+		push @palm_types, $phones{$primary};
+	    }
+
+	    for my $p (@csv_phones) {
+		my $phone = $columns[$fields{$p}];
+		if ($phone && ($p ne $primary)) {
+		    push @palm_phones, $phone;
+		    push @palm_types, $phones{$p};
+		}
+	    }
+
+	    # Assign phones to 5 available slots.
+	    my $nphones = @palm_phones;
+	    $nphones = 5 if $nphones > 5;
+
+	    for ($i = 1; $i <= $nphones; $i++) {
+		$r->{phoneLabel}{"phone$i"} = $palm_types[$i - 1];
+		$r->{fields}{"phone$i"} = $palm_phones[$i - 1];
+	    }
+
+	    #
+	    # Specify other fields
+	    #
+	    for my $k (keys %fields_map) {
+		$r->{fields}{$k} = $columns[$fields{$fields_map{$k}}];
+	    }
+
+	    # Add record to the database
+	    $pdb->append_Record($r);
+	    print STDERR "$r->{fields}{firstName} $r->{fields}{name}\n" 
+		if $verbose;
+	}
+	# Save new database
+	$pdb->Write ($output);
+    }
+    return 0;
+}
+
+#
+# POD section.
+# 
+
+=head1 NAME
+
+padb2csv, csv2padb - Convert between Palm Address datatbase and Yahoo! CSV
+format.
+
+=head1 SYNOPSYS
+
+padb2csv [B<-v>] [B<-h>] [B<-o>] [B<-m> expr] [B<-e> expr] [input_file [output_file]]
+
+csv2padb [B<-v>] [B<-h>] [B<-o>] [B<-m> expr] [B<-e> expr] [input_file [output_file]]
+
+=head1 OPTIONS
+
+    -h:	print help
+    -v:	be verbose:print names as they are added. 
+    -o:	override output file
+    -e expr: Drop records matching expr
+    -m expr: Only process records matching expr
+
+=head2 csv2padb:
+
+input_file:  Yahoo CSV formatted address file. '-' means use I<STDIN>.
+
+output_file: Palm .pdb file. Use F<AddressDB.pdb> if no output_file is gven.
+
+If no files are given, read from stdin and write to F<AddressDB.pdb>.
+
+=head2 padb2csv:
+
+input_file: Palm .pdb Address database. Use F<AddressDB.pdb> by default.
+
+output_file: Yahoo CSV formatted file. '-' means write to I<STDOUT>.
+
+If no files are given, read from F<AddressDB.pdb> and write to stdout.
+
+=head1 DESCRIPTION
+
+Convert to/from Palm Pilot Adress book database format file and Yahoo!
+Address Book CSV format.It creates a whole address book database that you
+can download directly into your Palm-compatible device, overwriting existing
+address database.
+
+You may use desktop tools like I<Jpilot> to view the resulting database
+before you actually download or sync it. Always keep backups in case
+something goes wrong.
+
+If you have some addresses in your PDA and some addresses in your Yahoo
+address book, you may manually merge them by uploading your converted
+database to Yahoo and then putting all of your Yahoo database into PDA.
+
+You may select which records to convert using filtering options - they match
+all fields of the record. If you create new entries on your PDA, you may
+create a special category for them (e.g. C<New>) and then extract only these
+records:
+
+  padb2csv -v -e New AddressDB.pdb Yahoo.csv
+
+=head1 CAVEATS
+
+There is no 1-to-1 mapping between Yahoo fields and Palm fields. Yahoo
+address book includes much more information, so if you convert your data to
+.pdb format and back you may loose some of it. The best way is to keep your
+master database on Yahoo and periodycally sync it with PDA. As an
+alternative, you may only use Yahoo fields that have corresponding PDA
+fields.
+
+If you run padb2csv or csv2padb without arguments it will try to quietly
+create an output database.
+
+=head1 SEE ALSO
+
+L<Palm::PDB>, L<Palm::Address>, L<Text::CSV_XS>.
+
+=head1 README
+
+This is csv2padb and padb2csv - tools for conversion between Palm Address
+book database and Yahoo! CSV format.
+
+Install this file as padb2csv and csv2padb in your PATH.
+
+For documentation use pod2text/pod2man on padb2csv or run it with '-h'
+arument.
+
+	Copyright (C) 2001 by Alexander Kolbasov
+
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the Artistic License, a copy of which
+   can be found with the Perl distribution.
+
+   This code is distributed in the hope that it will be useful, but
+   WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   Artistic License for more details.
+
+=head1 PREREQUISITES
+
+This script requires the following modules:
+
+C<strict>, C<File::Basename>, C<Getopt::Std>, C<Palm::PDB>, C<Palm::Address>,
+C<Text::CSV_XS>.
+
+=head1 AUTHOR
+
+Alexander Kolbasov <akolb@netgate.net>
+
+=head1 BUGS
+
+This program may die if something goes wrong due to the way Palm::PDB
+works. It inherits all the bugs and limitations of Palm::PDB and Text::CSV_XS.
+In particular, it can not accept a multi-line CSV entry.
+
+
+
+=pod OSNAMES
+
+any (Only tested on Unix).
+
+=pod SCRIPT CATEGORIES
+
+Mail
+
+=cut
+
+

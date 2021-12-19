@@ -1,0 +1,148 @@
+#!/usr/bin/perl
+#--CMMS 0.3----------------------------------------
+#
+# An easy to use console multimedia player that uses MPG123
+# as the decoder. All this does is get a list of mp3's and
+# send them to MPG123 to be played, so all credit should go
+# to the MPG123 authors
+#
+# Created by rinmak (slickster_42@hotmail.com)
+# >>> Sun Dec 16 13:42:15 WST 2001
+#---------------------------------------------------
+
+use Getopt::Std;
+use File::Recurse;
+use File::Basename;
+
+######## Configuration ##########
+my $VERSION = 0.3;
+my $MP3DIR  = "/mnt/windows/My Documents/Mp3";
+my $COMMAND = "mpg123 -q \"\$file\" 2> /dev/null";
+my $RANDOM  = 0;
+my $SLEEP   = 2;
+my $MP3LOG  = 0;
+
+######## Done with config #######
+
+
+######## Global Vars ############
+my @playlist;
+my $count = 0;
+
+sub get_arguments {
+	getopts("s:p:d:rvl",\%args);
+	if (defined $args{v}) { &help }
+	{
+		if (defined $args{p}) { &load_playlist($args{p}); last; }
+		if (defined $args{d} && -d $args{d}) { @playlist = &recurse($args{d}) }
+		@playlist = &recurse($MP3DIR) if (!defined $args{d});
+	}
+	$RANDOM = 1 if (defined $args{r} && $args{r} > 0);
+	$SLEEP = $args{s} if (defined $args{s} && $args{s} =~ /\d+/);
+	$MP3LOG = 1 if ($args{l});
+	#@playlist = &recurse($MP3DIR) if (!defined $args{d});
+}
+
+
+sub load_playlist {
+	my $playlist = shift;
+	open(PLAYLIST,$playlist) || die("$playlist, $!\n");
+	while (<PLAYLIST>) {
+		chomp;
+		die("$_, $!\n") if (!-e $_);
+		push(@playlist,$_);
+	}
+	close(PLAYLIST);
+}
+
+
+sub recurse {
+	my $MP3DIR = shift;
+	my %files = Recurse([$MP3DIR], {match => '\.mp3$'});
+	my @files;
+	my $current_dir;
+	foreach (sort keys %files) {
+		$current_dir = $_;
+		push(@files,"$current_dir/$_") foreach (@{ $files{$_} });
+	}
+	@files >= 0 ? push(@files,1) : push(@files,0);
+	return(@files);
+}
+
+sub help {
+	print <<HELPMSSG;
+Usage: cmms	-p <PATH>   Specify a playlist file to use instead of
+			    the MP3DIR default. Playlist files are just
+			    a plain text file with a path to an MP3 on
+			    each line.
+
+		-s <NUM>    Specify the break (in seconds) between each
+		            MP3, this is to give the user a chance to 
+			    CTRL-C out of the infinte loop. Default is 2
+			    seconds.
+
+		-d <PATH>   Use PATH as the MP3DIR directory to start from.
+			    The directory will be recursed for MP3 files.
+
+		-r	    Sets random mode to 1, meaning that the songs
+			    will be played in no specific order.
+
+		-l	    Sets log mode to 1. This will cause a log file
+			    of all the MP3's played and the times at which
+			    they started at to be created in $HOME/cmms.log
+HELPMSSG
+	exit;
+}
+
+
+print <<TITLE;
+Console Multimedia System Version $VERSION -- By rinmak (slickster_42\@hotmail.com)
+MP3 Decoding technology provided by MPG123
+
+TITLE
+$|++;
+
+&get_arguments;
+
+print "Scanning for MP3s...ok\n";
+print "Total MP3s found: $#playlist\n";
+die("Dont you have any MP3's man?\n") if ($#playlist == 0);
+print "Handing the rest over to MPG123 ->\n\n";
+unshift(@playlist,"rinmak is king"); #/ Gives random the ability to choose 1 #/
+
+srand;
+
+if ($MP3LOG) {
+	open(LOG,">>$ENV{HOME}/cmms.log");
+	print LOG "CMMS Started @ " . scalar(localtime) . "\n";
+}
+
+while (1) {
+	my $COMMAND = $COMMAND;
+	my $file;
+	if ($RANDOM) {
+		$file = $playlist[(rand($#playlist) + 1)];
+	} else {
+		$file = $playlist[$count];
+		$count++;
+	}
+	$COMMAND =~ s/\$file/$file/;
+	my $file2 = $file;
+	$file2 = basename($file2);
+	$file2 =~ s/\.mp3$//;
+	next if ($file2 eq "rinmak is king");
+	die("--> End of playlist reached.\n") if (!$file2);
+	print "Playing => $file2...\n";
+	my $time = `date +%T`;
+	chomp($time);
+	print LOG "\t$time  Playing => $file2...\n";
+	system("$COMMAND");
+	sleep $SLEEP;	#/ Stop the program for X seconds to
+			#/ give the user a chance to exit,
+			#/ otherwise you wont be able to stop
+			#/ it.
+
+}
+
+
+

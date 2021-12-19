@@ -1,0 +1,316 @@
+#!/usr/bin/perl
+#$Id: riofill,v 1.2 1999/09/29 08:30:34 root Exp $
+# Fill a Diamond Rio MP3 player with a randomly selected 
+# list of MP3 files.
+# Based largely on Ron Forrester's (rjf@zero-ping.com) riolist code.
+# Hacked upon mercilessly by Howard Owen (hbo@egbok.com)
+# because that's what I do for fun. 8)
+#
+use Getopt::Long;
+
+my $VERSION = 1.1;
+
+die "Error in argument parsing" 
+  if( !GetOptions( 
+		  "d=s" => \$opt_d, 
+		  "f=s" => \$opt_f, 
+		  "r=s" => \$opt_r, 
+		  "b=i" => \$opt_b, 
+		  "x:i" => \$opt_x, 
+		  "o" => \$opt_o, 
+		  "v" => \$opt_v, 
+		 )
+    );
+
+
+$MP3DIR=(defined $opt_d)?$opt_d:"."; 
+$RIOCMD=(defined $opt_r)?$opt_r:"/usr/local/bin/rio";
+# We'll test if riocmd is executable after we decide if we want to upload ..
+
+# We'll check the MP3 directory now, however.
+
+die "MP3 directory '$MP3DIR' does not exist or is not a directory" if (! -d $MP3DIR);
+
+#
+#  Truth table for $opt_o and $opt_f options:
+#
+#  $opt_o    $opt_f                  Action
+#  ========================================
+#  True      eq "-"                  Output playlist to stdout. Do not upload to Rio
+#  True      undef (-f not given)    Output playlist to stdout. Do not upload to Rio
+#  True      string other than "-"   Output playlist to $opt_f file. Do not upload to Rio
+#  False     Ignored                 Output playlist to tmp file. Upload MP3's to Rio
+#
+$opt_f= ">".$opt_f if (defined $opt_f); # note that "-f -" results in ">-" = stdout
+$opt_f = ">-" if (defined $opt_o && ! defined $opt_f); # implied stdout
+$opt_f=">/tmp/playlist_int.$$" if (! defined $opt_o); # ignore $opt_f
+
+# Now we know if we'll be uploading. Test riocmd
+die "$RIOCMD not found or not executable" if (!(defined $opt_o || -x $RIOCMD));
+
+open PL,"$opt_f" || die "Can't open $opt_f  $!";
+$STDOUT=select PL; 
+
+print STDERR "Finding MP3 files in $MP3DIR\n" if (defined $opt_v);
+@lines = `/usr/bin/find  $MP3DIR -follow -name \\*.mp3 -print`;
+
+# If none found, say so and get out...
+#
+die "No MP3 files found in $MP3DIR"  if ($#lines <0);
+
+
+#
+# Calculate basic ($opt_b || default) and external ($opt_x value || 32MB || 0) memory sizes
+# The default when neither $opt_b or $opt_x are given is for a PMP300
+if (defined $opt_b){
+  $realb=$opt_b-.5; # actual max size doesn't work
+  $maxBasicSize   = $realb * 1024 * 1024; 
+} else {
+  $maxBasicSize   = 31.5 * 1024 * 1024; 
+}
+$opt_x=32 if (defined $opt_x && !$opt_x);
+
+if (defined $opt_x){
+  $realx=$opt_x-.5; # actual max size doesn't work
+  $maxExternalSize   = $realx * 1024 * 1024; # actual max size doesn't work
+} else {
+  $maxExternalSize   = 0 # Don't assume external memory
+}
+$maxTotalSize = $maxBasicSize + $maxExternalSize;# needed if we are not uploading
+srand( time() ^ ($$ + ($$ << 15)) ); 
+
+# keep track of total size of playlist
+#
+$totalSize = 0;
+
+# until we are finished...
+#
+$doExt=0;
+for (;;) {
+
+  last if (! defined ($line= randomSelect(\@lines)));
+  chop $line;
+  $size=size($line);
+  # If adding this one to the list would keep the total size
+  # within our limit, then do so.
+  #
+  # toggle between basic and external memory based on $doExt flag.
+  if ($opt_o){ # we'll honor the -b and -x flags when we are not uploading ..
+    $targetSize=$maxTotalSize; # .. but you'll end up with all MP3s in one file.
+  } else { # we are uploading
+    $targetSize=$doExt?$maxExternalSize:$maxBasicSize; # toggle size based on $doExt
+  }
+  if ($totalSize + $size < $targetSize) {
+    $totalSize += $size;
+    print "$line\n";
+    # if we filled up basic memory and have external memory ...
+  } elsif (defined $opt_x && ! $doExt){# we exceeded basic size. do we have external RAM?
+    if (! defined $opt_o){ # switch temp files if we are uploading.
+      close PL;
+      open PL,">/tmp/playlist_ext.$$" || die "Can't open /tmp/playlist_ext.$$  $!";    
+      select PL;
+    }
+    $doExt=1; # flag it.
+    $totalSize=0; # reset total size
+  }
+}
+close PL; # done with playlist
+select $STDOUT; # reset output to stdout
+
+if (! defined $opt_o){ # We're going to upload to the Rio
+  $opt_f=~s/^>//;  # Strip output redirection character from base playlist;
+  doRio("$RIOCMD","-za"); # erase rio memory
+  doRio("$RIOCMD","-f $opt_f"); # upload playlist to rio base memory
+  unlink $opt_f; # Ax base temp file.
+  if (defined $opt_x){
+    doRio("$RIOCMD","-x -f /tmp/playlist_ext.$$") ; # upload playlist to rio ext memory
+    unlink "/tmp/playlist_ext.$$";
+  }
+
+  
+}
+print "\nriofill done\n";
+
+sub doRio {
+  my($cmd,$args)=@_;
+  if (defined $opt_v){
+    $args = "-v ".$args; # prepend verbose flag
+    print "$cmd $args\n";# echo cmd
+    print `$cmd $args`;  # echo cmd output
+  } else {
+    `$cmd $args`; # do it silently
+  }
+}
+  
+
+sub randomSelect {
+  # Select and remove a random element from the array 
+  # referenced by parameter 
+  my ($arRef)=shift;
+  if ($#$arRef>=0){ # only if the array is not empty
+    return splice @$arRef,int ((rand) * $#$arRef),1;
+  } else {
+    return undef;
+  }
+}
+sub size {
+  my($f)=shift;
+  my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size) = stat $f;
+  return ($size);
+}
+
+=head1 NAME
+
+riofill - make a random playlist from a directory of MP3 files that will fit into a Rio's memory. Optionally upload it to a Rio using SBA's B<rio> utility.
+
+=head1 SYNOPSIS
+
+B<riofill> S<[ B<-o -v> ] [ B<-f>I< filename> ] [ B<-d>I< MP3dir> ] [ B<-r>I< riopath> ] [ B<-x> [ I<MB> ] ] >
+
+=head1 DESCRIPTION
+
+The riofill utility randomly selects a list of MP3 files from a given directory.
+The utility ensures that the files selected will all fit into the memory of 
+a Diamond Rio portable MP3 player. Switches allow different sized Rio memory to be filled.
+By default, C<riofill> uploads the playlist produced to a Rio player connected to the 
+computer's parallel port using the Snowblind Alliance (SBA) B<rio> utility. Optionally, 
+the generated playlist may be printed to stdout or  saved in a file instead of being 
+uploaded to the Rio.
+
+=head2 Switches
+
+This script uses C<Getopt::Long> for argument parsing. This means that switches that
+take an option must have a space or an equals sign between the switch and its
+value. For example, B<-F=bar> or  B<-F bar> would work while B<-Fbar> would not.
+
+The following switches are supported:
+
+=over 5
+
+=item B<-b> I<MB>
+
+indicates that B<riofill> should attempt to load I<MB> megabytes worth of MP3 
+files into the RIO's base  memory If this switch is given it must be followed 
+by an integer number which B<riofill> will use as the number of megabytes (MB) 
+of base memory. If this switch is not given, B<riofill> will assume the Rio has 
+32MB of base memory. The actual value used by B<riofill> is the given or default 
+value minus 0.5. This is because exactly 32MB will not fit in a PMP300's 32MB base 
+memory. 
+
+See B<-o> switch below for how the B<-b> and B<-x> switches are treated when you are not uploading to a Rio.
+
+
+=item B<-d>I< MP3dir>
+
+specifies the directory in which to look for MP3 files. If B<-d> is not given B<riofill> 
+looks for MP3 files in the current directory. B<riofill> searches this directory and any
+subdirectories.
+
+=item B<-f>I< filename>
+
+specifies a file to which the playlist should be saved. This switch is ignored if B<-o> is not 
+given. If B<-o> is given and B<-f> is either not given or equal to "-" B<riofill> prints the playlist
+to the standard output.
+
+=item B<-o>
+
+specifies that B<riofill> should output the playlist rather than uploading it to the Rio.
+if no B<-f> switch (see below) is given, the playlist is printed to the standard output.
+If B<-o> is not given, B<riofill> attempts to upload the generated playlist to a Diamond 
+Rio connected to the computer's parallel port. If the B<-b> and/or B<-x> switches are given
+in combination with the B<-o> switch, B<riofill> adds their given or default values together
+to come up with the total size of the playlist. See the EXAMPLES section for a case in point.
+
+=item B<-r>I< riopath>
+
+specifies where the Snowblind Alliance's B<rio> utility is located. If B<-r> is not given, B<riofill>
+looks for this utility in /usr/local/bin. If B<riofill> is asked to upload a playlist to the Rio, this
+path is checked to ensure the rio utility is present and executable. If it isn't, B<riofill> exits with 
+an error message.
+
+=item B<-v>
+
+tells B<riofill> to be verbose in its actions. If this switch is given, B<riofill> will
+say what it is doing and print the output of the B<rio> utility to standard output.
+
+=item B<-x> [ I<MB> ]
+
+indicates that B<riofill> should attempt to load MP3 files into extended memory in the Rio. 
+Rio memory in add-on flash RAM cards is considered extended memory. If this switch is given with 
+no argument, B<riofill> will assume the Rio has 32MB of extended memory. If an argument is given, 
+B<riofill> will use it as the number of megabytes (MB) of extended memory. The actual value used by 
+B<riofill> is the given value minus 0.5. This is because exactly 32MB will not fit in a PMP300's 32MB 
+base memory. The author assumes this restriction applies to extended memory as well.
+
+
+=back 
+
+=head1 EXAMPLES
+
+Search the current directory for MP3 files. Randomly select 32MB worth of these files. Upload them to the 
+Rio:
+
+S<B<riofill>>
+
+Search F</home/mp3/lo-fi> for MP3 files. Randomly select 64MB worth of these files. Upload 32MB to the 
+Rio's base memory and 32MB to the Rio's extended memory using the B<rio> utility in F</bin>:
+
+S<B<riofill -d /home/mp3/lo-fi -r /bin/rio -x>>
+
+Search F</home/mp3/lo-fi> for MP3 files. Randomly select 32MB worth of these files. Print the names of these
+files on the screen:
+
+S<B<riofill -o -d /home/mp3/lo-fi>>
+
+Same as above:
+
+S<B<riofill -o -f - -d /home/mp3/lo-fi>>
+
+Search F</home/mp3/lo-fi> for MP3 files. Randomly select 32MB worth of these files. Print the names of these
+files to the file F</home/mp3/playlists/mylist>:
+
+S<B<riofill -o -d /home/mp3/lo-fi -f /home/mp3/playlists/mylist>>
+
+Same as above:
+
+S<B<riofill -o -d /home/mp3/lo-fi E<gt>/home/mp3/playlists/mylist>>
+
+Generate a playlist of MP3s whose total size does not exceed 88MB:
+
+S<B<riofill  -o -b 24 -x 64>>
+
+
+=head1 LICENSE
+
+B<riolist> is GPL. B<riofill> is either GPL or Artistic.
+
+=head1 AUTHOR
+
+Based on Ron Forrester's E<lt>rjf@zero-ping.comE<gt> B<riolist>. His code was hacked upon mercilessly by 
+Howard (that's what I do for fun) Owen E<lt>hbo@egbok.comE<gt> to produce B<riofill>
+
+=head1 SEE ALSO
+
+B<riolist> source, rio(1)
+
+=head1 PREREQUISITES
+
+This script uses the B<rio> utility to upload data to the Rio.
+You can get this utility from the Snowblind Alliance at http://www.world.co.uk/sba/
+This script also makes use of the C<Getopt::Long> module which is included in the
+Perl distribution.
+
+
+=head1 SCRIPT CATEGORIES
+
+Audio/MP3
+
+=head1 README
+
+Randomly selects a playlist of MP3 files from a given directory and either uploads them
+to a connected Rio MP3 player or prints the playlist.
+
+
+=cut
+
+

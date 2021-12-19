@@ -1,0 +1,191 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0057)http://www.cpan.org/authors/id/V/VK/VKHERA/mail2news-1.14 -->
+<HTML><HEAD>
+<META http-equiv=Content-Type content="text/html; charset=windows-1252">
+<META content="MSHTML 5.50.4134.600" name=GENERATOR></HEAD>
+<BODY><XMP>#!/usr/bin/perl -Tw
+use strict;
+
+# $Id: mail2news,v 1.14 2001/03/13 19:38:05 khera Exp $
+
+require 5.005;
+
+use Net::NNTP;
+use Mail::Header;
+
+require 'sysexits.ph';		# mailer exit status codes
+
+use vars qw($nntpserver $VERSION);
+
+#######
+# change this to point to your NNTP server host.
+$nntpserver = 'truffula';
+#######
+
+$VERSION = do { my @r=(q$Revision: 1.14 $ =~ /\d+/g); sprintf '%d.'.'%02d' x $#r, @r };
+
+# Print warning and exit.  Some mailers will discard warning string.
+# Postfix is nice enough to display it in the mailq & log output when
+# we exit with non-success exitcode.
+sub croak {
+  my ($msg,$exitcode) = @_;
+
+  warn "$msg\n";
+  exit($exitcode);
+}
+
+my $newsgroup = shift || croak('No newsgroup specified.',&EX_USAGE);
+
+# process headers
+my $head = new Mail::Header \*STDIN || croak('Mail::Header failure.',
+					     &EX_TEMPFAIL);
+
+# make sure a subject line is there, and has contents!
+if ($head->count('Subject') == 0) {
+  $head->add('Subject','(none specified)');
+} elsif ($head->get('Subject') =~ m/^\s*$/) {
+  $head->replace('Subject','(none specified)');
+}
+
+if ($head->count('Organization') == 0) {
+  $head->add('Organization','none');
+}
+
+my @headers;
+
+# headers we want from the message
+foreach my $h (qw(
+		  Date From To Cc Subject Organization
+		  Message-ID References In-Reply-To
+		  MIME-Version Content-Type Content-Transfer-Encoding
+		 )) {
+  if (defined (my $text = $head->get($h))) {
+    chomp $text;		# may or may not have newlines...
+    push @headers,"$h: $text\n";
+  }
+}
+
+push @headers,"Newsgroups: $newsgroup\n";
+push @headers,"Approved: $newsgroup\@mail2news\n";
+push @headers,"\n";
+
+# post the message!
+my $nntp = Net::NNTP->new($nntpserver)
+  or croak('Net::NNTP failure.', &EX_TEMPFAIL);
+
+$nntp->post() or croak('post() failure',&EX_TEMPFAIL);
+$nntp->datasend(\@headers) or croak('datasend() header failure',&EX_TEMPFAIL);
+while (<>) {
+  $nntp->datasend($_) or croak('datasend() body failure',&EX_TEMPFAIL);
+}
+$nntp->debug(1);		# if error exit code, log to maillog (STDERR)
+$nntp->dataend() or croak('Post dataend() failure.',&EX_DATAERR);
+$nntp->quit();
+
+exit(&EX_OK);
+
+__END__
+=pod
+
+=head1 NAME
+
+mail2news - gateway for email to news
+
+usage: C<mail2news local.group.name>
+
+=head1 DESCRIPTION
+
+Reads mail message from STDIN and posts to the specified newsgroup on
+an NNTP server.  Assumes that the news server will provide the news to
+mail direction via moderation, like INN does.
+
+This program takes care to ensure that threading is maintained and
+that MIME stuff passes through safely so that your news reader can do
+the right thing with it.
+
+=head1 README
+
+Install INN, configure it for local access with no newsfeeds.  If you
+have newsfeeds, ensure that C<local> groups are not fed to other sites.
+
+You B<must> change the $nntpserver variable in this program to name
+I<your> news server.
+
+On your news server (as user C<news>) do the following, per gatewayed
+group.  In our example, your domain name is C<example.com> and the news
+group is called C<local.group.name>.
+
+=over 4
+
+=item *
+
+Add new group as moderated:
+
+ ctlinnd newgroup local.group.name m daemon@example.com
+
+=item *
+
+Add moderator address to F</usr/local/news/etc/moderators>:
+
+ local.group.name:submission@address.location
+
+This makes postings to the newsgroup be forwarded to the mailing list
+submission address.  The mailing list will then forward it to all
+recipients, including the mail2news program, which will post it to the
+newsgroup as it was delivered to the rest of the mailing list.
+
+=back
+
+On mail server (as root):
+
+=over 4
+
+=item *
+
+Add aliases in F</etc/aliases> (or your system's equivalent):
+
+ group-name: "|exec /usr/local/bin/mail2news local.group.name"
+ owner-group-name: root
+
+Don't forget to run C<newaliases> or its equivalent.
+
+=back
+
+You will, of course, need to subscribe C<group-name@example.com> to
+the list you are gatewaying.  B<NOTE:> some lists expect you to be a
+member in order to post to them, so they may reject submissions from
+the news to mail translation done by INN, since it will send the
+message as being from your address, not the address subscribed for the
+mail to news gateway.
+
+=head1 PREREQUISITES
+
+Requires C<Net::NNTP> and C<Mail::Header>.  It has only been tested on
+perl 5.005_3 on Unix.  You must also have a valid C<sysexits.ph> header
+available for your system, as translated by h2ph during perl installation.
+
+=head1 OSNAMES
+
+Should work on C<any> Perl, but only tested on BSD Unix using Postfix as
+the mail server and INN as the news server.
+
+=head1 SCRIPT CATEGORIES
+
+Mail
+News
+
+=head1 AUTHOR
+
+Vivek Khera <vivek@khera.org>
+
+Copyright 2001 Vivek Khera.  This program is distributed under the
+same terms as Perl itself.  Please refer to the Perl license for
+details.
+
+Please, B<DO NOT> ask me for assistance setting up or configuring INN
+or your mail server.  I cannot help you with that.  Please do let me
+know of any problems with this program, however.
+
+=cut
+
+</XMP></BODY></HTML>
