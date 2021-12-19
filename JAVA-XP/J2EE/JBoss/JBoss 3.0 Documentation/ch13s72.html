@@ -1,0 +1,137 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Deployment on JBoss</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s58.html" title="How To use the Timer MBean and Scheduler Service on JBoss 3"><link rel="next" href="ch13s78.html" title="JAAS Based Security in JBoss"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s58.html"><img src="images\prev.gif" border="0"></a><a href="ch13s78.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="deployment-on-JBoss"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="deployment-on-JBoss"></a>Deployment on JBoss</h2></div><div><h3 class="author">Daniel Schulze</h3><div class="affiliation"><div class="address"><tt>&lt;<a href="mailto:daniel.schulze@telkel.com">daniel.schulze@telkel.com</a>&gt;</tt></div></div></div></div><div class="section"><a name="d0e10603"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10603"></a>Introduction</h3></div></div><p>The application deployment on JBoss is managed by the J2eeDeployer MBean. The 
+J2eeDeployer is able 
+to deploy ejb.jar packages, webapplication.war packages and j2ee 
+application.ear packages. 
+Furthermore he is able to deploy unpacked ejb.jar files for development 
+purposes.</p><p>The deployment is url based, so it is possible to deploy from whatever source 
+as long as there is 
+a url handler for that source available in your environment.
+(ie. http://somehost/applications/app.ear or 
+file:///home/user/development/myapp.ear)</p></div><div class="section"><a name="d0e10610"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10610"></a>J2EE Deployer</h3></div></div><p>The J2eeDeployer currently provides 3 methods: </p><div class="itemizedlist"><ul><li><p><a name="d0e10616"></a>void deploy (URL)
+this method starts the deployment process for the application this URL points 
+to. The URL can be a 
+file: or a http:// or any other type of url your environment is capable to 
+handle. In case of 
+deploying a unpacked ejb.jar package the URL type is currently limited to file.
+The deployment of an already deployed application (the name of the app is 
+significant) will result in an 
+undeployment of this app followed by a redeployment. </p></li><li><p><a name="d0e10619"></a>void undeploy (URL or Application name)
+use this to undeploy an application. the parameter can be the URL that was 
+used to deploy this application or just the name (application name = file name 
+of the app package or directory name in case of unpacked) of the application. </p></li><li><p><a name="d0e10622"></a>boolean isDeployed (URL or Application name)
+use this method to ask for the state of an application. The argument follows 
+the same rules as for the undeploy method. </p></li></ul></div><p>These 3 methods can be used via the web interface of JBoss at port 8082 at the 
+host JBoss is running on.</p></div><div class="section"><a name="d0e10627"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10627"></a>The AutoDeployer as helper</h3></div></div><p>The AutoDeployer MBean is a helper for the J2eeDeployer to allow doing 
+administration smoothly via drag and drop 
+or to automate the redeployment in case of development. He observes the given 
+directories for changes and calls 
+the appropriate methods on the J2eeDeployer. </p><p>The AutoDeployer observes the timestamps of the application packages or the 
+timestamp of the META-INF/ejb-jar.xml 
+file in case of unpacked ejb.jar files.</p><p>The AutoDeployer is configured whether static by the MLET configuration or 
+dynamic by adding urls to watch for
+in its web interface (port 8082 at the host JBoss is running on).</p><p>In its current version the AutoDeployer supports only local directories to 
+observe.</p><p>To deploy an ejb, web or ear package simply drop it in one of the observed 
+directories. 
+To autodeploy an unpacked ejb application, add the base directory of that 
+application 
+(base directory = the directory which containes the META-INF directory) to the 
+AutoDeployers
+observed urls.</p><p>Note: There is still a misbehavior when the autodeployer thread wins the race 
+against the copy thread
+which modifies a package! </p></div><div class="section"><a name="d0e10642"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10642"></a>Creating J2EE applications</h3></div></div><p>j2ee applications or .ear files are jar archives containing a collection of 
+ejb, web, client, connector and/or 
+other library packages. Currently JBoss only supports ejb, web and other 
+library packages (client and connector
+packages are ignored if present).</p><p>Other Library packages are class packages that are needed by your application 
+and are not provided by the j2ee
+runtime environment (ie: some xml tools)</p><p>This document will only describe the JBoss relevant stuff in creating j2ee 
+packages for a detailed description 
+of how to build such applications see the J2EE specification under chapter 8!</p><p>First create all ejb, war and library archives you want to put together to 
+make up your application. Make sure
+that all dependencies are solved, means: all classes that are needed by your 
+application must be contained in 
+your application (besides the classes that made up the J2EE platform (java 
+core, javax.transaction, 
+javax.sql, javax.servlet ...). Its up to you to create an arbitrary directory 
+structure for your application 
+to make it easier to maintain. Once you ve created your structure and moved 
+all files on their place you have
+to create a deployment descriptor. This file must reside in the &lt;your_app_dir&gt;/META-INF directory and must be
+named application.xml. 
+</p><div class="figure"><p><a name="sample-application-xml"></a><b>Figure 13.5. Example of application.xml file</b></p><pre class="programlisting">
+ &lt;application&gt;
+     &lt;display-name&gt;My Application&lt;/display-name&gt;
+
+      &lt;module&gt;
+         &lt;web&gt;
+            &lt;web-uri&gt;web-app.war&lt;/web-uri&gt;
+            &lt;context-root&gt;/myapp&lt;/context-root&gt;
+         &lt;/web&gt;
+      &lt;/module&gt;
+
+      &lt;module&gt;
+         &lt;ejb&gt;ejb-app.jar&lt;/ejb&gt;
+      &lt;/module&gt;
+ &lt;/application&gt;
+		</pre></div><p> This descriptor describes an application that contains a web application 
+			   package (JSPs/Servlets/HTML) and an ejb application (EJBs). The web applications war 
+			   package is located at the root of the .ear file and is named web-app.war. It will be 
+			   deployed under the webcontext /myapp. The ejb package also resides in the applications 
+			   root directory and is called ejb-app.jar.
+		</p><p>Understanding the shared classloader architecture in JBoss</p><p>When an application in JBoss gets deployed, every module will get deployed by 
+			  a separate container. Every container will get its own classloader - this means that a 
+			  call from one module to an other must be an remote call and all parameters must be serialized,
+			  because the classes (even if they are loaded from the same physical file) are not compatible 
+			  across container boundaries. To allow optimized interaction across container boundaries (local 
+			  calls with parameter ... per reference) the classes that are involved in this communication 
+			  must be loaded by the same classloader.
+		</p><p>In JBoss we achieve this issue with the following classloader architecture: 
+		</p><p>On deployment one common classloader is created. This classloader will get all archives in its 
+			classpath that are referenced in MANIFEST.MF/Class-Path<sup>[<a href="#ftn.classpath.gotcha">1</a>]</sup> entries of the each individual module
+			contained in enclosing application. <a href="ch13s72.html#web-manifest-figure" title="Figure 13.6. Example Manifest file of web module">Figure 13.6</a> shows such an entry
+		</p><p>When afterwards all modules become deployed in their containers, the 
+			classloaders created by these containers are all children of the common classloader.
+		</p><p>Now on runtime the communication between modules across container 
+			boundaries can be optimized when the classes used for the communication are 
+			loaded by the common classloader. 
+		</p><p>To allow our previous mentioned simple example to make use of the 
+			optimization, we must provide the classes the web 
+			module needs to communicate with the ejb module in an separate third package, 
+			lets call it ejb-client.jar.
+			This ejb-client.jar archive contains the remote interfaces of the ejbs and 
+			special method parameter types that are 
+			needed for the communication (if any). Now we put this package in the 
+			directory /lib of our application.
+		</p><p>To make sure that this package is now loaded by the common classloader, we 
+			reference it from within the web package by adding a Class-Path entry to the web 
+			packages MANIFEST.MF file<sup>[<a href="#ftn.classpath.gotcha2">2</a>]</sup>.
+		</p><div class="figure"><p><a name="web-manifest-figure"></a><b>Figure 13.6. Example Manifest file of web module</b></p><div class="literallayout">&nbsp;&nbsp;&nbsp;<br>
+			<tt>&nbsp;&nbsp;&nbsp;Manifest-Version:&nbsp;1.0<br>
+			&nbsp;&nbsp;&nbsp;Class-Path:&nbsp;./lib/ejb-client.jar<br>
+&nbsp;&nbsp;&nbsp;			</tt>&nbsp;&nbsp;&nbsp;<br>
+		&nbsp;&nbsp;</div></div><p>Now you just jar your applications directory, name it &lt;anyhow&gt;.ear, and drop it in 
+			one of JBoss' autodeploy directories. 
+		</p><div class="figure"><p><a name="application-manifest-figure"></a><b>Figure 13.7. Example application archive contents</b></p><div class="literallayout"><br>
+			<tt>&nbsp;&nbsp;&nbsp;META-INF/<br>
+&nbsp;&nbsp;&nbsp;META-INF/MANIFEST.MF<br>
+&nbsp;&nbsp;&nbsp;META-INF/application.xml<br>
+&nbsp;&nbsp;&nbsp;ejb-app.jar<br>
+&nbsp;&nbsp;&nbsp;web-app.war<br>
+&nbsp;&nbsp;&nbsp;lib/<br>
+&nbsp;&nbsp;&nbsp;lib/ejb-client.jar<br>
+&nbsp;			</tt>&nbsp;&nbsp;<br>
+		</div></div><p>
+			Note:
+			<div class="orderedlist"><ol type="1"><li><p><a name="d0e10703"></a>The MANIFEST.MF as shown in <a href="ch13s72.html#web-manifest-figure" title="Figure 13.6. Example Manifest file of web module">Figure 13.6</a> is inside of the ejb or the war 
+					archive and NOT the one directly in the ear archive.
+				</p></li><li><p><a name="d0e10708"></a>There should be a carriage return after the Class-Path entry in the manifest file - otherwise it is not found.
+				</p></li></ol></div>			
+                  </p><p>
+			Some useful references are <a href="http://java.sun.com/docs/books/tutorial/jar/basics/manifest.html" target="_top">Manifest tutorial</a> 
+			and <a href="http://java.sun.com/j2se/1.3/docs/guide/jar/jar.html" target="_top">Jar specification</a>
+			</p></div><div class="section"><a name="d0e10720"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10720"></a>Notes</h3></div></div><p>
+			<div class="footnote"><p><sup>[<a name="ftn.classpath.gotcha" href="#classpath.gotcha">1</a>] </sup>The MANIFEST.MF referred to is the one inside the ejb or war archive and NOT the one directly in the ear archive.</p></div>
+			<div class="footnote"><p><sup>[<a name="ftn.classpath.gotcha2" href="#classpath.gotcha2">2</a>] </sup>There is a "feature" of the jdk jarfile reader that means that you need to have a carriage return after the Class-Path entry in the manifest file - otherwise it is not found.</p></div>
+		</p></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.classpath.gotcha" href="#classpath.gotcha">1</a>] </sup>The MANIFEST.MF referred to is the one inside the ejb or war archive and NOT the one directly in the ear archive.</p></div><div class="footnote"><p><sup>[<a name="ftn.classpath.gotcha2" href="#classpath.gotcha2">2</a>] </sup>There is a "feature" of the jdk jarfile reader that means that you need to have a carriage return after the Class-Path entry in the manifest file - otherwise it is not found.</p></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s58.html"><img src="images\prev.gif" border="0"></a><a href="ch13s78.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

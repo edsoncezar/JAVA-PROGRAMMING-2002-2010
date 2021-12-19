@@ -1,0 +1,374 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0542-0545.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0552-0556.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-546"><P>Page 546</P></A>
+
+<P>Listing 13.38 java.lang.Thread wait() and notify() Methods
+</P>
+
+<PRE>
+
+//Wait until notified or the specified time has elapsed.
+public final void wait(long millis,
+                       int nanos)
+        throws InterruptedException;
+
+//Notify a single thread waiting on this object.
+public final void notify();
+
+//Notify all threads waiting on this object.
+public final void notifyAll();
+</PRE>
+
+<P>A thread calling an object's wait() is suspended until either of two situations occurs:
+
+<OL>
+<LI>     Another thread calls that same object's notify() or notifyAll().
+<LI>     The wait() is interrupted, which throws an InterruptedException.
+</OL>
+
+<P>When no thread is waiting, invoking notify() or notifyAll() does nothing.
+</P>
+
+<P>Both wait() and notify() are object methods and share this restriction; they must be
+called from within a method or block that is synchronized on the object being waited on
+or notified. For instance, if code calls myObject.wait() or myObject.notify() on an
+object called myObject, such a call must be made from inside a block synchronized
+on myObject. This guarantees that only one thread can call wait(), notify(), or notifyAll()
+on an object at any one time. If the object isn't locked, a java.lang.IllegalMonitor<br>
+StateException is thrown, as in listing 13.39.
+</P>
+
+<P>Listing 13.39 Legal and Illegal Calls to notify()
+</P>
+<PRE>
+public void notifyThis(){
+        notify();       //ILLEGAL, isn't synchronized
+}
+
+public synchronized void notifyThis() {
+        notify();       //LEGAL, synchronized on &quot;this&quot;
+}
+
+public void notifyThis() {
+        synchronized(this) {
+                notify();       //LEGAL, synchronized
+                                //on &quot;this&quot;
+        }
+}
+
+</PRE>
+
+<A NAME="PAGENUM-547"><P>Page 547</P></A>
+
+
+<PRE>
+
+public void notifyObject(Object obj) {
+        synchronized(obj) {
+                obj.notify();   //LEGAL, synchronized
+                                //on &quot;obj&quot;
+        }
+}
+</PRE>
+
+<P>
+<B>
+Uses of Condition Variables
+</B>
+</P>
+
+<P>Condition variables can be used to handle situations where mere synchronized
+methods won't suffice. Consider a simple producer/consumer example, as shown in listing
+13.40. In this class, produce() is called to supply a String of data, and consume() is called
+to return the most recent data. Note that if consume() is called and there is no data,
+a consuming thread must wait until data exists before returning.
+</P>
+
+<P>Listing 13.40 A Simple Producer/Consumer Class
+</P>
+<PRE>
+public class ProduceConsume {
+private String data;
+
+public synchronized String consume() {
+        String result;
+
+        //If there is no data, wait.
+        if(data == null)
+                this.wait();
+
+        //There is data.  Consume it.
+        result = data;
+        data = null;
+
+        return result;
+}
+
+//Produce some data.
+public synchronized void produce(String s) {
+        //We don't care, in this example, if there is
+        //already data there; we replace it with the
+        //latest up-to-date information.
+        data = s;
+        this.notify();
+}
+}
+</PRE>
+<P>The synchronization ensures that only one thread reads or writes data at any one time. The
+</P>
+<A NAME="PAGENUM-548"><P>Page 548</P></A>
+
+
+
+<P>
+call to wait() means that a thread calling consume() when there's no data is suspended in
+a wait().
+</P>
+
+<P>A thread that calls produce() places the data in the shared variable and calls notify()
+in case any consumer threads are waiting. If a thread is waiting, notify() makes it eligible
+for scheduling again. When more than one thread is waiting, one is randomly chosen (by
+the scheduler) to be notified. A consumer thread that's woken by the notify will return
+from wait() and consume the data.
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+An otherwise unreferenced object that has threads waiting on it will
+not be garbage collected (in other words, locks on an object count
+as a reference for garbage collection).
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<P><a href="images\ch13fg06.jpg"><img src="images\tn_ch13fg06.jpg"></a><BR>
+Figure 13.6 Two threads calling ProduceConsume methods.
+</P>
+
+
+<P>When looked at closely, this example appears to present a
+problem. If wait() is called from within the synchronized consume()
+method, how can any thread then enter produce() (which is also
+synchronized) to call notify()? The answer is that a thread releases the
+lock on entry to wait() before suspension. When eventually
+rescheduled after being notified, the thread obtains the lock again (waiting,
+if necessary, until no other thread has the lock) before returning
+from wait(). Figure 13.6 illustrates these concepts.</P>
+
+<A NAME="PAGENUM-549"><P>Page 549</P></A>
+
+<B>
+FileChecksum Using wait() and notify()
+</B>
+
+<P>Earlier, the FileChecksum class was rewritten to use a separate thread to do the
+processing, with getChecksum() modified to return _1 if the processing is incomplete.
+Listing 13.41 shows FileChecksum modified to enable getChecksum() to wait until the
+calculation finishes.
+</P>
+
+
+
+<P>Listing 13.41 A Threaded FileChecksum Class
+</P>
+<PRE>import java.io.*;
+
+//File checksum object which uses a Thread to calculate the
+//checksum in parallel with other processing.
+public class FileChecksum implements Runnable {
+
+//object variables
+private long                length;        //of the File
+private long                sum;
+
+private boolean             finished;
+public  Thread              thread;
+private FileInputStream     fis;
+
+//constructor
+public FileChecksum(File f)
+        throws FileNotFoundException {
+        //get the length of the file
+        length = f.length();
+
+        //initialize the sum to 0
+        sum = 0;
+
+        //clear the finished flag
+        finished = false;
+
+        //Open a FileInputStream for this file
+        fis = new FileInputStream(f);
+
+        //Create a Thread object that will run our
+        //processing for us.  Pass the filename as
+        //the name of the Thread.  Pass this as the
+        //object to be run by the new Thread.
+        thread = new Thread(this, f.getName());
+
+</PRE>
+<PRE>
+                                                                 continues
+</PRE>
+<A NAME="PAGENUM-550"><P>Page 550</P></A>
+
+<P>Listing 13.41 Continued
+</P>
+
+
+<PRE>
+
+        //Start the new thread running.
+        thread.start();
+
+} //end of constructor
+
+//The run() method that the Runnable interfaces requires
+//us to declare.  This is the method that the new thread
+//of control will call.
+public void run() {
+
+        //Loop through all of the bytes in the file
+        //and generate a checksum.
+        try {
+                for(int i=0; i&lt;length; i++)
+                        sum += (long)fis.read();
+        }
+
+        catch(IOException e) { }
+
+        finally {
+                synchronized(this) {
+                        finished = true;
+                        //notify any threads waiting.
+                        this.notifyAll();
+                }
+                try {
+                        fis.close();
+                }
+                catch(IOException e) { }
+        }
+}
+
+//object methods
+
+//getChecksum will wait if we haven't finished
+//calculating the checksum yet, unless interrupted.
+public synchronized long getChecksum() {
+        if(!finished) {
+                try {
+                        this.wait();
+                }
+
+                catch(InterruptedException e) {
+                        return -1;
+                }
+
+</PRE>
+
+<A NAME="PAGENUM-551"><P>Page 551</P></A>
+
+<PRE>
+
+        }
+        return sum;
+}
+}       //end of FileChecksum
+</PRE>
+
+<P>A thread that calls getChecksum() before the checksum is available will be suspended
+by the wait() until the checksum calculation completes and notifyAll() is called by run().
+</P>
+
+<B>
+More Complex Interaction via Condition Variables
+</B>
+
+<P>Imagine a class that controls access to a printer. Only one thread may send data to
+the printer at any one time. Assume that the printer also supports several different paper
+sizes, but switching between paper trays is inefficient; so it would be preferable to send
+together print jobs that require the same paper size, to minimize tray changes. An initial attempt
+is shown in listing 13.42.
+</P>
+
+<P>Listing 13.42 SimplePrinterAccess Class
+</P>
+<PRE>
+public class SimplePrinterAccess {
+//paper sizes
+public static final int LETTER=0,
+        LEGAL=1, A4=2;
+
+private Printer thePrinter;
+
+public synchronized void printJob(String data, int paperSize) {
+        //set up the right paper size
+        thePrinter.changePaperTray(paperSize);
+
+        //print the job
+        thePrinter.printTheJob(data);
+}
+}
+</PRE>
+
+<P>As defined by the SimplePrinterAccess class, while any thread is
+in the synchronized printJob() method, threads trying to enter
+are locked out, so the requirement that only one thread can be printing
+at any one time is satisfied. Now assume that three threads, A, B,
+and C, call printJob() in that order. Threads A and C request
+LETTER size paper, and B requests the A4 paper size. Because A
+enters printJob() first, the printer prepares LETTER size paper, and then
+A starts printing. Meanwhile, B and C both try to enter and
+become suspended. When A completes, either B or C gains entry
+to printJob(). The most efficient job to print next would be C
+because that too
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The notifyAll() method is equivalent to calling notify() for
+every waiting thread. All waiting threads become eligible
+for execution. The order in which they are rescheduled is
+not guaranteed.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<P><CENTER>
+<a href="0542-0545.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0552-0556.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

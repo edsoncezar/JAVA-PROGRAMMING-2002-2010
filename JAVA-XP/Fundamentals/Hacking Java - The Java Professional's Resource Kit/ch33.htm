@@ -1,0 +1,744 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 33 -- Web-Enabling Legacy Systems</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter 33</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Web-Enabling Legacy Systems</FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#UsingEncapsulationstoAccessLegacyData">
+Using Encapsulations to Access Legacy Data</A>
+<UL>
+<LI><A HREF="#AimingforSessionLessTransactions">
+Aiming for Session-Less Transactions</A>
+<LI><A HREF="#StoringSessionInformationintheWebPage">
+Storing Session Information in the Web Page</A>
+<LI><A HREF="#UsingHTTPCookiestoPreserveSessionInformation">
+Using HTTP Cookies to Preserve Session Information</A>
+<LI><A HREF="#ChoosingaGoodSessionIdentifier">
+Choosing a Good Session Identifier</A>
+<LI><A HREF="#ClearingOutOldSessions">
+Clearing Out Old Sessions</A>
+</UL>
+<LI><A HREF="#AccessingLegacyDatafromServlets">
+Accessing Legacy Data from Servlets</A>
+</UL>
+
+<HR>
+<P>
+Many companies get their feet wet on the Web by creating a static
+display-only page. This may be nice from a marketing perspective,
+but Web surfers find little use for these pages. The real power
+of the Web is that you can provide a way for customers to interact
+with your business.
+<P>
+When customers can do business with your company over the Web,
+they can conduct business at any time of day, from anywhere in
+the world. They don't have to wait for a salesman, they aren't
+stuck on hold waiting for an operator-you can give them all the
+information they need and the power to place orders right at their
+fingertips.
+<P>
+One of the reasons more companies aren't operating this way is
+that so many companies have older systems that aren't very Web-friendly.
+IBM has begun to address this problem for many of their customers,
+providing Web server software for the AS/400 line, and gateway
+software to access CICS systems. <A HREF="ch34.htm" >Chapter 34</A>, &quot;Interfacing
+with CICS Systems,&quot; shows you ways to access a CICS system.
+<P>
+If your company has a legacy system that needs to be accessed
+from the Web, you can use the encapsulation techniques from Chapter
+32, &quot;Encapsulating Legacy Systems,&quot; to help you.
+<H2><A NAME="UsingEncapsulationstoAccessLegacyData"><FONT SIZE=5 COLOR=#FF0000>
+Using Encapsulations to Access Legacy Data</FONT></A></H2>
+<P>
+When you want to connect a legacy system to the Web, you will
+probably want the Web server to act as a client to the legacy
+system. You must first figure out what kind of things you want
+to do on the Web, then design an interface to the legacy system
+that supports the functions you want.
+<P>
+Using the encapsulation techniques you learned in <A HREF="ch32.htm" >Chapter 32</A>,
+you create an object that both interacts with the legacy system
+and presents a nice Java front-end to it.
+<H3><A NAME="AimingforSessionLessTransactions">
+Aiming for Session-Less Transactions</A></H3>
+<P>
+Typical Web accesses are session-less. In other words, each time
+you access a document on the Web server, or post data to it, you
+set up a new connection to the server. From the Web server's point
+of view, this means that it never knows when a particular user
+is going to send another message.
+<P>
+In a session-oriented system, there is a distinct session initiation,
+an exchange of messages, and a session shutdown. The nice thing
+about session-oriented transactions is that you don't have to
+do everything at once. For instance, if you are booking a number
+of flights on an airline, you can try to book the first flight.
+If that succeeds, you book the second flight. If the first flight
+is full, you can try an alternate. Once you have selected the
+flights you want, you finish the transaction and everything is
+saved. You could also abort the transaction, canceling all your
+reservations automatically.
+<P>
+You can't do this kind of thing with session-less transactions.
+You have to do everything you want at one time. For instance,
+you would try to book your whole flight itinerary. If it failed
+for some reason, you'd make adjustments and try the whole thing
+again. This is generally less convenient for you but more convenient
+for the server.
+<P>
+If your legacy system already supports a session-less transaction
+system, you don't really have to do anything. If not, you can
+use encapsulation to fake it. When your Web server receives a
+request and invokes a method in your encapsulation, the encapsulation
+performs all the steps required to complete the transaction. In
+other words, it establishes a session, exchanges information with
+the legacy system, then finishes the transaction.
+<H3><A NAME="StoringSessionInformationintheWebPage">
+Storing Session Information in the Web Page</A></H3>
+<P>
+Sometimes, you want to keep the session-oriented transaction protocol,
+either because it is convenient or because you have no choice.
+In these situations, your Web server needs to be able to take
+an incoming request and determine which session it belongs to.
+<P>
+The easiest way to do this is to store a session identifier on
+the Web page in a hidden variable. Whenever you process a request,
+you look for this hidden variable. If it isn't there, you can
+assume that it's a new session. You associate this session identifier
+with whatever data you need to keep for your session with the
+legacy system. Typically, you would store the session identifier
+in a hash table.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+In order to keep a session going like this, you cannot use CGI. A CGI program would terminate after each request, taking down the session with the legacy system. The Java Servlet API is very well-suited for this kind of task, however.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+From the time a client first initiates a session, the sequence
+would go like this:
+<OL>
+<LI>The client accesses the URL for the Web service.
+<LI>The Web service creates a session with the legacy system,
+then creates a unique session identifier and stores the session
+information in a hash table using the session identifier as a
+key.
+<LI>The Web service returns an HTML page to the client that contains
+fields for entering data for the session, along with a hidden
+field containing the session identifier.
+<LI>The client enters some data for the session and clicks the
+submit button.
+<LI>The Web service reads in the fields from the client's page,
+including the session identifier. It uses this identifier to locate
+the session with the legacy system.
+<LI>The Web service updates the current transaction with whatever
+information was sent by the client, and returns another HTML page
+containing the same session identifier.
+<LI>When the client signals that it wants to finish the transaction,
+the server uses the session identifier again to locate the session
+with the legacy system. It then asks the legacy system to finish
+the transaction and close down the session.
+<LI>The server removes the session information from the hash table,
+because the session has been completed.
+</OL>
+<P>
+Listing 33.1 shows a servlet that uses a simple sequence number
+for a session ID. It uses a text field to build up a string of
+text. Anytime text is entered in the field, it appends the text
+to the current session text. It also provides a checkbox to signal
+that the transaction is complete.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 33.1&nbsp;&nbsp;Source Code for </B><TT><B>SessionServlet.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.io.*;
+import java.util.*;
+import java.servlet.*;
+import sun.server.html.*;
+
+// This servlet uses hidden variables to keep track of
+// a session. When it starts a new session, it sets a
+// hidden sessionId variable in the web page. Whenever
+// the 'submit' button is clicked, the hidden sessionId
+// is transmitted to the servlet.
+
+public class SessionServlet extends Servlet
+{
+
+// The sessions table maps session id's to session information. For
+// this example, the session information is just a string containing
+// the text added during the session.
+
+     protected Hashtable sessions;
+
+// Just for demonstration purposes, we use a simple integer
+// variable for generating session id's.
+
+     protected int nextSessionNumber;
+
+     public void init()
+     {
+          nextSessionNumber = 0;
+          sessions = new Hashtable();
+     }
+
+// Start new session is called when a request comes in that
+// does not contain a session id. This routine should generate
+// a new session id and perform the necessary session setup.
+
+     protected String startNewSession()
+     {
+// Generate a new session id
+          String sessionId = &quot;&quot;+nextSessionNumber++;
+
+// Set up the session information in the session table (start
+// with an empty string).
+          setSessionInfo(sessionId, &quot;&quot;);
+
+          return sessionId;
+     }
+
+// getSessionInfo returns the information associated with
+// a session - in this case, the information string.
+
+     protected String getSessionInfo(String sessionId)
+     {
+          return (String) sessions.get(sessionId);
+     }
+
+// setSessionInfo stores session-related information in the
+// sessions table.
+
+     protected void setSessionInfo(String sessionId, String info)
+     {
+          sessions.put(sessionId, info);
+     }
+
+// finishSession is called to complete a transaction and close
+// down the session.
+
+     protected void finishSession(String sessionId)
+     {
+          sessions.remove(sessionId);
+     }
+
+     public void service(ServletRequest req, ServletResponse resp)
+     {
+
+          boolean isNewSession = false;
+          boolean isExpired = false;
+          boolean isFinished = false;
+
+// get a table of variables from the web page
+          Hashtable params = req.getQueryParameters();
+
+// get the session id from the page
+          String sessionId = (String) params.get(&quot;sessionId&quot;);
+
+// if there was no session id, start up a new session
+          if (sessionId == null) {
+               sessionId = startNewSession();
+               isNewSession = true;
+          }
+
+// get the session info for this session
+          String sessionInfo = getSessionInfo(sessionId);
+
+// if there was no session info, it must be an old/invalid session id
+          if (sessionInfo == null) {
+               isExpired = true;
+          }
+
+// get the text item to be added to the session information
+          String newStuff = (String) params.get(&quot;item&quot;);
+
+// if there is text in the &quot;item&quot; field and the session id
+// isn't expired, add the item to the session info and save it.
+
+          if (!isExpired &amp;&amp; (newStuff != null)) {
+               sessionInfo += newStuff + &quot;\n&quot;;
+               setSessionInfo(sessionId, sessionInfo);
+          }
+
+// See if the &quot;finished&quot; flag was checked
+          String finishedFlag = (String) params.get(&quot;finished&quot;);
+          
+          isFinished = (finishedFlag != null) &amp;&amp;
+               finishedFlag.equals(&quot;on&quot;);
+
+// Start generating the response
+
+          resp.setContentType(&quot;text/html&quot;);
+          try {
+               resp.writeHeaders();
+          } catch (IOException e) {
+               e.printStackTrace();
+               return;
+          }
+
+// Create a response page
+
+          HtmlPage page = new HtmlPage(&quot;Session-Oriented Service&quot;);
+
+// We always respond with a form of some kind, the action
+          page.addText(&quot;&lt;FORM action=\&quot;/servlet/SessionServlet\&quot;&gt;&quot;);
+
+// If the transaction isn't finished, and the session id hasn't
+// expired, generate a form for entering text, including the
+// hidden session id, and a checkbox for signalling the last
+// entry in the transaction.
+
+          if (!isFinished &amp;&amp; !isExpired) {
+
+// Add the hidden sessionId field
+               page.addText(&quot;&lt;INPUT type=\&quot;hidden\&quot;&quot;+
+                    &quot; name=\&quot;sessionId\&quot;&quot;+
+                    &quot; value=\&quot;&quot;+sessionId+&quot;\&quot;&gt;&quot;);
+
+// Print out the current session info
+               page.addText(&quot;&lt;P&gt;Current transaction text:&lt;P&gt;&quot;);
+               page.addText(sessionInfo+&quot;&lt;P&gt;&quot;);
+
+// Create the field for adding new text
+               page.addText(&quot;&lt;P&gt;New text to add: &quot;);
+               page.addText(&quot;&lt;INPUT type=\&quot;text\&quot; name=\&quot;item\&quot;&gt;&quot;);
+
+// Create the checkbox for signalling the end of the transaction
+               page.addText(&quot;&lt;P&gt;Check here when finished: &quot;);
+               page.addText(&quot;&lt;INPUT type=\&quot;checkbox\&quot;&quot;+
+                    &quot; name=\&quot;finished\&quot;&gt;&quot;);
+
+// Create the submit buttin
+               page.addText(&quot;&lt;P&gt;&quot;);
+               page.addText(&quot;&lt;INPUT type=\&quot;submit\&quot;&gt;&quot;);
+
+// If this is a new session, let the user know
+               if (isNewSession) {
+                    page.addText(&quot;&lt;P&gt;Congratulations, you've started a &quot;+
+                         &quot;new session!&lt;P&gt;&quot;);
+               }
+
+// If the &quot;finished&quot; box was checked, finish the session and
+// create a simple form to start another transaction
+          } else if (isFinished) {
+
+// Close down the session
+               finishSession(sessionId);
+
+               page.addText(&quot;&lt;P&gt;Your transaction is completed.&lt;P&gt;&quot;);
+               page.addText(&quot;&lt;P&gt;Press 'Submit' to start another.&lt;P&gt;&quot;);
+               page.addText(&quot;&lt;INPUT type=\&quot;submit\&quot;&gt;&quot;);
+
+// If the session id had expired, print a message about it and create
+// a button to start another transaction.
+
+          } else if (isExpired) {
+               page.addText(&quot;&lt;P&gt;Uh oh! Your session has expired!&quot;);
+               page.addText(&quot;&lt;P&gt;Press 'Submit' to start another.&lt;P&gt;&quot;);
+               page.addText(&quot;&lt;INPUT type=\&quot;submit\&quot;&gt;&quot;);
+          }
+
+// Finish off the form
+          page.addText(&quot;&lt;/FORM&gt;&quot;);
+
+// Write the HTML page to the response output stream
+          try {
+               page.write(resp.getOutputStream());
+          } catch (IOException e) {
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 33.1 shows the output from the <TT>SessionServlet</TT>
+servlet.
+<P>
+<A HREF="f33-1.gif"><B>Figure 33.1 : </B><I>You can maintain a session ID using a hidden
+variable</I>.</A>
+<H3><A NAME="UsingHTTPCookiestoPreserveSessionInformation">
+Using HTTP Cookies to Preserve Session Information</A></H3>
+<P>
+One of the ugly parts of hidden variables is that they show up
+as part of the URL. If your browser shows the current location,
+you can see the session ID embedded within the URL. Aside from
+a security risk, which will be discussed shortly, the hidden variable
+causes unnecessary clutter in the URL.
+<P>
+The cookie protocol provides a nice alternative to hidden variables.
+Actually, cookies are intended more for permanent information.
+In other words, cookies were intended to be saved by the browser
+and used every time you run the browser. If you don't give a cookie
+an expiration date, however, the browser doesn't save it to disk.
+The cookie disappears when you exit the browser.
+<P>
+The only sticky point is that there is not a clean way to erase
+a cookie. In the case of a session, you want to erase the session
+cookie when the session is terminated. You can kludge around the
+lack of an erase mechanism by setting the session ID to some phony
+value like &quot;erased.&quot; Whenever the session ID cookie
+has a value of &quot;erased,&quot; treat it as though it were
+null.
+<P>
+Jeeves has a built-in cookie class, making it very easy to parse
+cookies and generate them. All you have to do, in order to use
+cookies instead of hidden variables, is change the way you read
+and write the information.
+<P>
+For instance, in the previous example, you read the session ID
+by saying:
+<BLOCKQUOTE>
+<PRE>
+Hashtable params = req.getQueryParameters();
+String sessionId = (String) params.get(&quot;sessionId&quot;);
+</PRE>
+</BLOCKQUOTE>
+<P>
+To use a cookie instead, you have to use a few more lines. You
+must first get the cookie string from the header:
+<BLOCKQUOTE>
+<PRE>
+// get the cookie value(s)
+String cookieStr = req.getHeader(&quot;Cookie&quot;);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Then, if there were a cookie string, you must extract the <TT>sessionId</TT>
+cookie:
+<BLOCKQUOTE>
+<PRE>
+Cookie cookie = null;
+
+String sessionId = null;
+
+// If there was a cookie string, convert it to a cookie object
+// and then fetch the sessionId value
+
+if (cookieStr != null) {
+cookie = new Cookie(cookieStr);
+
+sessionId = cookie.getValues(&quot;sessionId&quot;);
+
+// Netscape doesn't seem to like to erase a cookie while it's still
+// running, so we hack around it by creating a session id of &quot;erased&quot;
+if ((sessionId != null) &amp;&amp;
+      sessionId.equals(&quot;erased&quot;)) {
+      sessionId = null;
+}
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Unlike the hidden variable example, you still have to write out
+cookie information when the session ID has expired or you have
+finished the transaction. As you now know, you can't simply erase
+a cookie, so we have a special kludge to handle erasing the cookie:
+<BLOCKQUOTE>
+<PRE>
+// If we need to write out a session id, create a cookie and
+// write it out.
+
+if (!isFinished &amp;&amp; !isExpired) {
+cookie = new Cookie(&quot;sessionId&quot;, sessionId);
+cookie.setPath(&quot;/servlet/SessionCookie&quot;);
+resp.setHeader(&quot;Set-Cookie&quot;, cookie.toString());
+} else {
+
+// If expired or finished, set the sessionId to &quot;erased&quot;
+
+cookie = new Cookie(&quot;sessionId&quot;, &quot;erased&quot;);
+cookie.setPath(&quot;/servlet/SessionCookie&quot;);
+resp.setHeader(&quot;Set-Cookie&quot;, cookie.toString());
+}
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="ChoosingaGoodSessionIdentifier">
+Choosing a Good Session Identifier</A></H3>
+<P>
+If you are concerned about security (and you should be), you need
+to be very careful when creating a session identifier. The technique
+used in the preceding example, where you just use a sequential
+numbering system, is completely unacceptable.
+<P>
+The reason you need to be careful with the session identifier
+is that someone could come along and take over someone else's
+session if they could guess the session identifier. Even though
+there are 4 billion possible identifiers in a 32-bit number, you
+can figure out where the current count is by setting up your own
+session and seeing what session ID you have been assigned. Then
+you could guess in the neighborhood of that session ID number.
+<P>
+Don't think that cookies prevent this, either. Just because you
+can't see the cookie from the browser doesn't mean that someone
+couldn't write a program that establishes a session and prints
+out the cookie value it was given. You could use the cookie code
+in <A HREF="ch6.htm" >Chapter 6</A> &quot;Communicating with a Web Server,&quot; to
+do that.
+<P>
+As you've heard so many times, you have to start with secure communications.
+You have to ensure that no one can spy on another user and figure
+out their session ID. Once someone gets the session ID, it's all
+over. They can take over someone else's session. Next, you need
+to generate a reasonable session ID. Actually, a random session
+key that you might generate for secure private key communications
+would work in this situation. When you generate the session ID,
+you need to check your session ID table to make sure that you
+haven't chosen an ID that is already in use.
+<H3><A NAME="ClearingOutOldSessions">
+Clearing Out Old Sessions</A></H3>
+<P>
+One of the difficulties in trying to maintain a session in a session-less
+world is that the server never knows when a client has decided
+it doesn't want to talk anymore. Obviously, a client is going
+to tell you whether it wants to abort a transaction, or end one.
+But what do you do if the client completely forgets about you?
+<P>
+For instance, the client browser could crash and lose the session
+key. You probably don't have a good way to recover the key, especially
+since any such mechanism would make you vulnerable to impersonations.
+At some point, your service must decide that a client session
+is never going to complete.
+<P>
+The simplest way to age out old sessions is to store the last
+access time somewhere in your session information. Then, at periodic
+intervals, a background thread goes through the entire table of
+sessions and removes every session that has not been accessed
+within a certain time period.
+<P>
+The only thing you have to do in this case is figure out what
+a reasonable time period is. It might be 15 minutes, it might
+be an hour, it might be a week. The timeout period depends on
+the kind of interaction people do with your server. Generally,
+give your users more than a reasonable amount of time to perform
+their transactions. If a normal transaction is five minutes, maybe
+you should give them an hour or more. If it takes an hour, give
+them a day.
+<H2><A NAME="AccessingLegacyDatafromServlets"><FONT SIZE=5 COLOR=#FF0000>
+Accessing Legacy Data from Servlets</FONT></A></H2>
+<P>
+Hopefully, you have been creating your legacy system encapsulations
+in Java, or at least designed them to be Java-friendly. If this
+is the case, you can use Java servlets to quickly put your legacy
+system out on the Web.
+<P>
+Conceptually, you have a servlet running in a Java Web server
+that communicates with your legacy system encapsulation, which,
+in turn, talks to your legacy system. Figure 33.2 illustrates
+this relationship.
+<P>
+<A HREF="f33-2.gif"><B>Figure 33.2 : </B><I>Web access to legacy system involves a
+servlet and an encapsulation</I>.</A>
+<P>
+One of the things that makes system design so interesting is the
+number of ways you can implement a system. The trick, of course,
+is choosing the best way, or at least striking a good balance,
+between the different factors that affect performance and maintainability.
+<P>
+The most basic way to access legacy data from a servlet is to
+have the servlet and the legacy encapsulation code running in
+the same Java environment. Figure 33.3 illustrates this configuration.
+<P>
+<A HREF="f33-3.gif"><B>Figure 33.3 : </B><I>In the most basic configuration, the servlet
+and encapsulation reside in the same place</I>.</A>
+<P>
+This configuration can support all the different types of encapsulations
+from <A HREF="ch32.htm" >Chapter 32</A>. For example, you can invoke methods on an encapsulation
+that uses native methods. Listing 33.2 shows an extremely basic
+servlet that invokes the <TT>listParts</TT>
+native method in the <TT>Ordering</TT>
+class from <A HREF="ch32.htm" >Chapter 32</A>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 33.2&nbsp;&nbsp;Source Code for </B><TT><B>NativeServlet.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.io.*;
+import java.util.*;
+import java.servlet.*;
+import sun.server.html.*;
+
+// This servlet displays a list of parts from the ordering
+// system. It shows that a servlet can invoke native methods.
+
+public class NativeServlet extends Servlet
+{
+
+     public void init()
+     {
+// Load the native library
+          System.load(&quot;ORDERING.dll&quot;);
+     }
+
+     public void service(ServletRequest req, ServletResponse resp)
+     {
+
+// Start generating the response
+
+          resp.setContentType(&quot;text/html&quot;);
+          try {
+               resp.writeHeaders();
+          } catch (IOException e) {
+               e.printStackTrace();
+               return;
+          }
+
+// Create a response page
+
+          HtmlPage page = new HtmlPage(&quot;Native Encapsulation Service&quot;);
+
+
+          try {
+
+// Get the list of parts from the &quot;legacy system&quot;
+
+               String[] parts = ordering.Ordering.listParts();
+
+// Display the parts list
+               for (int i=0; i &lt; parts.length; i++) {
+                    page.addText(parts[i]+&quot;&lt;P&gt;&quot;);
+               }
+          } catch (Exception e) {
+               page.addText(e.toString());
+          }
+
+// Write the HTML page to the response output stream
+          try {
+               page.write(resp.getOutputStream());
+          } catch (IOException e) {
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+You don't have to restrict the servlet from running in the same
+Java environment as the legacy system encapsulation, however.
+You can use CORBA, RMI, or even TCP/IP to link the servlet to
+the encapsulation. Figure 33.4 shows an example configuration
+using RMI.
+<P>
+<A HREF="f33-4.gif"><B>Figure 33.4 : </B><I>A servlet can use RMI to access a legacy
+system encapsulation</I>.</A>
+<P>
+Listing 33.3 shows a banking servlet that retrieves an account
+balance from the banking service in <A HREF="ch16.htm" >Chapter 16</A>, &quot;Creating
+3-Tier Distributed Applications with RMI.&quot;
+<HR>
+<BLOCKQUOTE>
+<B>Listing 33.3&nbsp;&nbsp;Source Code for </B><TT><B>BankBalance.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.io.*;
+import java.util.*;
+import java.servlet.*;
+import sun.server.html.*;
+
+import java.rmi.server.StubSecurityManager;
+import java.rmi.Naming;
+
+import banking.*;
+
+// This servlet displays a bank balance using RMI to invoke methods
+// on the banking service.
+
+public class BankBalance extends Servlet
+{
+
+     public void init()
+     {
+// Set the security manager for RMI
+          System.setSecurityManager(new StubSecurityManager());
+     }
+
+     public void service(ServletRequest req, ServletResponse resp)
+     {
+
+// Start generating the response
+
+          resp.setContentType(&quot;text/html&quot;);
+          try {
+               resp.writeHeaders();
+          } catch (IOException e) {
+               e.printStackTrace();
+               return;
+          }
+
+          HtmlPage page = new HtmlPage(&quot;Banking Service&quot;);
+
+          Account myAccount = new Account(
+               &quot;AA1234&quot;, &quot;1017&quot;, Account.CHECKING);
+
+          try {
+
+// Get a stub for the BankingImpl object (the stub implements the
+// Banking interface).
+
+               Banking bank = (Banking)Naming.lookup(&quot;NetBank&quot;);
+
+// Check the initial balance
+               page.addText(&quot;&lt;P&gt;My balance is: &quot;+
+                    bank.getBalance(myAccount)+&quot;&lt;P&gt;&quot;);
+
+          } catch (Exception e) {
+               page.addText(e.toString());
+          }
+// Create a response page
+
+
+// Write the HTML page to the response output stream
+          try {
+               page.write(resp.getOutputStream());
+          } catch (IOException e) {
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Servlets are a big advantage over CGI when you need to do session-oriented
+transactions with a legacy system. Servlets stick around between
+requests, so the sessions with the legacy system are preserved
+for the next time. You already have a framework for tracking these
+sessions; all you need to do is put it together with your legacy
+system encapsulation and you're ready to hit the Web.
+<HR>
+
+<CENTER><P><A HREF="ch32.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch34.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

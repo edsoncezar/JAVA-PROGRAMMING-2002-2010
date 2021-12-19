@@ -1,0 +1,83 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>External JNDI Configuration and JNDI Viewing</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s101.html" title="EJX/AWT Development HowTo"><link rel="next" href="ch13s131.html" title="Customizing the JRMPContainerInvoker Socket Factories"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s101.html"><img src="images\prev.gif" border="0"></a><a href="ch13s131.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="howto-jndi"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="howto-jndi"></a>External JNDI Configuration and JNDI Viewing</h2></div></div><p>        Author:<span class="author">Scott Stark</span>
+		<tt>&lt;<a href="mailto:Scott_Stark@displayscape.com">Scott_Stark@displayscape.com</a>&gt;</tt>      
+	</p><div class="section"><a name="d0e11671"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11671"></a>The JNDI ExternalContext and JNDIView MBeans</h3></div></div><p>The ExternalContext JNDI MBean allows one to federate external
+JNDI contexts into the JBoss server JNDI namespace. This allows one
+to incorporate LDAP servers, Filesystem directories, DNS servers, etc.
+even if the JNDI providers root context is not Serializable. The federation can be made available to remote client in some circumstances.</p><p>The JNDIView MBean allows one to view the JNDI namespace tree as it exists
+in the JBoss server using the JMX agent view interface.</p></div><div class="section"><a name="d0e11678"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11678"></a>Preparation of the ExternalContext MBean</h3></div></div><p>First you have to add the ExternalContext service to the jboss.jcml
+in order to load the service. The folloing jboss.jcml fragment shows
+the setup for an LDAP server and a local filesystem directory:<div class="literallayout"><br>
+&lt;!--&nbsp;Bind&nbsp;a&nbsp;remote&nbsp;LDAP&nbsp;server&nbsp;--&gt;<br>
+&lt;mbean&nbsp;code="org.jboss.naming.ExternalContext"&nbsp;name="DefaultDomain:service=ExternalContext,jndiName=external/ldap/dscape"&nbsp;&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;attribute&nbsp;name="JndiName"&gt;external/ldap/dscape&lt;/attribute&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;attribute&nbsp;name="Properties"&gt;dscape.ldap&lt;/attribute&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;attribute&nbsp;name="InitialContext"&gt;javax.naming.ldap.InitialLdapContext&lt;/attribute&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;attribute&nbsp;name="RemoteAccess"&gt;true&lt;/attribute&gt;<br>
+&lt;/mbean&gt;<br>
+&lt;!--&nbsp;Bind&nbsp;the&nbsp;/Scott&nbsp;filesystem&nbsp;directory&nbsp;--&gt;<br>
+&lt;mbean&nbsp;code="org.jboss.naming.ExternalContext"&nbsp;name="DefaultDomain:service=ExternalContext,jndiName=external/fs/Scott"&nbsp;&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;attribute&nbsp;name="JndiName"&gt;external/fs/Scott&lt;/attribute&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;attribute&nbsp;name="Properties"&gt;scott_fs.props&lt;/attribute&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;attribute&nbsp;name="InitialContext"&gt;javax.naming.InitialContext&lt;/attribute&gt;<br>
+&lt;/mbean&gt;<br>
+<br>
+</div>where:<div class="itemizedlist"><ul><li><a name="d0e11687"></a>code="org.jboss.naming.ExternalContext" specifies the class that impliments the
+external context mbean.</li><li><a name="d0e11690"></a>name="DefaultDomain:service=ExternalContext,jndiName=external/ldap/dscape"
+assigns the name of the mbean. This is using a convention that sets the service
+property of the key to ExternalContext and adds a jndiName property that equals
+the mbean JndiName attribute. This allows multiple ExternalContext mbeans to
+easily be located and differentiated.</li><li><a name="d0e11693"></a>JndiName is the name with which the external context is bound into the JBoss JNDI namespace</li><li><a name="d0e11696"></a>Properties is URL string to a jndi.properties style of file for the JNDI provider
+whose context is to be created. This can be any url for which there is a handler or a simple
+string in which case it is treated as a resource that can be loaded via the current
+thread's context class loader.</li><li><a name="d0e11699"></a>InitialContext is the class name of the InitialContext class to create. Should be one
+of javax.naming.InitialContext, javax.naming.directory.InitialDirContext, or
+javax.naming.ldap.InitialLdapContext. In the case of the InitialLdapContext, a null
+Controls array is used. If this property is not given it defaults to
+javax.naming.InitialContext</li><li><a name="d0e11702"></a>RemoteAccess is a boolean flag indicating if the external InitialContext should be
+bound using a Serializable form that allows a remote client to create the external
+InitialContext. When a remote client looks up the external context via the JBoss JNDI
+InitialContext they effectively create an instance of the external InitialContext using
+the same env properties passed to the ExternalContext mbean. This will only work if
+the client could do a 'new InitialContext(env)' remotely. This requires that the provider
+url makes sense. For the LDAP example this should work. For the FileSystem example this
+most likely won't work unless the FileSystem path refers to a common network path.
+If this property is not given it defaults to false.</li></ul></div>
+		</p><p>This example is binding an external LDAP context into the JBoss JNDI namespace under
+the name "external/ldap/dscape". An example dscape.ldap properties file is:<div class="literallayout">java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory<br>
+java.naming.provider.url=ldap://ldaphost.displayscape.com:389/o=displayscape.com<br>
+java.naming.security.principal=cn=Directory&nbsp;Manager<br>
+java.naming.security.authentication=simple<br>
+java.naming.security.credentials=secret</div>With this mbean loaded, you can access the external LDAP context located at
+"ldap://ldaphost.displayscape.com:389/o=displayscape.com"
+from within the JBoss VM using the following code fragment:<pre class="programlisting">InitialContext iniCtx = new InitialContext();
+Context ldapCtx = iniCtx.lookup("external/ldap/dscape");
+...</pre>Using the same code fragment outside of the JBoss server VM will work in this case
+because the RemoteAccess property was set to true. If it was set to false it would
+not work because the remote client would receive a Reference object with an ObjectFactory
+that would not be able to recreate the external IntialContext.</p></div><div class="section"><a name="d0e11714"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11714"></a>Preparation of the JNDIView MBean</h3></div></div><p>All that is required to use the JNDIView service is to add it to jboss.jcml
+The mbean tag looks like this:<div class="literallayout"><br>
+&lt;mbean&nbsp;code="org.jboss.naming.JNDIView"&nbsp;name="DefaultDomain:service=JNDIView"&nbsp;&gt;<br>
+&lt;/mbean&gt;<br>
+</div>There are no configurable attributes. This simply loads the mbean into the JBoss
+server VM so that it can be used via the JMX MBean View.</p></div><div class="section"><a name="d0e11722"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11722"></a>Using the JNDIView MBean</h3></div></div><p>To view the JBoss JNDI namespace using the JNDIView mbean, you connect to the
+JMX Agent View using the http interface. The default settings put this at<a href="http://localhost:8082/" target="_top">http://localhost:8082/</a>. On this
+page you will see a section that lists the registered MBeans by domain. It
+should look something like this:<pre class="screen">    
+				<img src="images\agent_view.jpg">
+			</pre>
+		</p><p>This is showing two registered ExternalContext mbeans(ExternalContext/fs/Scott[a filesystem] and
+ExternalContext/ldap/dscape[an ldap server]) mbeans as well as the JNDIView
+mbean. Selecting the service=JNDIView link takes you to the JNDIView MBean
+View which will have a list of MBean operations section similar to:<pre class="screen">    
+				<img src="images\jndiview_ops.jpg">
+			</pre>
+		</p><p>Invoking the list operation creates a dump of the JBoss JNDI namespace that
+includes the federated external contexts. As an example, this is the dump
+with the filesystem and ldap contexts. The following image displays the
+start of the global JNDI namespace and includes the external/fs/Scott
+local filesystem directory contents.<pre class="screen">    
+				<img src="images\jndiview_list.jpg">
+			</pre>
+		</p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s101.html"><img src="images\prev.gif" border="0"></a><a href="ch13s131.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

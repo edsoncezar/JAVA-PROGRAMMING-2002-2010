@@ -1,0 +1,1734 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 6 -- Effective Use of Threads</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 6</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Effective Use of Threads</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#UsingThreads" >Using Threads</A>
+<LI><A HREF="#Performance" >Performance</A>
+<LI><A HREF="#InsideThreads" >Inside Threads</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+Unlike most common programming languages, Java incorporates threads
+into its design. This provides a number of advantages for the
+programmer. Because threads are an integral part of the Java environment,
+the programmer knows threads are always available. For a platform-neutral
+environment, this is an important attribute. The programmer can
+also feel confident that the underlying libraries are thread-safe.
+Because threads are defined as being part of the environment,
+any semantic clashes between the language and the presence of
+threads are eliminated.
+<P>
+A thread is an independant sequence of execution within a Java
+application (stand-alone Java programs or Java applets embedded
+in some other program such as your Web browser)<I>.</I> Every
+Java application runs within a Java VM (virtual machine). The
+Java VM may be, simultaneously, running multiple applications
+and/or multiple parts of a single application (see Figure 6.1).
+Every Java application is given at least one thread and may create
+more at its discretion. Although your application may have only
+one thread, it is probably safe to assume that the underlying
+Java VM may be using threads of its own to assist you. Some common
+uses of threads by the Java VM include the garbage collector and
+the AWT windowing toolkit.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-1.gif" ><B>Figure 6.1 : </B><I>A Java Application.</I></A>
+<P>
+Threads enable you to take better advantage of the computer and
+to parallelize your application. In the presence of a multiprocessor
+system, each thread in your application may run on a separate
+CPU and truly run in parallel. However, you can still have advantages
+on a uniprocessor system. A lot of time may be spent by the application
+waiting for certain events, such as IO. The uniprocessor system
+can take advantage of this time by executing another thread. Thus,
+while your application is waiting for input from the user, it
+can still be running some cute animation on the screen. You can
+do this without threads, but the presence of threads makes this
+type of task much easier. The use of threads also enables you
+to create simpler and easier-to-understand programs. A thread
+may be executing a single set of code doing a simple task, leaving
+other work to other threads. In this way, the programmer may be
+able to take a program that is hard to comprehend and divide it
+into separate distinct tasks that are easy to understand and,
+together, accomplish the more difficult task.
+<H3>How Does Java Define Threads?</H3>
+<P>
+The Java Language Specification defines threads to be part of
+the standard Java libraries (i.e. the <TT>java.*</TT>
+packages). Every implementation of Java must provide the standard
+libraries, and thus <I>must</I> support threads in some fashion.
+Therefore, the developer of Java applications can always expect
+threads to be present, and can be assured the standard Java libraries
+will be thread-safe (or at least have a defined behavior in the
+presence of threads). However, the Java programmer cannot make
+assumptions on the specific behavior of threads. Much of the specific
+behavior is left to the implementations (this will be discussed
+in more detail below).
+<H3>Threads and Java</H3>
+<P>
+To use threads in Java, the user should be familiar with a few
+Java classes (and interfaces). There are not many and they are
+easy to learn. In the following sections you examine each class
+in some detail. Most methods within the classes are fairly intuitive.
+Others-the more complicated ones-are accompanied by tips on usage.
+<H3>The <TT><FONT SIZE=4 FACE="Courier">Runnable</FONT></TT><FONT SIZE=4>
+Interface</FONT></H3>
+<P>
+At this point in your Java development career, you should be familiar
+with interfaces. The <TT>Runnable</TT>
+interface is most helpful because it enables any class that implements
+it to run easily within a thread. Here is the elementary <TT>Runnable</TT>
+interface:
+<BLOCKQUOTE>
+<TT>public interface Runnable extends Object
+<BR>
+{<BR>
+&nbsp;&nbsp;public abstract void run();<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+That is the entire interface-very simple, but quite powerful.
+When an object implements the <TT>Runnable</TT>
+interface it will, of course, provide a concrete version of the
+<TT>run()</TT> method. When a <TT>Thread</TT>
+is instantiated it can optionally take as one of its parameters
+an object that is an instance of <TT>Runnable</TT>.
+The thread will then execute the <TT>run()</TT>
+method of that object as its main<I>.</I> When the <TT>run()</TT>
+method exits (normally through an uncaught <TT>Throwable</TT>),
+the thread effectively dies. Thus, this simple interface enables
+any object whose class implements it to become alive.
+<P>
+Why have a <TT>Runnable</TT> interface
+<I>and</I> a <TT>Thread</TT> class?
+There are times when it will be more appropriate to just implement
+<TT>Runnable</TT>, and there are times
+when it is better to subclass <TT>Thread</TT>.
+Most of the time you could probably do either. Deciding when to
+use which one depends on your project's design and perhaps on
+your personal taste. There are cases where you could easily choose
+either method; however, there are other times where you must choose
+to implement <TT>Runnable</TT>. Using
+the <TT>Runnable</TT> interface is
+the more flexible of the two because you can always do it. You
+cannot always extend <TT>Thread</TT>.
+<P>
+As with all interfaces, true power occurs when you have a class
+that should, or must, subclass some other class to obtain a certain
+functionality. At the same time, you would like it to execute
+within its own thread. This is a case for using <TT>Runnable</TT>.
+If your class must subclass another class, you must implement
+<TT>Runnable</TT> to make an instance
+run in its own thread. A case in point is a simple applet. The
+applet class must subclass <TT>java.lang.Applet</TT>,
+so, to make it run in its own thread, you must implement <TT>Runnable</TT>,
+or you end up breaking what may be one class into two-one subclasses
+<TT>Thread</TT> and the other subclasses
+your other class. To be forced into this may conflict with your
+design, a case where the language will be getting in your way.
+<P>
+Once you have a class that implements <TT>Runnable</TT>
+and provides a <TT>run()</TT> method,
+you are almost ready to use it. To start the class in a thread,
+you still must instantiate the <TT>Thread
+</TT>class. Every thread within Java is associated with
+an instance of the <TT>Thread</TT>
+class, even if the <TT>Runnable</TT>
+interface is being used. When you instantiate the <TT>Thread</TT>
+class, you have the option of passing an instance of <TT>Runnable</TT>
+to the constructor of <TT>Thread</TT>.
+When this is done, it tells the <TT>Thread</TT>
+object to use the <TT>run()</TT> method
+from this passed-in object as the thread's main. What really occurs
+is that the default <TT>run()</TT>
+method of the <TT>Thread</TT> object
+simply calls the <TT>run()</TT> method
+of the passed-in object. This can easily be seen while in a debugger,
+or with the following program.
+<BLOCKQUOTE>
+<TT>public<BR>
+class Runn implements Runnable<BR>
+{<BR>
+&nbsp;&nbsp;public static void main(String[] args)<BR>
+&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;new Thread( new Runn() ).start();<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public void run()<BR>
+&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;new Exception().printStackTrace();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.exit(0);<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3>The <TT><FONT SIZE=4 FACE="Courier">ThreadGroup</FONT></TT><FONT SIZE=4>
+Class</FONT></H3>
+<P>
+Before you dive into the <TT>Thread</TT>
+class, let's take a look at <TT>ThreadGroup</TT>.
+An instance of the <TT>ThreadGroup</TT>
+class represents a collection of Java threads and other thread-groups.
+You can view the set of thread-groups within the Java VM as a
+tree, with the system thread-group as the root node. In this thread-tree,
+all threads are leaves, and thread-groups are (mostly) internal
+nodes (see Figure 6.2). An empty thread-group is also a leaf.
+Every <TT>Thread</TT> object and <TT>ThreadGroup</TT>
+object belongs to some thread-group, except for the system thread-group.
+The system thread-group is special; it is created by the Java
+VM and has no parent thread-group. Every other <TT>ThreadGroup</TT>
+object and <TT>Thread</TT> object
+is a descendant of the system thread-group. You learn the importance
+of this feature later in this chapter. 
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-2.gif" ><B>Figure 6.2 : </B><I>The thread group tree.</I></A>
+<P>
+The <TT>ThreadGroup</TT> class does
+not merely provide a container for these other objects; it also
+provides a certain amount of control over them. You can set actions
+on the thread-group that affect all its descendants. For example,
+you can set the maximum priority of a <TT>ThreadGroup</TT>,
+and this will prevent any other <TT>ThreadGroup</TT>
+or <TT>Thread</TT> from obtaining
+a higher priority. The <TT>ThreadGroup</TT>
+object will also make use of an installed security manager. Most
+security manager checks verify that the thread requesting the
+service has authority to modify the <TT>ThreadGroup</TT>
+object being accessed.
+<P>
+A primary example is a browser that enables the execution of applets.
+Each applet is composed of a set of classes and will run in one
+or more threads. When the browser is created, it has no idea when
+or what kinds of classes will enter the browser and begin executing.
+Furthermore, the browser may need to execute several applets at
+the same time. The browser can use thread-groups, along with a
+security manager to prevent threads created by applets from setting
+their priority higher than system threads and from modifying system
+threads or threads belonging to other applets. System threads
+may include items such as a garbage collector thread, window manager
+event thread, or other such threads that may provide service for
+the entire Java VM. In a sense, a <TT>ThreadGroup</TT>
+is one of several classes available to browsers, or other programs,
+to control distinct applets.
+<P>
+Here is the Java <TT>ThreadGroup</TT>
+class, including its nonpublic fields (shown for completeness),
+but minus the method implementations. (The comments are mine.)
+Much of this information can be obtained from the command <TT>javap
+-p ThreadGroup</TT>. This discussion is from the Sun JDK.
+The public (more specifically the nonprivate) fields for the standard
+Java classes should be the same on other implementations. It is
+possible that other implementations may differ slightly in their
+private fields; however, the functionality should remain consistent
+across all Java implementations.
+<BLOCKQUOTE>
+<TT>public class ThreadGroup<BR>
+{<BR>
+&nbsp;&nbsp;// constructors<BR>
+&nbsp;&nbsp;private&nbsp;&nbsp;ThreadGroup();<BR>
+&nbsp;&nbsp;public&nbsp;&nbsp;&nbsp;ThreadGroup( String );<BR>
+&nbsp;&nbsp;public&nbsp;&nbsp;&nbsp;ThreadGroup( ThreadGroup,
+String );<BR>
+&nbsp;&nbsp;// thread control methods<BR>
+&nbsp;&nbsp;public final synchronized void&nbsp;&nbsp;stop();
+<BR>
+&nbsp;&nbsp;public final synchronized void&nbsp;&nbsp;suspend();
+<BR>
+&nbsp;&nbsp;public final synchronized void&nbsp;&nbsp;resume();
+<BR>
+&nbsp;&nbsp;public final synchronized void&nbsp;&nbsp;destroy();
+<BR>
+&nbsp;&nbsp;public void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uncaughtException(
+Thread, Throwable );<BR>
+<BR>
+&nbsp;&nbsp;// public methods to set/get thread-group attributes
+<BR>
+&nbsp;&nbsp;public final String&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+getName();<BR>
+&nbsp;&nbsp;public final ThreadGroup&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getParent();
+<BR>
+&nbsp;&nbsp;public final int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getMaxPriority();
+<BR>
+&nbsp;&nbsp;public final boolean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isDaemon();
+<BR>
+&nbsp;&nbsp;public final void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setDaemon(boolean);
+<BR>
+&nbsp;&nbsp;public final synchronized void&nbsp;&nbsp;setMaxPriority(int);
+<BR>
+&nbsp;&nbsp;public final boolean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parentOf(
+ThreadGroup );<BR>
+<BR>
+&nbsp;&nbsp;// managing group contents<BR>
+&nbsp;&nbsp;private final synchronized void add( ThreadGroup );
+<BR>
+&nbsp;&nbsp;private synchronized void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+remove( ThreadGroup );<BR>
+&nbsp;&nbsp;synchronized void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(
+Thread );<BR>
+&nbsp;&nbsp;synchronized void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remove(
+Thread );<BR>
+&nbsp;&nbsp;public synchronized int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;activeCount();
+<BR>
+&nbsp;&nbsp;public int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enumerate(
+Thread[] );<BR>
+&nbsp;&nbsp;public int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enumerate(
+Thread[], boolean );<BR>
+&nbsp;&nbsp;private synchronized int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enumerate(
+Thread[], int, boolean );<BR>
+<BR>
+&nbsp;&nbsp;public synchronized int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;activeGroupCount();
+<BR>
+&nbsp;&nbsp;public int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enumerate(
+ThreadGroup[] );<BR>
+&nbsp;&nbsp;public int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enumerate(
+ThreadGroup[], boolean );<BR>
+&nbsp;&nbsp;private synchronized int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enumerate(
+ThreadGroup[], int, boolean );<BR>
+<BR>
+&nbsp;&nbsp;// security related methods<BR>
+&nbsp;&nbsp;public final void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;checkAccess();
+<BR>
+&nbsp;&nbsp;// debug and help methods<BR>
+&nbsp;&nbsp;public synchronized void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list();
+<BR>
+&nbsp;&nbsp;void&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(
+PrintStream, int );<BR>
+&nbsp;&nbsp;public String&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+toString();<BR>
+<BR>
+&nbsp;&nbsp;// non-public data fields<BR>
+&nbsp;&nbsp;ThreadGroup&nbsp;&nbsp;&nbsp;parent;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+//the group which contains this group<BR>
+&nbsp;&nbsp;String&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//the
+text name of this group<BR>
+&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+maxPriority;&nbsp;&nbsp;//the max priority of any thread in this
+group.<BR>
+&nbsp;&nbsp;boolean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; destroyed;&nbsp;&nbsp;&nbsp;&nbsp;//used
+internally to flag a dead group<BR>
+&nbsp;&nbsp;boolean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; daemon;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+//true if a daemon group<BR>
+&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+nthreads;&nbsp;&nbsp;&nbsp;&nbsp; //number of threads contained
+by this group<BR>
+&nbsp;&nbsp;Thread&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;threads[];&nbsp;&nbsp;&nbsp;&nbsp;//the
+actual threads<BR>
+&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ngroups;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//number of subgroups
+<BR>
+&nbsp;&nbsp;ThreadGroup&nbsp;&nbsp;&nbsp;groups[];&nbsp;&nbsp;&nbsp;&nbsp;
+//the actual groups<BR>
+}</TT>
+</BLOCKQUOTE>
+<H4>Using <TT>ThreadGroup</TT></H4>
+<P>
+The <TT>ThreadGroup</TT> class contains
+no public data fields thus you can only interface to thread groups
+with method calls. The purpose of each data field in the <TT>ThreadGroup</TT>
+class (see above) is pretty apparent and you will only need to
+know of them if you subclass <TT>ThreadGroup</TT>
+or if you need to view the contents of a <TT>ThreadGroup</TT>
+object while debugging.<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The <TT>ThreadGroup</TT> contains references to all its descendant threads and groups through the <TT>threads[]</TT> and <TT>groups[]</TT> data fields, thus an application does not need to maintain a reference to the thread or group it creates. The Java 
+garbage collector will not collect a thread or group object as long as a reference exists. This means that you can create threads with a simple statement such as <TT>new Thread( myGroup, &quot;myThread&quot; ).start();</TT> and not have to store the 
+returned object reference.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Creating a new <TT>ThreadGroup</TT>
+object is pretty straightforward. You must provide a name for
+the group and optionally a parent thread group. If you do not
+provide a parent group then the <TT>ThreadGroup</TT>
+of the current thread is used. Thus the following two code sequences
+are equivalent.
+<BLOCKQUOTE>
+<TT>ThreadGroup mygrp = new ThreadGroup(
+&quot;MyGroup&quot; );<BR>
+ThreadGroup mygrp = new ThreadGroup((Thread.currentThread().getThreadGroup(),
+&quot;MyGroup&quot; );<BR>
+</TT>
+</BLOCKQUOTE>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+There is a third constructor which is <TT>private</TT> and thus cannot be called by any Java method outside of the class. This constructor is used by the Java VM to create the system thread-group. In the Sun JDK, the source to the <TT>ThreadGroup</TT> 
+object shows that this constructor simply assigns itself the name <TT>system</TT> and sets the group priority to the maximum. The Sun JDK VM is written in C and will call this constructor during the initialization of the Java environment.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Thread Group Control Methods</H4>
+<P>
+There are a number of method which allow an application to control
+the execution of all the threads in the <TT>ThreadGroup</TT>
+hierarchy-this is the entire <I>thread-tree</I> using the thread
+group object being accessed as the root. If one of the <TT>stop()</TT>,
+<TT>suspend()</TT>, or <TT>resume()</TT>
+methods of a thread group is invoked, then every thread and thread
+group contained by that group will have its similar method invoked.
+Thus, a call such as <TT>mygroup.stop()</TT>
+will cause every thread in the group <TT>mygroup</TT>
+and every group which is a child of <TT>mygroup</TT>
+will have its <TT>stop()</TT> method
+invoked, (likewise for <TT>suspend()</TT>
+and <TT>resume()</TT>). Although these
+methods are within a group, their primary functions are to act
+on all their threads.
+<P>
+When all the threads in a group (and all of its subgroups) have
+exited, the group's <TT>destroy()</TT>
+method should be invoked. This method effectively cleans up memory
+resources. It should never be invoked on a group which still contains
+threads or groups which themselves contain threads. If it does
+the <TT>IllegalThreadStateException</TT>
+will be thrown, which is why this method cannot be used to kill
+all the threads within a group. The <TT>destroy()</TT>
+method will call the <TT>destroy()</TT>
+method on all of the groups subgroups, then marks the group as
+destroyed and removes itself from its parent group. After invoking
+<TT>destroy()</TT> the group can no
+longer have new objects added to it, otherwise <TT>IllegalThreadStateException</TT>
+is thrown.
+<P>
+Whenever a thread encounters an unhandled <TT>Throwable</TT>-one
+that propagates up to the main method of the thread-the <TT>uncaughtException()</TT>
+method of the threads <TT>ThreadGroup</TT>
+is invoked. The default method will simply attempt to call its
+parent's <TT>uncaughtException()</TT>.
+If it has no parent, it will simply invoke the <TT>printStackTrace()</TT>
+method of the passed in <TT>Throwable</TT>
+object. The <TT>ThreadGroup</TT> class
+can be subclassed and this method overridden in order for an application
+to install its own mechanism for dealing with unhandled throwables.
+<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The <TT>run()</TT> method defined in <TT>Runnable</TT> and <TT>Thread</TT> has no <TT>throws</TT> clause. This means the compiler should enforce all <TT>Exception</TT> class throwables to be handled. Other <TT>Throwables</TT>, such as <TT>Error</TT> 
+subclasses and <TT>RuntimeException</TT> subclasses, can be propogated by <TT>run()</TT> and thus caught by <TT>uncaughtException()</TT>.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Accessing Thread Group Attributes</H4>
+<P>
+Every thread group has a number of attributes associated with
+it. The thread groups name and parent attributes are set when
+the group is created and cannot change. To obtain those attributes
+the <TT>getName()</TT> and <TT>getParent()</TT>
+methods are invoked. 
+<P>
+The groups maximum priority attribute can be obtained with <TT>getMaxPriority()</TT>
+and altered with <TT>setMaxPriority()</TT>.
+This maximum priority cannot be set higher than its current maximum
+priority, and will cause each of its subgroups to have their <TT>setMaxPriority()</TT>
+methods invoked (which may or may not cause a change), thus a
+group can never raise its priority and can never have a priority
+higher then its parent. If you attempt to set a group's maximum
+priority higher then its current value the request is silently
+ignored. Changing a thread group's maximum priority will not affect
+the current priorities of any threads within the group. However,
+any existing thread cannot have its priority changed to a value
+greater then its group's current maximum priority. Look at the
+following program.
+<P>
+<BLOCKQUOTE>
+<TT>Public class Sample extends Thread<BR>
+{<BR>
+&nbsp;&nbsp;public static void main( String[] args )<BR>
+&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( currentThread().getThreadGroup()
+);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( currentThread() );
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;currentThread().setPriority(NORM_PRIORITY-1);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( currentThread() );
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;currentThread().getThreadGroup().setMaxPriority(
+MIN_PRIORITY );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( currentThread().getThreadGroup()
+);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( currentThread() );
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;currentThread().setPriority(NORM_PRIORITY-2);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( currentThread() );
+<BR>
+&nbsp;&nbsp;}<BR>
+}</TT></BLOCKQUOTE>
+
+<p>
+The preceding program produces the following output.
+<p>
+<BLOCKQUOTE>
+<TT>java.lang.ThreadGroup[name=main,maxpri=10]<BR>
+Thread[main,5,main]<BR>
+Thread[main,4,main]<BR>
+java.lang.ThreadGroup[name=main,maxpri=1]<BR>
+Thread[main,4,main]<BR>
+Thread[main,1,main]<BR>
+</TT>
+</BLOCKQUOTE>
+
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+When a thread is created it takes on the priority of the thread that created it, without checking the current maximum priority of its thread group. Thus it is possible to have new threads within a group to have priorities greater then its thread 
+group.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Another <TT>ThreadGroup</TT> attribute
+describes if the thread group is a <I>daemon</I> group (<TT>true</TT>),
+or not (<TT>false</TT>). Those with
+a UNIX background will recognize the term <I>daemon</I>. It is
+most often used in the UNIX world to indicate a <I>background</I>
+<I>process</I>. You don't see a daemon process-it is just sort
+of there and provides some service. In Java there are <I>daemon
+threads</I> (see next section) and <I>daemon groups</I>. When
+a <TT>ThreadGroup</TT> is marked as
+a daemon group and all its subgroups and threads have been removed,
+the thread-group will be automatically destroyed. The current
+<I>daemon-status</I> of a <TT>ThreadGroup</TT>
+can be obtained via the <TT>isDaemon()</TT>
+method. This attribute can be changed at any time during the <TT>ThreadGroup</TT>'s
+lifetime. The <TT>ThreadGroup</TT>
+constructor will set the daemon attribute to the value of its
+parent's-<TT>getParent().isDaemon()</TT>.
+The value of this attribute has no affect on the daemon value
+of any <TT>Thread</TT> objects.
+<H4>Thread Group Contents</H4>
+<P>
+At this point you are well aware that a <TT>ThreadGroup</TT>
+can contain two kinds of items-<TT>Thread</TT>
+objects and <TT>ThreadGroup</TT> objects.
+You can use the methods <TT>activeCount()</TT>
+and <TT>activeGroupCount()</TT> to
+obtain the current number of <TT>Thread</TT>
+and <TT>ThreadGroup</TT> objects,
+respectively, currently contained in the group. The values returned
+are the sum of all the threads, or thread groups, within the thread-tree
+(using the thread group as the root), not just those in the thread
+group. Therefore if you call <TT>activeCount()</TT>
+on the system group (the first group created by the Java VM) you
+will get the current count of threads in the entire Java VM, not
+just those in the system group. 
+<P>
+To obtain the actual <TT>Thread</TT>
+or <TT>ThreadGroup</TT> objects contained
+by the thread group you can use the <TT>enumerate()</TT>
+methods. To obtain the <TT>Thread</TT>
+objects of a group you would invoke one of the following:
+<BLOCKQUOTE>
+<TT>public int enumerate( Thread[] list );
+<BR>
+public int enumerate( Thread[] list, boolean recurse );</TT>
+</BLOCKQUOTE>
+<P>
+When you invoke <TT>enumerate()</TT>
+you pass it a pre-allocated <TT>Thread[]</TT>
+object. The <TT>enumerate()</TT> method
+will then fill in this array with the current <TT>Thread</TT>
+objects that the group contains. When the parameter <TT>recurse</TT>
+is set to <TT>true</TT> then <TT>enumerate()</TT>
+will obtain all the <TT>Thread</TT>
+objects in the thread-tree (using the group as the root), otherwise
+it obtains only the ones directly in the group. The actual number
+of elements placed in the array is returned by the method. If
+you invoke the first version of <TT>enumerate()</TT>
+it simply invokes the second with the <TT>recurse</TT>
+parameter set to <TT>true</TT>. For
+example, the following code fragments are equivalent, and both
+return all the <TT>Thread</TT> objects
+in the thread-tree where <TT>mygrp</TT>
+is the root.
+<BLOCKQUOTE>
+<TT>int actual_count = mygrp.enumerate( list
+);<BR>
+int actual_count = mygrp.enumerate( list, true );</TT>
+</BLOCKQUOTE>
+<P>
+You can obtain the <TT>ThreadGroup</TT>
+objects in a thread-tree in a similar manner by invoking one of
+the following methods.
+<BLOCKQUOTE>
+<TT>public int enumerate( ThreadGroup[] list
+);<BR>
+public int enumerate( ThreadGroup[] list, boolean recurse );</TT>
+</BLOCKQUOTE>
+<P>
+If, for example, you have the object representing the system thread-group-call
+it <TT>sys_grp</TT>-and you want to
+obtain a list of all threads running in the Java VM, you can achieve
+this with the following code:
+<BLOCKQUOTE>
+<TT>void ListThreads()<BR>
+{<BR>
+&nbsp;&nbsp;Thread[] thd_list = new Thread[ sys_grp.activeCount()
+];<BR>
+&nbsp;&nbsp;// get all threads in and below the given group<BR>
+&nbsp;&nbsp;int actual = sys_grp.enumerate( thd_list );<BR>
+&nbsp;&nbsp;// print each thread object<BR>
+&nbsp;&nbsp;for( int x=0; x&lt;actual; x++ )<BR>
+&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( x+&quot;: &quot;+thd_list[x]
+);<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+You will see code similar to this in the program AllThreads included
+on the CD-ROM. AllThreads creates a bunch of threads and thread-groups,
+then searches the tree for the system group and performs some
+code very much like that previously shown, thus listing every
+thread currently running in the Java VM.
+<P>
+It should be noted that the numbers returned by <TT>activeCount()</TT>
+and <TT>activeGroupCount()</TT> are
+the counts at the point in time when the specific thread-group
+was queried. By the time you use those counts, they may not be
+accurate. For example, one thread in a program obtains the thread
+counts, but after the count is returned, another thread adds 10
+more threads to an existing group. When an enumeration method
+is called, it will include those 10 new threads in its listing.
+If the array you passed in was created using the value returned
+by <TT>activeCount()</TT>, it will
+not be large enough to hold all the current threads. The enumeration
+methods will not overflow the array. They will fill the array
+as much as possible and simply return; thus, you may not get an
+accurate list. You must remember Java is a dynamic multithreaded
+environment and these methods simply provide a snapshot of the
+system. After you obtain the list of thread and/or thread group
+objects, you cannot expect that list to remain valid for any length
+of time. To do so would require freezing the Java system to prevent
+threads from dying or being created.<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The enumerate methods and count methods will be de-emphasized  in a future version of Java (probably v1.1). The methods <TT>threadCount()</TT>, <TT>allThreadsCount()</TT>, <TT>groupsCount()</TT>, and <TT>allGroupsCount()</TT> will return counts specific to 
+the group or the group's thread-tree. The methods  <TT>threads()</TT>, <TT>groups()</TT> will return arrays of thread or thread group objects containing the threads or groups specfic for the group. Similarly the <TT>allThreads()</TT> and 
+<TT>allGroups()</TT> methods will return the objects for the group's entire thread tree. You will no longer have to get the counts, allocate the array's and then fill the arrays.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Security</H4>
+<P>
+<TT>checkAccess()</TT>
+<P>
+The ThreadGroup class contains a method, checkAccess(), which
+is called to perform security checks if needed. It essentially
+checks to see whether the current thread (the one calling the
+ThreadGroup method), has the rights to modify the ThreadGroup
+object being called. If the check fails, a SecurityException will
+be thrown. The method is quite simple; it will query the Java
+Runtime for the currently installed SecurityManager object. If
+one is present, it will call the checkAccess() method of the security
+object passing it the ThreadGroup object. If no security manager
+has been installed, the check simply returns (thus enabling full
+access). This allows the ThreadGroup object to use whatever security
+policy has been put in place, without the ThreadGroup class being
+modified. The checkAccess() method is a final method and thus
+cannot be overridden, even by subclasses. The following methods
+within the ThreadGroup class call checkAccess():
+<UL>
+<LI><TT>ThreadGroup()</TT>(the constructor,
+which actually calls the <TT>checkAccess()</TT>
+method of the parent of the newly created group)
+<LI><TT>setDaemon()</TT>
+<LI><TT>setMaxPrioirty()</TT> 
+<LI><TT>stop()</TT>
+<LI><TT>suspend()</TT>
+<LI><TT>resume()</TT>
+<LI><TT>destroy()</TT>
+</UL>
+<H3>The <TT><FONT SIZE=4 FACE="Courier">Thread</FONT></TT><FONT SIZE=4>
+Class</FONT></H3>
+<P>
+The <TT>Thread</TT> class defines
+the application level interface to Java threads. This class is
+not the thread; it describes the attributes of a thread. In fact,
+the <TT>Thread</TT> object can still
+be accessed after the thread's main has completed. If an application
+is using classes that implement <TT>Runnable</TT>,
+it still needs to create an instance of <TT>Thread</TT>
+and assign the <TT>Runnable</TT> object
+to that thread:
+<BLOCKQUOTE>
+<TT>Runnable runner = GetRunner(); //magically
+returns a runnable<BR>
+Thread thd = new Thread( mygroup, runner, &quot;mythread&quot;
+);<BR>
+// the thread is now created and will use the run()<BR>
+// method defined in the Runnable object.</TT>
+</BLOCKQUOTE>
+<P>
+Although you can assign the same <TT>Runnable</TT>
+object to different threads, you normally will create a new instance
+for each new thread. If you do not, you must be careful because
+all the threads will be accessing the same instance data.<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+If using a subclass of <TT>Thread</TT>, all the instance data fields <I>will</I> be thread-specific data (sometimes referred to as <I>thread local storage</I>). If using <TT>Runnable</TT> and you assign the same <TT>Runnable</TT> object to many threads, 
+this won't be true.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Using the <TT>Thread</TT> Class
+</H4>
+<P>
+Lets now take a look at what the <TT>Thread</TT>
+class provides and how to use it. Following is the public interface
+of the <TT>Thread</TT> class (as of
+version 1.02). Although we won't look at every item we will cover
+the ones used most often.
+<BLOCKQUOTE>
+<TT>public class Thread implements Runnable
+<BR>
+{<BR>
+&nbsp;&nbsp;// thread class constants<BR>
+&nbsp;&nbsp;public static final int MIN_PRIORITY = 1;<BR>
+&nbsp;&nbsp;public static final int NORM_PRIORITY = 5;<BR>
+&nbsp;&nbsp;public static final int MAX_PRIORITY = 10;<BR>
+&nbsp;&nbsp;// static methods<BR>
+&nbsp;&nbsp;public native static Thread currentThread();<BR>
+&nbsp;&nbsp;public native static void yield();<BR>
+&nbsp;&nbsp;public native static void sleep(long);<BR>
+&nbsp;&nbsp;public static void sleep(long, int);<BR>
+&nbsp;&nbsp;public static int activeCount();<BR>
+&nbsp;&nbsp;public static int enumerate(Thread []);<BR>
+&nbsp;&nbsp;// constructors<BR>
+&nbsp;&nbsp;public Thread();<BR>
+&nbsp;&nbsp;public Thread(Runnable);<BR>
+&nbsp;&nbsp;public Thread(ThreadGroup, Runnable);<BR>
+&nbsp;&nbsp;public Thread(String);<BR>
+&nbsp;&nbsp;public Thread(ThreadGroup, String);<BR>
+&nbsp;&nbsp;public Thread(Runnable, String);<BR>
+&nbsp;&nbsp;public Thread(ThreadGroup, Runnable, String);<BR>
+&nbsp;&nbsp;// thread control methods<BR>
+&nbsp;&nbsp;public void run();<BR>
+&nbsp;&nbsp;public native synchronized void start();<BR>
+&nbsp;&nbsp;public final void join();<BR>
+&nbsp;&nbsp;public final synchronized void join(long);<BR>
+&nbsp;&nbsp;public final synchronized void join(long, int);<BR>
+&nbsp;&nbsp;public final void suspend();<BR>
+&nbsp;&nbsp;public final void resume();<BR>
+&nbsp;&nbsp;public final void stop();<BR>
+&nbsp;&nbsp;public final synchronized void stop(Throwable);<BR>
+&nbsp;&nbsp;public void interrupt();<BR>
+&nbsp;&nbsp;public static boolean interrupted();<BR>
+&nbsp;&nbsp;public boolean isInterrupted();<BR>
+&nbsp;&nbsp;public void destroy();<BR>
+&nbsp;&nbsp;// thread attributes<BR>
+&nbsp;&nbsp;public final native boolean isAlive();<BR>
+&nbsp;&nbsp;public final void setPriority(int);<BR>
+&nbsp;&nbsp;public final int getPriority();<BR>
+&nbsp;&nbsp;public final void setName(String);<BR>
+&nbsp;&nbsp;public final String getName();<BR>
+&nbsp;&nbsp;public final ThreadGroup getThreadGroup();<BR>
+&nbsp;&nbsp;public final void setDaemon(boolean);<BR>
+&nbsp;&nbsp;public final boolean isDaemon();<BR>
+&nbsp;&nbsp;// security related methods<BR>
+&nbsp;&nbsp;public void checkAccess();<BR>
+&nbsp;&nbsp;// debugging help<BR>
+&nbsp;&nbsp;public native int countStackFrames();<BR>
+&nbsp;&nbsp;public static void dumpStack();<BR>
+&nbsp;&nbsp;public String toString();<BR>
+}</TT>
+</BLOCKQUOTE>
+<H4>Creating Threads</H4>
+<P>
+The <TT>Thread</TT> class has seven
+constructors to choose from (you can see their signatures earlier
+in this chapter). The only input you can provide the constructor
+(in varying combinations) is a <TT>ThreadGroup</TT>
+object of the thread-group in which you want the new thread to
+be created. A <TT>String</TT> value
+contains the textual name of the newly created thread. Providing
+names for your thread is handy for debugging purposes. Finally,
+an instance of the <TT>Runnable</TT>
+interface can be provided. If you supply a runnable object, the
+thread will be created and the <TT>run()</TT>
+method of the newly created thread will immediately call the <TT>run()</TT>
+method provided by runnable object. This effectively activates
+that runnable object.
+<P>
+Once your thread is created you must activate that thread. When
+a thread object is created, the actual thread does not begin execution,
+rather it is just prepared to do so. You must invoke the <TT>start()</TT>
+method on the thread object to cause the thread to begin executing.
+After the thread's <TT>start()</TT>
+method has been invoked the thread can be scheduled for execution.
+You do not know exactly when it will begin execution, nor should
+you care.
+<H4>Controlling Threads</H4>
+<P>
+There are a number of methods for a thread to control itself as
+well as other threads. By calling the <TT>sleep()</TT>
+and <TT>yield()</TT> methods, a thread
+can effectivly give up the processor. The <TT>yield()</TT>
+method simply gives control to the thread scheduler. The scheduler
+will simply pull a thread off of the ready queue. If the thread
+which performed the yield is the highest priority thread then
+it may immediately get control back. You cannot expect yield to
+always cause another thread to get control. The <TT>sleep()</TT>
+method (there are two) will cause the thread to be taken off of
+the <I>ready queue</I> for a specified amount of time. The specified
+duration the thread will not be scheduled for execution-it is
+sleeping. The two <TT>sleep()</TT>
+methods allow you to indicate the time in milliseconds or milliseconds
+plus additional nanoseconds. <BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The <TT>sleep()</TT> and <TT>yield()</TT> methods are static and thus operate on the callers thread.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The current Sun JDK (v1.02) implementation of <TT>sleep( long, int )</TT> will not really use nanosecond granularity. It will round to the nearest millisecond.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+There are many cases where threads will need to wait for another
+thread to finish executing before proceeding. The <TT>join()</TT>
+ method is used to allow one thread to wait for the completion
+of another. There are three variations of this method. The one
+without parameters will cause the caller to wait indefinitely
+for the target thread to exit. The other two versions enable the
+caller to specify a time-out value. It either takes one parameter
+that is time-specified in milliseconds or two parameters where
+both are in milliseconds plus an additional value in nanoseconds.
+<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+In the current implementation of Java from Sun, timeouts specified with nanoseconds are rounded to the nearest millisecond. Thus, <TT>join( 10 )</TT> and <TT>join( 10, 1 )</TT> result in the same timeout period.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Threads can affect the execution of other threads in a number
+of ways. When the <TT>suspend()</TT>
+method is invoked the target thread is removed from the ready
+queue and will no longer receive any CPU time-it will not be scheduled.
+The <TT>resume()</TT> methods places
+it back on the ready queue. When you resume a thread, there is
+no guarantee that thread will begin executing immediately, because
+it is just now eligible for scheduling. There are applications
+that will find these methods valuable but most applications will
+not. Java provides much better mechanisms for thread synchronization-discussed
+in much detail in the next chapter.
+<P>
+Java also provides a method for one thread to <I>gently </I>interrupt
+another with the <TT>interrupt()</TT>
+method. I say <I>gently</I>, because the interrupt will not affect
+the current execution of the interrupted thread. The thread must
+query the system to see if it has been interrupted via the <TT>isInterrupted()</TT>
+method (you also can use <TT>IsInterrupted()</TT>
+to queiry another thread's interrupt status). The thread being
+interrupted might be in the middle of an important transaction
+which needs to complete, thus a thread must choose when to check
+if it has been interrupted. The benefit of this mechanism is that
+the interrupt will cause a thread to <I>awaken</I> from <TT>sleep()</TT>,
+<TT>wait()</TT>, and <TT>join()</TT>.
+This awakeing occurs by the <TT>InterruptedException</TT>
+being thrown by the above routines. <BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The current implementation of Java (v1.02) does not implement the interrupt methods. If they are called, they will throw an instance of <TT>NoSuchMethodError</TT>. The interfaces are scheduled to appear in Java v1.1.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>How Threads End</H4>
+<P>
+Normally a thread will end by the thread itself simply exiting
+from its <TT>run()</TT> method. However
+a thread may cause another to exit by invoking <TT>stop()</TT>
+on the thread. You can pass <TT>stop()</TT>
+a <TT>Throwable</TT> object which
+the Java VM will then cause to be thrown at the target thread-that
+is the target thread will behave as if it encountered a throw
+statement with the given object. Unless that throwable is being
+handled by the thread, the thread's <TT>run()</TT>
+method will exit and the <TT>uncaughtException()</TT>
+method of the thread's group will be invoked. Calling <TT>stop()</TT>
+with no parameters causes a <TT>ThreadDeath</TT>
+object to be thrown at the target thread. Thus the following lines
+are equivalent.
+<BLOCKQUOTE>
+<TT>Mythd.stop();<BR>
+mythd.stop( new ThreadDeath() );</TT>
+</BLOCKQUOTE>
+<P>
+There is a <TT>destroy()</TT> method
+defined, but it is currently not implemented. This method, when
+(or if) implemented, will simply destroy the thread without cleaning
+up the thread's resources. Thus synchronization objects will not
+be updated. An applicaiton should never have a reason to use such
+a method because it would be dangerous.
+<H4>Thread Attributes</H4>
+<P>
+Each thread contains a number of attributes. Some must be set
+when the thread object is created and can never be altered, while
+others can be changed throughout the thread's life. The attributes
+are: name, priority, thread group, and daemon status. The thread
+group must be specified while creating the thread and cannot change.
+The name can be queried and set using the <TT>getName()</TT>
+and <TT>setName()</TT> methods. The
+priority defaults to the priority of the creating thread. The
+current priority can be obtained from the <TT>getPriority()</TT>
+method. Before starting a thread and during its execution the
+threads priority can be altered by calling the <TT>setPriority()</TT>
+method with the desired priority. The priority can not be set
+higher than the maximum priority of the thread's group. If an
+attempt is made to set the priority higher it will silently be
+ignored and the priority will be changed to be equivalent to the
+current maximum priority of the threads group.
+<P>
+Recall from the <TT>ThreadGroup</TT>
+description that the term &quot;daemon&quot; is most commonly
+used in the UNIX community. For a Java thread, it essentially
+is used to indicate the type of thread. The most important attribute
+to remember is the Java VM will not exit if non-daemon threads
+are still present. If the main thread of an application ends and
+the only remaining threads are daemon threads, the Java VM will
+exit, essentially killing the daemon threads without warning.
+A daemon thread should be used for some background task that most
+likely is providing a service to the application. For example,
+a communications server may have a background thread that simply
+listens on a port for new connections. With a new connection,
+a new Java thread is spawned to serve that connection. The listen
+thread can be marked a daemon thread. The more important session
+thread, one using the connections, will probably not be a daemon
+thread. Marking a thread as a daemon is a judgment call on the
+part of the developer; however, it is a handy feature.<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Tip</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+If the developer does not provide a specific mechanism where the thread can exit, it is probably a candidate for being a daemon thread.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Security</H4>
+<P>
+The <TT>Thread</TT> class supports
+the presense of a security policy by providing the <TT>checkAccess()</TT>
+method and using that method internally to prevent unauthorized
+modifications of a thread object. This method simply attempts
+to get the currently installed <TT>SecurityManager</TT>
+object, which implements the security policy. If one is found
+then it is invoked to verify that the calling thread has the proper
+rights to modify the thread object. If the calling thread does
+not have the correct rights an instance of <TT>SecurityException</TT>
+is thrown. The following are methods within the <TT>Thread</TT>
+class that invoke this method:
+<UL>
+<LI><TT>stop()</TT>
+<LI><TT>suspend()</TT>
+<LI><TT>resume()</TT>
+<LI><TT>setPriority()</TT>
+<LI><TT>setName()</TT>
+<LI><TT>setDaemon()</TT>
+</UL>
+<H2><A NAME="UsingThreads"><FONT SIZE=5 COLOR=#FF0000>Using Threads</FONT></A>
+</H2>
+<P>
+There are several example programs on the CD-ROM that go with
+this chapter. The best way to understand them is to run the programs.
+Most are simple stand-alone programs that can be run from the
+command line. However, there are some that make use of the AWT
+and browsers. In general, all the programs show various parts
+of the <TT>Thread</TT> and <TT>ThreadGroup</TT>
+classes. None show all the features. The best way to learn them
+is to experiment. Included on the CD-ROM directory associated
+with this chapter is an HTML file named index.html, which you
+can view in a browser (such as Netscape Navigator) and which has
+a description of the included demos plus links to their source
+code. You can view the source directly in the browser. You have
+to go to the command prompt to run the stand-alone applications.
+Applets can, of course, be directly run in the browser. Now let's
+take a look at some basic thread examples.
+<H3>Priority.java</H3>
+<P>
+This is, perhaps, one of the simplest threaded programs you are
+likely to encounter. Its real purpose was to see how Java Thread
+priorities match with the underlying native threads (if running
+on such a platform). The program simply creates a <TT>Thread</TT>
+for each Java priority level and assigns that thread its respective
+priority level. The threads are very simple; they wait on an object
+until notified, then exit. This enables the whole set of threads
+to be active and alive while their priorities can be viewed. After
+being created and started, the program then uses the <TT>ThreadsList</TT>
+class to provide a textual listing of the threads. It then sits
+forever, waiting for the user to type a key, after which it notifies
+all the threads to end. Take a moment to check the source now.
+<P>
+It's a short program, right? As you can see, the single class
+<TT>Priority</TT> implements the <TT>Runnable</TT>
+interface and includes the required <TT>run()</TT>
+method:
+<BLOCKQUOTE>
+<TT>public void run()<BR>
+&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;synchronized( this )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.wait();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;catch( Exception ee )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ee.printStackTrace();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+To call the <TT>wait()</TT> method
+of an object, you must be synchronized on that object. This means
+you must either be in a <TT>synchronized</TT>
+method or within a <TT>synchronized</TT>
+block, as in this example. When the <TT>wait()</TT>
+is performed, the monitor for the object will be released. When
+the <TT>wait()</TT> returns, the monitor
+will once again be locked. Thus, after signaling a thread to continue
+from a <TT>wait()</TT>, the thread
+may still need to wait until it can reaquire the monitor<I>. </I>This
+is important to remember. <A HREF="ch7.htm" >Chapter 7</A>, &quot;Concurrency
+and Synchronization,&quot; discusses the details of Java's synchronization
+facilites in much depth. The <TT>wait()</TT>
+method can throw an <TT>InterruptedException</TT>,
+so you must be prepared to handle such an exception.
+<P>
+To get this <TT>run()</TT> method
+to execute in its thread, you must first create an instance of
+the class that implements <TT>Runnable</TT>,
+such as the following:
+<BLOCKQUOTE>
+<TT>Priority self = new Priority();</TT>
+</BLOCKQUOTE>
+<P>
+Then you create an instance of <TT>Thread</TT>,
+passing it the desired <TT>Runnable</TT>
+object. This example passes the same object to each thread. Thus,
+the primary portion of the application is the following:
+<BLOCKQUOTE>
+<TT>for( int x=Thread.MIN_PRIORITY; x&lt;=Thread.MAX_PRIORITY;
+x++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread thd = new Thread( self
+);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thd.setPriority( x );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thd.setDaemon( true );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thd.start();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+Pretty straight-forward stuff. The <TT>Thread</TT>
+class is instantiated, passing it the already created <TT>Runnable</TT>
+object, thus instructing the thread to use the <TT>run()</TT>
+method in the associated <TT>Runnable</TT>
+object. In this example, you need to keep a temporary copy of
+the thread object in the local variable so you can perform a few
+additional operations: otherwise, you could have simply performed
+the following statement and drop the return value.
+<BLOCKQUOTE>
+<TT>new Thread( self ).start(); </TT>
+</BLOCKQUOTE>
+<P>
+Instead, the example uses the thread object to set the priority
+and to mark the thread as a daemon thread. Finally, the thread
+is started and loops around to do the next thread.
+<P>
+Because the threads will all immediately block on the runnable
+object, and because they all are using the same runnable object,
+you can release them all with a single call to <TT>notifyAll()</TT>
+on the runnable object.
+<P>
+This test is very simple, but shows the basics for starting threads
+as well as some simple use of the <TT>Runnable</TT>
+interface and the synchronization facilites inherit in <I>every</I>
+Java object. Later, when examining thread priorities, if you are
+using a Win32 machine and have the pview95 (pview on NT) program,
+you can see that Java threads produce Win32 threads-notice the
+priority levels Win32 uses.
+<H3>PPrimes.java</H3>
+<P>
+This is also a simple program. It uses threads to find prime numbers.
+It is not a very good prime number generator, but it does show
+how to use Java threads. Further, if you run it on Solaris and
+Win32, you will notice slightly different behavior due to the
+differences in the threading model between the two systems (see
+the following sections on Performance and Java threads internals).
+Finally, you also can see that using multiple threads does not
+mean it will run faster. If you run this on a multiprocessor Windows
+NT box, you might actually see a performance increase. (I did
+not have access to one while writing this book, so I can only
+dream.)
+<P>
+This program takes input such as the following: 
+<BLOCKQUOTE>
+<TT>java Pprimes 200 5. </TT>
+</BLOCKQUOTE>
+<P>
+This will cause it to find all primes from 1 to 200 and will use
+5 threads. It simply divides the range into 5 parts, the first
+being 0..39, then 40..79, and so forth. Then each thread simply
+finds all primes within its range. It uses a modified brute-force
+method to find the primes and writes them to the screen as it
+finds them (thus they don't come out in order). It also provides
+the time in milliseconds to complete the task. You can vary the
+number of primes to find, but for simplicity the number is rounded
+up to a multiple of the number of threads used. You also can specify
+how many threads there are, including one.
+<P>
+You can view the source from the CD-ROM. Notice that the program
+makes use of the <TT>join()</TT> method
+to enable the main thread to wait for all the prime finders to
+finish before it exits. This program is also an example of subclassing
+<TT>Thread</TT>, as opposed to using
+<TT>Runnable</TT>.
+<H3>ThreadsList.java</H3>
+<P>
+Although this sample can be run by itself, it is not too exciting
+that way. It is mostly a little utility class, which will provide
+a listing of all the threads currently in the Java VM. Some of
+the other sample programs use this class. This is a simple class
+that demonstrates how you can obtain access to threads via the
+<TT>ThreadGroup</TT>. It simply starts
+from the caller's thread and finds its thread-group, then walks
+up the thread tree until the root (the system thread-group) is
+found. It then walks down the tree visiting every group and listing
+all the threads within that group.
+<H3>Debugging a Threaded Program</H3>
+<P>
+The best method for debugging threaded programs is to avoid having
+to debug. When using threads, it pays to plan carefully what your
+threads will do and how they will do it. Pay extra attention to
+the places where threads interact with each other. Undoubtedly,
+your threads will have to share data with one another or perhaps
+take turns accessing some resource. You should be sure these points
+of contact between threads are done in a thread-safe manner. It
+is often helpful to treat your threads as if they can all be running
+at the same time (in a multiprocessor machine with a Java VM that
+will support it, such as Java on NT, this can be a reality). Don't
+build any assumptions into your application of which thread will
+run first, or reach a certain point, or so forth. You often will
+not be able to predict this, and even if you can today on your
+current Java VM, it may not be true on a different Java VM.
+<P>
+Of course, even the best of you will have problems in your programs.
+Unfortunately, if your problems are related to threads misbehaving
+or not playing well together, it can be hard to fix. The biggest
+reason is the unpredictable nature of thread-related errors. Synchronization
+issues may not show at the point of the failure, but rather in
+some other location and at some other point in time. At this point,
+the help of a thread-aware debugger is indispensable. The current
+JDK from Sun builds in remote debugging capabilities (<A HREF="ch26.htm" >see Chapter 26</A>,
+&quot;The Java Debugger API&quot;) and also includes a proof-of-concept
+command-line debugger called jdb, which is simply a front-end
+to the Java VM's debugging capabilities. At the time of this writing,
+other companies (Sun, Symantec, Borland, and SGI) were coming
+out with GUI-based debuggers, which should make life easier.
+<P>
+No matter which debugger you use, the basics remain the same.
+Use the debugger to provide you with information about all the
+current threads that are running. This is where providing meaningful
+names for your threads (see <TT>setName()</TT>)
+comes in handy. The debugger should show you the thread's name
+and other information, such as where in the source code it is
+currently executing and the thread's state (running, sleeping,
+in a monitor, waiting on a condition, suspended, at a breakpoint,
+or perhaps a zombie). This information is indispensible; it enables
+you to notice unusual conditions quickly. For example, you may
+have two threads that should never be runnable at the same time
+for various reasons. The debugger can show this kind of problem
+quickly. The other big use of the debugger when debugging a multithreaded
+application is the debugger's capability of suspending all (or
+certain) threads. When you are debugging one thread-perhaps while
+it is at a breakpoint and you are examining data-it is often helpful
+to suspend the other threads to prevent them from continuing and
+affecting the application's state.
+<P>
+If you are the type that hates debuggers, or uses them only as
+a last resort, there are other techniques. You can sprinkle trace
+code throughout your application, perhaps activated by a command-line
+switch or some other mechanism (such as a special key sequence,
+an extra menu in your GUI application, or a special data packet
+across the socket connection). If you use tracing code, it is
+often helpful to include the thread ID in the trace message. See
+the following example:
+<BLOCKQUOTE>
+<TT>System.err.println( &quot;[&quot;+Thread.currentThread()+&quot;]Just
+got here&quot; );</TT>
+</BLOCKQUOTE>
+<P>
+This causes the current thread's <TT>toString()</TT>
+method to be called. The default <TT>toString()</TT>
+identifies the thread. When you view the tracing output, you can
+follow the order in which separate threads access various parts
+of your application. By providing meaningful names for your threads
+you can often quickly spot errors. Using thread groups (and giving
+the groups meaninful names) also often helps. The thread group's
+<TT>list()</TT> method can be used
+to dump a thread/thread group listing to the screen from wherever
+you need.
+<P>
+There is no easy guide for debugging programs in general, and
+especially for debugging multithreaded applications. It often
+requires detailed knowledge about the application and how it is
+structured. The best form of debugging is to avoid having to do
+it!
+<H2><A NAME="Performance"><FONT SIZE=5 COLOR=#FF0000>Performance</FONT></A>
+</H2>
+<P>
+Performance, as it relates to multithreaded applications, is a
+difficult subject-especially in a platform-neutral language and
+environment such as Java. The problem is that performance is tied
+to many factors: the specific machine you are using (CPU, memory,
+and so forth), the OS that is running, the specific Java implementation
+being used, and the application you are writing.
+<P>
+If you are running a Java implementation which can take advantage
+of a multiprocessor machine and you have such a machine, your
+multithreaded application will have an advantage over a similar
+single-threaded application. This assumes that the threads within
+your application can execute in parallel. If you don't have an
+multiprocessor box, or a Java VM that will use a multiprocessor
+box, you still have a good reason to use threads. Java is platform-neutral,
+and therefore your Java application may run on computers to which
+you don't have access. If that application is multithreaded it
+will be multiprocessor-ready.
+<P>
+Obviously, the presence of multiple processors will have a positive
+effect on your multithreaded application, but other factors must
+be considered. The performance of the same application could vary
+when run on various Java VMs, even on the same type of machine.
+This would fall on the Java VM implementer's shoulders. Some factors
+that may affect your application include the <I>context switch
+time</I>, which is the time it takes for the Java VM's thread
+manager to switch threads. Other areas include the various synchronization
+objects. The time it takes to obtain and release locks may vary
+over implementations.
+<H3>Thread Scheduling</H3>
+<P>
+The Java language and runtime define the presence of threads as
+well as a standard interface to their usage. Java also provides
+the mechanisms for controlling and synchronizing threads. However,
+because Java is platform-neutral (both hardware and operating
+system), it refrains from defining, or requiring, certain low-level
+policy information of threads. Java does not define the scheduling
+algorithm used to implement threads. The scheduling algorithm
+dictates which thread should be executed when and for how long.
+It also dictates how that thread relinquishes control to other
+threads. There is often much debate over the wisdom of this choice;
+however, it offers the most freedom to the implementers of Java,
+which may make it much easier for Java to be implemented everywhere.
+<P>
+There are some basic terms that you should be aware of to help
+you understand the nature of thread scheduling. When a thread
+can be suddenly interrupted so that another thread can begin work,
+it is said that thread has been <I>preempted</I>. The process
+of the system switching between two threads is called a <I>context
+switch</I>. On some systems, a thread scheduling policy will include
+<I>time slicing.</I> This means that when each thread is executing,
+it will only execute until it blocks to do some service, such
+as IO or waiting on a synchronization object, or until its <I>time
+slice</I> runs out. At this point, the system will preempt the
+thread in order to give another thread a chance to run. Other
+common terms describe the <I>state</I> of a thread. A thread can
+be <I>runnable,</I> which means it is ready to execute and is
+just waiting for the system to schedule it. A thread can be <I>blocked,</I>
+which means the thread is waiting for the completion of some service,
+after which it will again be runnable. Finally a thread can be
+<I>running,</I> which means it is the current thread being executed.
+There can be only one running thread per CPU in the system. You
+may also see terms such as <I>stopped</I>, <I>zombie</I>, or <I>sleeping</I>.
+For simplicity it suffices to think of threads being in one of
+the three states: blocked, runnable, or running (see Figure 6.3).
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-3.gif" ><B>Figure 6.3 : </B><I>Thread states.</I></A>
+<P>
+By not explicitly dictating scheduling policy, the implementation
+of Java has a certain amount of flexibility. The levels of priority
+that Java defines (currently 10 values in the range <TT>MIN_PRIORITY</TT>
+to <TT>MAX_PRIORITY</TT>) should be
+thought of only as a hint to the system. The scheduling algorithm
+deployed by the implementation may or may not take advantage of
+them. Currently, priorities are taken advantage of in the Sun
+Java implementation. The Java language does not dictate when or
+how a context switch takes place; nor does it require that threads
+be pre-empted. This freedom for implementers is a double-edged
+sword. On one side, it may increase the number of platforms on
+which Java will be available. On the other, it can make life difficult
+for the unsuspecting developer.
+<P>
+It is very easy to develop a program that is expecting certain
+behavior of the threads. When run on a different platform, one
+that the developer may not have access to, a radically different
+behavior is seen. As a real-world example, the current implementation
+of Java by Sun uses different thread scheduling rules when running
+on Win32 or on Solaris/SPARC.
+<H4>Sun JDK/Solaris</H4>
+<P>
+The Sun JDK implementation of Java on Solaris (SPARC) does not
+use the Solaris Thread Library; instead, for various reasons the
+Java group wrote its own thread package called Green Threads.
+Green Threads was implemented back when Java was called &quot;Oak&quot;
+and the project was called the &quot;green project,&quot; and
+probably before Solaris became stable. Green Threads does not
+use Solaris LWPs (LightWeight Process) and will not take advantage
+of a multiprocessor system. If you run Java on your 8-processor
+SparcCenter 1000, your multithreaded application will not use
+all the processors. Sun is reportedly converting their JDK to
+use Solaris Threads, which will help Java applications perform
+better on the Solaris platform.
+<P>
+Until then, you must live with Green Threads. Green Threads operates
+totally at the user level. The Solaris operating system will have
+no idea that multiple threads are running; it will look like a
+single-threaded process as far as Solaris is concerned (see Figure
+6.4). The following are the main features of the threads in Green
+Threads:
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-4.gif" ><B>Figure 6.4 : </B><I>Green Threads on Solaris.</I></A>
+<UL>
+<LI>They are very lightweight
+<LI>They have priority-based preemption
+<LI>They are non-timesliced
+<LI>They have priority inversion
+<LI><FONT COLOR=#000000>They have non-blocking system calls</FONT>
+</UL>
+<P>
+Because Green Threads does not have to make a system call to perform
+context switches, it can do so very rapidly. A Green Threads thread
+will run <I>forever</I> as long as it does not perform a blocking
+call (such as IO) and another higher-priority thread does not
+become runnable. Higher-priority threads preempt lower-priority
+threads. Green Threads will use <I>priority inversion</I> to boost
+a thread's priority temporality. This means that if it owns a
+monitor on which a higher-priority thread is blocked, this prevents
+a higher-priority thread from being starved by low-priority threads.
+The Green Threads package provides support to turn potentially
+blocking system calls into asynchronous calls to prevent one thread
+from blocking the entire process. Finally, the Green Threads package
+is designed to have a system-independent layer and a system-dependent
+layer, thus helping the porting effort to platforms that do not
+offer threads or dedicated hardware. In those cases, the Green
+Threads package can be used to provide the necessary thread support
+for Java.
+<P>
+The day will come when Java uses the Solaris Threads on the Solaris
+platform. Solaris Threads are the native threads under the Sun
+Solaris operating system. The main properties of its threads are
+the following:
+<UL>
+<LI>They are lightweight
+<LI>They use underlying LWPs (and thus are MP-capable)
+<LI>They have priority-based preemption
+<LI><FONT COLOR=#000000>They are non-timesliced</FONT>
+</UL>
+<P>
+Solaris Threads carry out most of the thread management responsibilities
+in user space, as opposed to system space. This makes thread context
+switching very light, because it does not require a kernel call.
+The Solaris Threads will use the underlying LWPs, which are controlled
+by the kernel (see Figure 6.5). LWP's are essentially equivalent
+to Win32 threads, that is, they are a kernel resource and are
+scheduled and preempted by the kernel. LWP's are scheduled to
+run on any of the available processors in an multiprocessor computer.
+Therefore Solaris Threads will take advantage of a multiprocessor
+system. 
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-5.gif" ><B>Figure 6.5 : </B><I>Solaris Threads</I></A><I>.</I>
+<H4>Sun JDK/Win32</H4>
+<P>
+The Sun JDK implementation of Java on the Win32 operating systems
+(Windows 95 and Windows NT) takes a different approach from the
+Solaris version. It uses the native Win32 threads of the underlying
+operation system (see Figure 6.6). Thus, whenever you create a
+Java thread, it translates directly to a Win32 thread. Win32 is
+relied on for the thread scheduling policy, as well as for all
+thread synchronization policies. Therefore, Win32 Java threads
+utilize the time-sliced and priority-based preemptive capabilities
+of Win32. The Win32 events, mutexes, and critical sections are
+used to perform the various kinds of synchronization. This has
+the benefit that Java behaves like other Win32 programs and the
+implementation appears to have been easier. However, threads under
+Win32 behave differently than Green Threads in Solaris; therefore,
+the developer has to be careful not to assume Win32 type threads.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-6.gif" ><B>Figure 6.6 : </B><I>Windows 95 threads.</I></A>
+<P>
+The Win32 scheduler schedules threads based on their <I>dynamic
+priority</I>. How it computes the dynamic priority of a thread
+is slightly complicated and the relevant Win32 documentation should
+be consulted. I will describe the basic policy here. Each Win32
+process can be in one of four priority classes: <TT>HIGH_PRIORITY</TT>,
+<TT>NORMAL_PRIORITY_CLASS</TT>, <TT>IDLE_PRIORITY_CLASS</TT>,
+and <TT>REALTIME_PRIORITY_CLASS</TT>.
+Each thread within the process can be in several <I>thread priority
+levels</I>. The priority class of the process and the thread priority
+level determines base priority for each thread. During execution,
+that base priority can be adjusted to come up with the threads
+dynamic priority. The scheduler will maintain a queue for each
+priority level. Threads within a level will run in round-robin
+fashion, and the scheduler will not run any threads in a lower
+level until the higher level has no runnable threads (see Figure
+6.7). Therefore, two <I>compute-bound</I> threads (those that
+do no, or little, IO) within the same level will not result in
+one being starved; however, those in a lower level can be starved.
+The advantage of Win32 is on a multiprocessor NT machine; here,
+Java threads truly can run in parallel. Java will execute within
+the <TT>NORMAL_PRIORITY</TT> (the
+Win32 default). Each thread will also begin in the normal priority
+level (again the Win32 default), however as the Java thread priority
+is adjusted so is the Win32 thread priority level (this is dicussed
+further below).
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-7.gif" ><B>Figure 6.7 : </B><I>Windows 95 scheduling.</I></A>
+<H3>Yielding Control</H3>
+<P>
+The differing scheduling policies used by the Sun JDK Java implementation
+on Solaris and Win32 is cause for some concern for developers.
+Typically, if your threaded application works well on Solaris,
+it will work well on Win32. The opposite is not true. A Thread
+in Win32 will be preempted when its time-slice is up; in Green
+Threads, a thread will be preempted only if a higher-priority
+thread becomes available. Therefore, on Solaris, a thread can
+easily starve other threads from getting a chance to run, whereas
+the same program will run well in Win32.
+<P>
+This situation can be avoided. If your threads perform IO, or
+other system calls, or they often use synchronization techniques
+(such as <TT>wait()</TT> and <TT>notify()</TT>
+or use of <TT>synchronized</TT> methods
+or blocks) they will provide many chances for other threads to
+obtain processor time. However, in some situations, you may have
+threads doing nonblocking processing (such as large math calculations).
+In these situations, you must be more careful. The use of the
+<TT>yield()</TT> method can help.
+This method causes the calling thread to relinquish control of
+the processor. The thread manager will simply check for other
+runnable threads of equal priority and, if one it is executed,
+the current thread will be placed back on the ready queue. If
+no runnable thread of equal priority is found, the current thread
+continues. Therefore, you can't yield to lower-priority threads.
+The use of <TT>yield()</TT> is often
+unavoidable in the Solaris Green Threads environment and is a
+small cost in Win32. In Win32, it translates into a <TT>Sleep(0)</TT>
+Win32 API call.
+<P>
+If you know your mix of threads in a program will be a few compute-bound
+threads and more IO-bound threads, you may be able to place your
+compute-bound threads at a lower priority. They will obtain processor
+time during the times the IO-bound threads are blocked in IO calls.
+Once the IO-bound threads become runnable (the IO completes),
+they will preempt the compute-bound threads.<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Tip</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Be sure any compute-bound threads that do not utilize <TT>sleep()</TT> or <TT>yield()</TT> do not have a higher priority than your interactive threads; otherwise, you risk starving your interactive threads until the compute-bound threads are complete.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+For most applications, you probably should avoid explicitly setting
+priorities. As a simple rule, if your thread does not do any blocking-type
+operations, move its priority down a bit; if you need a user interface
+thread to respond quickly you may bump its priority up a bit.
+In general, try to avoid setting priorities. If you can, place
+a <TT>yield()</TT> call in your code;
+this may help the threads on a non-preemptive system behave better-yield
+will almost never hurt you on any platform. You should not attempt
+to use the setting of priorities or the presence of <TT>sleep()</TT>
+calls as a mechanism for relying on threads to run. This gets
+complicated and often results in dependencies on the systems on
+which you are implementing. Your guiding principal should be <I>keep
+it simple.<BR>
+</I><p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Your application should never rely on <TT>yield()</TT> to perform correctly. The <TT>yield()</TT> method should only be present to help thread behavior and perhaps performance.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>Limitations</H3>
+<P>
+Threads have many good features, and developers should take advantage
+of them. However, don't get carried away! A thread is a resource
+that should be used carefully. Not only can the use of threads
+increase the resource requirement of your application, they can
+also decrease its performance. Another factor to consider is the
+type of application you are developing. An application that can
+be split among very independent threads is much easier to create
+than one where the threads require much interaction between them.
+The more threads there are that need to cooperate with one another,
+the more chances there are for subtle errors and performance problems.
+It may very well turn out that a multithreaded application will
+be spending much of its time synchronizing rather than doing work.
+In that case, it makes better sense to decrease the threads or
+do the entire application in a single thread. Other applications
+are naturally divided where each part can run in parallel. On
+today's SMP hardware, parallel execution is a distinct possibility.
+<P>
+When thinking about the cost of threads, here are some considerations
+to keep in mind:
+<UL>
+<LI>The memory requirements of a thread include the memory for
+its <TT>Thread</TT> object and perhaps
+a <TT>Runnable</TT> object
+<LI>On a low level, a thread has memory for its execution stack
+associated with it
+<LI>A thread may require kernel resources from the underlying
+operating system (such as Win32)
+<LI>The more threads, the more the system has to manage
+<LI><FONT COLOR=#000000>Your application can be paralleled only
+by the number of available processors (on conventional machines,
+this is still a relatively small number)</FONT>
+</UL>
+<H2><A NAME="InsideThreads"><FONT SIZE=5 COLOR=#FF0000>Inside
+Threads</FONT></A></H2>
+<P>
+In this section, you look at some of the details of Sun's current
+JDK implementation. If you are not interested in the nitty-gritty
+details of how threads are implemented, you can skip this section.
+However, understanding how things work often leads to a better
+understanding of how to use them. Sun provides the source code
+to the JDK implementation for noncommercial use at no cost, although
+you need to complete a licensing agreement. This is a painless
+task-visit its Web site for more information:
+<BLOCKQUOTE>
+<TT><A HREF="http://www.javasoft.com/">http://www.javasoft.com</A> </TT>
+</BLOCKQUOTE>
+<P>
+Because the source to the JDK implementation is the property of
+Sun, it cannot be provided here, and this discussion will be mostly
+descriptive of what it does.
+<H3>Layers</H3>
+<P>
+Threading in the Java VM is implemented in a set of layers with
+an abstract API at the top and a system-dependent interface at
+the bottom (see Figure 6.8). Most of the layers are very lightweight.
+This scheme helps make the Java VM both portable to multiple platforms
+and flexible in the choice of a thread package: the native OS,
+Green Threads, or some other package. Most thread implementations
+have enough similarities to make the abstraction layer easy and
+lightweight. For example, the Microsoft C  <TT>_beginethreadex()</TT>
+call and Solaris <TT>thr_create()</TT>
+call are different names and slightly different parameters, but
+they are very close in behavior, and thus it is easy to come up
+with an abstract &quot;create a thread&quot; routine. 
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-8.gif" ><B>Figure 6.8 : </B><I>Java Thread Architecture.</I></A>
+<H3>Green Threads</H3>
+<P>
+It is clear that the Green Threads package was written to be portable
+across a variety of systems, not just flavors of UNIX (see Figure
+6.9). The package is also more complete than Java uses. The Green
+Threads package provides the low-level data structures and functions
+to describe threads, thread contexts, thread control structures
+(runnable queues, and so forth), and thread synchronization objects,
+such as condition variables and mutexes. 
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f6-9.gif" ><B>Figure 6.9 : </B><I>Green Threads Architecture.</I></A>
+<P>
+Because Green Threads manages its own thread context switching,
+it must prevent a single thread from performing operations that
+will prevent the other threads from executing, such as IO or other
+system calls. Green Threads, as implemented on Solaris, provide
+replacements for many system calls. Rather than calling the Solaris
+<TT>write()</TT> function code, running
+in a Green Threads thread calls a special wrapper for the system
+<TT>write()</TT>. This wrapper turns
+a potentially blocking system call into an asynchronous system
+call. Green Threads then blocks the thread. To the thread it simply
+calls <TT>write()</TT> and blocks
+waiting for the completion; however, what really happens is Green
+Threads arranges for the OS to signal it when the IO is complete.
+Until that signal comes in, Green Threads is free to schedule
+another thread for service. When the signal comes in, indicating
+an outstanding IO needs attention, Green Threads will determine
+which IO needs completion and handle the IO. The waiting thread
+then becomes runnable.<BR>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Under Green Threads (that is, Java on Solaris), if a native method performs a blocking operation, the entire Java application will block. Writers of native methods under a Green Threads implementation should arrange for asynchronous IO, such as that 
+provided by the Green Threads package.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Recall that the Green Threads package totally manages its own
+threads. On a system such as Solaris, it essentially utilizes
+only one LWP at a time; thus, it won't take advantage of multiple
+processes. Recall also that Green Threads will perform thread
+context switches when that thread blocks for some reason, such
+as IO, waiting, sleeping, or a yield. A context switch will also
+be performed when a higher-priority thread becomes runnable.
+<P>
+Green Threads accomplishes this management task by utilizing two
+features-signals and a super-high priority thread. By using signals,
+the Green Threads manager can be notified of system events, such
+as IO completions and timer ticks. It uses this signal handling
+time to gain control and manage the other threads. The <TT>clock
+handler</TT> thread is a special thread installed by the
+Green Threads package. It runs at a priority of 11, which places
+it above the maximum priority Java allows (<TT>Thread.MAX_PRIORITY</TT>).
+When in a debugger, you can see this thread running in the system
+thread-group. This thread is, other than for its priority, a normal
+green thread. It spends most of its time blocked and is signaled
+by the expired alarm when it needs to perform some duty. The high
+priority enables it to gain control by preempting any current
+thread. The duty the <TT>clock handler</TT>
+performs is to notify other threads of expired timeouts, such
+as during a <TT>sleep()</TT> or a
+timed wait. Thus, the other threads can then be placed back on
+the runnable queue and can preempt a running lower-priority thread.
+<H3>Win32</H3>
+<P>
+A Sun JDK Java implementation on Win32 platforms makes use of
+the native threads provided by the operating system. There is
+much information on this in the Microsoft development kit help
+files. The threads in both Windows 95 and Windows NT are kernel-level
+resources, and a Java Thread directly maps onto a Win32 thread.
+Internally, the mapping is straightforward. The JDK uses the Microsoft
+C Runtime <TT>_beginthreadx()</TT>
+function to launch the thread. The mapping of Java priorities
+to Win32 priorities is shown in Table 6.1.<BR>
+<P>
+<CENTER><B>Table 6.1. Java-to-Win32 priority mapping.</B></CENTER>
+<p><p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=60%>
+<TR><TD WIDTH=30%><CENTER><B>Java Priorities </B></TD><TD WIDTH=70%><B>Win32 Priorities</B>
+</TD></TR>
+<TR><TD WIDTH=30%><CENTER>1,2</TD><TD WIDTH=70%><TT>THREAD_PRIORITY_LOWEST</TT>
+</TD></TR>
+<TR><TD WIDTH=30%><CENTER>3</TD><TD WIDTH=70%><TT>THREAD_PRIORITY_BELOW_NORMAL</TT>
+</TD></TR>
+<TR><TD WIDTH=30%><CENTER>4,5,6</TD><TD WIDTH=70%><TT>THREAD_PRIORITY_NORMAL</TT>
+</TD></TR>
+<TR><TD WIDTH=30%><CENTER>7</TD><TD WIDTH=70%><TT>THREAD_PRIORITY_ABOVE_NORMAL</TT>
+</TD></TR>
+<TR><TD WIDTH=30%><CENTER>8,9</TD><TD WIDTH=70%><TT>THREAD_PRIORITY_HIGHEST</TT>
+</TD></TR>
+<TR><TD WIDTH=30%><CENTER>10</TD><TD WIDTH=70%><TT>THREAD_PRIORITY_TIME_CRITICAL</TT>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The Win32 priorities are set by a call to <TT>SetThreadPriority()</TT>.
+This changes the <I>thread priority level</I>. Remember, the Java
+process runs at the Win32 <TT>NORMAL_PRIORITY
+</TT>CLASS-Java will not change the priority class (you
+would need to write a native method to do so). By setting the
+Java priority you can effectively change the Win32 threads base
+priority level, and thus influence the Win32 dynamic priority.
+In general, the Java priority of <TT>MAX_THREAD</TT>
+(i.e. 10 or in Win32 <TT>THREAD_PRIORITY_TIME_CRITICAL</TT>)
+level should be avoided, because you risk placing your thread
+at a higher priority than several kernel-level threads. The mapping
+Java provides allows for an application to greatly control its
+threads priorities, much like any Win32 application.
+<P>
+Java monitors make use of Win32 <TT>Mutex</TT>
+objects. The Java <TT>wait()</TT>,
+<TT>notify()</TT>, and <TT>notifyAll()</TT>
+method calls are implemented with <I>condition variables,</I>
+which Win32 does not have, but which are <I>simulated</I> via
+a combination of Win32 <TT>Event</TT>
+and <TT>Mutex</TT> objects. 
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+As you develop applications in Java you will often discover situations
+where the use of threads can be beneficial. With a proper understanding
+of how threads work and a realistic expectation of what threads
+have to offer, a developer can effectively use threads. This chapter
+introduces you to the basics of Java threads; you should now be
+ready to use threads effectively and to tackle the following two
+chapters.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch5.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch7.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

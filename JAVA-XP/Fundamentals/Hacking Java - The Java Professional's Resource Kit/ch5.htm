@@ -1,0 +1,1617 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 5 -- Animating Images</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;5</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Animating Images</FONT></H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#Animation">
+Animation</A>
+<LI><A HREF="#AnAnimationDriver">
+An Animation Driver</A>
+<LI><A HREF="#AnimatingImageSequences">
+Animating Image Sequences</A>
+<LI><A HREF="#AnimatingPortionsofanImage">
+Animating Portions of an Image</A>
+<LI><A HREF="#AnimatingwithaFilter">
+Animating with a Filter</A>
+<LI><A HREF="#CyclingtheColorPalette">
+Cycling the Color Palette</A>
+<LI><A HREF="#AnimatingGraphics">
+Animating Graphics</A>
+<UL>
+<LI><A HREF="#RedrawingtheEntireScreen">
+Redrawing the Entire Screen</A>
+<LI><A HREF="#DoingAnimationwithXOR">
+Doing Animation with XOR</A>
+</UL>
+<LI><A HREF="#EliminatingFlicker">
+Eliminating Flicker</A>
+<UL>
+<LI><A HREF="#DoubleBuffering">
+Double-Buffering</A>
+</UL>
+</UL>
+<HR>
+<H2><A NAME="Animation"><FONT SIZE=5 COLOR=#FF0000>
+Animation</FONT></A></H2>
+<P>
+Animation involves changing a picture over and over to simulate
+movement of some sort. There are several different types of animation
+you can perform in a Java applet. You can display a sequence of
+images, or you can display a single image while changing a portion
+of it. You can change an image by running it through a filter
+or by changing the colors in the image. You can also perform animation
+with the basic graphics classes.
+<P>
+Animation is a powerful technique for applets. Having a portion
+of your display that moves can make your application or your Web
+page much livelier. There are far more uses for animation that
+just sprucing up a Web page, however.
+<P>
+Animation is frequently used in video games. In fact, it's probably
+one of the most common factors in computer games. Modern adventure
+games often use sequences of real-life images to give the game
+a modern feel. Arcade games frequently employ graphical animation,
+although some have begun to integrate images into the games as
+well.
+<P>
+Beyond gaming, animation is an excellent tool for computer-assisted
+learning. Rather than describing a technique with plain old text,
+you can demonstrate it through animation. This type of animation
+is often done with images but not necessarily. You may be demonstrating
+a technique that requires a graphical representation that is computed
+while the program is running.
+<H2><A NAME="AnAnimationDriver"><FONT SIZE=5 COLOR=#FF0000>
+An Animation Driver</FONT></A></H2>
+<P>
+To perform animation, you have to create a thread that repeatedly
+changes the animation sequence and repaints the picture. Because
+the different animation techniques all use this same method, you
+can use the same mechanism to trigger the next animation sequence.
+The idea here is that you create a timer class that calls a method
+at specific intervals. Ideally, you would like the timer class
+to be able to invoke different methods in your applet, allowing
+you to run multiple timers in a single applet. You can do this
+in Java, but it takes a little extra work.
+<P>
+The first thing you need to do in setting up this timer class
+is to define the method the timer will call each time. Listing
+5.1 shows the <TT>TimerCallback</TT>
+interface that defines this method.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.1&nbsp;&nbsp;Source Code for TimerCallback.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This interface defines a callback for the Timer class
+
+public interface TimerCallback
+{
+     public void tick();
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Once you have this interface defined, you can create a <TT>Timer</TT>
+class that repeatedly calls the <TT>tick</TT>
+method at some fixed interval. You should keep track of the amount
+of time that elapses during the call to the <TT>tick</TT>
+method and only sleep for the amount of time remaining before
+the next tick. This makes your animation much smoother and helps
+minimize the effects of garbage collection. Obviously, if the
+<TT>tick</TT> method takes longer
+than the interval, your animation will be slower than you desire.
+<P>
+Listing 5.2 shows a reusable timer class that repeatedly calls
+the <TT>tick</TT> method in a <TT>TimerCallback</TT>
+interface at a certain interval. You can set the interval when
+you create the <TT>Timer</TT> object,
+and you may change it at any time.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.2&nbsp;&nbsp;Source Code for Timer.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+/**
+ * This class implements an interval timer. It calls
+ * the tick method in the callback interface after
+ * a fixed number of milliseconds (indicated by the 
+ * interval variable). It measures the amount of time spent
+ * in the tick method and adjusts for it.
+ * To start up a timer with this class, create it with
+ * a callback and the number of milliseconds in the interval
+ * and then call the start method:
+ * &lt;PRE&gt;
+ * 
+ *    Timer timer = new Timer(this, 2000);
+	// 2 second interval
+ *    timer.start();
+ *
+ * &lt;/PRE&gt;
+ *
+ * @author Mark Wutka
+ */
+
+public class Timer extends Object implements Runnable
+{
+
+     protected Thread timerThread;
+
+/** The number of milliseconds in the interval*/
+     protected long interval;
+
+/** The callback interface containing the tick method */
+     protected TimerCallback callback;
+
+     public Timer()
+     {
+     }
+
+     public Timer(TimerCallback callback)
+     {
+          this.callback = callback;
+     }
+
+     public Timer(long interval)
+     {
+          this.interval = interval;
+     }
+
+     public Timer(TimerCallback callback, long interval)
+     {
+          this.callback = callback;
+          this.interval = interval;
+     }
+
+/** returns the number of milliseconds in the interval */
+     public long getInterval()
+     {
+          return interval;
+     }
+
+/** sets the number of milliseconds in the interval
+ * @param newInterval the new number of milliseconds
+ */
+     public void setInterval(long newInterval)
+     {
+          interval = newInterval;
+     }
+
+/** returns the callback interface */
+     public TimerCallback getCallback()
+     {
+          return callback;
+     }
+
+/** changes the callback interface
+ * @param callback the new callback
+ */
+     public void setCallback(TimerCallback callback)
+     {
+          this.callback = callback;
+     }
+
+/** starts the timer */
+     public void start()
+     {
+          timerThread = new Thread(this);
+          timerThread.start();
+     }
+
+/** stops the timer */
+     public void stop()
+     {
+          timerThread.stop();
+          timerThread = null;
+     }
+
+     public void run()
+     {
+          while (true)
+          {
+// Check the current time
+               long startTime = System.currentTimeMillis();
+
+// If there is a callback, call it
+               if (callback != null)
+               {
+                    callback.tick();
+               }
+
+// Check the time again
+               long endTime = System.currentTimeMillis();
+
+// The amount of time to sleep is the interval minus the time spent
+// in the tick routine
+               long sleepTime = interval - (endTime - startTime);
+
+// If you've passed the next interval, hurry up and call the next tick
+               if (sleepTime &lt;= 0) continue;
+
+               try {
+                    Thread.sleep(sleepTime);
+               } catch (Exception insomnia) {
+                    // might as well ignore this exception
+               }
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now, you can only have one tick method, so how can you support
+multiple timers in a single application? The answer lies in a
+design pattern called the <TT>Command</TT>
+pattern. An object that implements the <TT>tick</TT>
+method is considered a command object. If you want to have multiple
+timers that call different methods in your class, you create a
+number of intermediate objects. Suppose you have the following
+object:
+<BLOCKQUOTE>
+<PRE>
+public class DualTimers extends Object
+{
+     public DualTimers()
+     {
+     }
+
+     public void timer1Tick()
+     {
+          System.out.println(&quot;Tick!&quot;);
+     }
+
+     public void timer2Tick()
+     {
+          System.out.println(&quot;Tock!&quot;);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+To set up timers to call each of these methods, create small intermediate
+classes to invoke each of these methods:
+<BLOCKQUOTE>
+<PRE>
+public class Timer1Callback extends Object implements TimerCallback
+{
+     protected DualTimers whichTimer;
+
+     public Timer1Callback(DualTimers timer)
+     {
+          whichTimer = timer;
+     }
+
+     public void tick()
+     {
+          whichTimer.timer1Tick();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Notice that this <TT>Timer1Callback</TT>
+class can be passed to a <TT>Timer</TT>
+object, and when its <TT>tick</TT>
+method is called, it will call the <TT>timer1Tick</TT>
+method in the <TT>DualTimer</TT> class.
+Similarly, you can create a <TT>Timer2Callback</TT>
+object:
+<BLOCKQUOTE>
+<PRE>
+public class Timer2Callback extends Object implements TimerCallback
+{
+     protected DualTimers whichTimer;
+
+     public Timer2Callback(DualTimers timer)
+     {
+          whichTimer = timer;
+     }
+
+     public void tick()
+     {
+          whichTimer.timer2Tick();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Figure 5.1 shows the relationship between a <TT>Timer</TT>
+object and a <TT>TimerCallback</TT>
+object.
+<P>
+<A HREF="f5-1.gif"><B>Figure 5.1 : </B><I>In the simple configuration, a </I><TT>Timer</TT><I>
+object invokes the tick method in a </I><TT>TimerCallback
+</TT><I>object</I>.</A>
+<P>
+Figure 5.2 shows how the relationship between these two objects
+changes when you use intermediate objects.
+<P>
+<A HREF="f5-2.gif"><B>Figure 5.2 : </B><I>Intermediate timer collbacks allow a single
+object to have multiple timer callbacks</I>.</A>
+<P>
+Now that you have these command objects, you can create two timers
+that call methods in the <TT>DualTimer</TT>
+object:
+<BLOCKQUOTE>
+<PRE>
+public class TestDualTimers extends Object
+{
+     public static void main(String[] args)
+     {
+          DualTimers dual = new DualTimers();
+          Timer1Callback tc1 = new Timer1Callback(dual);
+          Timer2Callback tc2 = new Timer2Callback(dual);
+
+          Timer timer1 = new Timer(tc1, 1000);
+          Timer timer2 = new Timer(tc2, 2000);
+
+          timer1.start();
+          timer2.start();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+In the previous example, you create only a single instance of
+the <TT>DualTimers</TT> object but
+two different timers that eventually trigger methods in <TT>DualTimers</TT>.
+If you only need to invoke a single method in an object, you don't
+need to create this extra layer of objects. Figure 5.3 shows this
+test program in operation.
+<P>
+<A HREF="f5-3.gif"><B>Figure 5.3 : </B><I>Timer 1, triggered every second, prints
+<TT>tick</TT>, while timer 2, triggered every two seconds, prints <TT>tock</TT></I>.</A>
+<H2><A NAME="AnimatingImageSequences"><FONT SIZE=5 COLOR=#FF0000>
+Animating Image Sequences</FONT></A></H2>
+<P>
+Performing animation by rapidly changing a series of images is
+one of the oldest forms of animation. It is the same method that
+movies use; however, your applet will only have a fraction of
+the number of frames that a movie has. The <TT>Timer</TT>
+class that was just discussed is a great help in creating image
+sequence animation. You simply need to load the images you want
+and then set up a timer. Every time the timer ticks, decide which
+image you want to display next and call <TT>repaint</TT>.
+<P>
+When you are first loading the images for an animation sequence,
+you should print some text in your applet or even some of the
+images from the animation-just to keep your viewers from getting
+impatient. You can use the <TT>ImageObserver</TT>
+interface to track which images have been loaded.
+<P>
+Listing 5.3 shows an applet that cycles a set of six images using
+the <TT>Timer</TT> class to trigger
+the next change. It displays a text message when it first comes
+up, and when the first image has been loaded, it displays it.
+Then, when the rest of the images have been loaded, it starts
+the animation.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.3&nbsp;&nbsp;Source Code for CycleAnimation.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.awt.image.*;
+
+// This applet demonstrates several useful techniques in dealing
+// with animating images.
+// 1. It uses the Timer class to trigger the next animation frame
+// 2. It displays a &quot;teaser&quot; while the images are being loaded
+// 3. It does not use the MediaTracker to wait for images, but
+//    knows when all the images are ready.
+
+public class CycleAnimation extends Applet implements TimerCallback,
+     ImageObserver
+{
+     protected Image[] images;
+     int whichImage;
+
+// This applet cycles from 0-5 and then cycles back down from 5-0
+// You won't need imageDirection if you only cycle one way.
+     int imageDirection;
+
+// have we started the animation or not?
+     boolean animationStarted;
+
+     Timer timer;
+
+     public CycleAnimation()
+     {
+          timer = null;
+          animationStarted = false;
+     }
+
+     public void init()
+     {
+          images = new Image[6];
+          for (int i=0; i &lt; 6; i++) {
+// Get images named mark1.gif - mark6.gif
+               images[i] = getImage(getDocumentBase(),
+                    &quot;mark&quot;+(i+1)+&quot;.gif&quot;);
+
+// Start downloading the images, but don't wait for them
+               prepareImage(images[i], this);
+          }
+// Animation will start at image 0, and go up to 5
+          whichImage = 0;
+          imageDirection = 1;
+     }
+
+// This update method prevents a minor flickering that occurs because
+// the default update method clears the screen before drawing
+     public void update(Graphics g)
+     {
+          paint(g);
+     }
+
+     public void paint(Graphics g)
+     {
+
+// If we haven't started the animation, display a &quot;teaser&quot;
+          if (!animationStarted)
+          {
+// If image 0 has been loaded go ahead and display it
+               int flags = checkImage(images[0], this);
+               if ((flags &amp; ImageObserver.ALLBITS) != 0) {
+                    g.drawImage(images[0], 10, 10, this);
+               } else {
+
+// If we haven't even gotten image 0, just display text
+                    g.drawString(&quot;Watch this space&quot;, 10, 30);
+                    g.drawString(&quot;For neat animation&quot;, 10, 50);
+               }
+          } else {
+
+// If we're in the animation, draw the current image in the sequence
+               g.drawImage(images[whichImage], 10, 10, this);
+          }
+     }
+
+// imageUpdate is called when there is an update to any of the images
+// that are being loaded.
+
+     public boolean imageUpdate(Image img, int flags, int x, int y,
+          int width, int height)
+     {
+
+// If this update isn't telling us that an image has been loaded
+// completely, we don't want to hear about it
+          if ((flags &amp; ImageObserver.ALLBITS) == 0) {
+               return true;
+          }
+
+// If we've gotten the first image, go ahead and repaint
+          if (img == images[0]) {
+               repaint();
+          }
+
+// Check to see if all the images have been loaded (ALLBITS set in
+// all of them)
+          for (int i=0; i &lt; images.length; i++) {
+               int iflags = checkImage(images[i], this);
+
+// Uh oh, we found one that isn't finished
+               if ((iflags &amp; ImageObserver.ALLBITS) == 0) {
+                    return true;
+               }
+          }
+
+// all right, we're ready to roll!
+
+          startAnimation();
+          return true;
+     }
+
+     public void tick()
+     {
+// Change the image - if we are counting from 0 to 5, which direction
+// will be 1, if we are going from 5 to 0, whichDirection will be -1
+
+          whichImage += imageDirection;
+
+// If we've gone past the first image, change direction
+          if (whichImage &lt; 0) {
+               whichImage = 0;
+               imageDirection = 1;
+
+// If we've gone past the last image, change direction
+          } else if (whichImage &gt;= images.length) {
+               whichImage = images.length-1;
+               imageDirection = -1;
+          }
+          repaint();
+     }
+
+     protected void startAnimation()
+     {
+          animationStarted = true;
+          timer = new Timer(this, 500);
+          timer.start();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figures 5.4 and 5.5 show consecutive frames of this animation.
+<P>
+<A HREF="f5-4.gif"><B>Figure 5.4 : </B><I>You can create an animation sequence by cycling
+through different images</I>.</A>
+<P>
+<A HREF="f5-5.gif"><B>Figure 5.5 : </B><I>Animation sequences often have only minor
+changes between frames</I>.</A>
+<H2><A NAME="AnimatingPortionsofanImage"><FONT SIZE=5 COLOR=#FF0000>
+Animating Portions of an Image</FONT></A></H2>
+<P>
+You will often find that the area that changes from one animation
+frame to the next is very small compared to the size of the entire
+area. This is not as true for images taken from a real video sequence
+because real-life motions are seldom restricted to one little
+area. If you can define a small rectangle that encloses the changed
+area from one image to the next, you can simply download one full
+image and then the different versions of the smaller rectangle.
+This could mean a huge difference in the time it takes to download
+your images. You aren't limited to changing just one portion of
+an image, of course. If there are multiple areas that change,
+you can download different rectangles for the different changed
+areas. The main idea here is that you work with one big image
+and a small set of changed areas.
+<P>
+For example, you might be doing a Monty Python-style animation
+on a picture of some celebrity in which his or her mouth is moving
+in an obviously fake manner. You only need to load the picture
+once and then load various small images of the mouth region.
+<P>
+Listing 5.4 shows an applet very similar to the full-frame animation
+applet, except that it loads a single base image and a set of
+smaller frames.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.4&nbsp;&nbsp;Source Code for AnimatePortion.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.awt.image.*;
+
+// This applet performs animation by loading in a whole image
+// and then successive versions of a much smaller potion of the
+// image.
+
+public class AnimatePortion extends Applet implements TimerCallback,
+     ImageObserver
+{
+     protected Image baseImage;
+     protected Image[] images;
+     int whichImage;
+
+// This applet cycles from 0-5 and then cycles back down from 5-0
+// You won't need imageDirection if you only cycle one way.
+     int imageDirection;
+
+// Have we started the animation or not?
+     boolean animationStarted;
+
+     Timer timer;
+
+     public AnimatePortion()
+     {
+          timer = null;
+          animationStarted = false;
+     }
+
+     public void init()
+     {
+          images = new Image[6];
+
+// Load the base (whole) image
+          baseImage = getImage(getDocumentBase(), &quot;mark1.gif&quot;);
+
+          for (int i=0; i &lt; 6; i++) {
+// Get partial images named animprt1.gif - animprt6.gif
+               images[i] = getImage(getDocumentBase(),
+                    &quot;animprt&quot;+(i+1)+&quot;.gif&quot;);
+
+// Start downloading the images, but don't wait for them
+               prepareImage(images[i], this);
+          }
+// Animation will start at image 0, and go up to 5
+          whichImage = 0;
+          imageDirection = 1;
+     }
+
+// This update method prevents a minor flickering that occurs because
+// the default update method clears the screen before drawing
+     public void update(Graphics g)
+     {
+          paint(g);
+     }
+
+     public void paint(Graphics g)
+     {
+
+// If we haven't started the animation, display a &quot;teaser&quot;
+          if (!animationStarted)
+          {
+// If base image has been loaded go ahead and display it
+               int flags = checkImage(baseImage, this);
+               if ((flags &amp; ImageObserver.ALLBITS) != 0) {
+                    g.drawImage(baseImage, 10, 10, this);
+               } else {
+
+// If we haven't even gotten the base image, just display text
+                    g.drawString(&quot;Watch this space&quot;, 10, 30);
+                    g.drawString(&quot;For neat animation&quot;, 10, 50);
+               }
+          } else {
+
+// If we're in the animation, draw the base image and the current
+// smaller animated portion.
+               g.drawImage(baseImage, 10, 10, this);
+               g.drawImage(images[whichImage], 70, 70, this);
+          }
+     }
+
+// imageUpdate is called when there is an update to any of the images
+// that are being loaded.
+
+     public boolean imageUpdate(Image img, int flags, int x, int y,
+          int width, int height)
+     {
+
+// If this update isn't telling us that an image has been loaded
+// completely, we don't want to hear about it
+          if ((flags &amp; ImageObserver.ALLBITS) == 0) {
+               return true;
+          }
+
+// If we've gotten the base image, go ahead and repaint
+          if (img == baseImage) {
+               repaint();
+               return true;
+          }
+
+// Check to see if all the images have been loaded (ALLBITS set in
+// all of them)
+          for (int i=0; i &lt; images.length; i++) {
+               int iflags = checkImage(images[i], this);
+
+// Uh oh, we found one that isn't finished
+               if ((iflags &amp; ImageObserver.ALLBITS) == 0) {
+                    return true;
+               }
+          }
+
+// all right, we're ready to roll!
+
+          startAnimation();
+          return true;
+     }
+
+     public void tick()
+     {
+// Change the image - if we are counting from 0 to 5, which direction
+// will be 1, if we are going from 5 to 0, whichDirection will be -1
+
+          whichImage += imageDirection;
+
+// If we've gone past the first image, change direction
+          if (whichImage &lt; 0) {
+               whichImage = 0;
+               imageDirection = 1;
+
+// If we've gone past the last image, change direction
+          } else if (whichImage &gt;= images.length) {
+               whichImage = images.length-1;
+               imageDirection = -1;
+          }
+          repaint();
+     }
+
+     protected void startAnimation()
+     {
+          animationStarted = true;
+          timer = new Timer(this, 500);
+          timer.start();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figures 5.6 and 5.7 show the portions of the overall image that
+actually change. The overall animation is identical to the one
+in Figures 5.4 and 5.5.
+<P>
+<A HREF="f5-6.gif"><B>Figure 5.6 : </B><I>It is often better to animate images by
+animating only the section that changes</I>.</A>
+<P>
+<A HREF="f5-7.gif"><B>Figure 5.7 : </B><I>Only the changed sections are redrawn when
+painting the next frame</I>.</A>
+<H2><A NAME="AnimatingwithaFilter"><FONT SIZE=5 COLOR=#FF0000>
+Animating with a Filter</FONT></A></H2>
+<P>
+Filters make wonderful devices for animation. Instead of downloading
+a sequence of images, you download a single image and use a filter
+to change the image from one frame to the next. Once you create
+the filter, you can either generate a complete set of animation
+frames up-front, or you can generate new frames on-the-fly as
+the applet is running. The choice between pre-generating the frames
+and generating them on-the-fly is a classic speed versus size
+tradeoff. The pregenerated frames require a lot of memory, but
+you can do faster animation because you don't take the time to
+generate the frames each time. The on-the-fly method requires
+only enough memory for the original frame and the current generated
+frame but runs much slower because it takes time to generate an
+image. If your filter is quick, you can get away with the on-the-fly
+method.
+<P>
+Filter animation requires a few interesting tricks. First, when
+you create new images over and over, you consume memory in the
+windowing system. This memory isn't always released when you might
+expect. You can't always rely on the garbage collection system
+to clean it up as fast as you need it to. Normally, when you create
+a filtered image, you use a statement such as the following:
+<BLOCKQUOTE>
+<PRE>
+image = createImage(new FilteredImageSource(
+originalImage.getSource(), imageFilter));
+</PRE>
+</BLOCKQUOTE>
+<P>
+If you do this statement over and over in an animation loop, you
+may consume too many system resources. Rather than creating a
+new image, you should reinitialize the image. In other words,
+put the image back to a state where it hasn't produced any pixels.
+This causes it to either reuse its current system resources or
+free up the resources it has allocated already. You reinitialize
+an image using the <TT>flush</TT>
+method:
+<BLOCKQUOTE>
+<PRE>
+image.flush()
+</PRE>
+</BLOCKQUOTE>
+<P>
+Another thing to consider when filtering images is that even though
+the original image may be completely loaded, you also need to
+make sure that the filtered image has been generated completely
+before drawing it. This is not as big a deal when displaying an
+image once, but when you get into a loop and start flushing out
+pixels over and over, you can really slow things down trying to
+display a filtered image before it is ready. This is one of the
+places in which the <TT>MediaTracker</TT>
+class comes in handy. After you flush out an image, you should
+set up a <TT>MediaTracker</TT> class
+to wait for the image to be rebuilt. Here is an example that rebuilds
+an image after the call to <TT>flush</TT>:
+<BLOCKQUOTE>
+<PRE>
+image.flush();
+
+MediaTracker tracker = new MediaTracker(this);
+tracker.addImage(image, 0);
+try {
+     if (!tracker.waitForID(0)) {     // If there's an error, don't repaint
+          return;
+     }
+} catch (Exception waitingError) {
+     return;          // Again, if there's an error, don't repaint
+}
+repaint();     // Draw the newly-loaded image
+</PRE>
+</BLOCKQUOTE>
+<P>
+Listing 5.5 shows a simple filter that changes the transparency
+value of an image, causing it to fade in and out. It is quite
+suitable for animation.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.5&nbsp;&nbsp;Source Code for TransFilter.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.image.*;
+
+// This filter fades an image by moving the RGB values towards
+// the background color. 
+// The transValue variable controls the amount of transparency
+// for the image. A level of 255 means fully opaque, while 0 means
+// fully transparent. The formula for a color component is
+// (background * (255 - transValue) + component * transValue) / 255
+// Notice that when transValue is 0, the component isn't part of
+// the final color, instead the background is the whole color
+// when transValue is 255, the background isn't used at all, and the
+// full color component is the new color. 
+
+public class TransFilter extends RGBImageFilter {
+	private int transValue;
+	private int bgRed;
+	private int bgGreen;
+	private int bgBlue;
+
+	public TransFilter(int tV, int backgroundRGB)
+	{
+	canFilterIndexColorModel = true;
+	transValue = tV;
+	bgRed = (backgroundRGB &gt;&gt; 16) &amp; 255;
+	bgGreen = (backgroundRGB &gt;&gt; 8) &amp; 255;
+	bgBlue = backgroundRGB &amp; 255;
+	}
+
+// Changes the transparency value
+
+	public void setTransValue(int newValue)
+	{
+	transValue = newValue;
+	}
+
+// Retrieves the transparency value
+	public int getTransValue()
+	{
+	return transValue;
+	}
+
+// Adjusts the transparency value of an RGB value, essentially
+// multiplying the transparency by transValue / 255
+
+	public int filterRGB(int x, int y, int rgb)
+	{
+// Compute the new red, green and blue components
+
+	int red = (bgRed * (255 - transValue) + 
+		 ((rgb &gt;&gt; 16) &amp;0xff) * transValue) / 255;
+
+	int green = (bgGreen * (255 - transValue) + 
+		((rgb &gt;&gt; 8) &amp; 0xff) * transValue) / 255;
+
+	int blue = (bgBlue * (255 - transValue) + 
+		(rgb &amp; 0xff) * transValue) / 255;
+
+// Combine the components back into a single RGB value, preserving the
+// original transparency value from the RGB component.
+
+	return (rgb &amp; 0xff000000) + (red &lt;&lt; 16) + (green &lt;&lt; 8) +
+	blue;
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 5.8 shows an image in the process of fading. The applet
+that produces this image uses the <TT>TransFilter</TT>
+image filter to produce the fading effect. This applet is included
+on the CD-ROM that comes with this book.
+<P>
+<A HREF="f5-8.gif"><B>Figure 5.8 : </B><I>You can produce neat effects by filtering
+the colors in an image</I>.</A>
+<H2><A NAME="CyclingtheColorPalette"><FONT SIZE=5 COLOR=#FF0000>
+Cycling the Color Palette</FONT></A></H2>
+<P>
+Color palette cycling has traditionally been a &quot;poor man's
+animation.&quot; The color palette is essentially an indexed color
+model. Since the advent of indexed colors, programmers have been
+performing a cheap method of animation by repeatedly changing
+sections of the color palette. This technique is often used to
+show flowing water or motion between two points. If you want to
+perform palette cycling on an existing image, you may have to
+do a bit of work with the image to set up the palette order. If
+you generate the image from a memory image source, you can create
+your own index color model that is easy to cycle.
+<P>
+Unlike other color filters, you don't change the colors in the
+<TT>getRGB</TT> method in a color
+palette cycler. Instead, you override the <TT>filterIndexColorModel</TT>
+method, which creates a new index color model based on the existing
+one. Listing 5.6 shows an implementation of a color palette cycler.
+Its constructor takes three parameters-the location of the first
+palette entry to be cycled, the number of consecutive entries
+to cycle, and the direction of the cycle. If the direction is
+positive, the colors are cycled from left to right. If the direction
+is negative, they are cycled from right to left. The direction
+also indicates the number of positions a color moves during each
+cycle. Normally, direction should be 1 or -1, to move each color
+over by 1 position. You may want to move sets of colors, however.
+For instance, if you need to shift colors in pairs, set the direction
+to 2 or -2. The <TT>cycleComponent</TT>
+method cycles the palette every time it is called.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.6&nbsp;&nbsp;Source Code for CycleFilter.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.awt.image.*;
+
+//
+// This class cycles the colors in an index color model.
+// When you create a CycleFilter, you give the offset in
+// the index color model and also the number of positions
+// you want to cycle. Then every time you call cycleColors,
+// it increments the cycle position. You then need to re-create
+// your image and its colors will be cycled.
+// 
+// This filter will only work on images that have an indexed
+// color model.
+
+public class CycleFilter extends RGBImageFilter {
+
+// The offset in the index to begin cycling
+     protected int cycleStart;
+
+// How many colors to cycle
+     protected int cycleLen;
+
+// The current position in the cycle
+     protected int cyclePos;
+
+// The cycle direction and length
+     protected int direction;
+
+// A temporary copy of the color components being cycled
+     protected byte[] tempComp;
+
+     public CycleFilter(int cycleStart, int cycleLen, int direction)
+     {
+          this.cycleStart = cycleStart;
+          this.cycleLen = cycleLen;
+          this.direction = direction;
+          tempComp = new byte[cycleLen];
+
+          cyclePos = 0;
+
+// Must set this to true to allow the shortcut of filtering
+// only the index and not each individual pixel
+
+          canFilterIndexColorModel = true;
+     }
+
+// cycleColorComponent takes an array of bytes that represent
+// either the red, green, blue, or alpha components from the
+// index color model, and cycles them based on the cyclePos.
+// It leaves the components that aren't part of the cycle intact.
+
+     public void cycleColorComponent(byte component[])
+     {
+
+// If there aren't enough components to cycle, leave this alone
+          if (component.length &lt; cycleStart + cycleLen) return;
+
+// Make a temporary copy of the section to be cycled
+          System.arraycopy(component, cycleStart, tempComp,
+               0, cycleLen);
+
+// Now for each position being cycled, shift the component over
+// by cyclePos positions.
+          for (int i=0; i &lt; cycleLen; i++) {
+               component[cycleStart+(cyclePos+i)%cycleLen] =
+                    tempComp[i];
+          }
+     }
+
+// cycleColors moves the cyclePos by &lt;direction&gt; locations.
+// If direction is positive, the colors move from left to
+// right. If direction is negative, they move from right
+// to left.
+
+     public void cycleColors()
+     {
+          cyclePos = (cyclePos + direction) % cycleLen;
+          if (cyclePos &lt; 0) cyclePos += cycleLen;
+     }
+
+// Can't really filter direct color model RGB this way, because you have
+// no idea what rgb values get cycled, so just return the original
+// rgb values. 
+
+     public int filterRGB(int x, int y, int rgb)
+     {
+          return rgb;
+     }
+
+// filterIndexColorModel is called by the image filtering mechanism
+// whenever the image uses an indexed color model and the
+// canFilterIndexColorModel flag is set to true. This allows you
+// to filter colors without filtering each and every pixel
+// in the image.
+
+     public IndexColorModel filterIndexColorModel(IndexColorModel icm)
+     {
+
+// Get the size of the index color model
+          int mapSize = icm.getMapSize();
+
+// Create space for the red, green, and blue components
+          byte reds[] = new byte[mapSize];
+          byte greens[] = new byte[mapSize];
+          byte blues[] = new byte[mapSize];
+
+// Copy in the red components and cycle them
+          icm.getReds(reds);
+          cycleColorComponent(reds);
+
+// Copy in the green components and cycle them
+          icm.getGreens(greens);
+          cycleColorComponent(greens);
+
+// Copy in the blue components and cycle them
+          icm.getBlues(blues);
+          cycleColorComponent(blues);
+
+// See if there is a transparent pixel. If not, copy in the alpha
+// values, just in case the image should be partially transparent.
+
+          if (icm.getTransparentPixel() == -1) {
+
+// Copy in the alpha components and cycle them
+               byte alphas[] = new byte[mapSize];
+               icm.getAlphas(alphas);
+               cycleColorComponent(alphas);
+
+               return new IndexColorModel(icm.getPixelSize(),
+                    mapSize, reds, greens, blues, alphas);
+          } else {
+
+// If there was a transparent pixel, ignore the alpha values and
+// set the transparent pixel in the new filter
+               return new IndexColorModel(icm.getPixelSize(),
+                    mapSize, reds, greens, blues,
+                    icm.getTransparentPixel());
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 5.7 shows an applet that displays a .GIF image with a
+customized color palette. The image contains several figures colored
+with consecutive color palette entries. As the palette cycles,
+the colors of the figures change.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.7&nbsp;&nbsp;Source Code for Cycler.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.awt.image.*;
+import java.applet.*;
+
+// This applet creates a series of moving
+// lines by creating a memory image and cycling
+// its color palette.
+
+public class Cycler extends Applet implements TimerCallback
+{
+     protected Image origImage; // the image before color cycling
+     protected Image cycledImage;     // image after cycling
+     protected CycleFilter colorFilter;     // performs the cycling
+
+     public void init()
+     {
+
+// Create the uncycled image
+          origImage = getImage(getDocumentBase(), &quot;cycleme.gif&quot;);
+          MediaTracker mt = new MediaTracker(this);
+          mt.addImage(origImage, 0);
+          try {
+               mt.waitForID(0);
+          } catch (Exception hell) {
+          }
+
+// Create the filter for cycling the colors
+          colorFilter = new CycleFilter(1, 5, 1);
+
+// Create the first cycled image
+          cycledImage = createImage(new FilteredImageSource(
+               origImage.getSource(),
+               colorFilter));
+
+          Timer t = new Timer(this, 1000);
+          t.start();
+     }
+
+// Paint simply draws the cycled image
+     public synchronized void paint(Graphics g)
+     {
+          g.drawImage(cycledImage, 0, 0, this);
+     }
+
+// Flicker-free update
+     public void update(Graphics g)
+     {
+          paint(g);
+     }
+
+// Cycles the colors and creates a new cycled image. Uses media
+// tracker to ensure that the new image has been created before
+// trying to display. Otherwise, we can get bad flicker.
+
+     public synchronized void tick()
+     {
+// Cycle the colors
+          colorFilter.cycleColors();
+
+// Flush clears out a loaded image without having to create a
+// whole new one. When we use waitForID on this image now, it
+// will be regenerated.
+
+          cycledImage.flush();
+
+          MediaTracker myTracker = new MediaTracker(this);
+          myTracker.addImage(cycledImage, 0);
+          try {
+
+// Cause the cycledImage to be regenerated
+               myTracker.waitForID(0);
+          } catch (Exception ignore) {
+          }
+// Now that we have reloaded the cycled image, ask that it 
+// be redrawn.
+          repaint();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 5.9 shows an image whose colors are being cycled.
+<P>
+<A HREF="f5-9.gif"><B>Figure 5.9 : </B><I>Cycling colors in the color palette creates
+neat animation effects</I>.</A>
+<H2><A NAME="AnimatingGraphics"><FONT SIZE=5 COLOR=#FF0000>
+Animating Graphics</FONT></A></H2>
+<P>
+In addition to animating images, you can perform animation with
+the graphics drawing functions. There are two ways to animate
+graphical figures. You can create each frame anew, clearing the
+screen and drawing the new figure, or you can use the XOR drawing
+function to move a figure without redrawing the rest of the screen.
+<H3><A NAME="RedrawingtheEntireScreen">
+Redrawing the Entire Screen</A></H3>
+<P>
+Redrawing the entire screen is the easiest way to perform animation,
+because when the <TT>paint</TT> method
+is called, the drawing area has already been cleared. All you
+need to do is draw the new frame. Listing 5.8 shows an applet
+that moves a ball back and forth on the screen using this simple
+technique. As usual, it uses the <TT>Timer</TT>
+class to trigger the next frame.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.8&nbsp;&nbsp;Source Code for BallAnim1.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+
+// This applet moves three balls around the screen by repainting
+// the entire scene every time.
+
+public class BallAnim1 extends Applet implements TimerCallback
+{
+
+     int ballX[] = { 0, 200, 0 }; // Current X coord of each ball
+     int ballY[] = { 0, 0, 100 }; // Current Y coord
+     int ballXSpeed[] = { 1, 0, 1 }; // Current X speed
+     int ballYSpeed[]= { 1, 1, 0 }; // Current Y Speed
+
+     Timer timer;
+
+     Color ballColor[] = { Color.red, Color.yellow, Color.blue };
+
+     int numBalls = ballX.length;
+
+     public void init()
+     {
+     }
+
+// Repaint the entire scene (i.e. draw each ball)
+
+     public void paint(Graphics g)
+     {
+          for (int i=0; i &lt; numBalls; i++) {
+               g.setColor(ballColor[i]);
+               g.fillOval(ballX[i], ballY[i], 30, 30);
+          }
+     }
+
+// For each timer tick, move the balls. If they go off the edge anywhere,
+// change their direction.
+
+     public void tick()
+     {
+          for (int i=0; i &lt; numBalls; i++) {
+
+// Move the ball
+               ballX[i] += ballXSpeed[i];
+               ballY[i] += ballYSpeed[i];
+
+// See if it goes off the edge anywhere
+               if ((ballX[i] &lt; 0) || (ballX[i] &gt;= size().width)) {
+                    ballXSpeed[i] = -ballXSpeed[i];
+               }
+               if ((ballY[i] &lt; 0) || (ballY[i] &gt;= size().height)) {
+                    ballYSpeed[i] = -ballYSpeed[i];
+               }
+          }
+          repaint();
+     }
+
+     public void start()
+     {
+          Timer timer = new Timer(this, 100);
+          timer.start();
+     }
+
+     public void stop()
+     {
+          timer.stop();
+          timer = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Using this method, the figures you draw have a notion of depth.
+The first figure drawn is on the bottom, while the last figure
+drawn is on the top. Being on top means that if a figure shares
+any screen area with another figure, the figure on top covers
+the other figure. This makes sense-if you draw one figure and
+then draw another figure on top of it, the second figure would
+obscure the first one.
+<P>
+Figure 5.10 shows the BallAnim1 applet in action.
+<P>
+<A HREF="f5-10.gif"><B>Figure 5.10: </B><I>By redrawing all figures in a particular
+sequence, you create a sense of depth</I>.</A>
+<H3><A NAME="DoingAnimationwithXOR">
+Doing Animation with XOR</A></H3>
+<P>
+XOR animation is not as pretty as other animation, but it has
+the advantage of speed. This technique relies on the fact that
+when you draw a figure in XOR mode, you can erase it again by
+just drawing it again in XOR mode. There is no restriction in
+drawing order in XOR mode because whenever figures overlap in
+XOR mode, they always look the same, no matter which figure is
+drawn first. Of course, the figures don't look as nice, either.
+When two figures overlap in XOR mode, the overlapped portion is
+a combination of the two figures, meaning it is a different color
+from either figure. If you are drawing in black and white, the
+overlapped portion of two white figures will be black. When you
+draw XOR figures with a direct color model, the colors are XORed
+together. When you use an index color model, the index values
+are XORed together. This can give the overlapping regions some
+really funky colors, but it works. XOR animation isn't used very
+often, but it can come in handy if it is too costly to redraw
+an entire frame and you are only moving a few objects on the screen.
+<P>
+When you draw in XOR mode, you create your own <TT>update</TT>
+method that does not clear the drawing area before calling the
+<TT>paint</TT> routine. Otherwise,
+you might as well not use XOR mode. Your <TT>update</TT>
+method should look like this:
+<BLOCKQUOTE>
+<PRE>
+public void update(Graphics g)
+{
+     paint(g);
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Listing 5.9 shows an example of XOR animation, with three shapes
+moving in different directions. Notice the interesting color combinations
+when the figures collide.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.9&nbsp;&nbsp;Source Code for BallAnim2.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+
+// This applet moves 3 balls around the screen using XOR animation.
+
+public class BallAnim2 extends Applet implements TimerCallback
+{
+     int ballX[] = { 0, 200, 0 };     // X coords of each ball
+     int ballY[] = { 0, 0, 100 };     // Y coords
+     int ballXSpeed[] = { 1, 0, 1 }; // Speed in X direction
+     int ballYSpeed[]= { 1, 1, 0 };  // Speed in Y direction
+
+     boolean drewFirst = false;     // Have we drawn anything yet?
+
+     Timer timer;
+
+     Color ballColor[] = { Color.red, Color.yellow, Color.blue };
+
+     int numBalls = ballX.length;
+
+     public void init()
+     {
+     }
+
+// special version of update that doesn't erase the screen
+
+     public void update(Graphics g)
+     {
+          paint(g);
+     }
+
+     public void paint(Graphics g)
+     {
+
+// Go into XOR mode with white as the XOR color
+          g.setXORMode(Color.white);
+
+// redraw the old balls, causing them to be erased. Don't try to erase anything
+// if we haven't drawn the first time, otherwise there will be garbage
+// left on the screen.
+
+          if (drewFirst) {
+               for (int i=0; i &lt; numBalls; i++) {
+                    g.setColor(ballColor[i]);
+                    g.fillOval(ballX[i], ballY[i], 30, 30);
+               }
+          }
+
+// Now move the balls. In our repaint, we erase the old, move, and then
+// draw the new.
+          moveBalls();
+
+// Draw the balls in their new position
+          for (int i=0; i &lt; numBalls; i++) {
+               g.setColor(ballColor[i]);
+               g.fillOval(ballX[i], ballY[i], 30, 30);
+          }
+          drewFirst = true;
+     }
+
+     public void moveBalls()
+     {
+          for (int i=0; i &lt; numBalls; i++) {
+
+// Move the ball
+               ballX[i] += ballXSpeed[i];
+               ballY[i] += ballYSpeed[i];
+
+// See if it has gone off the edge
+               if ((ballX[i] &lt; 0) || (ballX[i] &gt;= size().width)) {
+                    ballXSpeed[i] = -ballXSpeed[i];
+               }
+               if ((ballY[i] &lt; 0) || (ballY[i] &gt;= size().height)) {
+                    ballYSpeed[i] = -ballYSpeed[i];
+               }
+          }
+     }
+
+// Rather than moving the balls in the tick method, we move them in the
+// paint method. All tick needs to do is trigger a repaint.
+
+     public void tick()
+     {
+          repaint();
+     }
+
+     public void start()
+     {
+          Timer timer = new Timer(this, 100);
+          timer.start();
+     }
+
+     public void stop()
+     {
+          timer.stop();
+          timer = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 5.11 shows the BallAnim2 applet in action.
+<P>
+<A HREF="f5-11.gif"><B>Figure 5.11: </B><I>XOR animation produces strange results
+when objects collide</I>.</A>
+<H2><A NAME="EliminatingFlicker"><FONT SIZE=5 COLOR=#FF0000>
+Eliminating Flicker</FONT></A></H2>
+<P>
+You may have noticed a lot of flicker in some of your animation
+applets. Flicker is actually just a very quick change on the drawing
+area. If you use the standard <TT>update</TT>
+method, the screen is cleared before your <TT>paint</TT>
+method is called. Your eye picks up that momentary clearing, making
+it look like the screen flickers. Fortunately, there are simple
+ways to eliminate flicker.
+<P>
+First, you can override the <TT>update</TT>
+method that doesn't clear the screen before calling <TT>paint</TT>:
+<BLOCKQUOTE>
+<PRE>
+public void update(Graphics g)
+{
+     paint(g);
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+If your <TT>paint</TT> method relies
+on the screen being cleared, this may give you trouble. You can
+counter this, however, by using the second technique, which, when
+used in conjunction with the above <TT>update</TT>
+method, should eliminate flicker from your applet completely.
+This method is called &quot;double-buffering.&quot; 
+<H3><A NAME="DoubleBuffering">
+Double-Buffering</A></H3>
+<P>
+The technique of double-buffering involves drawing to an off-screen
+image and then drawing the off-screen in a single method call.
+To perform double-buffering, you need to declare an instance variable
+to hold the off-screen image:
+<BLOCKQUOTE>
+<PRE>
+Image offscreenImage;
+</PRE>
+</BLOCKQUOTE>
+<P>
+Next, in your <TT>init</TT> method,
+you need to create the image:
+<BLOCKQUOTE>
+<PRE>
+offscreenImage = createImage(size().width, size().height);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Finally, you can create an <TT>update</TT>
+method that draws to this off-screen image. By clearing the off-screen
+image before calling <TT>paint</TT>,
+you can add double-buffering to any applet without changing the
+applet's <TT>paint</TT> method.
+<P>
+Listing 5.10 shows one of the animation examples with a flicker-free
+<TT>update</TT> method. The changes
+made to accommodate the flicker-free <TT>update</TT>
+are the addition of the <TT>offscreenImage</TT>
+variable, its initialization in the <TT>init</TT>
+method, and a new <TT>update</TT>
+method.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.10&nbsp;&nbsp;Source Code for BallAnim3.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+
+// This applet moves three balls around the screen by repainting
+// the entire scene every time.
+// It has a flicker-free update method.
+
+public class BallAnim3 extends Applet implements TimerCallback
+{
+
+     int ballX[] = { 0, 200, 0 }; // Current X coord of each ball
+     int ballY[] = { 0, 0, 100 }; // Current Y coord
+     int ballXSpeed[] = { 1, 0, 1 }; // Current X speed
+     int ballYSpeed[]= { 1, 1, 0 }; // Current Y Speed
+
+     Timer timer;
+
+     Color ballColor[] = { Color.red, Color.yellow, Color.blue };
+
+     int numBalls = ballX.length;
+
+     Image offscreenImage;
+
+     public void init()
+     {
+          offscreenImage = createImage(size().width, size().height);
+     }
+
+     public void update(Graphics g)
+     {
+// Get a graphics context for the offscreen area
+          Graphics offscreenG = offscreenImage.getGraphics();
+
+// Clear the offscreen area to the background color
+          offscreenG.setColor(getBackground());
+          offscreenG.fillRect(0, 0, size().width, size().height);
+
+// Paint on the offscreen image
+          paint(offscreenG);
+
+// Copy the offscreen image to the screen
+          g.drawImage(offscreenImage, 0, 0, this);
+     }
+
+// Repaint the entire scene (i.e. draw each ball)
+
+     public void paint(Graphics g)
+     {
+          for (int i=0; i &lt; numBalls; i++) {
+               g.setColor(ballColor[i]);
+               g.fillOval(ballX[i], ballY[i], 30, 30);
+          }
+     }
+
+// For each timer tick, move the balls. If they go off the edge anywhere,
+// change their direction.
+
+     public void tick()
+     {
+          for (int i=0; i &lt; numBalls; i++) {
+
+// Move the ball
+               ballX[i] += ballXSpeed[i];
+               ballY[i] += ballYSpeed[i];
+
+// See if it goes off the edge anywhere
+               if ((ballX[i] &lt; 0) || (ballX[i] &gt;= size().width)) {
+                    ballXSpeed[i] = -ballXSpeed[i];
+               }
+               if ((ballY[i] &lt; 0) || (ballY[i] &gt;= size().height)) {
+                    ballYSpeed[i] = -ballYSpeed[i];
+               }
+          }
+          repaint();
+     }
+
+     public void start()
+     {
+          Timer timer = new Timer(this, 100);
+          timer.start();
+     }
+
+     public void stop()
+     {
+          timer.stop();
+          timer = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+
+<CENTER><P><A HREF="ch4.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch6.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

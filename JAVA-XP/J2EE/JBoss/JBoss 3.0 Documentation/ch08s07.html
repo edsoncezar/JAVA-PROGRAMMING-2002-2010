@@ -1,0 +1,763 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>JMS Provider</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch08.html" title="Chapter 8. JBoss and JMS"><link rel="previous" href="ch08s03.html" title="Overview"><link rel="next" href="ch08s20.html" title="Message Driven Beans and JBoss"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch08.html"><img src="images\toc.gif" border="0"></a><a href="ch08s03.html"><img src="images\prev.gif" border="0"></a><a href="ch08s20.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="jms-jms"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="jms-jms"></a>JMS Provider</h2></div></div><p>JBoss contains its own JMS provider, called JBossMQ. This is a JMS 1.0.2-compliant JMS provider, and it may be used for all ordinary JMS programming, i.e. writing stand alone JMS-based clients.</p><p>To understand how JMS works in JBoss, one has to have an understanding of some of the concepts and terminology used in JMS. The best way to get it is to read the specification, but we also give a short JMS introduction below.</p><div class="section"><a name="jms-jms-intro"></a><div class="titlepage"><div><h3 class="title"><a name="jms-jms-intro"></a>Short introduction to JMS</h3></div></div><p>JMS is centered around the concept of a <span class="emphasis"><i>destination</i></span>. When you send a message, you do not send it directly to the recipient(s) interested in the message; you send it to a destination, instead. Then, anyone interested in the message has to either connect to the destination and get the message or to set up a subscription at the destination; in any case, messages sent to the destination get forwarded to the recipient.</p><p>In JMS there are two types of destinations: <span class="emphasis"><i>topics</i></span> and <span class="emphasis"><i>queues</i></span>. These have different semantics:</p><div class="itemizedlist"><ul><li><p><a name="d0e3157"></a>A message sent to a topic may be received by multiple parties. Publishing with topics allows one-to-many or many-to-many communication channels. In this case, the originator of a message is called the <span class="emphasis"><i>publisher</i></span>, while the recipient is called a <span class="emphasis"><i>subscriber</i></span>.</p></li><li><p><a name="d0e3166"></a>A queue, on the other hand, will only allow the delivery of a message to a single party. A <span class="emphasis"><i>sender</i></span> places the message in the queue, the <span class="emphasis"><i>receiver</i></span> gets it off the queue and the message disappears from the queue. The first receiver to fetch the message will get it, while everyone else will not.</p></li></ul></div><p>To be able to send or receive messages you have to obtain a JMS connection, which is an abstract way to get in contact with the JMS provider. Once you have obtained a connection, you will have to establish a session. Once the session is established, you either create a publisher/sender to send messages or a subscriber/receiver to receive them.</p><p>At runtime, the publisher or subscriber have to be associated with a topic destination, while the sender or receiver have to be associated with a queue destination.</p><p>In general, the way to operate within the JMS framework is as follows:</p><div class="orderedlist"><ol type="1"><li><p><a name="d0e3182"></a>Get the JNDI initial context.</p></li><li><p><a name="d0e3185"></a>Look up a connection factory (for the right type of destination, topic or queue).</p></li><li><p><a name="d0e3188"></a>Obtain a connection from the factory.</p></li><li><p><a name="d0e3191"></a>Create a session tied to the connection.</p></li><li><p><a name="d0e3194"></a>Look up the destination (topic or queue).</p></li><li><p><a name="d0e3197"></a>Create a message producer or a message consumer (specific for the topic or the queue).</p></li></ol></div><p>To get a connection to the provider and to get a destination to associate with your publisher/sender or your subscriber/receiver you have to use provider-specific parameters.</p><p>You get a connection factory or a destination by looking up these objects by way of JNDI, which is standard for any JMS provider, but the name to use in this lookup is specific to the provider being used. You will therefore have to learn what to specify for each and every different JMS provider you use, including JBossMQ.</p><p>Any configuration of the JMS provider, such as connection characteristics, what destinations are available and so forth, are also specific to the provider being used. For example, there is no standard way to create new destinations.</p></div><div class="section"><a name="jms-jms-config"></a><div class="titlepage"><div><h3 class="title"><a name="jms-jms-config"></a>Configuration</h3></div></div><p>While using a JMS provider, there are three items that involve provider-specific stuff:</p><div class="itemizedlist"><ul><li><p><a name="d0e3213"></a>Getting the JNDI initial context</p></li><li><p><a name="d0e3216"></a>The name of the connection factories to use</p></li><li><p><a name="d0e3219"></a>Administration and naming conventions for destinations.</p></li></ul></div><p>JBoss comes with its own JNDI implementation. For a plain vanilla JMS client, you configure and look up the initial context as you do it for your other J2EE client components.</p><p>The JMS-specific stuff is tied to the JBoss JMS provider, JBossMQ. JBossMQ is configured via the XML file <tt>jbossmq.xml</tt>, found in the directory <tt>conf/default</tt> of the JBoss distribution tree.</p><p>[<span class="bold"><b>2.4.1</b></span>. The latest JBossMQ does not use the <tt>jbossmq.xml</tt> file any more. All of its components have been added to the <tt>jboss.jcml</tt> file as MBeans, instead.]</p><p>There are basically three things for which one needs to use the <tt>jbossmq.xml</tt> file:</p><div class="itemizedlist"><ul><li><p><a name="d0e3249"></a>Adding new destinations</p></li><li><p><a name="d0e3252"></a>Configuring users</p></li><li><p><a name="d0e3255"></a>Obtaining the names of the available connection factories</p></li></ul></div><div class="section"><a name="jms-jms-config-dest"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-config-dest"></a>Adding new destinations</h4></div></div><p>Destinations are added to the <tt>jbossmq.xml</tt> file.</p><p>[<span class="bold"><b>2.4.1</b></span>. The file used is <tt>jboss.jcml</tt>, instead.]</p><p>There are several default destinations already in the file, so it's easy to see how to do it. Say you need a topic destination named <tt>spool</tt>; then you would add the following entry to <tt>jbossmq.xml</tt>:</p><div class="figure"><p><a name="d0e3282"></a><b>Figure 8.2. Defining a destination in <tt>jbossmq.xml</tt></b></p><pre class="programlisting">
+&lt;Topic&gt;&lt;Name&gt;spool&lt;/Name&gt;&lt;/Topic&gt;
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. The entry used in <tt>jboss.jcml</tt> is an MBean, instead.]</p><div class="figure"><p><a name="d0e3297"></a><b>Figure 8.3. [<span class="bold">2.4.1</span>] Defining a destination in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jbossmq.server.TopicManager"
+  name="JBossMQ:service=Topic,name=spool"/&gt;
+
+</pre></div><p>Destinations may also be added on the fly.</p><p>One way of doing it is through the JMX HTML management GUI. If you created a plain vanilla JBoss distribution, it's normally accessible through the port 8082, i.e. <tt>http://localhost:8082</tt>. Follow the link to <tt>Service=JMSServer</tt> under <tt>JMS</tt> and fill in either the form field <tt>newTopic</tt> or the form field <tt>newQueue</tt>.</p><p>[<span class="bold"><b>2.4.1</b></span>. Follow the link to <tt>Service=Server</tt> under <tt>JBossMQ</tt> and fill in either the form field <tt>createTopic</tt> or the form field <tt>createQueue</tt>.]</p><p>It is also possible to add destinations programmatically. This is done by accessing the MBean and invoking the methods <tt>newTopic</tt> or <tt>newQueue</tt>.</p><p>[<span class="bold"><b>2.4.1</b></span>. This is done by accessing the MBean and invoking the methods <tt>createTopic</tt> or <tt>createQueue</tt>.]</p><p>An example is given in <a href="ch08s07.html#jms-jms-examples" title="Examples">the section called &#8220;Examples&#8221;</a>.</p><p>[<span class="bold"><b>2.4.1</b></span>. Destinations created in this way will be <span class="emphasis"><i>transient</i></span>, living only as long as the server is up. When the JBoss server is rebooted, the dynamically created destinations will be gone.]</p><p>All destinations in JBossMQ have a prefix that indicates the type of the destination; for topics it is <tt>topic</tt> and for queues it is <tt>queue</tt>. To look up the testTopic destination you will therefore need to lookup the name <tt>topic/testTopic</tt>.</p></div><div class="section"><a name="jms-jms-config-users"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-config-users"></a>Managing users</h4></div></div><p>In JMS it is possible to associate a connection with a user. Unfortunately there is no known way of restricting access to JBossMQ or to a particular destination to a given user.</p><p>For most the most part, creating users is not needed in JBossMQ, except if one wants to have a durable topic subscriber. In that case, a user is required.</p><p>Users are added through the file <tt>jbossmq.xml</tt> found in directory <tt>conf/default</tt>. User <tt>john</tt> is added like this:</p><div class="figure"><p><a name="d0e3404"></a><b>Figure 8.4. Adding a JBossMQ user</b></p><pre class="programlisting">
+&lt;User&gt;
+  &lt;Name&gt;john&lt;/Name&gt;
+  &lt;Password&gt;needle&lt;/Password&gt;
+  &lt;Id&gt;DurableSubscriberExample&lt;/Id&gt;
+&lt;/User&gt;
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. Users are instead configured in the file <tt>jbossmq-state.xml</tt>, also found in directory <tt>conf/default</tt>. The entries look the same as those in <tt>jbossmq.xml</tt>.]</p></div><div class="section"><a name="jms-jms-config-cf"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-config-cf"></a>Connection Factories</h4></div></div><p>JBossMQ includes several different connection factories for topics and queues, each of them with its own special characteristics. When looking up a connection factory through JNDI, one needs to know the name to use. All the available factories and their properties, including their names, are listed as separate entries in the file <tt>jbossmq.xml</tt>.</p><p>[<span class="bold"><b>2.4.1</b></span>. The available factories are listed in file <tt>jboss.jcml</tt>, instead.]</p><p>There are three types of connection factories, depending on the communication protocol used:</p><div class="variablelist"><dl><dt><a name="d0e3443"></a><span class="term">OIL</span></dt><dd><p><a name="d0e3446"></a>A fast two-way socket-based communication protocol. It's the default.</p></dd><dt><a name="d0e3449"></a><span class="term">UIL</span></dt><dd><p><a name="d0e3452"></a>Protocol multiplexed over one socket. Good to have when going through firewalls or when the client is not able to look up the server IP address correctly.</p></dd><dt><a name="d0e3455"></a><span class="term">RMI</span></dt><dd><p><a name="d0e3458"></a>The first protocol written, stable but slow.</p></dd></dl></div><p>[<span class="bold"><b>2.4.0</b></span>. A fourth type of connection factory was introduced at this time:</p><div class="variablelist"><dl><dt><a name="d0e3467"></a><span class="term">INVM</span></dt><dd><p><a name="d0e3470"></a>Very fast in-VM protocol that does not use sockets. Available when the client is in the same virtual machine as JBossMQ.]</p></dd></dl></div><p>The following table lists all the JMS connection factories available in JBoss:</p><div class="table"><p><a name="d0e3475"></a><b>Table 8.2. JMS Connection Factories in JBoss</b></p><table summary="JMS Connection Factories in JBoss" border="1"><colgroup><col><col><col></colgroup><thead><tr><th>Destination type</th><th>JNDI name</th><th>Factory type</th></tr></thead><tbody><tr><td>Topic</td><td><tt>TopicConnectionFactory</tt></td><td>OIL</td></tr><tr><td>Queue</td><td><tt>QueueConnectionFactory</tt></td><td>OIL</td></tr><tr><td>Topic</td><td><tt>XATopicConnectionFactory</tt></td><td>OIL. Supports XA transaction</td></tr><tr><td>Queue</td><td><tt>XAQueueConnectionFactory</tt></td><td>OIL. Supports XA transaction</td></tr><tr><td>Topic</td><td><tt>UILTopicConnectionFactory</tt></td><td>UIL</td></tr><tr><td>Queue</td><td><tt>UILQueueConnectionFactory</tt></td><td>UIL</td></tr><tr><td>Topic</td><td><tt>UILXATopicConnectionFactory</tt></td><td>UIL. Supports XA transaction</td></tr><tr><td>Queue</td><td><tt>UILXAQueueConnectionFactory</tt></td><td>UIL. Supports XA transaction</td></tr><tr><td>Topic</td><td><tt>RMITopicConnectionFactory</tt></td><td>RMI</td></tr><tr><td>Queue</td><td><tt>RMIQueueConnectionFactory</tt></td><td>RMI</td></tr><tr><td>Topic</td><td><tt>RMIXATopicConnectionFactory</tt></td><td>RMI. Supports XA transaction</td></tr><tr><td>Queue</td><td><tt>RMIXAQueueConnectionFactory</tt></td><td>RMI. Supports XA transaction</td></tr></tbody></table></div><p>[<span class="bold"><b>2.4.0</b></span>. Besides all the same connection factories available before, there were some new ones introduced for this version of JBoss. The following table lists all the additional JMS connection factories available.]</p><div class="table"><p><a name="d0e3592"></a><b>Table 8.3. [<span class="bold">2.4.0</span>] Additional JMS Connection Factories</b></p><table summary="[2.4.0] Additional JMS Connection Factories" border="1"><colgroup><col><col><col></colgroup><thead><tr><th>Destination type</th><th>JNDI name</th><th>Factory type</th></tr></thead><tbody><tr><td>Topic</td><td><tt>java:/INVMTopicConnectionFactory</tt></td><td>INVM</td></tr><tr><td>Queue</td><td><tt>java:/INVMQueueConnectionFactory</tt></td><td>INVM</td></tr><tr><td>Topic</td><td><tt>java:/INVMXATopicConnectionFactory</tt></td><td>INVM. Supports XA transaction</td></tr><tr><td>Queue</td><td><tt>java:/INVMXAQueueConnectionFactory</tt></td><td>INVM. Supports XA transaction</td></tr></tbody></table></div><p>[<span class="bold"><b>2.4.1</b></span>. The names have changed. The same factory is now used for both topic- and queue-based connections. The following table lists all the JMS connection factories available in this version of JBoss.]</p><div class="table"><p><a name="d0e3646"></a><b>Table 8.4. [<span class="bold">2.4.1</span>] JMS Connection Factories</b></p><table summary="[2.4.1] JMS Connection Factories" border="1"><colgroup><col><col><col></colgroup><thead><tr><th>Destination type</th><th>JNDI name</th><th>Factory type</th></tr></thead><tbody><tr><td>Topic/Queue</td><td><tt>RMIConnectionFactory</tt></td><td>RMI</td></tr><tr><td>Topic/Queue</td><td><tt>RMIXAConnectionFactory</tt></td><td>RMI. Supports XA transaction</td></tr><tr><td>Topic/Queue</td><td><tt>java:/ConnectionFactory</tt></td><td>INVM</td></tr><tr><td>Topic/Queue</td><td><tt>java:/XAConnectionFactory</tt></td><td>INVM. Supports XA transaction</td></tr><tr><td>Topic/Queue</td><td><tt>ConnectionFactory</tt></td><td>OIL</td></tr><tr><td>Topic/Queue</td><td><tt>XAConnectionFactory</tt></td><td>OIL. Supports XA transaction</td></tr><tr><td>Topic/Queue</td><td><tt>UILConnectionFactory</tt></td><td>UIL</td></tr><tr><td>Topic/Queue</td><td><tt>UILXAConnectionFactory</tt></td><td>UIL. Supports XA transaction</td></tr></tbody></table></div></div></div><div class="section"><a name="jms-jms-adv-config"></a><div class="titlepage"><div><h3 class="title"><a name="jms-jms-adv-config"></a>Advanced JMS Configuration in JBoss</h3></div></div><p>The previous section explained the basic configuration tasks needed to get going with JBossMQ. In this section we will go over other configuration customizations that are possible with JBossMQ.</p><div class="section"><a name="jms-jms-adv-config-pm"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-adv-config-pm"></a>The JMS Persistence Manager</h4></div></div><p>A JBossMQ Persistence Manager (PM) is responsible for storing JMS messages marked as persistent, to allow the recovery of the persistent messages if the server suffers a failure. The persistent JMS messages are stored in a simple log file, which is why this type of PM is called <tt>Logged</tt>.</p><p>[<span class="bold"><b>2.4.1</b></span>. Now, the persistence of messages can be accomplished in different ways, each one with its advantages and drawbacks.]</p><div class="table"><p><a name="d0e3750"></a><b>Table 8.5. [<span class="bold">2.4.1</span>] Available JMS Persistence Managers</b></p><table summary="[2.4.1] Available JMS Persistence Managers" border="1"><colgroup><col><col><col></colgroup><thead><tr><th>PM Name</th><th>Advantages</th><th>Disadvantages</th></tr></thead><tbody><tr><td><tt>File</tt></td><td>Very Stable</td><td>Not fast</td></tr><tr><td><tt>Rollinglogged</tt></td><td>Very Fast</td><td>Very new, somewhat unproven</td></tr><tr><td><tt>JDBC</tt></td><td>Should provide better stability/scalability</td><td>Has JDBC overhead</td></tr><tr><td><tt>Logged</tt></td><td>Fast</td><td>Log files grow without bound, memory management problems during recovery</td></tr></tbody></table></div><p>[<span class="bold"><b>2.4.1</b></span>. The default Persistence Manager is the <tt>File</tt> Persistence Manager. You can change it, but you must have one and only one PM configured for one instance of the JMS server.]</p><p>The Persistence Manager can be configured in file <tt>jbossmq.xml</tt>.</p><p>[<span class="bold"><b>2.4.1</b></span>. Now the type of Persistence Manager you wish to use can be configured in the <tt>jboss.jcml</tt> file.]</p></div><div class="section"><a name="jms-jms-adv-config-pm-logged"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-adv-config-pm-logged"></a>Setting up the <tt>Logged</tt> Persistence Manager</h4></div></div><p>The <tt>Logged</tt> Persistence Manager is the original one.</p><p>[<span class="bold"><b>2.4.1</b></span>. As it was developed just as a hack to get message persistence working in JBoss, its use is not recommended anymore, now that there are better options.]</p><div class="figure"><p><a name="d0e3836"></a><b>Figure 8.5. Definition of the <tt>Logged</tt> Persistence Manager in <tt>jbossmq.xml</tt></b></p><pre class="programlisting">
+&lt;PersistenceManager&gt;
+  &lt;DataDirectory&gt;../../db/jbossmq/&lt;/DataDirectory&gt;
+&lt;/PersistenceManager&gt;
+
+</pre></div><div class="figure"><p><a name="d0e3846"></a><b>Figure 8.6. [<span class="bold">2.4.1</span>] Definition of the <tt>Logged</tt> Persistence Manager in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.mq.pm.logged.PersistenceManager"
+  name="JBossMQ:service=PersistenceManager"&gt;
+  &lt;attribute name="DataDirectory"&gt;../../db/jbossmq/&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>The <tt>Logged</tt> Persistence Manager allows you to specify the following attributes when setting up the configuration:</p><div class="table"><p><a name="d0e3864"></a><b>Table 8.6. Settable attributes of the <tt>Logged</tt> Persistence Manager</b></p><table summary="Settable attributes of the Logged Persistence Manager" border="1"><colgroup><col><col></colgroup><thead><tr><th>Attribute</th><th>Description</th></tr></thead><tbody><tr><td><tt>DataDirectory</tt></td><td>Path to the directory the Persistence Manager will use to store its persistent data files. If a relative path is specified, it is considered relative to the <tt>jbossmq.xml</tt> file. [<span class="bold"><b>2.4.1</b></span>. Relative to the <tt>jboss.jcml</tt> file.]</td></tr></tbody></table></div></div><div class="section"><a name="jms-jms-adv-config-pm-file"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-adv-config-pm-file"></a>[<span class="bold"><b>2.4.1</b></span>] Setting up the <tt>File</tt> Persistence Manager</h4></div></div><p>The <tt>File</tt> Persistence Manager uses the concept of one file per persisted message. This method of message persistence is not the most effective, performance-wise, but it is very stable.</p><p>The <tt>File</tt> Persistence Manager is the default one enabled with a standard JBoss distribution. If you look at the <tt>jboss.jcml</tt> file you will see an XML section that looks like this:</p><div class="figure"><p><a name="d0e3916"></a><b>Figure 8.7. [<span class="bold">2.4.1</span>] Definition of the <tt>File</tt> Persistence Manager in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.mq.pm.file.PersistenceManager"
+  name="JBossMQ:service=PersistenceManager"&gt;
+  &lt;attribute name="DataDirectory"&gt;../../db/jbossmq/&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>The <tt>File</tt> Persistence Manager allows you to specify the following attributes when setting up the MBean configuration:</p><div class="table"><p><a name="d0e3934"></a><b>Table 8.7. [<span class="bold">2.4.1</span>] Settable MBean attributes of the <tt>File</tt> Persistence Manager</b></p><table summary="[2.4.1] Settable MBean attributes of the File Persistence Manager" border="1"><colgroup><col><col></colgroup><thead><tr><th>Attribute</th><th>Description</th></tr></thead><tbody><tr><td><tt>DataDirectory</tt></td><td>Path to the directory the Persistence Manager will use to store its persistent data files. If a relative path is specified, it is considered relative to the <tt>jboss.jcml</tt> file.</td></tr></tbody></table></div></div><div class="section"><a name="jms-jms-adv-config-pm-rollinglogged"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-adv-config-pm-rollinglogged"></a>[<span class="bold"><b>2.4.1</b></span>] Setting up the <tt>Rollinglogged</tt> Persistence Manager</h4></div></div><p>The <tt>Rollinglogged</tt> Persistence Manager is the most recently created but it has very promising performance characteristics. It uses log files to persist multiple messages, so there isn't much of the I/O overhead incurred when creating a file.</p><div class="figure"><p><a name="d0e3975"></a><b>Figure 8.8. [<span class="bold">2.4.1</span>] Definition of the <tt>Rollinglogged</tt> Persistence Manager</b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.mq.pm.rollinglogged.PersistenceManager"
+  name="JBossMQ:service=PersistenceManager"&gt;
+  &lt;attribute name="DataDirectory"&gt;../../db/jbossmq/&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>The <tt>Rollinglogged</tt> Persistence Manager allows you to specify the following attributes when setting up the MBean configuration:</p><div class="table"><p><a name="d0e3991"></a><b>Table 8.8. [<span class="bold">2.4.1</span>] Settable MBean attributes of the <tt>Rollinglogged</tt> Persistence Manager</b></p><table summary="[2.4.1] Settable MBean attributes of the Rollinglogged Persistence Manager" border="1"><colgroup><col><col></colgroup><thead><tr><th>Attribute</th><th>Description</th></tr></thead><tbody><tr><td><tt>DataDirectory</tt></td><td>Path to the directory the Persistence Manager will use to store its persistent data files. If a relative path is specified, it is considered relative to the <tt>jboss.jcml</tt> file.</td></tr></tbody></table></div></div><div class="section"><a name="jms-jms-adv-config-pm-jdbc"></a><div class="titlepage"><div><h4 class="title"><a name="jms-jms-adv-config-pm-jdbc"></a>[<span class="bold"><b>2.4.1</b></span>] Setting up the <tt>JDBC</tt> Persistence Manager</h4></div></div><p>The <tt>JDBC</tt> Persistence Manager uses database tables to store the messages.  It requires a JBoss-configured DataSource to access the database.</p><div class="figure"><p><a name="d0e4032"></a><b>Figure 8.9. [<span class="bold">2.4.1</span>] Definition of the <tt>JDBC</tt> Persistence Manager in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.mq.pm.jdbc.PersistenceManager"
+  name="JBossMQ:service=PersistenceManager"&gt;
+  &lt;attribute name="JmsDBPoolName"&gt;DefaultDS&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>The <tt>JDBC</tt> Persistence Manager allows you to specify the following attributes when setting up the MBean configuration:</p><div class="table"><p><a name="d0e4050"></a><b>Table 8.9. [<span class="bold">2.4.1</span>] Settable MBean attributes of the <tt>JDBC</tt> Persistence Manager</b></p><table summary="[2.4.1] Settable MBean attributes of the JDBC Persistence Manager" border="1"><colgroup><col><col></colgroup><thead><tr><th>Attribute</th><th>Description</th></tr></thead><tbody><tr><td><tt>JmsDBPoolName</tt></td><td>The JNDI name of the datasource to be used.</td></tr></tbody></table></div></div></div><div class="section"><a name="jms-jms-examples"></a><div class="titlepage"><div><h3 class="title"><a name="jms-jms-examples"></a>Examples</h3></div></div><p>
+As mentioned above, there are basically three things that are specific to the JMS provider being used and needed to get JMS up and working: configuring the JNDI initial context, the names of the connection factories and the naming conventions used for destinations.
+</p><p>
+When writing production code the best thing to do, of course, is to isolate the provider-specific stuff to make it easier to move between different JMS providers. The examples presented here, however, are not focused on writing production code, but on explaining what needs to be done to work with JBossMQ.
+</p><p>
+One nice way of configuring JNDI is through the property file <tt>jndi.properties</tt>. By filling such a file in with the correct values and including in the classpath the directory where it is placed, it is very easy to obtain the correct initial context.
+</p><p>
+To do so, create a file named <tt>jndi.properties</tt> with the following lines:
+</p><div class="figure"><p><a name="d0e4092"></a><b>Figure 8.10. Client <tt>jndi.properties</tt> file example</b></p><pre class="programlisting">
+java.naming.factory.initial=org.jnp.interfaces.NamingContextFactory
+java.naming.provider.url=localhost:1099
+java.naming.factory.url.pkgs=org.jboss.naming:org.jnp.interfaces
+
+</pre></div><p>
+Place it in a directory somewhere and make the directory part of your classpath.
+</p><p>
+If done this way, getting the initial context is simple:
+</p><div class="figure"><p><a name="d0e4104"></a><b>Figure 8.11. Getting the initial context</b></p><pre class="programlisting">
+// Get the initial context
+Context context = new InitialContext();
+
+</pre></div><p>
+In some situations, however, it might be better to configure JNDI manually; for example, when the environment in which the class is running already has a configured initial context, but that's not the one you want to use.
+</p><p>
+This is done by filling in a few properties in a <tt>Hashtable</tt> and instantiating the <tt>InitialContext</tt> with the hash table, like this:
+</p><div class="figure"><p><a name="d0e4119"></a><b>Figure 8.12. Getting the initial context with specified properties</b></p><pre class="programlisting">
+// Populate with needed properties
+Hashtable props = new Hashtable();
+props.put(Context.INITIAL_CONTEXT_FACTORY,
+  "org.jnp.interfaces.NamingContextFactory");
+props.put(Context.PROVIDER_URL, "localhost:1099");
+props.put("java.naming.rmi.security.manager", "yes");
+props.put(Context.URL_PKG_PREFIXES, "org.jboss.naming");
+
+// Get the initial context with given properties
+Context context = new InitialContext(props);
+
+</pre></div><p>
+The class <tt>ManualJNDI.java</tt> in directory <tt>org/jboss/docs/jms/client</tt> is an example of this. It may be tested with the following Ant command:
+</p><div class="figure"><p><a name="d0e4132"></a><b>Figure 8.13. Running the manual JNDI example</b></p><pre class="programlisting">
+ant jms-manual-jndi
+
+</pre></div><p>
+Once we have the context, we continue by looking up a connection factory. To do it, we use one of the available names. Let's look up the standard topic connection factory:
+</p><div class="figure"><p><a name="d0e4139"></a><b>Figure 8.14. Looking up a <tt>TopicConnectionFactory</tt></b></p><pre class="programlisting">
+// Get the connection factory
+TopicConnectionFactory topicFactory =
+  (TopicConnectionFactory)context.lookup("TopicConnectionFactory");
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. The name should be <tt>ConnectionFactory</tt>, instead.]</p><div class="figure"><p><a name="d0e4154"></a><b>Figure 8.15. [<span class="bold">2.4.1</span>] Looking up a <tt>TopicConnectionFactory</tt></b></p><pre class="programlisting">
+// Get the connection factory
+TopicConnectionFactory topicFactory =
+  (TopicConnectionFactory)context.lookup("ConnectionFactory");
+
+</pre></div><p>
+For a Queue, it would instead look like this:
+</p><div class="figure"><p><a name="d0e4166"></a><b>Figure 8.16. Looking up a <tt>QueueConnectionFactory</tt></b></p><pre class="programlisting">
+// Get the connection factory
+QueueConnectionFactory queueFactory =
+  (QueueConnectionFactory)context.lookup("QueueConnectionFactory");
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. The name should be <tt>ConnectionFactory</tt>, instead.]</p><div class="figure"><p><a name="d0e4181"></a><b>Figure 8.17. [<span class="bold">2.4.1</span>] Looking up a <tt>QueueConnectionFactory</tt></b></p><pre class="programlisting">
+// Get the connection factory
+QueueConnectionFactory queueFactory =
+  (QueueConnectionFactory)context.lookup("ConnectionFactory");
+
+</pre></div><p>
+Once we have the factory we create a connection; and then we can establish a session in the connection. For a topic, this might look like this:
+</p><div class="figure"><p><a name="d0e4193"></a><b>Figure 8.18. Creating topic connections and sessions</b></p><pre class="programlisting">
+// Create the connection
+topicConnection = topicFactory.createTopicConnection();
+
+// Create the session
+topicSession = topicConnection.createTopicSession(
+  // No transaction
+  false,
+  // Auto ack
+  Session.AUTO_ACKNOWLEDGE);
+
+</pre></div><p>
+A session may be created configured to involve transactions or not; if transactions are not involved, it may be set up with different types of acknowledgement modes. Read a JMS reference text to learn more about transactions in JMS, or check <a href="ch08s32.html" title="JMS as a managed resource">the section called &#8220;JMS as a managed resource&#8221;</a>).
+</p><p>
+Similarly, establishing a session for a queue might look like this:
+</p><div class="figure"><p><a name="d0e4204"></a><b>Figure 8.19. Creating queue connections and sessions</b></p><pre class="programlisting">
+// Create the connection
+queueConnection = queueFactory.createQueueConnection();
+
+// Create the session
+queueSession = queueConnection.createQueueSession(
+  // No transaction
+  false,
+  // Auto ack
+  Session.AUTO_ACKNOWLEDGE);
+
+</pre></div><p>
+Now it is time to create the part that either publishes/sends messages or subscribes to/receives messages.
+</p><p>
+To do this we need to look up a destination. To look up the topic destination <tt>testTopic</tt> we would write:
+</p><div class="figure"><p><a name="d0e4216"></a><b>Figure 8.20. Looking up a topic destination</b></p><pre class="programlisting">
+// Look up the destination
+Topic topic = (Topic)context.lookup("topic/testTopic");
+
+</pre></div><p>
+To look up the queue destination <tt>testQueue</tt> we would write, instead:
+</p><div class="figure"><p><a name="d0e4226"></a><b>Figure 8.21. Looking up a queue destination</b></p><pre class="programlisting">
+// Look up the destination
+Queue queue = (Queue)context.lookup("queue/testQueue");
+
+</pre></div><p>
+Note that in JBossMQ the prefix <tt>topic/</tt> is always placed before the topic name and the prefix <tt>queue/</tt> is always placed before the queue name.
+</p><p>
+In JMS, each possible role a client may play, as a publisher or subscriber for topics and as a sender or receiver for queues, has its own object hierarchy and its own special creation methods.
+</p><p>
+Let's start by looking at what one has to do to publish/send a message. For a topic, we need to create a <tt>TopicPublisher</tt> through the <tt>TopicSession</tt> by giving to the session the topic we have looked up in the context:
+</p><div class="figure"><p><a name="d0e4249"></a><b>Figure 8.22. Create a topic publisher</b></p><pre class="programlisting">
+// Create a publisher
+TopicPublisher topicPublisher = topicSession.createPublisher(topic);
+
+</pre></div><p>
+For a queue, instead, we need to create a <tt>QueueSender</tt> though the <tt>QueueSession</tt> by giving to the session the queue we have looked up in the context:
+</p><div class="figure"><p><a name="d0e4262"></a><b>Figure 8.23. Create a queue sender</b></p><pre class="programlisting">
+// Create a sender
+QueueSender queueSender = queueSession.createSender(queue);
+
+</pre></div><p>
+Once we have a publisher/sender, we need to create a message through the session, fill it with the message data and publish/send it through the publisher/sender created before. For a topic it would look like this:
+</p><div class="figure"><p><a name="d0e4269"></a><b>Figure 8.24. Create a <tt>TextMessage</tt> and publish it</b></p><pre class="programlisting">
+// Create a message
+TextMessage message = topicSession.createTextMessage();
+message.setText(msg);
+
+// Publish the message
+topicPublisher.publish(topic, message);
+
+</pre></div><p>
+The code for a queue is very similar:
+</p><div class="figure"><p><a name="d0e4279"></a><b>Figure 8.25. Create a <tt>TextMessage</tt> and send it</b></p><pre class="programlisting">
+// Create a message
+TextMessage message = queueSession.createTextMessage();
+message.setText(msg);
+
+// Send the message
+queueSender.send(queue, message);
+
+</pre></div><p>
+A complete and working topic publisher might look like this:
+</p><div class="figure"><p><a name="d0e4289"></a><b>Figure 8.26. Complete topic publisher, from <tt>HelloPublisher.java</tt> in directory <tt>org/jboss/docs/jms/client</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.client;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
+import javax.jms.TopicConnectionFactory;
+import javax.jms.TopicConnection;
+import javax.jms.TopicSession;
+import javax.jms.TopicPublisher;
+import javax.jms.Topic;
+import javax.jms.TextMessage;
+import javax.jms.Session;
+import javax.jms.JMSException;
+/**
+ * &lt;p&gt;Simple JMS client, publish text messages to testTopic Topic.
+ * &lt;/p&gt;
+ *
+ * &lt;p&gt;&lt;b&gt;NOTE&lt;/b&gt;This code is a showcase only. It may not provide
+ * a stable production example.&lt;/p&gt;
+ * @author Peter Antman
+ * @version $Revision: 3.1 $
+ */
+public class HelloPublisher {
+
+  /**
+   * Topic connection, hold on to this so you may close it.
+   */
+  TopicConnection topicConnection;
+
+  /**
+   * Topic session, hold on to this so you may close it.
+   * Also used to create messages.
+   */
+  TopicSession topicSession;
+
+  /**
+   * Use this to publish messages.
+   */
+  TopicPublisher topicPublisher;
+
+  /**
+   * Destination where to publish.
+   */
+  Topic topic;
+
+
+  /**
+   * Sets up all the JMS fixtures.
+   *
+   * Use close() when finished with object.
+   *
+   * @param factoryJNDI name of the topic connection factory to look up.
+   * @param topicJNDI name of the topic destination to look up
+   */
+  public HelloPublisher(String factoryJNDI, String topicJNDI)
+    throws JMSException, NamingException {
+
+    // Get the initial context
+    Context context = new InitialContext();
+
+    // Get the connection factory
+    TopicConnectionFactory topicFactory =
+      (TopicConnectionFactory)context.lookup(factoryJNDI);
+
+    // Create the connection
+    topicConnection = topicFactory.createTopicConnection();
+
+    // Create the session
+    topicSession = topicConnection.createTopicSession(
+      // No transaction
+      false,
+      // Auto ack
+      Session.AUTO_ACKNOWLEDGE);
+
+    // Look up the destination
+    topic = (Topic)context.lookup(topicJNDI);
+
+    // Create a publisher
+    topicPublisher = topicSession.createPublisher(topic);
+
+  }
+
+  /**
+   * Publish the given String as a JMS message to the testTopic topic.
+   */
+  public void publish(String msg) throws JMSException {
+
+    // Create a message
+    TextMessage message = topicSession.createTextMessage();
+    message.setText(msg);
+
+    // Publish the message
+    topicPublisher.publish(topic, message);
+
+  }
+
+  /**
+   * Close session and connection.
+   * When done, no publishing is possible any more.
+   */
+  public void close() throws JMSException {
+
+    topicSession.close();
+    topicConnection.close();
+
+  }
+
+  /**
+   * Run an example publishing 10 messages to testTopic.
+   * Only works up to and including JBoss 2.4.0
+   */
+  public static void main(String[] args) {
+    try {
+
+      // Create the HelloPublisher, giving it the name of the
+      // TopicConnection Factory and the Topic destination to
+      // use in lookup.
+      HelloPublisher publisher = new HelloPublisher(
+        // Name of ConnectionFactory
+        "TopicConnectionFactory",
+        // Name of destination to publish to
+        "topic/testTopic");
+
+      // Publish 10 messages
+      for (int i = 1; i &lt; 11; i++) {
+
+        String msg = "Hello World no. " + i;
+        System.out.println("Publishing message: " + msg);
+        publisher.publish(msg);
+
+      }
+
+      // Close down your publisher
+      publisher.close();
+
+    } catch(Exception ex) {
+
+      System.err.println(
+        "An exception occurred while testing HelloPublisher: " + ex);
+      ex.printStackTrace();
+
+    }
+
+  }
+
+} // HelloPublisher
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>.
+There is only one thing that needs to be changed to make it work: Change the <tt>TopicConnectionFactory</tt> to <tt>ConnectionFactory</tt>. Below, the modified <tt>main()</tt> method is shown.]
+</p><div class="figure"><p><a name="d0e4313"></a><b>Figure 8.27. [<span class="bold">2.4.1</span>] Topic publisher <tt>main()</tt>, from <tt>HelloPublisher25.java</tt> in directory <tt>org/jboss/docs/jms/client</tt></b></p><pre class="programlisting">
+/**
+ * Run an example publishing 10 messages to testTopic.
+ * Only works from JBoss 2.4.1 and up.
+ */
+public static void main(String[] args) {
+  try {
+
+    // Create the HelloPublisher, giving it the name of the
+    // TopicConnection Factory and the Topic destination to
+    // use in lookup.
+    HelloPublisher25 publisher = new HelloPublisher25(
+      // Name of ConnectionFactory
+      "ConnectionFactory",
+      // Name of destination to publish to
+      "topic/testTopic");
+
+    // Publish 10 messages
+    for (int i = 1; i &lt; 11; i++) {
+
+      String msg = "Hello World no. " + i;
+      System.out.println("Publishing message: " + msg);
+      publisher.publish(msg);
+
+    }
+
+    // Close down your publisher
+    publisher.close();
+
+    } catch(Exception ex) {
+
+    System.err.println(
+      "An exception occurred while testing HelloPublisher25: " + ex);
+    ex.printStackTrace();
+
+  }
+
+}
+
+</pre></div><p>
+Both of these examples are available in the examples directory <tt>org/jboss/docs/jms/client</tt> as <tt>HelloPublisher.java</tt> and <tt>HelloPublisher25.java</tt>.
+</p><p>
+As we know, it is not only possible to send/publish messages with JMS, but it is also possible to obtain published/sent messages. Time-wise, there are two ways of doing it:</p><div class="itemizedlist"><ul><li><p><a name="d0e4343"></a>Synchronously: This means that you need to manually go and fetch them. We do not show here any examples of how to do that.</p></li><li><p><a name="d0e4346"></a>Asynchronously: This means that you need to register an object that implements the MessageListener interface. It is then up to the JMS provider to invoke this object each time there is a message waiting for you at the destination.</p></li></ul></div><p>
+In principle, asynchronous receiving is done the same way for both topics and queues, but the classes and method signatures are different in both cases. First, you must implement a <tt>MessageListener</tt> interface. For simple cases it is often good enough to implement the listener in the same class where you write the other JMS code.
+</p><div class="figure"><p><a name="d0e4354"></a><b>Figure 8.28. A <tt>MessageListener</tt></b></p><pre class="programlisting">
+public class HelloSubscriber implements MessageListener {
+
+  public void onMessage(Message m) {
+
+    // Unpack the message, be careful when casting to the correct
+    // message type. onMessage should not throw any application
+    // exceptions.
+    try {
+
+      String msg = ((TextMessage)m).getText();
+      System.out.println("HelloSubscriber got message: " + msg);
+
+    } catch(JMSException ex) {
+
+      System.err.println("Could not get text message: " + ex);
+      ex.printStackTrace();
+
+    }
+
+  }
+
+}
+
+</pre></div><p>
+Then you need to create a subscriber/receiver and register the listener with it. You then <span class="emphasis"><i>have</i></span> to start the connection the get the JMS provider to start sending messages to the subscriber/receiver.
+</p><p>
+For a topic it might look like this:
+</p><div class="figure"><p><a name="d0e4368"></a><b>Figure 8.29. Create and start a topic subscriber</b></p><pre class="programlisting">
+// Create a subscriber
+topicSubscriber = topicSession.createSubscriber(topic);
+
+// Set the message listener, which is this class since we implement
+// the MessageListener interface
+topicSubscriber.setMessageListener(this);
+
+// OBS! For the message listener to receive any messages the connection
+// has to be started.
+topicConnection.start();
+
+</pre></div><p>
+And for a queue like this:
+</p><div class="figure"><p><a name="d0e4375"></a><b>Figure 8.30. Create and start a queue receiver</b></p><pre class="programlisting">
+// Create a subscriber
+queueReceiver = queueSession.createReceiver(queue);
+
+// Set the message listener, which is this class since we
+// implement the MessageListener interface
+queueReceiver.setMessageListener(this);
+
+// OBS! For the message listener to receive any messages
+// the connection has to be started.
+queueConnection.start();
+
+</pre></div><p>
+Let's look at a complete example of a topic subscriber:
+</p><div class="figure"><p><a name="d0e4382"></a><b>Figure 8.31. Topic subscriber example, from <tt>HelloSubscriber.java</tt> in directory <tt>org/jboss/docs/jms/client</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.client;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
+import javax.jms.TopicConnectionFactory;
+import javax.jms.TopicConnection;
+import javax.jms.TopicSession;
+import javax.jms.TopicSubscriber;
+import javax.jms.Topic;
+import javax.jms.Message;
+import javax.jms.TextMessage;
+import javax.jms.Session;
+import javax.jms.MessageListener;
+import javax.jms.JMSException;
+
+/**
+ * &lt;p&gt;Simple JMS client, subscribes for messages on testTopic Topic.
+ * &lt;/p&gt;
+ *
+ * &lt;p&gt;&lt;b&gt;NOTE&lt;/b&gt;This code is a showcase only. It may not provide
+ * a stable production example.&lt;/p&gt;
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $
+ */
+public class HelloSubscriber implements MessageListener {
+
+  /**
+   * Topic connection, hold on to this so you may close it.
+   */
+  TopicConnection topicConnection;
+
+  /**
+   * Topic session, hold on to this so you may close it.
+   * Also used to create messages.
+   */
+  TopicSession topicSession;
+
+  /**
+   * Subscriber
+   */
+  TopicSubscriber topicSubscriber;
+
+  /**
+   * Destination to subscribe to
+   */
+  Topic topic;
+
+  /**
+   * Sets up all the JMS fixtures.
+   *
+   * Use close() when finished with object.
+   *
+   * @param factoryJNDI name of the topic connection factory to look up.
+   * @param topicJNDI name of the topic destination to look up
+   */
+  public HelloSubscriber(String factoryJNDI, String topicJNDI)
+    throws JMSException, NamingException
+  {
+
+    // Get the initial context
+    Context context = new InitialContext();
+
+    // Get the connection factory
+    TopicConnectionFactory topicFactory =
+      (TopicConnectionFactory)context.lookup(factoryJNDI);
+
+    // Create the connection
+    topicConnection = topicFactory.createTopicConnection();
+
+    // Create the session
+    topicSession = topicConnection.createTopicSession(
+      // No transaction
+      false,
+      // Auto ack
+      Session.AUTO_ACKNOWLEDGE);
+
+    // Look up the destination
+    topic = (Topic)context.lookup(topicJNDI);
+
+    // Create a subscriber
+    topicSubscriber = topicSession.createSubscriber(topic);
+
+    // Set the message listener, which is this class since we implement
+    // the MessageListener interface
+    topicSubscriber.setMessageListener(this);
+
+    System.out.println(
+      "HelloSubscriber subscribed to topic: " + topicJNDI);
+
+    // OBS! For the message listener to receive any messages the
+    // connection has to be started
+    topicConnection.start();
+  }
+
+  /**
+   * Implementation of the MessageListener interface,
+   * messages will be received through this method.
+   */
+  public void onMessage(Message m) {
+
+    // Unpack the message, be careful when casting to the correct
+    // message type. onMessage should not throw any application
+    // exceptions.
+    try {
+
+      String msg = ((TextMessage)m).getText();
+      System.out.println("HelloSubscriber got message: " + msg);
+
+    } catch(JMSException ex) {
+
+      System.err.println("Could not get text message: " + ex);
+      ex.printStackTrace();
+
+    }
+
+  }
+
+  /**
+   * Close session and connection.
+   */
+  public void close() throws JMSException {
+
+    topicSession.close();
+    topicConnection.close();
+
+  }
+
+  /**
+   * Run an example subscribing to topic testTopic.
+   * Only works up to and including JBoss 2.4.0
+   */
+  public static void main(String[] args) {
+
+    try {
+
+      // Create the HelloSubscriber, giving it the name of the
+      // TopicConnection Factory and the Topic destination to use in
+      // lookup.
+      HelloSubscriber subscriber = new HelloSubscriber(
+        // Name of ConnectionFactory
+        "TopicConnectionFactory",
+        // Name of destination to publish to
+        "topic/testTopic");
+
+    } catch(Exception ex) {
+
+      System.err.println(
+        "An exception occurred while testing HelloSubscriber: " + ex);
+      ex.printStackTrace();
+
+    }
+
+  }
+
+} // HelloSubscriber
+
+</pre></div><p>
+You will find the files <tt>HelloSubscriber.java</tt> and <tt>HelloSubscriber25.java</tt> in the same directory as HelloPublisher; note that <tt>HelloSubscriber25.java</tt> only works with JBoss version 2.4.1. There are also in the same directory complete examples of how to work with queues in the files <tt>HelloSender.java</tt> and <tt>HelloReceiver.java</tt>.
+</p><p>
+The examples may be run and tested with the provided Ant build file <tt>build.xml</tt>.
+</p><p>
+To run the topic examples, open two terminal windows (or virtual sessions) and change to the <tt>build</tt> directory. In the first terminal window type:
+</p><div class="figure"><p><a name="d0e4419"></a><b>Figure 8.32. Running the HelloSubscriber example</b></p><pre class="programlisting">
+ant jms-hello-subscriber
+
+</pre></div><p>
+If all went well, you should see a message at the end looking like this:
+</p><div class="figure"><p><a name="d0e4426"></a><b>Figure 8.33. Output of running the HelloSubscriber example</b></p><pre class="programlisting">
+jms-hello-subscriber:
+     [echo] Using resources from: /home/pra/src/examples/resources
+     [java] HelloSubscriber subscribed to topic: topic/testTopic
+
+</pre></div><p>
+Now, type in the other window:
+</p><div class="figure"><p><a name="d0e4433"></a><b>Figure 8.34. Running the HelloPublisher example</b></p><pre class="programlisting">
+ant jms-hello-publisher
+
+</pre></div><p>
+In the subscriber window you should now see:
+</p><div class="figure"><p><a name="d0e4440"></a><b>Figure 8.35. Output of running the HelloPublisher example</b></p><pre class="programlisting">
+     [java] HelloSubscriber got message: Hello World no. 1
+     [java] HelloSubscriber got message: Hello World no. 2
+     [java] HelloSubscriber got message: Hello World no. 3
+     [java] HelloSubscriber got message: Hello World no. 4
+     [java] HelloSubscriber got message: Hello World no. 5
+     [java] HelloSubscriber got message: Hello World no. 6
+     [java] HelloSubscriber got message: Hello World no. 7
+     [java] HelloSubscriber got message: Hello World no. 8
+     [java] HelloSubscriber got message: Hello World no. 9
+     [java] HelloSubscriber got message: Hello World no. 10
+
+</pre></div><p>
+To run a JMS client with JBossMQ without the help of the already defined <tt>build.xml</tt> file you will need to set up a correct classpath. The library files needed to run a client are actually different for all the treated versions of JBoss. Among the examples, under the <tt>org/jboss/docs/jms/bin</tt> directory, there are three shell scripts that show how to run a JMS client for each of the different versions of JBoss.
+</p><p>
+First of all, you need to have the classes of your own client in the classpath. You should also have included in the classpath the directory where your <tt>jndi.properties</tt> file is located.
+</p><p>
+You will also need in the classpath the following JAR files included in the standard JBoss distribution:
+</p><div class="itemizedlist"><ul><li><p><a name="d0e4461"></a>client/jbossmq-client.jar</p></li><li><p><a name="d0e4464"></a>client/jnp-client.jar</p></li><li><p><a name="d0e4467"></a>client/jta-spec1_0_1.jar</p></li><li><p><a name="d0e4470"></a>lib/ext/jms.jar</p></li></ul></div><p>[<span class="bold"><b>2.4.0</b></span>. You should have these, instead:</p><div class="itemizedlist"><ul><li><p><a name="d0e4479"></a>client/jbossmq-client.jar</p></li><li><p><a name="d0e4482"></a>client/jnp-client.jar</p></li><li><p><a name="d0e4485"></a>client/jta-spec1_0_1.jar</p></li><li><p><a name="d0e4488"></a>client/jboss-j2ee.jar</p></li><li><p><a name="d0e4491"></a>lib/ext/oswego-concurrent.jar]</p></li></ul></div><p>[<span class="bold"><b>2.4.1</b></span>. You should have these, instead:</p><div class="itemizedlist"><ul><li><p><a name="d0e4500"></a>client/jbossmq-client.jar</p></li><li><p><a name="d0e4503"></a>client/jnp-client.jar</p></li><li><p><a name="d0e4506"></a>client/jta-spec1_0_1.jar</p></li><li><p><a name="d0e4509"></a>client/jboss-j2ee.jar</p></li><li><p><a name="d0e4512"></a>lib/ext/oswego-concurrent.jar</p></li><li><p><a name="d0e4515"></a>client/log4j.jar]</p></li></ul></div><p>
+Here it is an example shell script to run the HelloPublisher client program:
+</p><div class="figure"><p><a name="d0e4520"></a><b>Figure 8.36. Shell script for HelloPublisher from <tt>org/jboss/docs/jms/bin/runHelloPublisher22.sh</tt></b></p><pre class="programlisting">
+#!/bin/bash
+
+#
+# Example script to run JMS client against JBoss 2.2.x
+#
+
+# Directory where jndi.properties is located
+JNDI_RESOURCE_DIR=../resources/
+
+# HelloPublisher class
+CLIENT_CLASS_DIR=../../../../../build-examples/jms/classes/
+
+# Required libs to run client
+LIBS=$JBOSS_DIST/client/jbossmq-client.jar:\
+$JBOSS_DIST/client/jnp-client.jar:\
+$JBOSS_DIST/client/jta-spec1_0_1.jar:\
+$JBOSS_DIST/lib/ext/jms.jar
+
+# Agregated classpath
+CLASSPATH=:$LIBS:\
+$CLIENT_CLASS_DIR:\
+$JNDI_RESOURCE_DIR
+
+echo "Running with classpath $CLASSPATH"
+$JAVA_HOME/bin/java -classpath $CLASSPATH org.jboss.docs.jms.client.HelloPublisher
+
+</pre></div><p>
+To use this you have to set the environment variables <tt>JBOSS_DIST</tt> and <tt>JAVA_HOME</tt> as explained in <a href="ch08s02.html" title="Introduction">the section called &#8220;Introduction&#8221;</a>
+			</p><p>
+Here are the Ant targets to run the JMS examples:
+</p><div class="figure"><p><a name="d0e4539"></a><b>Figure 8.37. Ant targets for JMS examples</b></p><pre class="programlisting">
+ant jms-hello-publisher
+ant jms-hello-subscriber
+ant jms-hello-publisher25
+ant jms-hello-subscriber25
+ant jms-hello-sender
+ant jms-hello-receiver
+ant jms-hello-sender25
+ant jms-hello-receiver25
+ant jms-manual-jndi
+
+</pre></div><p>
+As a final touch we shall also explain a JBoss-specific feature: how to manage destinations on the fly.
+ As of this writing, it is only possible to do this up to and including JBoss version 2.4.0. Is is also possible to do this in JBoss version 2.4.1, but the API has changed slightly and the created destinations are not persisted between server restarts.
+</p><p>
+There are two different ways of doing this, depending on whether the code is in the same Virtual Machine as JBoss or it is in a standalone client. Both involve invoking a JMX MBean registered by the name <tt>service=JMSServer</tt>; this MBean has four methods to manage destinations: newTopic, destroyTopic, newQueue and destroyQueue.
+</p><p>[<span class="bold"><b>2.4.1</b></span>. The MBean is registered by the name <tt>service=Server</tt> and its method names are createTopic, destroyTopic, createQueue and destroyQueue.]</p><p>
+The difference between the two ways of managing destinations on the fly is reflected in how the MBean is invoked. If the code is in the same VM as the MBean server, you may invoke it directly. To create a topic destination you might do it like this:
+</p><div class="figure"><p><a name="d0e4561"></a><b>Figure 8.38. Creating a topic programmatically in the same VM</b></p><pre class="programlisting">
+// Get the MBean server
+MBeanServer server = (MBeanServer)
+  MBeanServerFactory.findMBeanServer(null).iterator().next();
+
+// Invoke the MBean
+server.invoke(new ObjectName("JMS", "service", "JMSServer"),
+  "newTopic",
+  new Object[] { "myTopic" },
+  new String[] { "java.lang.String" });
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. Because of the changes in the strings used to look up the MBean and in the method names of the MBean, it would typically look like below, instead.]</p><div class="figure"><p><a name="d0e4571"></a><b>Figure 8.39. [<span class="bold">2.4.1</span>] Creating a topic programmatically in the same VM</b></p><pre class="programlisting">
+// Get the MBean server
+MBeanServer server = (MBeanServer)
+  MBeanServerFactory.findMBeanServer(null).iterator().next();
+
+// Invoke the MBean
+server.invoke(new ObjectName("JBossMQ", "service", "Server"),
+  "createTopic",
+  new Object[] { "myTopic" },
+  new String[] { "java.lang.String" });
+
+</pre></div><p>
+If the code is not in the same VM as the MBean server, you need to go through a JMX adapter. One JMX adapter is the HTML GUI. It is possible to programmatically invoke an MBean via a URL.
+</p><div class="figure"><p><a name="d0e4581"></a><b>Figure 8.40. Creating a topic programmatically via a URL</b></p><pre class="programlisting">
+//These are samples, not available in the example code.
+String method = "newTopic";
+String destName = "myCreated";
+
+String action = "action=" + method + "?action=" + method +
+  "&amp;param0%2Bjava.lang.String=" + destName;
+
+String arg = "/InvokeAction//JMS%3Aservice%3DJMSServer" + "/" + action;
+
+URL url = new URL("http", "localhost", 8082, arg);
+
+//Invoke the URL
+HttpURLConnection con = (HttpURLConnection)url.openConnection();
+con.connect();
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. The strings used would look somewhat different.]</p><div class="figure"><p><a name="d0e4591"></a><b>Figure 8.41. [<span class="bold">2.4.1</span>] Creating a topic programmatically via a URL</b></p><pre class="programlisting">
+//These are samples, not available in the example code.
+String method = "createTopic";
+String destName = "myCreated";
+
+String action = "action=" + method + "?action=" + method +
+  "&amp;param0%2Bjava.lang.String=" + destName;
+
+String arg = "/InvokeAction//JBossMQ%3Aservice%3DServer" + "/" + action;
+
+URL url = new URL("http", "localhost", 8082, arg);
+
+//Invoke the URL
+HttpURLConnection con = (HttpURLConnection)url.openConnection();
+con.connect();
+
+</pre></div><p>
+The example code may be found in the source file <tt>DestinationHelper.java</tt> in directory <tt>org/jboss/docs/jms/client</tt>.</p><p>[<span class="bold"><b>2.4.1</b></span>. The source file is <tt>DestinationHelper25.java</tt> in the same directory.]</p><p>You may run it with the Ant targets:
+</p><div class="figure"><p><a name="d0e4617"></a><b>Figure 8.42. Running the DestinationHelper example</b></p><pre class="programlisting">
+ant jms-create-dest
+ant jms-destroy-dest
+
+</pre></div><div class="figure"><p><a name="d0e4622"></a><b>Figure 8.43. [<span class="bold">2.4.1</span>] Running the DestinationHelper example</b></p><pre class="programlisting">
+ant jms-create-dest25
+ant jms-destroy-dest25
+
+</pre></div><p>
+They will create and destroy the topic <tt>myCreated</tt>.
+</p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch08.html"><img src="images\toc.gif" border="0"></a><a href="ch08s03.html"><img src="images\prev.gif" border="0"></a><a href="ch08s20.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

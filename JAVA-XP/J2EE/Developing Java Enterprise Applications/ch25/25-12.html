@@ -1,0 +1,183 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The confirmation page displays the items confirmed by the EJB, highlighting the ones that have changed in price or quantity from the items requested. Items may change price if their Web page is out of date. The quantity will change based on availability. These changes are determined by asking the ShoppingCart bean, passed as an argument, to add an item. The bean returns the same item, with the price and quantity adjusted. These adjusted values are placed in the session under the name &#147;shoppingcart.itemsToConfirm.&#148; This page also contains a form for the user to enter a confirmation password. In this example, the confirmation password should correspond to a name in the database.
+</P>
+<PRE>
+    protected void outputConfirm(Hashtable items
+                                ,ShoppingCart cart
+                                ,HttpSession session
+                                ,PrintWriter out
+                                ,String requestURL
+                                ,String referer)
+    {
+        ShoppingCartItem item;
+        ShoppingCartItem curItem;
+        Enumeration curItems;
+        Hashtable itemsToConfirm;
+        float total=0;
+        
+        curItems = items.elements();
+           
+        itemsToConfirm = new Hashtable();   
+        session.putValue(&#147;shoppingcart.itemsToConfirm&#148;
+                           ,itemsToConfirm);
+        
+        out.println(&#147;&ltHTML&gt&#148;);
+        out.println(&#147;&ltHEAD&gt&#148;);
+        out.println(&#147;&ltTITLE&gt&#148;);
+        out.println(&#147;Confirm Purchase&#148;);
+        out.println(&#147;&lt/TITLE&gt&#148;);
+        out.println(&#147;&lt/HEAD&gt&#148;);
+        out.println(&#147;&ltBODY TEXT=\&#147;#000000\&#148; BGCOLOR=\&#147;#FFFFFF\&#148;&#147;);
+        out.println(&#147; LINK=\&#147;#FF0000\&#148; VLINK=\&#147;#800080\&#147;&gt&#148;);
+        out.println(&#147;&ltCENTER&gt&#148;);
+        out.println(&#147;&ltTABLE WIDTH=500 BORDER=0&gt&#148;);
+        out.println(&#147;&ltTR&gt&#148;);
+        out.println(&#147;&ltTD&gt&#148;);
+        
+        out.println(&#147;&ltCENTER&gt&ltH1&gtConfirmation &#148;
+                             +&#147;Required&lt/H1&gt&lt/CENTER&gt&#148;);
+        out.print(&#147;Please confirm your purchase of&#148;);
+        out.println(&#147; the following items:&ltBR&gt&#148;);
+        out.print(&#147;&ltEM&gtItems that have changed are printed&#148;);
+        out.println(&#147; in blue.&lt/EM&gt&#148;);
+        out.println(&#147;&ltTABLE&gt&#148;);
+        out.println(&#147;&ltTR&gt&#148;);
+        out.println(&#147;&ltTH&gtDescription&lt/TH&gt&#148;);
+        out.println(&#147;&ltTH&gtQuantity&lt/TH&gt&#148;);
+        out.println(&#147;&ltTH&gtPrice&lt/TH&gt&#148;);
+        out.println(&#147;&ltTH&gtTotal&lt/TH&gt&#148;);
+        out.println(&#147;&lt/TR&gt&#148;);
+        
+        while((curItems!=null)&amp&amp(curItems.hasMoreElements()))
+        {
+            curItem = (ShoppingCartItem) curItems.nextElement();
+        
+            try
+            {
+                item = cart.addItem(curItem);
+            
+                curItem.price = item.price;
+                curItem.quantity = item.quantity;
+                
+                itemsToConfirm.put(item.desc,item);
+            }
+            catch(Exception exp)
+            {
+                item = new ShoppingCartItem("err",0,0);
+            }
+            
+            out.println("&ltTR&gt");
+            out.print("&ltTD&gt");
+            out.print(item.desc);
+            out.println("&lt/TD&gt");
+            out.print("&ltTD&gt");
+            
+            if(item.quantity != curItem.quantity)
+                out.print("&ltFONT COLOR=\"#0033FF\"&gt");
+            
+            out.print(item.quantity);
+            
+            if(item.quantity != curItem.quantity)
+                out.print("&lt/FONT&gt");
+            
+            out.println("&lt/TD&gt");
+            out.print("&ltTD&gt");
+            
+            if(item.price != curItem.price)
+                out.print("&ltFONT COLOR=\"#0033FF\"&gt");
+                
+            out.print(formatter.format(item.price));
+            
+            if(item.price != curItem.price)
+                out.print("&lt/FONT&gt");
+            
+            out.println("&lt/TD&gt");
+            out.print("&ltTD&gt");
+            out.print(formatter.format(item.getTotal()));
+            out.println("&lt/TD&gt");
+            out.println("&lt/TR&gt");
+        
+            total += item.getTotal();
+        }
+        
+        out.println("&ltTR&gt");
+        out.println("&ltTD&gt&lt/TD&gt");
+        out.println("&ltTD&gt&lt/TD&gt");
+        out.println("&ltTD&gt&ltB&gtTotal&lt/B&gt&lt/TD&gt");
+        out.print("&ltTD&gt&ltB&gt");
+        out.print(formatter.format(total));
+        out.println("&lt/B&gt&lt/TD&gt");
+        out.println("&lt/TR&gt");
+
+        out.println("&lt/TABLE&gt");
+        
+        out.println("&ltBR&gt");
+        out.print("&ltFORM ACTION=\"");
+        out.print(requestURL);
+        out.println("\" METHOD=\"GET\"&gt");
+        out.println("Enter your pass phrase to confirm.");
+        out.println("&ltINPUT TYPE=\"TEXT\" ");
+        out.println("NAME=\"confirmed\" SIZE=16&gt");
+        out.println("&ltINPUT TYPE=\"HIDDEN\" "); 
+        out.println("NAME=\"action\" VALUE=\"purchase\"&gt");
+        out.println("&ltINPUT TYPE=\"SUBMIT\" "); 
+        out.println("NAME=\"submit\" VALUE=\"Confirm\"&gt");
+        
+        out.println("&lt/FORM&gt");
+        
+        if((referer!=null)&amp&amp(referer.length()&gt0))
+        {
+            out.print("&ltCENTER&gt&ltH4&gt&ltA HREF=\"");
+            out.print(referer);
+            out.print("?referer=");
+            out.print(referer);
+            out.println("\"&gtBack&lt/A&gt&lt/H4&gt&lt/CENTER&gt");
+        }
+        
+        out.println("&lt/TD&gt");
+        out.println("&lt/TR&gt");
+        out.println("&lt/TABLE&gt");
+        out.println("&lt/CENTER&gt");
+        out.println("&lt/BODY&gt");
+        out.println("&lt/HTML&gt");
+        out.close();
+    }
+</PRE>
+<P>A call to doPurchase is made from the doGet method when a purchase is requested, and the user id is assigned by the confirmation page. First, doPurchase adds the requested items to the cart. These are the confirmed items, not the user&#146;s original requests. If the items are added successfully, the bean is asked to purchase its items. This request either succeeds or throws an exception. If the exception is a BadCreditException, an appropriate message is displayed; otherwise, an error message is sent to the user. Finally, if no errors occurred, the servlet displays a page listing the purchased items with a link back to the online store&#146;s home page.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

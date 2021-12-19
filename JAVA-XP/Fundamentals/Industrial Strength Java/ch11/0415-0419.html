@@ -1,0 +1,652 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0410-0414.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0420-0425.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-415"><P>Page 415</P></A>
+
+
+
+
+
+
+<PRE>
+
+      total += msgLength[i];
+
+    return total;
+
+    }
+
+
+
+    protected int computeLength(int id) throws IOException {
+
+    File f = new File(prefix + msgID[id]);
+
+    return (int) f.length();
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Accessing Message Content
+
+</B>
+
+</P>
+
+
+
+<P>To make the contents of a message available as an InputStream, open the file that
+
+holds the message and return a FileInputStream object:
+
+</P>
+
+
+
+
+<PRE>
+
+    InputStream getMessage(int id) throws IOException {
+
+    return new FileInputStream(prefix + msgID[id]);
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Resetting Message Deletion Flag
+
+</B>
+
+</P>
+
+
+
+<P>To support deleting messages and subsequent undeletion before committing changes,
+
+you must maintain an array of flags that indicate whether a given message is marked
+
+for deletion. You must also provide a reset() method that resets the deletion flags:
+
+</P>
+
+
+
+
+<PRE>
+
+    void delete(int id) {
+
+    msgDeleted[id] = true;
+
+    }
+
+
+
+    void reset() {
+
+    for (int i = 0; i &lt; msgDeleted.length; i++)
+
+      msgDeleted[i] = false;
+
+    }
+
+</PRE>
+
+
+<P>
+
+
+
+<B>
+
+Updating the Maildrop
+
+</B>
+
+</P>
+
+
+
+<P>After the POP session, either unlock() the maildrop or update() it with changes
+
+made during the POP session. When you update the maildrop, the system deletes any
+
+messages so marked and unlocks the maildrop:
+
+</P>
+
+
+
+
+<PRE>
+
+    void update() {
+
+    for (int i = 0; i &lt; msgDeleted.length; i++) {
+
+      if (msgDeleted[i]) {
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-416"><P>Page 416</P></A>
+
+
+
+
+
+
+<PRE>
+
+        File f = new File(prefix + Integer.toString(msgID[i]));
+
+        f.delete();
+
+      }
+
+    }
+
+    unlock();
+
+    }
+
+
+
+  }
+
+</PRE>
+
+
+
+
+<H3><A NAME="ch11_ 28">
+
+Simple Message Transport<BR>
+
+Protocol (SMTP)
+
+</A></H3>
+
+
+
+<P>Originally, e-mail transmission was a function handled by the file transfer protocol
+
+(FTP). When the networking community migrated to TCP/IP, the e-mail functions separated
+
+into a separate protocol based on FTP. This link appears in the command syntax and
+
+response code formats. Commands from the client to the servers are four-letter commands
+
+followed by a space. Responses from the server to the client start with a three-digit response
+
+code, followed by a user-readable text message.
+
+</P>
+
+
+
+<P>The Simple Message Transport Protocol (SMTP) is specified in RFC821. Initiate
+
+the SMTP session by sending a HELO command, and terminate the session with a
+
+QUIT command. Sending a message in SMTP involves a three-step process:
+
+</P>
+
+
+
+<OL>
+
+<LI>          Initiate the sequence and identify the sender of the message with a MAIL
+
+FROM: command.
+
+<LI>     Specify the recipients using one or more RECP TO: commands.
+
+<LI>     Transmit the message by issuing a DATA command, writing the message to
+
+the server, and ending it with a line containing only a &quot;.&quot; character.
+
+</OL>
+
+
+
+<P>Responses from the server to the client appear in a special format designed for
+
+easy processing. Single-line responses, or the last line of a multiline response, begin with the
+
+3-digit code, followed by a space character. Each line except the last in a multiline
+
+response starts with the three-digit code, followed by the &quot;-&quot; character; the last line starts with
+
+the three-digit code, followed by a space. The system expects the same three-digit code in
+
+all lines of a multiline response. The response codes are designed for automated
+
+processing without regard to the text:
+
+</P>
+
+
+
+<UL>
+
+<LI>          A first digit of 2 indicates success.
+
+<LI>          A first digit of 3 indicates success in a multi-command sequence.
+
+</UL>
+
+
+
+<A NAME="PAGENUM-417"><P>Page 417</P></A>
+
+
+
+
+
+<UL>
+
+<LI>          A first digit of 4 indicates temporary failure.
+
+<LI>          A first digit of 5 indicates permanent failure.
+
+</UL>
+
+
+
+<P>The second digit involves additional categories. In practice, each SMTP command
+
+defines a specific set of expected three-digit response codes. Servers should use one of the
+
+defined codes to ensure maximum operability with clients.
+
+</P>
+
+
+
+<H3><A NAME="ch11_ 29">
+
+Sending Mail Using SMTP
+
+</A></H3>
+
+
+
+<P>After constructing your toolkit and basic classes, you can shift your attention to
+
+building the client and servers applications. The first application is sending e-mail. As
+
+previously identified, mail moves from the client to the server through SMTP.
+
+</P>
+
+
+
+<P>Figure 11.6 shows the packet exchanges between the client and server when sending
+
+one message.
+
+</P>
+
+
+
+<P><a href="images\ch11fg06.jpg"><img src="images\tn_ch11fg06.jpg"></a><BR>
+
+Figure 11.6
+
+SMTP packet exchanges to send a message to
+
+User1 and User2.
+
+</P>
+
+
+
+<A NAME="PAGENUM-418"><P>Page 418</P></A>
+
+
+
+
+
+
+
+<H4><A NAME="ch11_ 30">
+
+An SMTP Client
+
+</A></H4>
+
+
+
+<P>Before building the server, construct a client to become familiar
+
+with SMTP operation. Because SMTP operates on e-mail
+
+messages, model your object design around the message rather than the
+
+e-mail protocol.
+
+</P>
+
+
+
+<P>The SMTPMessage class contains String variables for the relay
+
+host name, the sender and recipient's mail addresses, the subject
+
+or header, and the body. As an extension to the example in this
+
+section, you can add a Vector of parts for a multimedia version.
+
+</P>
+
+
+
+<B>
+
+Creating SMTPMessage Objects
+
+</B>
+
+
+
+<P>Create an SMTPMessage object by specifying the name of your e-mail relay host.
+
+For applets, the standard security manager restricts the relay host to the same as
+
+the document's codeBase. The default SMTP port 25 applies if you do not specify otherwise:
+
+</P>
+
+
+
+
+<PRE>
+
+  public class SMTPMessage {
+
+    protected String smtpServer;
+
+    protected String from;
+
+    protected String to;
+
+    protected String subject;
+
+    protected String header;
+
+    protected String body;
+
+    protected int smtpPort;
+
+
+
+    protected DataInputStream in;
+
+    protected InetOutputStream out;
+
+
+
+    private final static int defaultPort = 25;
+
+
+
+    private SMTPMessage() {
+
+    }
+
+
+
+    public SMTPMessage(String server) {
+
+    this(server, defaultPort);
+
+    }
+
+
+
+    public SMTPMessage(String server, int port) {
+
+    smtpServer = server;
+
+    smtpPort = port;
+
+    }<BR>
+
+</PRE>
+
+
+<BR>
+
+<P>
+
+
+
+<CENTER>
+
+<TABLE BGCOLOR="#FFFF99">
+
+<TR><TD><B>
+
+NOTE
+
+</B></TD></TR>
+
+<TR><TD>
+
+<BLOCKQUOTE>
+
+If you need to use several different client protocols for e-mail,
+
+a different object model separates the message from
+
+the transmission protocol.
+
+</BLOCKQUOTE></TD></TR>
+
+</TABLE></CENTER>
+
+</P>
+
+
+
+
+
+<A NAME="PAGENUM-419"><P>Page 419</P></A>
+
+
+
+
+
+
+
+
+
+<B>
+
+Setting Message Header Fields
+
+</B>
+
+
+
+<P>Provide the following accessor methods to set the various String variables that
+
+hold information about the message:
+
+</P>
+
+
+
+
+<PRE>
+
+    public void setFrom(String from) {
+
+    this.from = from;
+
+    }
+
+
+
+    public void setTo(String to) {
+
+    this.to = to;
+
+    }
+
+
+
+    public void setSubject(String sub) {
+
+    subject = sub;
+
+    }
+
+
+
+    public void setHeader(String hdr) {
+
+    header = hdr;
+
+    }
+
+
+
+    public void setBody(String body) {
+
+    this.body = body;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Sending the Message
+
+</B>
+
+</P>
+
+
+
+<P>The submit() method performs the actual protocol processing. After you verify
+
+the parameters, open a connection to the SMTP relay host and create the input and
+
+output streams. The server sends a &quot;220&quot; response with its official host name as an argument.
+
+You respond with a HELO command with your host name:
+
+</P>
+
+
+
+
+<PRE>
+
+public void submit() throws IOException {
+
+    if ((from == null) || (to == null))
+
+      throw new IllegalArgumentException(&quot;missing parameters&quot;);
+
+    Socket s = new Socket(smtpServer, smtpPort);
+
+    try {
+
+      in = new DataInputStream(s.getInputStream());
+
+      out = new InetOutputStream(s.getOutputStream(), true);
+
+      checkResponse(&quot;220&quot;, &quot;&quot;);
+
+      out.println(&quot;HELO there.com&quot;);
+
+      checkResponse(&quot;250&quot;, &quot;HELO: &quot;);
+
+</PRE>
+
+
+
+
+<P><CENTER>
+
+<a href="0410-0414.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0420-0425.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

@@ -1,0 +1,250 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>How to Integrate Custom Services via MBeans</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s21.html" title="How to use Applets to access EJBs in JBoss"><link rel="next" href="ch13s39.html" title="JMX Connector Description and HowTo"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s21.html"><img src="images\prev.gif" border="0"></a><a href="ch13s39.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="howto.mbeans"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="howto.mbeans"></a>How to Integrate Custom Services via MBeans</h2></div></div><p>Author:<span class="author">Scott Stark</span> 
+		<tt>&lt;<a href="mailto:Scott_Stark@displayscape.com">Scott_Stark@displayscape.com</a>&gt;</tt>
+	</p><div class="section"><a name="d0e9601"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9601"></a>Introduction</h3></div></div><p>The best way to add services to the JBoss server is to write your own JMX MBeans. An MBean is a Java object which implement resources and their instrumentation interfaces as defined in the Java Management Extensions(JMX) specification. Once written they are added to JBoss using the jboss.jcml which is used to configure the core JBoss MBeans. The best way for your EJBs to access your new services is to make them accessible via JNDI.</p><p>There are two classes of MBeans; those that are independent of JBoss services and those that are dependent on JBoss services. MBeans that are independent of JBoss services are the trival case and can be written per the JMX specification and added to a JBoss server by adding their MLET tag to the jboss.conf file. Writing an MBean that relies on a JBoss service like naming requires one to follow the JBoss service pattern. Before describing how to write such an MBean, let's go over the two JBoss services that manage the configuration and depdendencies of MBean services; ConfigurationService and ServiceControl.</p><div class="section"><a name="d0e9608"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9608"></a>The ConfigurationService MBean</h4></div></div><p>JBoss manages configuration its MBean services via a custom MBean that loads an xml variation of the standard MLet configuration file. This custom MBean is implemented in the org.jboss.configuration.ConfigurationService class. The ConfigurationService MBean is loaded when JBoss starts up by the JMX MLet due to its entry in the jboss.conf file. The jboss.jcml configuration is then loaded by invoking loadConfiguration() on the ConfigurationService MBean. The loadConfiguration method performs the following steps:</p><div class="procedure"><p><a name="d0e9613"></a><b>Procedure 13.1. </b></p><ol type="1"><li><a name="d0e9614"></a><p>Parse the jboss.jcml file and instantiate all MBeans</p></li><li><a name="d0e9617"></a><p>Parse the optional jboss-auto.jcml</p><ol type="a"><li><a name="d0e9621"></a><p>If jboss-auto.jcml exists, parse the file and instantiate any MBeans that were not created by the parse of the jboss.jcml file.</p></li><li><a name="d0e9624"></a><p>Apply the MBean attribute settings from the jboss-auto.jcml file.</p></li></ol></li><li><a name="d0e9627"></a><p>Apply the attribute settings from the jboss.jcml file.</p></li></ol></div></div><div class="section"><a name="d0e9630"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9630"></a>The ServiceControl MBean</h4></div></div><p>JBoss manages dependencies between MBeans via the org.jboss.util.ServiceControl custom MBean. . The ServiceControl MBean is also loaded by the JMX MLet on JBoss startup. It implements the javax.management.NotificationListener interface to receive AttributeChangeNotification, MBeanServerNotification.REGISTRATION_NOTIFICATION and MBeanServerNotification.UNREGISTRATION_NOTIFICATION JMX events. AttributeChangeNotification are simply logged to the JBoss server log. The REGISTRATION_NOTIFICATION and UNREGISTRATION_NOTIFICATION are used to determine which MBeans are candidate JBoss service MBeans. The order of MBean registration is used as the order of service initialization and startup. The ServiceControl MBean has four key methods: init, start, stop and destroy.</p><div class="section"><a name="d0e9635"></a><div class="titlepage"><div><h5 class="title"><a name="d0e9635"></a>The init Method</h5></div></div><p>The ServiceControl <tt>init</tt> method is called by the JBoss server main entry point after the jboss.jcml configuration has been loaded. The process of loading the jboss.jcml file will have caused the names of all loaded MBeans to have been registered with the ServiceControl MBean due to the registration events posted by the MBeanServer. The <tt>init</tt> method makes a copy of curent list of MBean names and then proceeds to invoke the <tt>init</tt> method on each MBean. If successful, the ServiceControl MBean then registers as an NotificationListener on the MBean's name to receive AttributeChangeNotification from the MBean. The order of initialization is the order of registration which is the same as the ordering of mbean entries in the jboss.jcml file. When an MBean's <tt>init</tt> method is called, all MBeans that were registered ahead of it have also had their <tt>init</tt> method invoked. This gives an MBean an opportunity to check that required MBeans or resources exist. The MBean typically cannot utilize other MBean services at this point as most JBoss MBean services do not become fully functional until they have been started.</p></div><div class="section"><a name="d0e9655"></a><div class="titlepage"><div><h5 class="title"><a name="d0e9655"></a>The start Method</h5></div></div><p>The ServiceControl <tt>start</tt> method is called by the JBoss server main entry point after all MBeans have been <tt>init</tt>d. The <tt>start</tt> method makes a copy of curent list of MBean names and then proceeds to invoke the <tt>start</tt> method on each MBean. When an MBean's <tt>start</tt> method is called, all MBeans that were registered ahead of it have also had their <tt>start</tt> method invoked. It is within the <tt>start</tt> method that signals an MBean service to become fully operational.</p></div><div class="section"><a name="d0e9681"></a><div class="titlepage"><div><h5 class="title"><a name="d0e9681"></a>The stop Method</h5></div></div><p>The <tt>stop</tt> method is invoked by the by the JBoss server shutdown process which is managed by the org.jboss.util.Shutdown MBean. The <tt>stop</tt> method makes a copy of the current list of MBean names and then invokes the <tt>stop</tt> method on each MBean in reverse order.</p></div><div class="section"><a name="d0e9695"></a><div class="titlepage"><div><h5 class="title"><a name="d0e9695"></a>The destroy Method</h5></div></div><p>The <tt>destroy</tt> method is invoked by the by the JBoss server shutdown process after the <tt>stop</tt> method. The <tt>destroy</tt> method makes a copy of the current list of MBean names and then invokes the <tt>destroy</tt> method on each MBean in reverse order.</p></div></div></div><div class="section"><a name="d0e9712"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9712"></a>Writing JBoss MBean Services</h3></div></div><p>Writing a custom service that integrates into the JBoss server requires the use of the org.jboss.util.Service interface pattern if the custom service is depdendent on other JBoss services. This means that you cannot perform any JBoss service dependent intialization in any of the javax.management.MBeanRegistration interface methods. Instead, you must do this in the Service interface <tt>init</tt> and/or <tt>start</tt> methods. You need to do one of the following:</p><div class="itemizedlist"><ul><li><p><a name="d0e9724"></a>Add any of the Service methods that you want called on your MBean to your MBean interface.</p></li><li><p><a name="d0e9727"></a>Have your MBean interface extend the org.jboss.util.Service interface.</p></li><li><p><a name="d0e9730"></a>Have your MBean interface extend the org.jboss.util.ServiceMBean interface. This is a subinterface of org.jboss.util.Service that adds <tt>String getName()</tt>, <tt>int getState()</tt>, and <tt>String getStateString()</tt> methods.</p></li></ul></div><p>Which approach you choose depends on whether or not you want to be associated with JBoss specific code. If you don't, then you would use the first approach. If you don't mind, then the simplest approach is to have your MBean interface extend from org.jboss.util.ServiceMBean and your MBean implementation class extend from the abstract org.jboss.util.ServiceMBeanSupport class. This class implements the org.jboss.util.ServiceMBean interface except for the <tt>String getName()</tt> method. ServiceMBeanSupport provides implementations of the init, start, stop and destroy methods that integrate logging and JBoss service state management. Each method delegates any subclass specific work to initService, startService, stopService, and destroyService methods respectively. When subclassing ServiceMBeanSupport you would override one or more of the initService, startService, stopService, and destroyService methods in addition to getName as required.</p></div><div class="section"><a name="d0e9747"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9747"></a>Examples</h3></div></div><p>This section uses a simple MBean that binds a HashMap into the JBoss JNDI namespace at a location determined by its JndiName attribute. Because the MBean uses JNDI it depdends on the JBoss naming service MBean and therefore must use the JBoss MBean service pattern to be notified of when the naming service is available.</p><div class="section"><a name="d0e9752"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9752"></a>JNDIMap MBean That Implements Service Methods</h4></div></div><p>
+				<a href="ch13s26.html#howto.mbeans.Service" title="Figure 13.2. JNDIMap MBean Interface and Implementation Based On the Service Interface">Figure 13.2</a> gives the MBean interface for the JNDIMap MBean that incorporates that Service interface methods that it needs to startup correctly. The interface includes the Service <tt>start</tt> method to be informed when all required services have been started and the  <tt>stop</tt> method to clean up the service.</p><div class="figure"><p><a name="howto.mbeans.Service"></a><b>Figure 13.2. JNDIMap MBean Interface and Implementation Based On the Service Interface</b></p><pre class="programlisting">// The JNDIMap MBean interface
+import javax.naming.NamingException;
+
+public interface JNDIMapMBean
+{
+    public String getJndiName();
+    public void setJndiName(String jndiName) throws NamingException;
+    public void start() throws Exception;
+    public void stop() throws Exception;
+}</pre><pre class="programlisting">// The JNDIMap MBean implementation
+import java.io.InputStream;
+import java.util.HashMap;
+import javax.naming.CompositeName;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.Name;
+import javax.naming.NamingException;
+import org.jboss.naming.NonSerializableFactory;
+
+public class JNDIMap implements JNDIMapMBean
+{
+    private String jndiName;
+    private HashMap contextMap = new HashMap();
+    private boolean started;
+
+    public String getJndiName()
+    {
+       return jndiName;
+    }
+    public void setJndiName(String jndiName) throws NamingException
+    {
+        String oldName = this.jndiName;
+        this.jndiName = jndiName;
+        if( started )
+        {
+            unbind(oldName);
+            try
+            {
+                rebind();
+            }
+            catch(Exception e)
+            {
+                NamingException ne = new NamingException("Failed to update jndiName");
+                ne.setRootCause(e);
+                throw ne;
+            }
+        }
+    }
+
+    public void start() throws Exception
+    {
+        started = true;
+        rebind();
+    }
+
+    public void stop()
+    {
+        started = false;
+        unbind(jndiName);
+    }
+
+    private static Context createContext(Context rootContext, Name name) throws NamingException
+    {
+        Context subctx = rootContext;
+        for(int n = 0; n &lt; name.size(); n ++)
+        {
+            String atom = name.get(n);
+            try
+            {
+                Object obj = subctx.lookup(atom);
+                subctx = (Context) obj;
+            }
+            catch(NamingException e)
+            {	// No binding exists, create a subcontext
+                subctx = subctx.createSubcontext(atom);
+            }
+        }
+
+        return subctx;
+    }
+
+    private void rebind() throws NamingException
+    {
+        InitialContext rootCtx = new InitialContext();
+        // Get the parent context into which we are to bind
+        Name fullName = rootCtx.getNameParser("").parse(jndiName);
+        System.out.println("fullName="+fullName);
+        Name parentName = fullName;
+        if( fullName.size() &gt; 1 )
+            parentName = fullName.getPrefix(fullName.size()-1);
+        else
+            parentName = new CompositeName();
+        Context parentCtx = createContext(rootCtx, parentName);
+        Name atomName = fullName.getSuffix(fullName.size()-1);
+        String atom = atomName.get(0);
+        NonSerializableFactory.rebind(parentCtx, atom, contextMap);
+    }
+    private void unbind(String jndiName)
+    {
+        try
+        {
+            Context rootCtx = (Context) new InitialContext();
+            rootCtx.unbind(jndiName);
+            NonSerializableFactory.unbind(jndiName);
+        }
+        catch(NamingException e)
+        {
+            e.printStackTrace();
+        }
+    }
+}
+</pre></div></div><div class="section"><a name="d0e9772"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9772"></a>JNDIMap MBean That Extends ServiceMBean</h4></div></div><p>
+				<a href="ch13s26.html#howto.mbeans.ServiceMBean" title="Figure 13.3. JNDIMap MBean Interface and Implementation Based On the ServiceMBean Interface and ServiceMBeanSupport Class">Figure 13.3</a> gives the MBean interface for the JNDIMap MBean that extends th ServiceMBean interface. The implementation class then extends the ServiceMBeanSupport class and overrides the <tt>startService</tt> method to be informed when all required services have been started and the  <tt>stopService</tt> method to clean up the service. It also implements the abstract <tt>getName</tt> to return a descriptive name for the MBean.</p><div class="figure"><p><a name="howto.mbeans.ServiceMBean"></a><b>Figure 13.3. JNDIMap MBean Interface and Implementation Based On the ServiceMBean Interface and ServiceMBeanSupport Class</b></p><pre class="programlisting">// The JNDIMap MBean interface
+import javax.naming.NamingException;
+
+public interface JNDIMapMBean extends org.jboss.util.ServiceMBean
+{
+    public String getJndiName();
+    public void setJndiName(String jndiName) throws NamingException;
+}</pre><pre class="programlisting">// The JNDIMap MBean implementation
+import java.io.InputStream;
+import java.util.HashMap;
+import javax.naming.CompositeName;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.Name;
+import javax.naming.NamingException;
+import org.jboss.naming.NonSerializableFactory;
+
+public class JNDIMap extends org.jboss.util.ServiceMBeanSupport implements JNDIMapMBean
+{
+    private String jndiName;
+    private HashMap contextMap = new HashMap();
+
+    public String getJndiName()
+    {
+       return jndiName;
+    }
+    public void setJndiName(String jndiName) throws NamingException
+    {
+        String oldName = this.jndiName;
+        this.jndiName = jndiName;
+        if( super.getState() == STARTED )
+        {
+            unbind(oldName);
+            try
+            {
+                rebind();
+            }
+            catch(Exception e)
+            {
+                NamingException ne = new NamingException("Failed to update jndiName");
+                ne.setRootCause(e);
+                throw ne;
+            }
+        }
+    }
+
+    public String getName()
+    {
+        return "JNDIMap(" + jndiName + ")";
+    }
+
+    public void startService() throws Exception
+    {
+        rebind();
+    }
+
+    public void stopService()
+    {
+        unbind(jndiName);
+    }
+
+    private static Context createContext(Context rootContext, Name name) throws NamingException
+    {
+        Context subctx = rootContext;
+        for(int n = 0; n &lt; name.size(); n ++)
+        {
+            String atom = name.get(n);
+            try
+            {
+                Object obj = subctx.lookup(atom);
+                subctx = (Context) obj;
+            }
+            catch(NamingException e)
+            {	// No binding exists, create a subcontext
+                subctx = subctx.createSubcontext(atom);
+            }
+        }
+
+        return subctx;
+    }
+
+    private void rebind() throws NamingException
+    {
+        InitialContext rootCtx = new InitialContext();
+        // Get the parent context into which we are to bind
+        Name fullName = rootCtx.getNameParser("").parse(jndiName);
+        log.debug("fullName="+fullName);
+        Name parentName = fullName;
+        if( fullName.size() &gt; 1 )
+            parentName = fullName.getPrefix(fullName.size()-1);
+        else
+            parentName = new CompositeName();
+        Context parentCtx = createContext(rootCtx, parentName);
+        Name atomName = fullName.getSuffix(fullName.size()-1);
+        String atom = atomName.get(0);
+        NonSerializableFactory.rebind(parentCtx, atom, contextMap);
+    }
+    private void unbind(String jndiName)
+    {
+        try
+        {
+            Context rootCtx = (Context) new InitialContext();
+            rootCtx.unbind(jndiName);
+            NonSerializableFactory.unbind(jndiName);
+        }
+        catch(NamingException e)
+        {
+            log.exception(e);
+        }
+    }
+}
+</pre></div></div></div><div class="section"><a name="d0e9795"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9795"></a>Sample jboss.jcml mbean entry</h3></div></div><p>A sample jboss.jcml mbean entry for the JNDIMap MBean is given in <a href="ch13s26.html#howto.mbeans.config" title="Figure 13.4. Sample jboss.jcml entry for the JNDIMap MBean">Figure 13.4</a>. This binds a HashMap object under the "inmemory/maps/MapTest" JNDI name.
+			</p><div class="figure"><p><a name="howto.mbeans.config"></a><b>Figure 13.4. Sample jboss.jcml entry for the JNDIMap MBean</b></p><pre class="programlisting">
+&lt;server&gt;
+...
+  &lt;mbean code="org.jboss.naming.NamingService" name="DefaultDomain:service=Naming"&gt;
+    &lt;attribute name="Port"&gt;1099&lt;/attribute&gt;
+  &lt;/mbean&gt;
+
+  &lt;!-- Add the JNDIMap entry after the NamingService since the NamingService must
+	be running in order for the JNDIMap bean to start.
+  --&gt;
+  &lt;mbean code="JNDIMap" name="DefaultDomain:service=JNDIMap,jndiName=inmemory/maps/MapTest"&gt;
+    &lt;attribute name="JndiName"&gt;inmemory/maps/MapTest&lt;/attribute&gt;
+  &lt;/mbean&gt;
+...
+&lt;/server&gt;
+				
+				</pre><pre class="programlisting">
+// Sample lookup code
+InitialContext ctx = new InitialContext();
+HashMap map = (HashMap) ctx.lookup("inmemory/maps/MapTest");
+				</pre></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s21.html"><img src="images\prev.gif" border="0"></a><a href="ch13s39.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

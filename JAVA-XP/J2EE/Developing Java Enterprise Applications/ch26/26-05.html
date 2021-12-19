@@ -1,0 +1,263 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Notice that the methods for converting values all accept strings as possible input, and the stringFor method converts any object to a string.
+</P>
+<P>MiniJMS provides implementations of the message subtypes. These implementations are called MiniTextMessage, MiniMapMessage, MiniObjectMessage, MiniStreamMessage, and MiniBytesMessage. The stream and bytes messages are in no way optimized and do not support reading arbitrary bytes from the message. However, they should be sufficient for testing.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading7"></A><FONT COLOR="#000077">MiniConnectionFactory</FONT></H4>
+<P>The first real working class in MiniJMS is the MiniConnectionFactory. This class acts as the superclass for the MiniQueueConnectionFactory and the MiniTopicConnectionFactory. Basically, a factory keeps track of the URL to the server, as shown in this snapshot of the MiniConnectFactory.java file:
+</P>
+<PRE>
+package minijms;
+
+//Import statements removed to save space.
+
+public class MiniConnectionFactory
+ implements Serializable
+{
+    <B>protected String url;</B>
+
+    public MiniConnectionFactory(String serverURL)
+    {
+        url = serverURL;
+    }
+
+    public String getURL()
+    {
+        return url;
+    }
+}
+</PRE>
+<P>The subclasses for MiniConnectionFactory implements Referenceable, so they can be bound to a JNDI context. MiniConnectionFactory implements only Serializable, making it and its subclasses available for RMI messaging.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading8"></A><FONT COLOR="#000077">MiniConnection</FONT></H4>
+<P>The connections in MiniJMS extend the MiniConnection class. This class provides the core functionality for a connection to the MiniJMS server. In particular, the connection keeps track of username, password, client ID, and ExceptionListener for connections. MiniConnection also implements the code that creates a connection to the RMI server and stores a list of the connections sessions. The following code is taken from the MiniConnection.java file and includes discussions that indicate major functionality of the MiniConnection class:
+</P>
+<PRE>
+package minijms;
+
+//Import statements removed to save space.
+
+public class MiniConnection implements javax.jms.Connection
+{
+    protected RemoteMiniServer server;
+    protected RemoteMiniConnection remote;
+    protected String user;
+    protected String password;
+    protected String clientId;
+    protected ExceptionListener elistener;
+    protected Vector sessions;
+
+    public MiniConnection(String url,String name,String pass)
+        throws JMSException
+    {
+        user = name;
+        password = pass;
+        sessions = new Vector();
+
+        try
+        {
+            <B>server = (RemoteMiniServer) Naming.lookup(url);
+            remote = server.openConnection(user);
+            clientId = remote.getClientId();</B>
+
+            if(remote==null) throw new Exception(url);
+        }
+        catch(Exception exp)
+        {
+            throw
+            new JMSException(&#147;Failed to connect to server: &#148;
+                                &#43;exp.toString());
+        }
+    }
+</PRE>
+<P>The client ID for a connection defaults to the IP address of the client or the username. This value is used to determine to whom messages are delivered. All of the connections with the same client ID are treated as equivalent by the server and share the messages sent to it. The client ID is actually assigned by the server, so changing it involves reconnecting to the server, closing the existing connection in the process. As you can see from the following definition of getClientID and setClientID, changing the client ID causes the connection to reconnect to the server with the new value.
+</P>
+<PRE>
+public String getClientID() throws JMSException
+{
+        return clientId;
+    }
+
+    public void setClientID(String id) throws JMSException
+    {
+        try
+        {
+            if(remote != null)
+            {
+                remote = remote.close();
+            }
+        }
+        catch(Exception exp)
+        {
+        }
+
+        clientId = id;
+
+        try
+        {
+            remote = server.openConnection(clientId);
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>MiniJMSConnectionMetaData implements the ConnectionMetaData interface. Because this information is mainly about the version of the provider, the code is not included in the book, but it is available on the CD-ROM.
+</P>
+<PRE>
+public ConnectionMetaData getMetaData() throws JMSException
+    {
+        return new MiniJMSConnectionMetaData();
+    }
+</PRE>
+<P>The ExceptionListener is notified when bad errors occur. Currently, MiniJMS does not notify this listener anywhere, but the code is included here to perform the notification.
+</P>
+<PRE>
+public void setExceptionListener(ExceptionListener listener)
+    {
+        elistener = listener;
+    }
+
+    public void notifyListener(JMSException exp)
+    {
+        if(elistener != null)
+        {
+            elistener.onException(exp);
+        }
+    }
+</PRE>
+<P>When a subclass of MiniConnection creates a session, it adds the session to the list of sessions being managed for this connection. Sessions remove themselves from the list when closed.
+</P>
+<PRE>
+public void addSession(MiniSession s)
+    {
+        synchronized(sessions)
+        {
+            if(!sessions.contains(s))
+            {
+                sessions.addElement(s);
+            }
+        }
+    }
+
+    public void removeSession(MiniSession s)
+    {
+        synchronized(sessions)
+        {
+            if(!sessions.contains(s))
+            {
+                sessions.removeElement(s);
+            }
+        }
+    }
+</PRE>
+<P>Starting a connection tells the sessions in that connection to resume. Currently, this feature is not implemented in the session objects.
+</P>
+<PRE>
+public void start() throws JMSException
+   {
+        synchronized(sessions)
+        {
+            int i,max;
+            MiniSession session;
+
+            max = sessions.size();
+
+            for(i=0;i&ltmax;i&#43;&#43;)
+            {
+                session = (MiniSession) sessions.elementAt(i);
+                session.resume();
+            }
+        }
+    }
+</PRE>
+<P>Stopping a connection tells the sessions in that connection to suspend. Currently, this feature is not implemented in the session objects.
+</P>
+<PRE>
+    public void stop() throws JMSException
+    {
+        synchronized(sessions)
+        {
+            int i,max;
+            MiniSession session;
+
+            max = sessions.size();
+
+            for(i=0;i&ltmax;i&#43;&#43;)
+            {
+                session = (MiniSession) sessions.elementAt(i);
+                session.suspend();
+            }
+        }
+    }
+</PRE>
+<P>Closing a MiniConnection closes the sessions that it is managing and notifies the server that the connection should be closed. This frees up resources on the server.
+</P>
+<PRE>
+    public void close() throws JMSException
+    {
+        try
+        {
+            synchronized(sessions)
+            {
+                int i,max;
+                MiniSession session;
+
+                max = sessions.size();
+
+                for(i=0;i&ltmax;i&#43;&#43;)
+                {
+                    session = (MiniSession) sessions.elementAt(i);
+                    session.close();
+                }
+
+                sessions.removeAllElements();
+            }
+
+            if(remote != null) remote = remote.close();
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+}
+</PRE>
+<P>As you can see, connections have a close relationship with their sessions in this design. This relationship is transparent to the programmer using the JMS interfaces.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,1068 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 18 -- Using CORBA IDL with Java</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;18</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Using CORBA IDL with Java</FONT>
+</H1>
+<P>
+<I><B>By Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#WhatIsCORBA">
+What Is CORBA?</A>
+<LI><A HREF="#SunsIDLtoJavaMapping">
+Sun's IDL to Java Mapping</A>
+<UL>
+<LI><A HREF="#IDLModules">
+IDL Modules</A>
+<LI><A HREF="#IDLConstants">
+IDL Constants</A>
+<LI><A HREF="#IDLDataTypes">
+IDL Data Types</A>
+<LI><A HREF="#EnumeratedTypes">
+Enumerated Types</A>
+</UL>
+<LI><A HREF="#Structures">
+Structures</A>
+<UL>
+<LI><A HREF="#Unions">
+ Unions</A>
+<LI><A HREF="#SequencesandArrays">
+Sequences and Arrays</A>
+<LI><A HREF="#Exceptions">
+Exceptions</A>
+<LI><A HREF="#Interfaces">
+Interfaces</A>
+<LI><A HREF="#Attributes">
+Attributes</A>
+</UL>
+<LI><A HREF="#UsingCORBAinApplets">
+Using CORBA in Applets</A>
+<UL>
+<LI><A HREF="#ChoosingBetweenCORBAandRMI">
+Choosing Between CORBA and RMI</A>
+</UL>
+<LI><A HREF="#CreatingCORBAClientswithJavaIDL">
+Creating CORBA Clients with JavaIDL</A>
+<LI><A HREF="#CreatingCORBAClientswithVisiBroker">
+Creating CORBA Clients with VisiBroker</A>
+</UL>
+
+<HR>
+<H2><A NAME="WhatIsCORBA"><FONT SIZE=5 COLOR=#FF0000>
+What Is CORBA?</FONT></A></H2>
+<P>
+In <A HREF="ch17.htm" >Chapter 17</A>, &quot;Creating CORBA Clients,&quot; you learned
+how to create a CORBA client using the OrbixWeb client. If this
+is your first exposure to CORBA, you may not realize what CORBA
+actually is.
+<P>
+The Common Object Request Broker Architecture (CORBA) is a tremendous
+vision of distributed objects interacting without regard to their
+location or operating environment. CORBA is still in its infancy,
+with some standards still in the definition stage, but the bulk
+of the CORBA infrastructure is defined. Many software vendors
+are still working on some of the features that have been defined.
+<P>
+CORBA consists of several layers. The lowest layer is the Object
+Request Broker, or ORB. The ORB is essentially a remote method
+invocation facility. The ORB is language-neutral, meaning you
+can create objects in any language and use the ORB to invoke methods
+in those objects. You can also use any language to create clients
+that invoke remote methods through the ORB. There is a catch to
+the &quot;any language&quot; idea. You have to define a language
+mapping between the implementation language and CORBA's Interface
+Definition Language (IDL).
+<P>
+When you go from IDL to your implementation language, you generate
+a stub and a skeleton in the implementation language. The stub
+is the interface between the client and the ORB; the skeleton
+is the interface between the ORB and the object (or server). Figure
+18.1 shows the relationship between the ORB, an object, and a
+client wishing to invoke a method on the object.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f18-1.gif"><B>Figure 18.1 : </B><I>COBRA clients use the ORB to invoke methods
+on a COBRA server</I>.</A>
+<P>
+While the ORB is drawn conceptually as a separate part of the
+architecture, it is often just part of the application. A basic
+ORB implementation might include a naming service (see the following
+discussion) and a set of libraries that facilitate communications
+between clients and servers. Once a client locates a server, it
+communicates directly with that server, not going through any
+intermediate program. This permits efficient CORBA implementations.
+<P>
+The ORB is both the most visible portion of CORBA and the least
+exciting. CORBA's big benefit comes in all the services that it
+defines. Among the services defined in CORBA are
+<UL>
+<LI>Lifecycle
+<LI>Naming
+<LI>Persistence
+<LI>Events
+<LI>Transactions
+<LI>Querying
+<LI>Properties
+</UL>
+<P>
+These services are a subset of the full range of services defined
+by CORBA. The Lifecycle and the Naming services crystallize Sun's
+visionary phrase, &quot;The network is the computer.&quot; These
+services allow you to instantiate (create) new objects without
+knowing where the objects reside. You might be creating an object
+in your own program space, or you might be creating an object
+halfway around the world, and your program will never know it.
+<P>
+The Lifecycle service enables you to create, delete, copy, and
+move objects on a specific system. As an application programmer,
+you would prefer not to know where an object resides. As a systems
+programmer, you need the Lifecycle service to implement this location
+transparency for the application programmer. One of the hassles
+you frequently run into in remote procedure call systems is that
+the server you are calling must already be up and running before
+you can make the call. The Lifecycle service removes that hassle;
+you can create an object, if you need to, before invoking a method
+on it.
+<P>
+The Naming service enables you to locate an object on the network
+by name. You want the total flexibility of being able to move
+objects around the network without having to change any code.
+The Naming service gives you that ability by associating an object
+with a name instead of a network address.
+<P>
+The Persistence service lets you save objects somewhere and retrieve
+them later. This might be in a file, or it might be on an object
+database. The CORBA standard doesn't specify which. That is left
+up to the individual software vendors.
+<P>
+The Event service is a messaging system that allows more complex
+interaction than a simple message call. You could use the Event
+service to implement a network-based Observer-Observable model,
+for instance. There are event suppliers that send events, and
+event consumers that receive them. A server or a client is either
+push or pull. A push server sends events out when it wants to
+(it pushes them out), while a push client has a push method and
+automatically receives events through this method. A pull server
+doesn't send out events until it is asked; you have to pull them
+out of the server. A pull client does not receive events until
+it asks for them. It might help to use the term poll in place
+of pull. A pull server doesn't deliver events on its own; it gives
+them out when it is polled. A pull client goes out and polls for
+events.
+<P>
+The Transaction service is one of the most complex services in
+the CORBA architecture. It enables you to define operations across
+multiple objects as a single transaction. This kind of transaction
+is similar to a database transaction. It handles concurrency,
+locking, and even rollbacks in case of a failure. A transaction
+must comply with a core set of requirements that are abbreviated
+ACID:
+<UL>
+<LI>Atomicity&nbsp;&nbsp;A transaction is a single event. Everything
+in the transaction is either done as a whole or undone. You don't
+perform a transaction partially.
+<LI>Consistency&nbsp;&nbsp;When you perform a transaction, you
+do not leave the system in an inconsistent state. For example,
+if you have an airline flight with one seat left, you don't end
+up assigning that seat to two different people if their transactions
+occur at the same time.
+<LI>Isolation&nbsp;&nbsp;No other objects see the results of a
+transaction until that transaction is committed. Even if transactions
+are executing simultaneously, they have a sequential order with
+respect to the data.
+<LI>Durability&nbsp;&nbsp;If you commit a transaction, you can
+be sure that the change has been made and stored somewhere. It
+doesn't get lost.
+</UL>
+<P>
+The transaction service usually relies on an external Transaction
+Processing (TP) system.
+<P>
+The Object Querying service lets you locate objects based on something
+other than name. For instance, you could locate all ships registered
+in Liberia, or all Krispy Kreme donut locations in Georgia. This
+feature is usually used when your objects are stored in an object
+database.
+<P>
+The Properties service lets objects store information on other
+objects. A property is like a sticky-note. An object writes some
+information down on a sticky-note and slaps it on another object.
+This has tremendous potential because it lets information be associated
+with an object without the object having to know about it.
+<P>
+The beauty of the whole CORBA system is that all of these services
+are available through the ORB interface, so once your program
+can talk to the ORB, you have these services available. Of course,
+your ORB vendor may not have implemented all of these services
+yet.
+<H2><A NAME="SunsIDLtoJavaMapping"><FONT SIZE=5 COLOR=#FF0000>
+Sun's IDL to Java Mapping</FONT></A></H2>
+<P>
+In order to use Java in a CORBA system, you need a standard way
+to convert attributes and methods defined in IDL into Java attributes
+and methods. Sun has proposed a mapping and released a program
+to generate Java stubs and skeletons from an IDL definition.
+<P>
+Defining interfaces in IDL is similar to defining interfaces in
+Java, since you are defining only the signatures (parameters and
+return values) of the methods and not the implementation of the
+methods.
+<H3><A NAME="IDLModules">
+IDL Modules</A></H3>
+<P>
+A module is the IDL equivalent of the Java package. It groups
+sets of interfaces together in their own namespace. Like Java
+packages, IDL modules can be nested.
+<P>
+Here is an example IDL module definition (shown without any definitions,
+which are discussed later in this chapter):
+<BLOCKQUOTE>
+<PRE>
+module MyModule {
+     // insert your IDL definitions here, you must have at least
+     // one definition for a valid IDL module
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+This module would be generated in Java as a package called <TT>MyModule</TT>:
+<BLOCKQUOTE>
+<PRE>
+package MyModule;
+</PRE>
+</BLOCKQUOTE>
+<P>
+When you nest modules, the Java packages you generate are also
+nested. For example, consider the following nested module definition:
+<BLOCKQUOTE>
+<PRE>
+module foo {
+     module bar {
+          module baz {
+// insert definitions here
+          };
+     };
+};<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Don't forget to put a semicolon (;) after the closing brace (}) of a module definition. Unlike Java, C, and C++, you are <I><FONT FACE="Times New Roman Italic">required </FONT></I>to put a semicolon after the brace in IDL.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The Java package definition for interfaces within the <TT>baz</TT>
+module is
+<BLOCKQUOTE>
+<PRE>
+package foo.bar.baz;
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="IDLConstants">
+IDL Constants</A></H3>
+<P>
+As in Java, you can define constant values in IDL. The format
+of an IDL constant definition is
+<BLOCKQUOTE>
+<PRE>
+const <I>type</I> <I>variable</I> = <I>value</I>;
+</PRE>
+</BLOCKQUOTE>
+<P>
+The type of a constant is limited to <TT>boolean</TT>,
+<TT>char</TT>, <TT>short</TT>,
+<TT>unsigned short</TT>, <TT>long</TT>,
+<TT>unsigned long</TT>, <TT>float</TT>,
+<TT>double</TT>, and <TT>string</TT>.
+<P>
+Constants are mapped into Java in an unusual way. Each constant
+is defined as a class with a single, static, final, public variable,
+called <TT>value,</TT> that holds
+the value of the constant. This is done because IDL lets you define
+constants within a module, but Java <BR>
+requires that constants belong to a class.
+<P>
+Here is an example IDL constant definition:
+<BLOCKQUOTE>
+<PRE>
+module ConstExample {
+     const long myConstant = 123;
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+This IDL definition produces the following Java definition:
+<BLOCKQUOTE>
+<PRE>
+package ConstExample;
+public final class myConstant {
+     public static final int value = (int) (123L);
+}
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="IDLDataTypes">
+IDL Data Types</A></H3>
+<P>
+IDL has roughly the same set of primitive data types as Java except
+for a few exceptions:
+<UL>
+<LI>The IDL equivalent of the Java <TT>byte</TT>
+data type is the <TT>octet</TT>.
+<LI>IDL supports the <TT>String</TT>
+type, but it is called <TT>string</TT>.
+<LI>Characters in IDL can only have values between 0 and 255.
+The JavaIDL system checks your characters to make sure they fall
+within this range, including characters stored in strings.
+<LI>IDL supports 16, 32, and 64-bit integers, but the names for
+the 32 and 64-bit types are slightly different. In IDL, the 32-bit
+value is called a <TT>long</TT>, while
+in Java it is called an <TT>int</TT>.
+The IDL equivalent of the Java <TT>long</TT>
+is the <TT>long long</TT>.
+<LI>IDL supports unsigned <TT>short</TT>,
+<TT>int</TT>, and <TT>long</TT>
+values. In Java, these values are stored in signed variables.
+You must be very careful when dealing with large unsigned values,
+since they may end up negative when represented in Java.
+</UL>
+<H3><A NAME="EnumeratedTypes">
+Enumerated Types</A></H3>
+<P>
+Unlike Java, IDL lets you create enumerated types that represent
+integer values. The JavaIDL system turns the enumerated type into
+a class with public, static, final values.
+<P>
+Here is an example IDL enumerated type:
+<BLOCKQUOTE>
+<PRE>
+module EnumModule {
+     enum Medals { gold, silver, bronze };
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+This definition produces the Java class shown in Listing 18.1:
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.1&nbsp;&nbsp;Java Definition of Enumerated Types
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package EnumModule;
+public class Medals {
+ public static final int gold = 0,
+                silver = 1,
+                bronze = 2;
+ public static final int narrow(int i) throws sunw.corba.EnumerationRangeException {
+     if (gold &lt;= i &amp;&amp; i &lt;= bronze) {
+      return i;
+     }
+     throw new sunw.corba.EnumerationRangeException();
+ }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Since you can also declare variables of an enumerated type, JavaIDL
+creates a holder class that is used in place of the data type.
+The holder class contains a single instance variable called <TT>value</TT>
+that holds the enumerated value. The holder for the <TT>Medals</TT>
+enumeration looks like the definition in Listing 18.2:
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.2&nbsp;&nbsp;Java Definition of Holder Class for
+Enumerated Types<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package EnumModule;
+public class MedalsHolder
+{
+ //     instance variable
+ public int value;
+ //     constructors
+ public MedalsHolder() {
+     this(0);
+ }
+ public MedalsHolder(int __arg) {
+     value = EnumModule.Medals.narrow(__arg);
+ }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+You can create a <TT>MedalsHolder</TT>
+by passing an enumerated value to the constructor:
+<BLOCKQUOTE>
+<PRE>
+MedalsHolder medal = new MedalsHolder(Medals.silver);
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>narrow</TT> method performs
+range checking on values and throws an exception if the argument
+is outside the bounds of the enumeration. It returns the value
+passed to it, so you can use it to perform passive bounds checking.
+For example:
+<BLOCKQUOTE>
+<PRE>
+int x = Medals.narrow(y);
+</PRE>
+</BLOCKQUOTE>
+<P>
+assigns y to x only if y is in the range of enumerated values
+for <TT>Medals</TT>, otherwise it
+throws an exception.
+<H2><A NAME="Structures"><FONT SIZE=5 COLOR=#FF0000>
+Structures</FONT></A></H2>
+<P>
+An IDL struct is like a Java class without methods. In fact, JavaIDL
+converts an IDL struct into a Java class whose only methods are
+a null constructor and a constructor that takes all the structure's
+attributes.
+<P>
+Here is an example IDL struct definition:
+<BLOCKQUOTE>
+<PRE>
+module StructModule {
+     struct Person {
+          string name;
+          long age;
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+This definition produces the Java class declaration shown in Listing
+18.3 (with some JavaIDL-specific methods omitted):
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.3&nbsp;&nbsp;Java Definition of IDL Struct<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package StructModule;
+public final class Person {
+ //     instance variables
+ public String name;
+ public int age;
+ //     constructors
+ public Person() { }
+ public Person(String __name, int __age) {
+     name = __name;
+     age = __age;
+ }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Like the enumerated type, a struct also produces a holder class
+that represents the structure. The holder class contains a single
+instance variable called <TT>value</TT>.
+Listing 18.4 shows the holder for the <TT>Person</TT>
+structure:
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.4&nbsp;&nbsp;Java Definition of Holder Class for
+IDL Struct<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package StructModule;
+public final class PersonHolder
+{
+ //     instance variable
+ public StructModule.Person value;
+ //     constructors
+ public PersonHolder() {
+     this(null);
+ }
+ public PersonHolder(StructModule.Person __arg) {
+     value = __arg;
+ }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="Unions">
+ Unions</A></H3>
+<P>
+The union is another C construct that didn't survive the transition
+to Java. The IDL union actually works more like the variant record
+in Pascal, since it requires a <I>discriminator</I> value. An
+IDL union is essentially a group of attributes, only one of which
+can be active at a time. The discriminator indicates which attribute
+is in use at the current time. A short example should make this
+a little clearer. Listing 18.5 shows an IDL union declaration:
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.5&nbsp;&nbsp;An IDL Union Declaration<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+module UnionModule {
+     union MyUnion switch (char) {
+          case 'a':      string aValue;
+          case 'b':     long bValue;
+          case 'c':      boolean cValue;
+          default:     string defValue;
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The character value in the switch, known as the discriminator,
+indicates which of the three variables in the union is active.
+If the discriminator is <TT>'a'</TT>,
+the <TT>aValue</TT> variable is active.
+Because Java doesn't have unions, a union is turned into a class
+with accessor methods for the different variables and a variable
+for the discriminator. The class is fairly complex. Listing 18.6
+shows a subset of the definition for the <TT>MyUnion</TT>
+union:
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.6&nbsp;&nbsp;Subset of Java Definition for an IDL
+Union<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package UnionModule;
+public class MyUnion {
+//     constructor
+ public MyUnion() {
+//     only has a null constructor
+ }
+ //     discriminator accessor
+ public char discriminator()
+     throws sunw.corba.UnionDiscriminantException {
+//     returns the value of the discriminator
+ }
+ //     branch constructors and get and set accessors
+ public static MyUnion createaValue(String value) {
+//     creates a MyUnion with a discriminator of 'a'
+ }
+ public String getaValue()
+     throws sunw.corba.UnionDiscriminantException {
+//     returns the value of aValue (only if the discriminator 
+//     is 'a' right now)
+ }
+ public void setaValue(String value) {
+//     sets the value of aValue and set the
+//	discriminator to 'a'
+ }
+ public void setdefValue(char discriminator, String value)
+     throws sunw.corba.UnionDiscriminantException {
+
+//     Sets the value of defValue and sets the discriminator.
+//	Although every variable has a method in this form, it 
+//	is only useful when you have a default value in the
+//	union.
+ }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The holder structure should be a familiar theme to you by now.
+JavaIDL generates a holder structure for a union. The holder structure
+for <TT>MyUnion</TT> would be called
+<TT>MyUnionHolder</TT> and would contain
+a single instance variable called <TT>value</TT>.
+<H3><A NAME="SequencesandArrays">
+Sequences and Arrays</A></H3>
+<P>
+IDL sequences and arrays both map very neatly to Java arrays.
+Sequences in IDL can be either unbounded (no maximum size) or
+bounded (a specific maximum size). IDL arrays are always of a
+fixed size. Since Java arrays have a fixed size, but the size
+isn't known at compile-time, the JavaIDL system performs runtime
+checks on arrays to make sure they fit within the restrictions
+defined in the IDL module.
+<P>
+Here is a sample IDL definition containing an array, a bounded
+sequence and an unbounded sequence:
+<BLOCKQUOTE>
+<PRE>
+module ArrayModule {
+     struct SomeStructure {
+          long longArray[15];
+          sequence &lt;boolean&gt; unboundedBools;
+          sequence &lt;char, 15&gt; boundedChars;
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+The arrays are defined in Java as:
+<BLOCKQUOTE>
+<PRE>
+public int[] longArray;
+public boolean[] unboundedBools;
+<FONT SIZE=2>public char[] boundedChars;</FONT>
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="Exceptions">
+Exceptions</A></H3>
+<P>
+CORBA has the notion of exceptions. Unlike Java, however, exceptions
+are not just a type of object, they are separate entities. IDL
+exceptions cannot inherit from other exceptions. Otherwise, they
+work like Java exceptions and may contain instance variables.
+<P>
+Here is an example IDL exception definition:
+<BLOCKQUOTE>
+<PRE>
+module ExceptionModule {
+     exception YikesError {
+          string info;
+     };
+
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+This definition creates the Java file shown in Listing 18.7 (with
+some JavaIDL-specific methods removed):
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.7&nbsp;&nbsp;Java Definition of IDL Exception<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package ExceptionModule;
+public class YikesError
+     extends sunw.corba.UserException {
+ //     instance variables
+ public String info;
+ //     constructors
+ public YikesError() {
+     super(&quot;IDL:ExceptionModule/YikesError:1.0&quot;);
+ }
+ public YikesError(String __info) {
+     super(&quot;IDL:ExceptionModule/YikesError:1.0&quot;);
+     info = __info;
+ }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="Interfaces">
+Interfaces</A></H3>
+<P>
+Interfaces are the most important part of IDL. An IDL interface
+contains a set of method definitions, just like a Java interface.
+Like Java interfaces, an IDL interface can inherit from other
+interfaces. Here is a sample IDL interface definition:
+<BLOCKQUOTE>
+<PRE>
+module InterfaceModule {
+     interface MyInterface {
+          void myMethod(in long param1);
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+IDL classifies method parameters as being either <TT>in</TT>,
+<TT>out</TT>, or <TT>inout</TT>.
+An <TT>in</TT> parameter is identical
+to a Java parameter; it is a parameter passed by value. Even though
+the method can change the value of the variable, the changes are
+discarded when the method returns.
+<P>
+An <TT>out</TT> variable is an output-only
+variable. The method is expected to set the value of this variable,
+which is preserved when the method returns, but no value is passed
+in for the variable (it is uninitialized).
+<P>
+An <TT>inout</TT> variable is a combination
+of the two; you pass in a value to the method. If the method changes
+the value, the change is preserved when the method returns.
+<P>
+The fact that Java parameters are <TT>in</TT>-only
+poses a small challenge when mapping IDL to Java. Sun has come
+up with a reasonable approach, however. For any out or inout parameters,
+you pass in a holder class for that variable. The CORBA method
+can then set the <TT>value</TT> instance
+variable with the value that is supposed to be returned.
+<H3><A NAME="Attributes">
+Attributes</A></H3>
+<P>
+IDL lets you define variables within an interface. These translate
+into <TT>get</TT> and <TT>set</TT>
+methods for the attribute. An attribute can be specified as <TT>readonly</TT>,
+which prevents the generation of a <TT>set</TT>
+method for the attribute. For example, if you defined an IDL attribute
+as
+<BLOCKQUOTE>
+<PRE>
+attribute long myAttribute;
+</PRE>
+</BLOCKQUOTE>
+<P>
+your Java interface would then contain the following methods:
+<BLOCKQUOTE>
+<PRE>
+int getmyAttribute() throws omg.corba.SystemException;
+void setmyAttribute() throws omg.corba.SystemException;
+</PRE>
+</BLOCKQUOTE>
+<H2><A NAME="UsingCORBAinApplets"><FONT SIZE=5 COLOR=#FF0000>
+Using CORBA in Applets</FONT></A></H2>
+<P>
+Although the full CORBA suite represents a huge amount of code,
+the requirements for a CORBA client are fairly small. All you
+really need for a client is the ORB itself. You can access the
+CORBA services from another location on the network. This enables
+you to have very lightweight CORBA clients. In other words, you
+can create applets that are CORBA clients.
+<P>
+The only real restriction on applets using CORBA is that an applet
+can only make network connections back to the server it was loaded
+from. This means that all the CORBA services must be available
+on the Web server (or there must be some kind of proxy set up).
+<P>
+Since an applet cannot listen for incoming network connections,
+an applet cannot be a CORBA server in most cases. You might find
+an ORB that gets around this restriction by using connections
+made by the applet. Most Java ORBs available today have the ability
+to run CORBA servers on an applet for a callback object. For a
+callback, an applet might create a server object locally and then
+pass a reference for its server object to a CORBA server running
+on another machine. That CORBA server could then use the reference
+to invoke methods in the applet as a client. Figure 18.2 illustrates
+how an applet might act as a CORBA server.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f18-2.gif"><B>Figure 18.2 : </B><I>An applet can act as a server by passing
+a reference to a local COBRA server</I>.</A>
+<H3><A NAME="ChoosingBetweenCORBAandRMI">
+Choosing Between CORBA and RMI</A></H3>
+<P>
+CORBA and RMI each has its advantages and disadvantages. RMI will
+be a standard part of Java on both the client and server side,
+making it a good, cheap tool. Since it is a Java-only system,
+it integrates cleanly with the rest of Java. RMI is really only
+a nice remote procedure call system, however.
+<P>
+CORBA defines a robust, distributed environment, providing almost
+all the necessary features for distributed applications. Not all
+of these features have been implemented by most vendors, yet.
+Most CORBA clients are offered free, but you must pay for the
+server software. This is the typical pricing model for most Internet
+software nowadays. If you don't need all the neat features of
+CORBA and don't want to spend a lot of money, RMI might be the
+right thing for you.
+<P>
+Your company may feel that Java is not yet ready for prime time.
+If this is the case, but you believe that Java is the environment
+of the future, you should start working CORBA into your current
+development plans, if possible.
+<P>
+CORBA is a language-independent system. You can implement your
+applications in C++ today using many of the Java design concepts.
+Specifically, keep the application and the user interface separated
+and make the software as modular as possible. If you use CORBA
+between the components of your system, you can migrate to Java
+by slowly replacing the various components with CORBA-based Java
+software.
+<P>
+If you are a programmer trying to convince your skeptical management
+about the benefits of Java, use CORBA to make a distributed interface
+into one of your applications (hopefully you have a CORBA product
+for the language your application is written in). Next, write
+a Java applet that implements the user interface for your application
+using CORBA to talk to the real application. You have instantly
+ported part of your application to every platform that can run
+a Java-enabled browser. Hopefully, your applet will perform as
+well as the old native interface to the application.
+<P>
+This same technique opens up your existing CORBA applications
+to non-traditional devices like cell-phones and PDAs. If you aren't
+ready to support those devices yet, at least you now have a pathway.
+<H2><A NAME="CreatingCORBAClientswithJavaIDL"><FONT SIZE=5 COLOR=#FF0000>
+Creating CORBA Clients with JavaIDL</FONT></A></H2>
+<P>
+The JavaIDL system consists of an IDL-to-Java converter, a lightweight
+ORB, and a simple naming service. The JavaIDL interface is intended
+to be an interface to multiple ORBs, much the same way that JDBC
+interfaces with multiple databases.
+<P>
+There are two simple steps in creating a CORBA client in JavaIDL:
+<OL>
+<LI>Create a reference to a stub using the <TT>createRef</TT>
+method in the particular stub.
+<LI>Use the <TT>sunw.corba.Orb.resolve</TT>
+method to create a connection between the stub and a CORBA server.
+</OL>
+<P>
+For example, suppose you had the IDL definition for a banking
+interface, as shown in Listing 18.8.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.8&nbsp;&nbsp;Source Code for Banking.idl<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+module banking {
+
+     enum AccountType {
+          CHECKING,
+          SAVINGS
+     };
+
+     struct AccountInfo {
+          string id;
+          string password;
+          AccountType which;
+     };
+
+     exception InvalidAccountException {
+          AccountInfo account;
+     };
+
+     exception InsufficientFundsException {
+     };
+
+     interface Banking {
+
+          long getBalance(in AccountInfo account)
+               raises (InvalidAccountException);
+
+          void withdraw(in AccountInfo account, in long amount)
+               raises (InvalidAccountException,
+                    InsufficientFundsException);
+
+          void deposit(in AccountInfo account, in long amount)
+               raises (InvalidAccountException);
+
+          void transfer(in AccountInfo fromAccount,
+               in AccountInfo toAccount, in long amount)
+               raises (InvalidAccountException,
+                    InsufficientFundsException);
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+You create a reference to a stub for the banking interface with
+the following line:
+<BLOCKQUOTE>
+<PRE>
+BankingRef bank = BankingStub.createRef();
+</PRE>
+</BLOCKQUOTE>
+<P>
+Next, you must create a connection between the stub and a CORBA
+server by <I>resolving</I> it. Since JavaIDL is meant to be the
+standard Java interface for all ORBs, it requires an ORB-independent
+naming scheme. Sun decided on a URL-type naming scheme of the
+format
+<BLOCKQUOTE>
+<PRE>
+idl:<I>orb_name</I>://<I>orb_parameters</I>
+</PRE>
+</BLOCKQUOTE>
+<P>
+The early versions of JavaIDL shipped with an ORB called the Door
+ORB, which is a very lightweight ORB containing little more than
+a naming scheme. To access a CORBA object using the Door ORB,
+you must specify the host name and port number used by the CORBA
+server you are connecting to and the name of the object you are
+accessing. The format of this information is
+<BLOCKQUOTE>
+<PRE>
+<I>hostname</I>:<I>port</I>/<I>object_name</I>
+</PRE>
+</BLOCKQUOTE>
+<P>
+If you want to access an object, named Bank, via the Door ORB,
+running on a server at port 5150 on the local host, you resolve
+your stub this way:
+<BLOCKQUOTE>
+<PRE>
+sunw.corba.Orb.resolve(
+      &quot;idl:sunw.door://localhost:5150/Bank&quot;,
+      bank);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Remember that the <TT>bank</TT> parameter
+is the <TT>BankingRef</TT> returned
+by the <TT>BankingStub.createRef</TT>
+method. Once the stub is resolved, you can invoke remote methods
+in the server using the stub.
+<P>
+Listing 18.9 shows the full JavaIDL client for the banking interface.
+As you can see, once you have connected the stub to the server,
+you can invoke methods on the stub just like it was a local object.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.9&nbsp;&nbsp;Source Code for BankingClient.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import banking.*;
+
+// This program tries out some of the methods in the BankingImpl
+// remote object.
+
+public class BankingClient
+{
+
+     public static void main(String args[])
+     {
+
+// Create an Account object for the account we are going to access.
+
+          Account myAccount = new Account(
+               &quot;AA1234&quot;, &quot;1017&quot;, AccountType.CHECKING);
+
+          AccountInfo myAccountInfo = myAccount.toAccountInfo();
+          try {
+
+// Get a stub for the BankingImpl object
+
+               BankingRef bank = BankingStub.createRef();
+               sunw.corba.Orb.resolve(
+                    &quot;idl:sunw.door://localhost:5150/Bank&quot;,
+                    bank);
+
+// Check the initial balance
+               System.out.println(&quot;My balance is: &quot;+
+                   bank.getBalance(myAccountInfo));
+
+// Deposit some money
+               bank.deposit(myAccountInfo, 50000);
+
+// Check the balance again
+               System.out.println(&quot;Deposited $500.00, balance is: &quot;+
+                    bank.getBalance(myAccountInfo));
+
+// Withdraw some money
+               bank.withdraw(myAccountInfo, 25000);
+
+// Check the balance again
+              System.out.println(&quot;Withdrew $250.00, balance is: &quot;+
+                    bank.getBalance(myAccountInfo));
+
+               System.out.flush();
+               System.exit(0);
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception: &quot;+e);
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="CreatingCORBAClientswithVisiBroker"><FONT SIZE=5 COLOR=#FF0000>
+Creating CORBA Clients with VisiBroker</FONT></A></H2>
+<P>
+VisiBroker, formerly known as Black Widow, is very similar to
+JavaIDL in its mapping from IDL to Java. Both JavaIDL and VisiBroker
+map the IDL data types and data structures the same way, and both
+handle <TT>inout</TT> and <TT>out</TT>
+parameters the same way.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Netscape and VisiBroker recently announced that future versions of the Netscape Navigator would contain the VisiBroker CORBA client. You will soon be able to write applets for Netscape that don't have to download the ORB software before they 
+run.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The only difference between the two ORBs on the client side is
+in the way you connect a stub to a server.
+<P>
+Under VisiBroker, you must first initialize the ORB with the following
+line:
+<BLOCKQUOTE>
+<PRE>
+CORBA.ORB orb = CORBA.ORB.init();
+</PRE>
+</BLOCKQUOTE>
+<P>
+You only need to initialize the ORB once, no matter how many stubs
+you create. Next, you connect the stub to the server using the
+<TT>bind</TT> method. For example,
+to connect your stub to an object named <TT>Bank</TT>,
+you would use the following call:
+<BLOCKQUOTE>
+<PRE>
+Banking bank = Banking_var.bind(&quot;Bank&quot;);<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You'll often see the terms <I><FONT FACE="Times New Roman Italic">bind</FONT></I> and <I><FONT FACE="Times New Roman Italic">resolve</FONT></I> used in network programming. Bind refers to attaching two things together, like you bind a port number to a 
+socket, meaning you assign that port number to the socket. In the VisiBroker context, you bind a stub to a server object, meaning you connect them together. Resolve is another word for lookup. When you resolve a name, you find the object the name refers 
+to. When you resolve a stub, you find the named object the stub should be connected to.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<HR>
+
+<CENTER><P><A HREF="ch17.htm"><IMG SRC="http://docs.rinet.ru/JSol/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JSol/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JSol/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch19.htm"><IMG SRC="http://docs.rinet.ru/JSol/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

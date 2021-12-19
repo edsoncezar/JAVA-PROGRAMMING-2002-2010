@@ -1,0 +1,230 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-15.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-17.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Registrations are stored using RegPair objects. These objects hold an id and name. RegPair implements hashCode and equals to ensure that two pairs with the same name and id are equal. As always, thread synchronization is used to protect the shared sessions&#146; vector for a destination.
+</P>
+<P>The registerFor method, included here, also performs another key task related to JMS messaging. If the client registering for messages is doing so from a persistent queue, that client is sent all of the messages from the queue after the client&#146;s last acknowledgment. The same is true for durable topic subscribers. However, queue receivers that have never acknowledged messages receive all of the previous messages, while a durable subscriber does not receive any messages sent before its initial registration. Once registered, both receive messages sent while they are disconnected from the server when they reconnect and register for them.</P>
+<P>Non-durable subscribers and new subscribers have a new entry placed in the ack table on registration so that if a durable subscriber reconnects it gets missed messages.</P>
+<PRE>
+    public void registerFor(Destination dest
+                            ,String id
+                            ,String name)
+        throws JMSException
+    {
+        <B>String qname = dest.toString();
+        Vector sessions
+            = (Vector) destinations.get(qname);
+        RegPair pair = new RegPair();
+
+        pair.id = id;
+        pair.name = name;
+
+        if(sessions==null)
+        {
+            sessions = new Vector();
+
+            destinations.put(qname,sessions);
+        }</B>
+
+        synchronized(sessions)
+        {
+            <B>if(! sessions.contains(pair))
+            {
+                sessions.addElement(pair);
+            }</B>
+        }
+
+        <B>Vector msgs = (Vector) messages.get(pair.id);
+
+        if(msgs == null)
+        {
+            msgs = new Vector();
+            messages.put(pair.id,msgs);
+        }</B>
+
+        try
+        {
+            ResultSet rs;
+            long maxAck=-1;
+
+            <B>rs = statement.executeQuery(&#147;select * from &#148;
+                                        &#43;&#147;ack&#148;
+                                        &#43;&#147; where destination=\&#145;&#148;
+                                        &#43;qname
+                                        &#43;&#147;\&#145; and name=\&#145;&#148;
+                                        &#43;name
+                                        &#43;&#147;\&#145;&#148;);
+
+            if(rs.next())
+            {
+                maxAck = rs.getLong(&#147;msg_num&#148;);
+            }
+            else
+            {
+                if(dest instanceof MiniDestination)
+                {
+                    if(((MiniDestination)dest).isQueue())
+                    {
+                        maxAck = 0;
+                    }
+                }
+                else if(dest instanceof Queue)
+                {
+                    maxAck = 0;
+                }
+                else
+                {
+                    maxAck = -1;
+                }
+            }</B>
+
+            rs.close();
+
+            //Don&#146;t back-fill totally new subscribers.
+            //Do back-fill queue receivers.
+            <B>if(maxAck&gt=0)
+            {</B>
+
+                String content;
+                Message msg;
+                int i,max;
+                long msgNum;
+
+                //And get missed messages.
+                <B>rs = statement.executeQuery(&#147;select * from &#148;
+                                        &#43;&#147;messages &#148;
+                                        &#43;&#147;where destination=\&#145;&#148;
+                                        &#43;qname
+                                        &#43;&#147;\&#145; and msg_num&gt&#148;
+                                        &#43;maxAck
+                                        &#43;&#147; order by msg_num asc&#148;);
+
+                while(rs.next())
+                {
+                    content = rs.getString(&#147;content&#148;);
+                    msgNum = rs.getLong(&#147;msg_num&#148;);
+
+                    msg = messageFromFile(content);
+
+                    if(msg != null)
+                    {
+                        if(!msg.propertyExists(MSG_NUM))
+                            msg.setLongProperty(MSG_NUM,msgNum);
+
+                        //Make sure the message isn&#146;t already
+                        //waiting for delivery.
+                        if(!msgs.contains(msg))
+                            msgs.addElement(msg);
+                    }
+                }</B>
+
+                rs.close();
+            <B>}
+            else
+            {
+                //Get this client in the list.
+                acknowledge(dest,name,curId-1);
+            }</B>
+
+            conn.commit();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+
+            try
+            {
+                conn.rollback();
+            }
+            catch(Exception e)
+            {
+            }
+        }
+    }
+</PRE>
+<P>When a session unregisters for a destination, using the unregisterFor method shown here it is saying that it doesn&#146;t plan to retrieve messages for that destination any more. This results in the session being removed from the destination&#146;s list of registered sessions and removes the clients acknowledgment entry from the ack database table. If the client reregisters, it will be treated as a new registration, as discussed previously.
+</P>
+<PRE>
+    public void unregisterFor(Destination dest
+                              ,String id
+                              ,String name)
+                             throws JMSException
+    {
+        String qname = dest.toString();
+        Vector sessions
+            = (Vector) destinations.get(qname);
+        RegPair pair;
+
+        if(sessions!=null)
+        {
+            pair = new RegPair();
+            pair.id = id;
+            pair.name = name;
+
+            sessions.removeElement(pair);
+
+            try
+            {
+                statement.executeUpdate(&#147;delete from &#148;
+                                    &#43;&#147;ACK &#148;
+                                    &#43;&#147;where destination=\&#145;&#148;
+                                    &#43; qname
+                                    &#43;&#147;\&#145; and name=\&#145;&#148;
+                                    &#43; name
+                                    &#43;&#147;\&#145;&#148;);
+                conn.commit();
+            }
+            catch(Exception exp)
+            {
+                try
+                {
+                    conn.rollback();
+                }
+                catch(Exception ignore)
+                {
+                }
+                throw new JMSException(exp.toString());
+            }
+        }
+        else
+        {
+            throw new JMSException(&#147;Not registered.&#148;);
+        }
+    }
+</PRE>
+<P>The message store implements three internal methods for managing messages. The first method saves a message to disk. The second loads a message from disk. Both expect the message to be stored in the objDir, with a name equal to their message number followed by &#147;.ser.&#148; For example, message number 1 is in 1.ser under the objDir directory. The final method copies a message by serializing it in memory and then unserializing a copy. Copying is used to ensure that the messages in memory for each session, id, and name are not shared and can have their header fields or properties manipulated as needed.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-15.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-17.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

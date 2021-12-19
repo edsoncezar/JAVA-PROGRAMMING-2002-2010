@@ -1,0 +1,165 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A JMS-Based Alarm System</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="21-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch22\22-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The onMessage method shown here demonstrates how the AlarmConfig application handles the two types of messages on the ALARM_TOPIC. First, if the message contains an Alarm object, the AlarmConfig updates the list of available alarms by deleting the relevant Alarm. If the message contains a vector, the complete list is replaced with the new list of current alarms.
+</P>
+<PRE>
+public void onMessage(Message msg)
+{
+    try
+    {
+        <B>ObjectMessage map = (ObjectMessage)msg;
+        Object test = map.getObject();
+       
+        if(test instanceof Alarm)
+        {</B>
+            Alarm alarm = (Alarm) test;
+            alarmsModel.removeElement(alarm);
+        <B>}
+        else if(test instanceof Vector)
+        {</B>
+            Vector curAlarms = (Vector) test;
+       
+            if(curAlarms != null)
+            {
+                int i,max;
+           
+                alarmsModel.removeAllElements();
+               
+                max = curAlarms.size();
+           
+                for(i=0;i&ltmax;i&#43;&#43;)
+                {
+                    alarmsModel.addElement(curAlarms.elementAt(i));
+                }
+           
+                if(max &gt 0)
+                {
+                    alarms.setSelectedIndex(0);
+                    nameField.selectAll();
+                    nameField.requestFocus();
+                }
+               
+                repaint();
+            }
+        <B>}</B>
+    }
+    catch(Exception exp)
+    {
+        exp.printStackTrace();
+    }
+}
+</PRE>
+<P>Pressing the &#147;Shutdown server&#148; button results in a call to doShutdown. This method creates a MapMessage for the ADMIN_QUEUE and sets the ACTION to SHUTDOWN before sending it. The AlarmConfig application also shuts itself down, because it can&#146;t do anything without the server.
+</P>
+<PRE>
+protected void doShutdown()
+{
+    try
+    {
+        <B>MapMessage map = session.createMapMessage();
+       
+        map.setString(AlarmServer.ACTION,AlarmServer.SHUTDOWN);
+       
+        sender.send(map);</B>
+       
+        close();
+       
+        setVisible(false);
+       
+        System.exit(0);
+    }
+    catch(Exception exp)
+    {
+        exp.printStackTrace();
+        JOptionPane.showMessageDialog(this
+                                 ,&#147;Can&#146;t shutdown server.&#148;
+                                 ,&#147;Error&#148;
+                                 ,JOptionPane.ERROR_MESSAGE);
+    }
+}
+</PRE>
+<P>If you try this example, you can use the window close box to close the AlarmConfig application without shutting down the server. Restarting the AlarmConfig program causes it to initialize its list from the server, displaying the alarms that didn&#146;t fire between the time the program was exited and the time it was restarted.
+</P>
+<H3><A NAME="Heading6"></A><FONT COLOR="#000077">AlarmDaemon</FONT></H3>
+<P>The AlarmDaemon application, like the AlarmConfig, creates a basic user interface, pictured in Figure 21.5.
+</P>
+<P>The AlarmDaemon has only one button for initiating a shutdown. Otherwise, the daemon simply registers as a MessageListener for the ALARM_TOPIC and displays JOptionPanes when an alarm occurs. The daemon also beeps to warn the user of an alarm. The onMessage method ignores any messages that don&#146;t contain an Alarm object by throwing an exception and catching it, as shown below.</P>
+<PRE>
+public void onMessage(Message msg)
+    {
+        try
+        {
+            <B>ObjectMessage map = (ObjectMessage)msg;
+            Alarm alarm = (Alarm) map.getObject();</B>
+            long interval=300;
+            int beeps=5;
+            int i;
+            Toolkit kit = Toolkit.getDefaultToolkit();
+            
+            if(alarm != null)
+            {
+                for(i=0;i&ltbeeps;i&#43;&#43;)
+                {
+                    kit.beep();
+                    Thread.sleep(interval);
+                }
+                
+                <B>JOptionPane.showMessageDialog(null
+                                ,alarm.getMessage()
+                                ,&#147;Alarm&#148;
+                                ,JOptionPane.INFORMATION_MESSAGE);</B>
+                
+                kit.beep();
+            }
+        }
+        catch(Exception exp)
+        {
+        }
+    }
+</PRE>
+<P><A NAME="Fig5"></A><A HREF="images\21-05.jpg"><IMG SRC="images\21-05t.jpg"></A>
+<BR><A HREF="images\21-05.jpg"><FONT COLOR="#000077"><B>Figure 21.5</B></FONT></A>&nbsp;&nbsp;AlarmDaemon interface.</P>
+<P>One addition to this class might be a way to add a filter to the alarms displayed so that not all alarms are displayed. It is also worth noting that the JOptionPane is a model, so the daemon will not receive any more alarm messages until the current one is acknowledged by the user. Another implementation might provide an audio-only alarm or keep a list of alarms that have fired.
+</P>
+<P>This is perhaps one of the simplest clients for listening to alarms. You could create other applications that use the same alarm server, possibly by adding alarms to the server programmatically instead of using the AlarmConfig program. One example of this type of application would be a program that reindexes a Web site or runs reports on a regular basis. By separating the alarm functionality into a separate program that keeps a persistent list, you can rely on alarms without having to reimplement the code each time.</P>
+<H3><A NAME="Heading7"></A><FONT COLOR="#000077">Summary</FONT></H3>
+<P>The AlarmServer is a great example of how messaging can be used to create a standard interface to a network service. Multiple applications can use the AlarmServer by subscribing to the ALARM_TOPIC and sending to the ADMIN_QUEUE. The clients don&#146;t have to know how the server is implemented, nor even what mechanism is being used to communicate with it beyond JMS. Using messaging allows the application to use services generically, publishing requests and receiving responses.
+</P>
+<P>This example also demonstrates how the messages you send are an integral part of the application itself. If we decided to use text messages instead of ObjectMessages, it would change the complete design, the client applications, and the server. Message definition must happen early in the design process and should be flexible enough to support changes that you plan to make. For example, you might use MapMessages because they support arbitrary contents for ObjectMessages for the same reason. However, keep in mind that the JMS provider you choose may provide differing levels of support and performance for the various messaging types.</P>
+<P>Messaging is a powerful addition to the enterprise toolkit that already contains servlets, JDBC, and Enterprise JavaBeans. Hopefully, this example gives you a few ideas of how you can use messaging to connect systems in a generic way, allowing the individual applications to change as long as the messages stay the same. JMS and messaging are object encapsulation at the application level.</P>
+<P>The next chapter introduces the concept of transactions; it is followed by a discussion of transactions and Enterprise JavaBeans.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="21-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch22\22-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

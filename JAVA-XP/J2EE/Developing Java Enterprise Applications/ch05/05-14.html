@@ -1,0 +1,213 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using JNDI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="05-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="05-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<PRE>
+...
+try
+{
+    DirContext dctx = new InitialDirContext(env);
+
+    String filter = &#147;(&amp(cn=E*)(account&gt1000))&#148;;
+
+    SearchControls sc = new SearchControls();
+    <B>sc.setCountLimit(5);</B>
+
+    NamingEnumeration result = 
+         dctx.search(&#147;ou=People&#148;, filter, <B>sc</B> );
+
+    while (result.hasMore())
+        System.out.println(result.next());
+} catch(SizeLimitExceededException se)
+{
+
+System.out.println(&#147;More than five objects returned...&#148;);
+} catch(NamingException ne)
+{
+...
+</PRE>
+<P>By setting the count limit to 5 in this code, only the first five results are returned.
+</P>
+<P><FONT SIZE="+1"><B><I>Set a Time Limit on Retrieving Results</I></B></FONT></P>
+<P>SearchControls allows you to limit the amount of waiting time for results. This is useful when you don&#146;t want your program to block for a long time on searches that are taking awhile due to the performance of the server, the network, and so on. To do this, call the SearchControls method setTimeLimit and pass in the number of milliseconds you are willing to wait. Then the search returns results within that span of time, or the exception TimeLimitExceededException is thrown. Set the time limit to 0 to wait forever. Here is an example:
+</P>
+<PRE>
+...
+try
+{
+    DirContext dctx = new InitialDirContext(env);
+
+    String filter = &#147;(&amp(cn=E*)(account&gt1000))&#148;;
+
+    SearchControls sc = new SearchControls();
+<B>    // Wait 2 seconds
+    sc.setTimeLimit(2000);</B>
+
+    NamingEnumeration result = 
+         dctx.search(&#147;ou=People&#148;, filter, <B>sc</B> );
+
+    while (result.hasMore())
+        System.out.println(result.next());
+} catch(TimeLimitExceededException te)
+{
+
+System.out.println(&#147;More than two seconds have passed...&#148;);
+} catch(NamingException ne)
+{
+...
+</PRE>
+<P>By setting the time limit, you force a search to return in a fixed amount of time. In this code, the setting of 2000 means that if the query cannot return due to a large number of results or a network failure, the search will be canceled after two seconds, which means the user is not subjected to a long wait for a response.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading11"></A><FONT COLOR="#000077">Modify Attributes</FONT></H4>
+<P>Now that values have been retrieved from the directory, let&#146;s look at techniques for modifying the values of an object in the directory. The DirContext method modifyAttributes can be used for this purpose. Table 5.14 lists the variations of this method.
+</P>
+<P>The simple form of the modifyAttributes method takes a named object (Name or String), a modification operation (listed below), and a list of attributes to modify (instance of Attributes).</P>
+<TABLE WIDTH="90%"><TD CAPTION COLSPAN="2"><B>Table 5.14</B> DirContext modifyAttributes Method Variations 
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="35%" VALIGN="TOP" ALIGN="LEFT">METHOD 
+<TH WIDTH="55%" VALIGN="TOP" ALIGN="LEFT">USE
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>void modifyAttributes(Name name, int mod_op, Attributes attrs)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Modifies the attributes contained in attrs of the object described by the non-null name. The operation to perform is ADD_ATTRIBUTE, REPLACE_ATTRIBUTE, or REMOVE_ATTRIBUTE. The operations occur in no particular order.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>void modifyAttributes(Name name, ModificationItem[] mods)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Performs the modifications of the attributes as specified in mods of the object described by the non-null name. The operations occur in the order they are defined in the ModificationItem array.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>void modifyAttributes(String name, int mod_op, Attributes attrs)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Modifies the attributes contained in attrs of the object described by the non-null name. The operation to perform is ADD_ATTRIBUTE, REPLACE_ATTRIBUTE, or REMOVE_ATTRIBUTE. The operations occur in no particular order.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>void modifyAttributes(String name, ModificationItem[] mods)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Performs the modifications of the attributes as specified in mods of the object described by the non-null name. The operations occur in the order they are defined in the ModificationItem array.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+</TABLE>
+<P>The modification operation can be one of the following constants:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;DirContext.ADD_ATTRIBUTE
+<DD><B>&#149;</B>&nbsp;&nbsp;DirContext.REPLACE_ATTRIBUTE
+<DD><B>&#149;</B>&nbsp;&nbsp;DirContext.REMOVE_ATTRIBUTE
+</DL>
+<P>For example, given a person named John, suppose that you want to add an e-mail address john@pri.com and an empty website address attribute. The code below uses the modifyAttributes method of DirContext to specify that a set of attributes should be added to the object John in the current context.
+</P>
+<PRE>
+import javax.naming.*;
+import javax.naming.directory.*;
+import java.util.Hashtable;
+
+public class Modify1Example
+{
+    public static void main(String args[])
+    {
+        Hashtable env = new Hashtable(11);
+
+
+        env.put(Context.INITIAL_CONTEXT_FACTORY,
+            &#147;com.sun.jndi.ldap.LdapCtxFactory&#148;);
+        env.put(Context.PROVIDER_URL,
+            &#147;ldap://MyHost/o=JNDIExample&#148;);
+        try
+        {
+            DirContext dctx = new InitialDirContext(env);
+            Attributes attrs = new BasicAttributes(true);
+            attrs.put(new BasicAttribute(&#147;email&#148;,&#147;john@pri.com&#148;));
+            attrs.put(new BasicAttribute(&#147;website&#148;));
+
+            <B>dctx.modifyAttributes(&#147;cn=John, ou=People&#148;,
+                                  DirContext.ADD_ATTRIBUTE,
+                                  attrs);</B>
+        }catch(Exception e)
+        {
+            System.out.println(e);
+        }
+    }
+}
+</PRE>
+<P>Using this technique, you can add, modify, and delete attributes. The only problem is that each modify call can perform only a single operation on a set of attributes.
+</P>
+<P><FONT SIZE="+1"><B><I>Create a Modification List</I></B></FONT></P>
+<P>The previous modifyAttributes example is useful when you want to perform one atomic operation on one or more attributes. However, it is often more useful to perform several operations at once. For example, let&#146;s say a person named Karen moved from the marketing department to the sales department. The program will need to change Karen&#146;s attributes to reflect the move. Karen may also require a sales quota attribute with an initial value. Maybe she doesn&#146;t have an assistant anymore, so that attribute should be removed. Rather than executing three modifyAttributes calls, you use a ModificationItem list to specify these changes. A ModificationItem consists of one of the operation constants in the preceding example specifying the operation, as well as an Attribute to modify. Modifications are applied in the order in which they appear in the list; either all of the modifications are executed, or none are. The following example performs the position transfer for Karen.
+</P>
+<PRE>
+import javax.naming.*;
+import javax.naming.directory.*;
+import java.util.Hashtable;
+
+public class Modify2Example
+{
+    public static void main(String args[])
+    {
+        Hashtable env = new Hashtable(11);
+
+        env.put(Context.INITIAL_CONTEXT_FACTORY,
+            "com.sun.jndi.ldap.LdapCtxFactory");
+        env.put(Context.PROVIDER_URL,
+            "ldap://MyHost/o=JNDIExample");
+        try
+        {
+            DirContext dctx = new InitialDirContext(env);
+
+            <B>ModificationItem[] mods = new ModificationItem[3];
+            mods[0] = new ModificationItem(
+                DirContext.REPLACE_ATTRIBUTE,
+                new BasicAttribute("department", "sales"));
+            mods[1] = new ModificationItem(
+                DirContext.ADD_ATTRIBUTE,
+                new BasicAttribute("quota", "$1,000,000"));
+            mods[2] = new ModificationItem(
+                DirContext.REMOVE_ATTRIBUTE,
+                new BasicAttribute("assistant"));
+
+            dctx.modifyAttributes("cn=Karen, ou=People", mods);</B>
+        }catch(Exception e)
+        {
+            System.out.println(e);
+        }
+    }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="05-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="05-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

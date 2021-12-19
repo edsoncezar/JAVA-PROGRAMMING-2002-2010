@@ -1,0 +1,242 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming with the Java Messaging Service</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>As with the QueueSenderTest example, this code provides a transacted version of the QueueReceiverTest example that uses a transacted session. This example, called TransQueueReceiverTest and pictured in Figure 20.5, provides buttons for the user to commit, roll back, or recover the session. When a receiver&#146;s session is committed, it acknowledges the entire message received to date. If it is rolled back, these messages will be redelivered. Recover tells the session to stop delivery, mark messages that weren&#146;t acknowledged as redelivered, and start delivery again. Both rollback and recover may result in duplicate messages, but only recover treats the messages as redelivered.
+</P>
+<P><A NAME="Fig5"></A><A HREF="images\20-05.jpg"><IMG SRC="images\20-05t.jpg"></A>
+<BR><A HREF="images\20-05.jpg"><FONT COLOR="#000077"><B>Figure 20.5</B></FONT></A>&nbsp;&nbsp;Transacted queue receiver example.</P>
+<P><FONT SIZE="+1"><B><I>Using Receive</I></B></FONT></P>
+<P>The other mechanism for receiving messages from a Queue is to use the receive method. The following example demonstrates this technique in a command-line program. Like the previous examples, the object used to implement this one stores JMS entities in instance variables and uses its constructor to create these objects.
+</P>
+<PRE>
+//Import statements removed to save space
+public class QueueWatcher
+ implements Runnable
+{
+    <B>javax.jms.QueueSession session;
+    javax.jms.QueueReceiver receiver;
+    javax.jms.QueueConnection conn;
+    javax.jms.QueueConnectionFactory factory;</B>
+
+    public QueueWatcher(String user)
+    {
+        Context context;
+
+        try
+        {
+            MiniJMSUtils.init(&#147;queuewatcher.properties&#148;);
+            context = MiniJMSUtils.context;
+
+            <B>factory
+             = (QueueConnectionFactory)
+                context.lookup(&#147;QueueConnectionFactory&#148;);
+
+            conn
+             = factory.createQueueConnection(user,null);
+
+            session
+             = conn.createQueueSession(false
+                      ,Session.AUTO_ACKNOWLEDGE);</B>
+
+            if(session == null) throw new Exception();
+
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+    }
+</PRE>
+<P>The setQueue method creates a receiver for the specified queue after looking it up in JNDI. No MessageListener is assigned to the queue, because the receive method will be used to retrieve messages.
+</P>
+<PRE>
+    public void setQueue(String name)
+    {
+        Queue queue=null;
+
+        try
+        {
+            if(receiver != null) receiver.close();
+
+            queue
+             = (Queue) MiniJMSUtils.context.lookup(name);
+
+            receiver = session.createReceiver(queue);
+
+            if((queue == null)
+                ||(receiver==null)) throw new Exception();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+    }
+</PRE>
+<P>This program watches for messages in a separate thread from the main thread. The run method uses a while loop to repeatedly call the QueueReceiver&#146;s receive method. A time-out is provided, and if that time-out is exceeded, a message is printed to the console. If a message is received, the message itself is printed to the console. In this example, the time-out is set to 3 seconds, or 3,000 milliseconds.
+</P>
+<PRE>
+    public void run()
+    {
+        Message msg;
+        long interval=3000;
+
+        while(true)
+        {
+            try
+            {
+                <B>msg = receiver.receive(interval);</B>
+
+                if(msg != null)
+                    System.out.println(&#147;Message: &#148;&#43;msg);
+                else
+                    System.out.println(&#147;No message in &#148;
+                                        &#43;interval&#43;&#147;msec&#148;);
+            }
+            catch(Exception exp)
+            {
+                System.out.println(exp);
+            }
+        }
+    }
+</PRE>
+<P>The close method cleans up any JMS resources.
+</P>
+<PRE>
+    public void close()
+    {
+        try
+        {
+            receiver.close();
+            session.close();
+            conn.close();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+        }
+    }
+</PRE>
+<P>The main method creates a QueueWatcher object, assigns its name and Queue, then starts a new thread to watch for messages.
+</P>
+<PRE>
+    public static void main(String s[])
+    {
+        QueueWatcher watcher;
+        String user=&#147;QueueWatcher&#148;;
+        Thread kicker;
+
+        if(s.length&lt;=0)
+            System.out.println(&#147;usage: QueueWatcher queueName&#148;);
+
+        //So we can catch errors in a log file
+        System.setErr(System.out);
+
+        watcher = new QueueWatcher(user);
+        <B>watcher.setQueue(s[0]);
+        kicker = new Thread(watcher);
+        kicker.start();</B>
+    }
+}
+</PRE>
+<P>As you can see, receive allows the watcher to retrieve messages in the thread of its choosing. In this case, the watcher spawns a thread to listen for messages, but it could have used the main thread just as easily. Message listeners, on the other hand, receive onMessage from the session in a thread managed by the session. The session guarantees that only one thread at a time sends onMessage, but that thread is not under program control.
+</P>
+<P><FONT SIZE="+1"><B><I>Using ReplyTo</I></B></FONT></P>
+<P>One of the header fields in a Message is the JMSReplyTo field. This field can be used to send a private queue along with a message. Receivers can use this private queue to respond to the sender, without going through an administered queue. Instead, temporary queues are normally used for reply-to messages.
+</P>
+<P>The following example contains two applications. The first, ReplyToTest, creates a temporary queue and uses it as the JMSReplyTo field for the messages it sends. The other program, Echo, is a command-line program that sends a reply, when possible, for the messages it receives.</P>
+<P>ReplyToTest is a combination of the QueueSenderTest and the QueueReceiverTest examples. It provides a field for sending messages and a list of messages received in the temporary reply queue. Because this code is similar to previous examples, the full code is not shown here. The entire example is available on the CD-ROM.</P>
+<P>The constructor for the ReplyToTest creates the JMS session and the user interface. Notice that a temporary queue is created for reply-to messages. A receiver is created for the queue, and the ReplyToTest object registers as a MessageListener for the temporary queue.</P>
+<PRE>
+//import statements removed for space
+public class ReplyToTest extends JPanel
+ implements ActionListener,MessageListener
+{
+    ... Instance variables for UI ...
+
+    javax.jms.QueueSession session;
+    javax.jms.QueueReceiver receiver;
+    javax.jms.QueueSender sender;
+    javax.jms.QueueConnection conn;
+    javax.jms.QueueConnectionFactory factory;
+
+    public static final String queue_action=&#147;queue&#148;;
+    public static final String send_action=&#147;send&#148;;
+
+    public ReplyToTest (String user)
+    {
+        ... Local variables for UI ...
+
+        Context context;
+
+        try
+        {
+            MiniJMSUtils.init(&#147;replyto.properties&#148;);
+
+            context = MiniJMSUtils.context;
+
+            factory
+             = (QueueConnectionFactory)
+                  context.lookup(&#147;QueueConnectionFactory&#148;);
+
+            conn
+             = factory.createQueueConnection(user,null);
+
+            session
+             = conn.createQueueSession(false
+                   ,Session.AUTO_ACKNOWLEDGE);
+
+                  <B>tempQ = session.createTemporaryQueue();
+
+            receiver = session.createReceiver(tempQ);</B>
+
+            if(receiver == null) throw new Exception();
+
+            <B>receiver.setMessageListener(this);</B>
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+
+        ... Create the UI ...
+
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

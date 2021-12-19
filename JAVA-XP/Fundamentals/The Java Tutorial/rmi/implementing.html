@@ -1,0 +1,499 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Implementing a Remote Interface</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="designing.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="client.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=bottom border=0 alt="RMI | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Using Java RMI</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Implementing a Remote Interface
+</h2>
+<p>
+<blockquote>
+
+Let's turn now to the task of implementing a class for the compute
+engine. In general the implementation class of a remote interface
+should at least
+<UL>
+<LI> Declare the remote interfaces being implemented
+<LI> Define the constructor for the remote object
+<LI> Provide an implementation for each remote method in the remote interfaces
+</UL>
+<P>
+The server needs to create and to install the remote objects. This
+setup procedure can be encapsulated in a <CODE>main</CODE> method in
+the remote object implementation class itself, or it can be included in
+another class entirely. The setup procedure should
+<UL>
+<LI> Create and install a security manager
+<LI> Create one or more instances of a remote object
+<LI> Register at least one of the remote objects with the RMI remote
+     object registry (or another naming service such as one that uses JNDI),
+     for bootstrapping purposes
+</UL>
+<P>
+The complete implementation of the compute engine follows. The
+<a href="http://docs.rinet.ru/Jtuta/rmi/example-1dot2/engine/ComputeEngine.java"><CODE>engine.ComputeEngine</CODE></a>
+class implements the remote interface
+<CODE>Compute</CODE> and also includes the <CODE>main</CODE> method for
+setting up the compute engine.
+<BLOCKQUOTE>
+<pre>
+package engine;
+
+import java.rmi.*;
+import java.rmi.server.*;
+import compute.*;
+
+public class ComputeEngine extends UnicastRemoteObject
+                           implements Compute
+{
+    public ComputeEngine() throws RemoteException {
+        super();
+    }
+
+    public Object executeTask(Task t) {
+        return t.execute();
+    }
+
+    public static void main(String[] args) {
+        if (System.getSecurityManager() == null) {
+            System.setSecurityManager(new RMISecurityManager());
+        }
+        String name = &quot;//host/Compute&quot;;
+        try {
+            Compute engine = new ComputeEngine();
+            Naming.rebind(name, engine);
+            System.out.println(&quot;ComputeEngine bound&quot;);
+        } catch (Exception e) {
+            System.err.println(&quot;ComputeEngine exception: &quot; + 
+			       e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+</pre>
+</BLOCKQUOTE>
+<P>
+Now let's take a closer look at each of the components of the compute
+engine implementation.
+
+<H4>Declare the Remote Interfaces Being Implemented</H4>
+<blockquote>
+The implementation class for the compute engine is declared as
+<BLOCKQUOTE>
+<pre>
+public class ComputeEngine extends UnicastRemoteObject
+                           implements Compute
+</pre>
+</BLOCKQUOTE>
+<P>
+This declaration states that the class implements the <CODE>Compute</CODE>
+remote interface (and therefore defines a remote object) and extends
+the class <CODE>java.rmi.server.UnicastRemoteObject</CODE>.
+<P>
+<CODE>UnicastRemoteObject</CODE> is a convenience class, defined in the
+RMI public API, that can be used as a superclass for remote object
+implementations. The superclass <CODE>UnicastRemoteObject</CODE>
+supplies implementations for a number of <CODE>java.lang.Object</CODE>
+methods (<CODE>equals</CODE>, <CODE>hashCode</CODE>,
+<CODE>toString</CODE>) so that they are defined appropriately for
+remote objects<CODE>. UnicastRemoteObject</CODE>also includes
+constructors and static methods used to <EM CLASS="Italic">export</EM>
+a remote object, that is, make the remote object available to receive
+incoming calls from clients.
+<P>
+A remote object implementation does not have to extend
+<CODE>UnicastRemoteObject</CODE>, but any implementation that does not
+must supply appropriate implementations of the
+<CODE>java.lang.Object</CODE> methods. Furthermore, a remote object
+implementation must make an explicit call to one of
+<CODE>UnicastRemoteObject</CODE>'s <CODE>exportObject</CODE> methods to
+make the RMI runtime aware of the remote object so that the object can
+accept incoming calls. By extending <CODE>UnicastRemoteObject</CODE>,
+the <CODE>ComputeEngine</CODE> class can be used to create a simple
+remote object that supports unicast (point-to-point) remote
+communication and that uses RMI's default sockets-based transport for
+communication.
+<P>
+If you choose to extend a remote object from any class other than
+<CODE>Unicast-RemoteObject</CODE> or, alternatively, extend from the
+new JDK 1.2 class <CODE>java.rmi.activation.Activatable</CODE> (used to
+construct remote objects that can execute on demand), you need to
+export the remote object by calling either the
+<CODE>UnicastRemoteObject.exportObject</CODE> or
+<CODE>Activatable.exportObject</CODE> method explicitly from your
+class's constructor (or another initialization method, as
+appropriate).
+<P>
+The compute engine example defines a remote object class that
+implements only a single remote interface and no other interfaces. The
+<CODE>ComputeEngine</CODE> class also contains some methods that can be
+called only locally. The first of these is a constructor for
+<CODE>ComputeEngine</CODE> objects; the second is a <CODE>main</CODE>
+method that is used to create a <CODE>ComputeEngine</CODE> and make it
+available to clients.
+</blockquote>
+
+<H4>Define the Constructor</H4>
+<blockquote>
+The <CODE>ComputeEngine</CODE> class has a single constructor that
+takes no arguments. The code for the constructor is
+<BLOCKQUOTE>
+<pre>
+public ComputeEngine() throws RemoteException {
+    super();
+}
+</pre>
+</BLOCKQUOTE>
+
+This constructor simply calls the superclass constructor, which is the
+no-argument constructor of the <CODE>UnicastRemoteObject</CODE> class.
+Although the superclass constructor gets called even if omitted from
+the <CODE>ComputeEngine</CODE> constructor, we include it for clarity.
+<P>
+During construction, a <CODE>UnicastRemoteObject</CODE> is <EM
+CLASS="Italic">exported</EM>, meaning that it is available to accept
+incoming requests by listening for incoming calls from clients on an
+anonymous port.
+<BLOCKQUOTE>
+<hr>
+<strong>Note</strong>:
+In JDK 1.2 you may indicate the specific port that a remote object uses
+to accept requests.
+<hr>
+</blockquote>
+<P>
+The no-argument constructor for the superclass,
+<CODE>UnicastRemoteObject</CODE>, declares the exception
+<CODE>RemoteException</CODE> in its <CODE>throws</CODE> clause, so the
+<CODE>Compute-Engine</CODE> constructor must also declare that it can
+throw <CODE>RemoteException</CODE>. A <CODE>RemoteException</CODE> can
+occur during construction if the attempt to export the object
+fails--due to, for example, communication resources being unavailable
+or the appropriate stub class not being found.
+</blockquote>
+
+<H4>Provide Implementations for Each Remote Method</H4>
+<blockquote>
+The class for a remote object provides implementations for each of the
+remote methods specified in the remote interfaces. The
+<CODE>Compute</CODE> interface contains a single remote method,
+<CODE>executeTask</CODE>, which is implemented as follows:
+<BLOCKQUOTE>
+<pre>
+public Object executeTask(Task t) {
+    return t.execute();
+}
+</pre>
+</BLOCKQUOTE>
+<P>
+This method implements the protocol between the <CODE>ComputeEngine</CODE>
+and its clients. Clients provide the <CODE>ComputeEngine</CODE> with a
+<CODE>Task</CODE> object, which has an implementation of the task's
+<CODE>execute</CODE> method. The <CODE>ComputeEngine</CODE> executes
+the <CODE>Task</CODE> and returns the result of the task's
+<CODE>execute</CODE> method directly to the caller.
+<P>
+The <CODE>executeTask</CODE> method does not need to know anything more
+about the result of the <CODE>execute</CODE> method than that it is at
+least an <CODE>Object</CODE>. The caller presumably knows more about
+the precise type of the <CODE>Object</CODE> returned and can cast the
+result to the appropriate type.
+
+<H4>Passing Objects in RMI</H4>
+<blockquote>
+Arguments to or return values from remote methods can be of almost any
+type, including local objects, remote objects, and primitive types.
+More precisely, any entity of any type can be passed to or from a
+remote method as long as the entity is an instance of a type that is a
+primitive data type, a remote object, or a <EM CLASS="Italic">serializable</EM>
+object, which means that it implements the interface
+<CODE>java.io.Serializable.</CODE>
+
+<P>
+A few object types do not meet any of these criteria and thus cannot be
+passed to or returned from a remote method. Most of these objects, such
+as a file descriptor, encapsulate information that makes sense only
+within a single address space. Many of the core classes, including
+those in the packages <CODE>java.lang</CODE> and
+<CODE>java.util</CODE>, implement the <CODE>Serializable</CODE>
+interface.
+<P>
+The rules governing how arguments and return values are passed are as follows.
+<UL>
+<LI> Remote objects are essentially passed by reference.
+     A <EM CLASS="Italic">remote object reference</EM> is a stub, which
+     is a client-side proxy that implements the complete set of remote
+     interfaces that the remote object implements.
+<LI> Local objects are passed by copy, using object serialization.
+     By default all fields are copied, except those that are marked
+     <CODE>static</CODE> or <CODE>transient</CODE>. Default
+     serialization behavior can be overridden on a class-by-class
+     basis.
+</UL>
+<P>
+Passing an object by reference (as is done with remote objects) means
+that any changes made to the state of the object by remote method calls
+are reflected in the original remote object. When passing a remote
+object, only those interfaces that are remote interfaces are available
+to the receiver; any methods defined in the implementation class or
+defined in nonremote interfaces implemented by the class are not
+available to that receiver.
+<P>
+For example, if you were to pass a reference to an instance of the
+<CODE>ComputeEngine</CODE> class, the receiver would have access only
+to the compute engine's <CODE>executeTask</CODE> method. That receiver
+would not see either the <CODE>ComputeEngine</CODE> constructor or its
+<CODE>main</CODE> method or any of the methods in
+<CODE>java.lang.Object</CODE>.
+<P>
+In remote method calls objects--parameters, return values, and
+exceptions--that are not remote objects are passed by value. This means
+that a copy of the object is created in the receiving virtual machine.
+Any changes to this object's state at the receiver are reflected only
+in the receiver's copy, not in the original instance.
+</blockquote>
+</blockquote>
+
+<H4>Implement the Server's main Method</H4>
+<blockquote>
+The most involved method of the <CODE>ComputeEngine</CODE>
+implementation is the <CODE>main </CODE> method. The <CODE>main</CODE>
+method is used to start the <CODE>ComputeEngine</CODE> and therefore
+needs to do the necessary initialization and housekeeping to prepare
+the server for accepting calls from clients. This method is not a
+remote method, which means that it cannot be called from a different
+virtual machine. Since the <CODE>main</CODE> method is declared
+<CODE>static</CODE>, the method is not associated with an object at all
+but rather with the class <CODE>ComputeEngine</CODE>.
+</blockquote>
+
+<H4>Create and Install a Security Manager</H4>
+<blockquote>
+The first thing that the <CODE>main</CODE> method does is to create and
+to install a security manager, which protects access to system
+resources from untrusted downloaded code running within the virtual
+machine. The security manager determines whether downloaded code has
+access to the local file system or can perform any other privileged
+operations.
+<P>
+All programs using RMI must install a security manager, or RMI will not
+download classes (other than from the local class path) for objects
+received as parameters, return values, or exceptions in remote method
+calls. This restriction ensures that the operations performed by
+downloaded code go through a set of security checks.
+<P>
+The <CODE>ComputeEngine</CODE> uses a security manager supplied as part
+of the RMI system, the <CODE>RMISecurityManager</CODE>. This security
+manager enforces a similar security policy as the typical security
+manager for applets; that is to say, it is very conservative as to what
+access it allows. An RMI application could define and use another
+<CODE>SecurityManager</CODE> class that gave more liberal access to
+system resources or, in JDK 1.2, use a policy file that grants more
+permissions.
+<P>
+Here's the code that creates and installs the security manager:
+<BLOCKQUOTE>
+<pre>
+if (System.getSecurityManager() == null) {
+    System.setSecurityManager(new RMISecurityManager());
+}
+</pre>
+</BLOCKQUOTE>
+</blockquote>
+
+<H4>Make the Remote Object Available to Clients</H4>
+<blockquote>
+Next, the <CODE>main</CODE> method creates an instance of the
+<CODE>ComputeEngine</CODE>. This is done with the statement
+<BLOCKQUOTE>
+<pre>
+Compute engine = new ComputeEngine();
+</pre>
+</BLOCKQUOTE>
+<P>
+As mentioned, this constructor calls the <CODE>UnicastRemoteObject</CODE>
+superclass constructor, which in turn exports the newly created object
+to the RMI runtime. Once the export step is complete, the
+<CODE>ComputeEngine</CODE> remote object is ready to accept incoming
+calls from clients on an anonymous port, one chosen by RMI or the
+underlying operating system. Note that the type of the variable
+<CODE>engine</CODE> is <CODE>Compute</CODE>, not
+<CODE>ComputeEngine</CODE>. This declaration emphasizes that the
+interface available to clients is the <CODE>Compute</CODE> interface
+and its methods, not the <CODE>Compute-Engine</CODE> class and its
+methods.
+<P>
+Before a caller can invoke a method on a remote object, that caller
+must first obtain a reference to the remote object. This can be done in
+the same way that any other object reference is obtained in a program,
+such as getting it as part of the return value of a method or as part
+of a data structure that contains such a reference.
+<P>
+The system provides a particular remote object, the RMI registry, for
+finding references to remote objects. The RMI registry is a simple
+remote object name service that allows remote clients to get a
+reference to a remote object by name. The registry is typically used
+only to locate the first remote object an RMI client needs to use. That
+first remote object then provides support for finding other objects.
+<P>
+The <CODE>java.rmi.Naming</CODE> interface is used as a front-end API
+for binding, or registering, and looking up remote objects in the
+registry. Once a remote object is registered with the RMI registry on
+the local host, callers on any host can look up the remote object by
+name, obtain its reference, and then invoke remote methods on the
+object. The registry may be shared by all servers running on a host, or
+an individual server process may create and use its own registry, if
+desired.
+<P>
+The <CODE>ComputeEngine</CODE> class creates a name for the object with
+the statement
+<BLOCKQUOTE>
+<pre>
+String name = &quot;//host/Compute&quot;;
+</pre>
+</BLOCKQUOTE>
+<P>
+This name includes the host name, <CODE>host</CODE>,
+on which the registry (and remote object) is being run and a name,
+<CODE>Compute</CODE>, that identifies the remote object in the
+registry. The code then needs to add the name to the RMI registry
+running on the server. This is done later (within the <CODE>try</CODE>
+block) with the statement
+<BLOCKQUOTE>
+<pre>
+Naming.rebind(name, engine);
+</pre>
+</BLOCKQUOTE>
+<P>
+Calling the <CODE>rebind</CODE> method makes a remote call to the RMI
+registry on the local host. This call can result in a
+<CODE>RemoteException</CODE> being generated, so the exception needs to
+be handled. The <CODE>ComputeEngine</CODE> class handles the exception
+within the <CODE>try</CODE>/<CODE>catch</CODE> block. If the exception
+is not handled in this way, <CODE>RemoteException</CODE> would have to
+be added to the <CODE>throws</CODE> clause (currently nonexistent) of
+the <CODE>main</CODE> method.
+<P>
+Note the following about the arguments to the call to <CODE>Naming.rebind</CODE>.
+<UL>
+<LI> The first parameter is a URL-formatted <CODE>java.lang.String</CODE>
+     representing the location and the name of the remote object. You
+     will need to change the value of <CODE>host</CODE> to be the name,
+     or IP address, of your server machine. If the host is omitted from
+     the URL, the host defaults to the local host. Also, you don't need
+     to specify a protocol in the URL. For example, supplying
+     <CODE>Compute</CODE> as the name in the <CODE>Naming.rebind</CODE>
+     call is allowed. Optionally a port number may be supplied in the
+     URL; for example, the name <CODE>//host:1234/objectname</CODE> is
+     legal. If the port is omitted, it defaults to 1099. You must
+     specify the port number only if a server creates a registry on a
+     port other than the default 1099. The default port is useful in
+     that it provides a well-known place to look for the remote objects
+     that offer services on a particular host.
+<LI> The RMI runtime substitutes a reference to the stub for the
+     remote object reference specified by the argument. Remote
+     implementation objects, such as instances of
+     <CODE>ComputeEngine,</CODE> never leave the VM where they are
+     created, so when a client performs a lookup in a server's remote
+     object registry, a reference to the stub is returned. As discussed
+     earlier, remote objects in such cases are passed by reference
+     rather than by value.
+<LI> Note that for security reasons, an application can <CODE>bind</CODE>,
+     <CODE>unbind</CODE>, or <CODE>rebind</CODE> remote object
+     references only with a registry running on the same host. This
+     restriction prevents a remote client from removing or overwriting
+     any of the entries in a server's registry. A <CODE>lookup</CODE>,
+     however, can be requested from any host, local or remote.
+</UL>
+<P>
+Once the server has registered with the local RMI registry, it prints
+out a message indicating that it's ready to start handling calls and
+then the <CODE>main</CODE> method exits. It is not necessary to have a
+thread wait to keep the server alive. As long as there is a reference
+to the <CODE>ComputeEngine</CODE> object in another virtual machine,
+local or remote, the <CODE>ComputeEngine</CODE> object will not be shut
+down, or garbage collected. Because the program binds a reference to
+the <CODE>ComputeEngine</CODE> in the registry, it is reachable from a
+remote client, the registry itself! The RMI system takes care of
+keeping the <CODE>ComputeEngine</CODE>'s process up. The
+<CODE>ComputeEngine</CODE> is available to accept calls and won't be
+reclaimed until its binding is removed from the registry, <EM
+CLASS="Italic">and</EM> no remote clients hold a remote reference to
+the <CODE>ComputeEngine</CODE> object.
+<P>
+The final piece of code in the <CODE>ComputeEngine.main</CODE> method deals with handling any exception that might arise. The only exception that could be thrown in the code is a <CODE>RemoteException</CODE>, thrown either by the constructor of the <CODE>ComputeEngine</CODE> class or by the call to the RMI registry to bind the object to the name <CODE>Compute</CODE>. In either case the program can't do much more than exit after printing an error message. In some distributed applications it is possible to recover from the failure to make a remote call. For example, the application could choose another server and continue operation.
+</blockquote>
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="designing.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="client.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=top border=0 alt="RMI | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Using Java RMI</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

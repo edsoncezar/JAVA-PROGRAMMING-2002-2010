@@ -1,0 +1,192 @@
+<HTML>
+<HEAD>
+
+<TITLE>Java 1.2 In Record Time:Working with Multi-Threaded Programs and JAR Files</TITLE>
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="513-517.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="521-526.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>This line is just where the problem is. Between the steps of incrementing and printing out the data, the other thread could have slipped in and completed both tasks, which means that the numbers could appear out of order. In fact, if you run this first version of <TT>synchronize.java</TT>, you&#146;ll see that sometimes this indeed happens&#151;the values do sometimes appear out of order. You can fix this problem now by creating a new version of <TT>synchronize.java</TT>. The first version of the applet, with the synchronization problems, appears in <TT>synchronize.java,</TT> <TT>version 1</TT>.</P>
+<P><A NAME="Fig6"></A><A HREF="images\16-06.jpg"><IMG SRC="images\16-06t.jpg"></A></P>
+<P><B>synchronize.java, version 1</B>
+</P>
+<PRE>
+import java.awt.*;
+import java.applet.Applet;
+
+public class synchronize extends Applet implements Runnable&#123;
+
+     Thread Thread1, Thread2;
+     dataClass sensitiveData;
+
+     public void init() &#123;
+          sensitiveData = new dataClass();
+     &#125;
+
+     public void start() &#123;
+          Thread1 = new Thread(this);
+          Thread1.start();
+          Thread2 = new Thread(this);
+          Thread2.start();
+     &#125;
+
+     public void run() &#123;
+          String out_string;
+          int loop_index;
+          out_string = new String();
+          for(loop_index = 1; loop_index &lt;1000;
+          loop_index&#43;&#43;)&#123;
+               sensitiveData.internal_data&#43;&#43;;
+               System.out.println(&#147;data value = &#147; &#43;
+               &#8658; out_string.valueOf(sensitiveData.
+               internal_data));
+          &#125;
+     &#125;
+&#125;
+</PRE>
+<P>Let&#146;s explore how to fix this problem with synchronized functions.
+</P>
+<H3><A NAME="Heading11"></A><FONT COLOR="#000077">Synchronizing Functions</FONT></H3>
+<P>Since both <TT>thread1</TT> and <TT>thread2</TT> are working with the same <TT>internal_data</TT> variable, you&#146;re in danger of having one thread being interrupted between the time it increments the counter and the time it reads the value back from the counter to display it. In that case, the other thread could have incremented the counter again by that time, and you could end up displaying the wrong value. This problem can be solved by denying multiple access to the same resource in a program until the currently accessing thread is finished with its work.</P>
+<P>One way to deny multiple access to a resource (in our example, the counter variable) is to put all the operations having to do with the counter into a <I>synchronized</I> function. To do so, you have to place the sensitive data-handling statements into their own function. Currently, all this code is in the <TT>run()</TT> method:</P>
+<PRE>
+     public void run() &#123;
+          String out_string;
+          int loop_index;
+          out_string = new String();
+          for(loop_index = 1; loop_index &lt;1000;
+          loop_index&#43;&#43;)&#123;
+               sensitiveData.internal_data&#43;&#43;;
+               System.out.println(&#147;data value = &#147; &#43;
+          &#8658; out_string.valueOf(sensitiveData.internal_data));
+          &#125;
+     &#125;
+</PRE>
+<P>You can create a new function, called <TT>printer()</TT> as follows:</P>
+<PRE>
+     public void printer()&#123;
+               .
+               .
+               .
+     &#125;
+</PRE>
+<P>Add the data-handling code here to increment your data and display the new value:
+</P>
+<PRE>
+     public void printer()&#123;
+&#8594;          String out_string;
+&#8594;          out_string = new String();
+&#8594;          sensitiveData.internal_data&#43;&#43;;
+&#8594;          System.out.println("data value = " &#43; &#8584;
+ out_string.valueOf(sensitiveData.internal_data));
+     &#125;
+</PRE>
+<P>Now all the sensitive code is in one function; you can restrict access to that function with the <TT>synchronized</TT> keyword:</P>
+<PRE>
+&#8594;     public synchronized void printer()&#123;
+          String out_string;
+          out_string = new String();
+          sensitiveData.internal_data&#43;&#43;;
+          System.out.println(&#147;data value = &#147;&#43;
+          &#8584; out_string.valueOf(sensitiveData.internal_data));
+     &#125;
+&#125;
+</PRE>
+<P>Now your <TT>printer()</TT> function is synchronized, which means that only one thread can enter it at a time. In the <TT>run()</TT> method, all you have to do is to call your new synchronized function, <TT>printer()</TT>:</P>
+<PRE>
+     public void run() &#123;
+          int loop_index;
+          for(loop_index = 1; loop_index &lt; 500; loop_index&#43;&#43;)&#123;
+               printer();
+          &#125;
+     &#125;
+</PRE>
+<P>And you&#146;re finished&#151;if you run the new version of this applet, you&#146;ll see the same stream of numbers on the screen, but this time they&#146;ll be in order. You&#146;ve been able to coordinate your threads. The code for this improved applet appears in <TT>synchronize.java,</TT> <TT>version 2</TT>.</P>
+<P><B>synchronize.java, version 2</B></P>
+<PRE>
+import java.awt.*;
+import java.applet.Applet;
+
+public class synchronize extends Applet implements Runnable&#123;
+
+     Thread Thread1, Thread2;
+     dataClass sensitiveData;
+
+     public void init() &#123;
+          sensitiveData = new dataClass();
+     &#125;
+
+     public void start() &#123;
+          Thread1 = new Thread(this);
+          Thread1.start();
+          Thread2 = new Thread(this);
+          Thread2.start();
+     &#125;
+
+     public void run() &#123;
+          int loop_index;
+          for(loop_index = 1; loop_index &lt; 500; loop_index&#43;&#43;)&#123;
+               printer();
+          &#125;
+     &#125;
+
+     public synchronized void printer()&#123;
+          String out_string;
+          out_string = new String();
+          sensitiveData.internal_data&#43;&#43;;
+          System.out.println(&#147;data value = &#147; &#43;
+          out_string.valueOf(sensitiveData.internal_data));
+     &#125;
+&#125;
+
+class dataClass&#123;
+     public int internal_data;
+     public void dataClass()&#123;
+          internal_data = 0;
+     &#125;
+&#125;
+</PRE>
+<P>Creating a separate class like <TT>dataClass</TT> is a good way to work with multiple threads. However, it&#146;s not always convenient to have to place sensitive code into its own function, so Java gives you another way. Let&#146;s look into that now.</P>
+<H3><A NAME="Heading12"></A><FONT COLOR="#000077">Synchronizing Code Blocks</FONT></H3>
+<P>The sensitive part of your <TT>synchronize.java</TT> applet is in the <TT>for</TT> loop in the <TT>run()</TT> method:</P>
+<PRE>
+     public void run() &#123;
+          String out_string;
+          int loop_index;
+&#8594;          out_string = new String();
+&#8594;          for(loop_index = 1; loop_index &lt; 500;
+                 loop_index&#43;&#43;)&#123;
+&#8594;               sensitiveData.internal_data&#43;&#43;;
+&#8594;               System.out.println("data value = " &#43; &#8658;
+&#8594;               out_string.valueOf(sensitiveData.internal_data));
+&#8594;          &#125;
+     &#125;
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="513-517.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="521-526.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

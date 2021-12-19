@@ -1,0 +1,1844 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 15 -- A Virtual Java-Creating Behaviors in VRML 2.0</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 15</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>A Virtual Java-Creating Behaviors in VRML 2.0</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#GoingBeyondReality" >Going Beyond Reality</A>
+<LI><A HREF="#MakingtheWorldBehave" >Making the World Behave</A>
+<LI><A HREF="#OverviewofVRML" >Overview of VRML</A>
+<LI><A HREF="#TheVRMLScriptNode" >The VRML Script Node</A>
+<LI><A HREF="#VRMLDatatypesinJava" >VRML Datatypes in Java</A>
+<LI><A HREF="#IntegratingJavaScriptswithVRML" >Integrating Java Scripts with VRML</A>
+<LI><A HREF="#TheBrowserClass" >The Browser Class</A>
+<LI><A HREF="#TheScriptExecutionModel" >The Script Execution Model</A>
+<LI><A HREF="#CreatingEfficientBehaviors" >Creating Efficient Behaviors</A>
+<LI><A HREF="#DynamicWorldsCreatingVRMLontheFly" >Dynamic Worlds-Creating VRML on the Fly</A>
+<LI><A HREF="#CreatingReusableBehaviors" >Creating Reusable Behaviors</A>
+<LI><A HREF="#TheFutureVRMLJavaandAI" >The Future: VRML, Java, and AI</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<H2><A NAME="GoingBeyondReality"><FONT SIZE=5 COLOR=#FF0000>Going
+Beyond Reality</FONT></A></H2>
+<P>
+You've probably had enough of buttons, menus, and creating a hundred
+and one pictures for animations, and are looking for something
+a little different. If you have been closely reading the computing
+press, you may have noticed sections creeping in about another
+web technology called VRML-the Virtual Reality Modeling Language.
+VRML is designed to produce the 3D equivalent of HTML; a three-dimensional
+scene defined in a machine neutral format that can be viewed by
+anyone with the appropriate viewer.
+<P>
+Until recently, VRML has not really lived up to its name. The
+first version of the standard only produced static scenes and
+was a derivative of Silicon Graphic's Open Inventor file format.
+A user could wander around in a 3D scene, but there was no way
+to interact with the scene apart from clicking on the 3D-equivalent
+of hypertext links. This was a deliberate decision on the part
+of the designers. In December 1995 the VRML mailing-list decided
+to drop planned revisions to version 1.0 and head straight to
+the fully interactive version 2.0.
+<P>
+One of the prime requirements for VRML 2.0 was the ability to
+support programmable behaviors. Of the seven proposals, the Moving
+Worlds submission by Sony and SGI came out as the favorite among
+the 2000 members of the VRML mailing list. Contained in what has
+now become the draft proposal for VRML 2.0 was a Java API for
+creating behaviors.
+<P>
+Effectively combining VRML and Java requires a good understanding
+of how both languages work. This chapter introduces the Java implementation
+of the VRML API and shows you how to get the most from a dynamic
+virtual world.
+<H2><A NAME="MakingtheWorldBehave"><FONT SIZE=5 COLOR=#FF0000>Making
+the World Behave</FONT></A></H2>
+<P>
+Within the virtual reality environment any dynamic change in the
+scenery is regarded as a behavior. This may be something as simple
+as an object changing color when touched or something as complex
+as autonomous agents that look and act like humans, such as Neal
+Stephenson's Librarian from Snow Crash.
+<P>
+In order to understand how to integrate behaviors you also need
+to understand how VRML works. While this section won't delve into
+a lengthy discussion of VRML, a few basic concepts are needed.
+To start with, VRML is a separate language from the Java used
+in the scripts. VRML provides a class to interact only with a
+pre-existing scene, which means that you cannot use VRML as a
+3D toolkit. A stand-alone application could use the VRML class
+libraries to create a collection of VRML nodes, but without a
+pre-existing browser open there is no way of making these visible
+on the screen. In the future, you will be able to write a browser
+using Java3D that is resposible for the visualisation of the VRML
+file structure, but there is no method currently.
+<P>
+The second concept to understand is that within VRML there is
+no such thing as a monolithic application. Each object has its
+own script attached to it. Creating a highly complex world means
+writing lots of short scripts. Much of this lightweight work is
+performed with the JavaScript derived VRMLscript. This is the
+preferred method for short calculations, but when more complex
+work needs to be done, then the world creator uses Java based
+scripting. Typically, such heavy-weight operations combine the
+VRML API with the thread and networking classes.
+<P>
+To keep down the amount of programming the VRML specification
+writers added a number of nodes to take care of commonly required
+functionality. These can divided into two groups: <I>interpolators</I>
+and <I>sensors</I>. Interpolators are available for color, scalar
+values, points (morphing), vectors, position, and orientation.
+Sensors cover a more varied range: geometric shapes (cylinder,
+disk, plane, and sphere), proximity, time, and touch. These all
+can be directly inserted into a scene and connected to the various
+primitives to create effects without having to write a line of
+code. Simple effects, such as an automatically opening door, can
+be created by adding a sensor, interpolator, and primitives to
+the scene.
+<H2><A NAME="OverviewofVRML"><FONT SIZE=5 COLOR=#FF0000>Overview
+of VRML</FONT></A></H2>
+<P>
+The VRML world description uses a traditional scene graph approach
+reminiscent of <TT>PEX/PHIGS</TT>
+and other 3D toolkits. This description applies not only in the
+file structure but also within the inner workings. Each node within
+the scene has some parent and many can have children. For a complete
+structural description of VRML it is recommended that you purchase
+a good book on VRML, especially if serious behavioral programming
+is to be undertaken.
+<P>
+Surprisingly, the VRML nodes can be represented in a semi-object-oriented
+manner that meshes well with Java. Each node has a number of fields.
+These can be accessible to other nodes only if explicitly declared
+so, or they can be declared read- or write-only or only have defined
+methods to access their values. In VRML syntax, the four types
+of access are described as
+<UL>
+<LI><B>field</B>&nbsp;&nbsp;Hidden from general access
+<LI><B>eventIn</B>&nbsp;&nbsp;Sends a value to a node-a write-only
+field
+<LI><B>eventOut&nbsp;&nbsp;</B>Sends a value from a node-a read-only
+field
+<LI><B><FONT COLOR=#000000>exposedField</FONT></B>&nbsp;&nbsp;Publicly
+accessible for both read and write
+</UL>
+<P>
+Apart from seeing these in the definitions of the nodes defined
+by VRML, where you will be having to deal with them is in the
+writing of the behaviour scripts. Most scripts will be written
+to process a value being passed to the script in the form of an
+<TT>eventIn</TT> which then passes
+the result back through the <TT>eventOut</TT>.
+Any internal values will be kept in field values. Script nodes
+are not permitted to have <TT>exposedFields</TT>
+due to the updating and implementation ramifications within the
+event system.
+<P>
+Although a node may consist of a number of input and output fields
+it does not insist that they all be connected. Usually the opposite
+is the case-only a few of the available connections are made.
+VRML requires explicit connection of nodes using the <TT>ROUTE</TT>
+keyword as follows:
+<BLOCKQUOTE>
+<TT>ROUTE fromNode.fieldname1 TO toNode.fieldname2</TT>
+</BLOCKQUOTE>
+<P>
+The only restriction is that the two fields be of the same type.
+There is no casting of types permitted.
+<P>
+This route mechanism can be very powerful when combined with scripting.
+The specification allows both fan in and fan out of  <TT>ROUTEs</TT>.
+Fan in occurs when many nodes have <TT>ROUTEs</TT>
+to a single <TT>eventIn</TT> field
+of a node. Fan out is the opposite: one <TT>eventOut</TT>
+is connected to many other <TT>eventIns</TT>.
+This enables sensors and interpolators to feed the one script
+with information saving coding effort. The only problem that currently
+exists is that there is no way to find out which node generated
+an event for an <TT>eventIn</TT>.
+Fan out also is handy for when the one script controls a number
+of different objects at once, for example, a light switch turning
+on multiple lights simultaneously.
+<P>
+If two or more events cause a fan in clash on a particular <TT>eventIn</TT>,
+then the results are undefined. The programmer should be careful
+to avoid such situations. A typical example where this may occur
+is when two animation scripts set the position of an object.
+<P>
+VRML datatypes all follow the standard programming norms. There
+are integer, floating point, string, and boolean standard types,
+as well as specific type for dealing with 3D graphics such as
+points, vectors, image, and color. To deal with the extra requirements
+of the VRML scene, graph structure and behaviors node and time
+types have been added. The node datatype contains an instance
+pointer to a particular node in the scene graph. Individual fields
+within a node are not accessible directly. Individual field references
+in behaviors programming is rarely needed because communication
+is on an event-driven model. When field references are needed
+within the API, a node instance and field string description pair
+are used.
+<P>
+Apart from the boolean and time types these values can be either
+single or multivalued. The distinction is made in the field name
+with the <TT>SF</TT> prefix for single-valued
+fields and <TT>MF</TT> for multivalued
+fields. A <TT>SFInt32</TT> contains
+a single integer whereas a <TT>MFInt32</TT>
+contains an array of integers. For example, the script node definition
+in the next section contains an <TT>MFString</TT>
+and an <TT>SFBool</TT>. The <TT>MFstring</TT>
+is used to contain a collection of URLs, each kept in their own
+separate substring, but the <TT>SFBool</TT>
+contains a single boolean flag controlling a condition.
+<H2><A NAME="TheVRMLScriptNode"><FONT SIZE=5 COLOR=#FF0000>The
+</FONT><TT><FONT SIZE=5 COLOR=#FF0000 >VRML</FONT></TT><FONT SIZE=5 COLOR=#FF0000>
+</FONT><TT><FONT SIZE=5 COLOR=#FF0000 >Script</FONT></TT><FONT SIZE=5 COLOR=#FF0000>
+Node</FONT></A></H2>
+<P>
+The Script node provides the means for integrating a custom behavior
+into VRML. Behaviors can be programmed in any language that the
+browser supports and that an implementation of the API can be
+found for. In the draft versions of the VRML 2.0, specification
+sample APIs were provided for Java, C, and also VRML's own scripting
+language, <TT>VRMLscript</TT>-a derivative
+of Netscape's Javascript. The script node is defined as follows:
+<BLOCKQUOTE>
+<TT>Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;MFString&nbsp;&nbsp;&nbsp;&nbsp;behaviour&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[]
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mustEvaluate&nbsp;&nbsp;&nbsp;&nbsp;
+FALSE<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;directOutputs&nbsp;&nbsp;&nbsp;&nbsp;FALSE
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# any number of the following<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<I>eventTypeName&nbsp;&nbsp;&nbsp;&nbsp;eventName
+<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<I>eventTypeName&nbsp;&nbsp;&nbsp;&nbsp;eventName
+<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+fieldTypeName&nbsp;&nbsp;&nbsp;&nbsp;fieldName&nbsp;&nbsp;&nbsp;&nbsp;initialValue
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Unlike a standard HTML, VRML enables multiple target files to
+be specified in order of preference. The behavior field contains
+any number of strings specifying URLs or URNs to the desired behavior
+script. For Java scripts this would be the URL of the <TT>.class</TT>
+file but it is not limited to just one script type.  
+<P>
+Apart from specifying what the behavior script is, VRML also enables
+control over how the script node performs within the scene graph.
+The <TT>mustEvaluate</TT> field tells
+the browser about how often the script should be run. If it is
+set to <TT>TRUE</TT>, then the browser
+must send events to the script as soon as they are generated,
+forcing an execution of the script. If the field is set to <TT>false</TT>,
+then in the interests of optimization the browser may elect to
+queue events until the outputs of the script are needed by the
+browser. A <TT>TRUE</TT> setting is
+most likely to cause browser performance to degrade due to the
+constant context-swapping needed rather than batching to keep
+it to a minimum. Unless you are performing something that the
+browser is not aware of, such as using the networking or database
+functionality, you should set this field to <TT>false</TT>.
+<P>
+The <TT>directOutputs</TT> field controls
+whether the script has direct access for sending events to other
+nodes. Java methods require the Node reference of other nodes
+when setting field values. If, for example, a script is passed
+an instance of a Group node, then with this field set to <TT>TRUE</TT>
+it can send an event directly to that node. To add a new default
+box to this group, the script would contain the following:
+<BLOCKQUOTE>
+<TT>SFNode&nbsp;&nbsp;&nbsp;&nbsp;group_node
+= (SFNode)getField(&quot;group_node&quot;);<BR>
+group_node.postEventIn(&quot;add_children&quot;, (Field)CreateVRMLfromString(&quot;Box&quot;));</TT>
+</BLOCKQUOTE>
+<P>
+If <TT>directOutputs</TT> is set to
+<TT>false</TT>, then it requires the
+script node to have an <TT>eventOut</TT>
+field with the corresponding event type specified (an <TT>MFNode</TT>
+in this case), and a <TT>ROUTE</TT>
+connecting the script with the target node.
+<P>
+There are advantages to both approaches. When the scene graph
+is static in nature, then the second approach using known events
+and <TT>ROUTEs</TT> is much simpler.
+However, in a scene where objects are being generated on the fly,
+static routing and events will not work and the first approach
+is required.
+<H2><A NAME="VRMLDatatypesinJava"><FONT SIZE=5 COLOR=#FF0000>VRML
+Datatypes in Java</FONT></A></H2>
+<P>
+The whole of the API is built around two Java interfaces defined
+in the package <I>vrml</I>: <TT>eventIn</TT>
+and <TT>Node</TT> that are defined
+as the following:
+<BLOCKQUOTE>
+<TT>interface eventIn {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public String&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getName();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public SFTime&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getTimeStamp();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public ConstField&nbsp;&nbsp;getValue();
+<BR>
+}<BR>
+<BR>
+interface Node {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public ConstField getValue(String fieldName)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws InvalidFieldException;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void postEventIn(String eventName,
+Field eventValue)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws InvalidEventInException;
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In addition to these two interfaces, each of the VRML field types
+also has two class definitions which are subclasses of <TT>Field</TT>:
+a standard version and a restricted <TT>Const</TT>
+read-only version. The <TT>Const*</TT>
+definitions are only used in the <TT>eventIns</TT>
+defined in individual scripts. Unless that field class has an
+exception explicitly defined, they are guaranteed not to generate
+exceptions.
+<P>
+For the non-constant fields, each class has at least <TT>setValue</TT>
+and <TT>getValue</TT> methods that
+return the Java equivalent of the VRML field type. For example,
+a <TT>SFRotation</TT> class returns
+an array of floats mapping to the x, y, and z orientation, but
+the <TT>MFRotation</TT> class returns
+a two-dimensional array of floats. The multivalued field types
+also have a <TT>set1value</TT> method,
+enabling the caller to set an individual element.
+<P>
+<TT>SFString</TT> and <TT>MFString</TT>
+need special attention. Java defines them as being Unicode characters
+whereas VRML defines a subset of this-<TT>UTF-8</TT>.
+Ninety-nine percent of the time this should not present any problems,
+but it does pay to be aware of this.
+<H2><A NAME="IntegratingJavaScriptswithVRML"><FONT SIZE=5 COLOR=#FF0000>Integrating
+Java Scripts with VRML</FONT></A></H2>
+<H3>The Script Class definition</H3>
+<P>
+The last thing that needs to be defined is the script class itself.
+Earlier the VRML Script node was defined: now it is necessary
+to define the Java equivalent.
+<BLOCKQUOTE>
+<TT>Class Script implements Node {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void processEvents(Events [] events)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws Exception;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void eventsProcessed()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws Exception
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;protected Field getEventOut(String eventName)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws InvalidEventOutException;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;protected Field getField(String fieldName)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws InvalidFieldException
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+When a programmer creates a script, she is expected to subclass
+this to provide the needed functionality. The class definition
+has deliberately left the definition of the codes for the exceptions
+up to the author to enable the creation of tailored exceptions
+and handlers.
+<P>
+The <TT>getField()</TT> method returns
+the value of the field nominated by the given string. This is
+how the Java script gets the values from the VRML Script node
+fields. This method is used for all fields and <TT>exposedFields</TT>.
+To the Java script, an <TT>eventOut</TT>
+just looks like another field. There is no need to write an <TT>eventOut</TT>
+function-the value is set by calling the appropriate fieldtype's
+<TT>setValue()</TT> method.
+<H3>Dealing with Event Input</H3>
+<P>
+Every <TT>eventIn</TT> field specified
+in the VRML Script node definition requires a matching public
+method in the Java implementation. The method definition takes
+the form of
+<BLOCKQUOTE>
+<TT>public void &lt;eventName&gt;(Const&lt;eventTypeName&gt;
+&lt;variable name&gt;, SFTime &lt;variable name&gt;);</TT>
+</BLOCKQUOTE>
+<P>
+The method must have the same name as the matching <TT>eventIn</TT>
+field in the VRML script description. The second field corresponds
+to the timestamp of when the event was generated. This is particularly
+useful when the <TT>mustEvaluate</TT>
+field is set <TT>false</TT>, meaning
+that an event may be queued for some time before finally being
+processed.
+<P>
+Script is an implementation of the Node interface, which means
+that it contains the <TT>postEventIn()</TT>
+method. Previously it was stated that you should not call the
+<TT>eventIn</TT> methods of other
+scripts directly. To facilitate direct inter-node communication,
+the <TT>postEventIn</TT> method enables
+the programmer to send information to other nodes while staying
+within the VRML event handling system. The arguments are a string
+specifying the <TT>eventIn</TT> field
+name and a Field containing the value. This value would be a VRML
+datatype cast to Field. <TT>PostEventIn</TT>
+use is shown in the following example and it is also used in a
+later section where a simple dynamic world is constructed.
+<BLOCKQUOTE>
+<TT>//The node we are getting is a translation
+<BR>
+Node translation;<BR>
+float[3] translation_details;<BR>
+<BR>
+translation[0] = 0;<BR>
+translation[1] = 2.3;<BR>
+translation[2] = -.4;<BR>
+translation.postEventIn(&quot;translation&quot;, (Field)translation);</TT>
+</BLOCKQUOTE>
+<P>
+The event processing methods <TT>processEvents()</TT>
+and <TT>eventsProcessed()</TT> are
+dealt with in a latter section.
+<H3>The First Behavior-A Color Changing Box</H3>
+<P>
+The first behavior can now be defined by putting this all together-a
+cube that when touched toggles color between red and blue. This
+requires five components: a box primitive, a touchsensor, a material
+node, the script node, and the Java script. In this case the static
+connections between the script are used, as well as the other
+nodes, because the scene is static.
+<P>
+The basic input scene consists of a cube placed at the origin
+with a color and touch sensor <BR>
+around it:
+<BLOCKQUOTE>
+<TT>Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1 1 1
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;children [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Shape {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geometry
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Box
+{size 1 1 1}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;appearance
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF
+cube_material Material {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;diffuseColor&nbsp;&nbsp;&nbsp;&nbsp;1.0
+0. 0. #start red.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} # end of shape
+definition<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Now define a
+TouchSensor node. This node takes in the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# geometry of
+the parent transform. Default behaviour OK.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF cube_sensor
+TouchSensor {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;]<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Now you need to define a script to act as the color changer. You
+need to take input from the touch sensor and output the new color
+to the material node. You also need to internally keep track of
+the color. This can be done by reading in the value from the <TT>Material</TT>
+node, but for demonstration purposes an internal flag is included
+in the script. No fancy processing or send event sending to other
+nodes is necessary, so both the <TT>mustEvaluate</TT>
+and <TT>directOutputs</TT> fields
+can be left at the default setting of <TT>NULL</TT>.
+<BLOCKQUOTE>
+<TT>DEF colour_script Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;behaviour&nbsp;&nbsp;&nbsp;&nbsp;&quot;colour_changer.class&quot;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# now define our needed fields<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isRed&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TRUE
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clicked
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;SFColor&nbsp;&nbsp;&nbsp;&nbsp;color_out
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+You then need to connect these two together using <TT>ROUTEs</TT>:
+<BLOCKQUOTE>
+<TT>ROUTE cube_sensor.isOver TO colour_script.clicked
+<BR>
+ROUTE colour_script.color_out TO cube_material.diffuseColor</TT>
+</BLOCKQUOTE>
+<P>
+Finally, the script needs to be added to make everything work.
+<BLOCKQUOTE>
+<TT>import vrml<BR>
+<BR>
+class colour_changer extends Script {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// declare the field<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private SFBool&nbsp;&nbsp;&nbsp;isRed
+= (SFBool)getField(&quot;isRed&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// declare the eventOut<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private SFColor&nbsp;&nbsp;color_out =
+(SFColor)getEventOut(&quot;color_out&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// declare eventIns<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void clicked(ConstSFBool isClicked,
+ConstSFTime ts) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// called when
+the user clicks or touches the cube or<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// stops touching/click
+so first check the status of the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// isClicked field.
+We will only respond to a button up.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(isClicked.getValue()
+== FALSE) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+now check whether the cube is red or green<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(isRed.getValue()
+== TRUE)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isRed.setValue(FALSE);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isRed.setValue(TRUE);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// finally the event processing call<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void eventsProcessed() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(isRed.getValue()
+== TRUE)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_out.setValue([0
+0 1.]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_out.setValue([1.0
+0 0]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+That's it. You now have a cube that changes color when you click
+on it. Creating more complex behaviors is just a variation on
+this scheme with more Java code and fields. The basic user input
+usually come from sensors as interpolators, and is usually directly
+wired between a series of other event-generating and receiving
+structures.
+<P>
+More complex input from external systems is also possible. Scripts
+are not just restricted to input methods based on <TT>eventIns</TT>.
+One example is a stock market tracker that runs as a separate
+thread. It could constantly receive updates from the network,
+process them, then send the results through a public method to
+the script, which would put the appropriate results into the 3D
+world.
+<H2><A NAME="TheBrowserClass"><FONT SIZE=5 COLOR=#FF0000>The Browser
+Class</FONT></A></H2>
+<P>
+Behaviors using the method outlined above will work for many simple
+systems. Effective virtual reality systems, however, require more
+than just being able to change the color and shape of the objects
+already existing in the virtual world. Take a virtual taxi as
+an exercise. A user would step inside, and instruct the cab where
+to go. The cab moves off, leaving the user in the same place.
+The user does not &quot;exist&quot; as part of the scene graph-she
+is known to the browser but not the VRML scene rendering engine.
+Clearly, a greater level of control is needed.
+<H3>Changing the Current Scene</H3>
+<P>
+The VRML 2.0 specification defines a series of actions that need
+to be provided to the programmer to set and retrieve information
+about the world. Within the Java implementation of the API, this
+is provided as the Browser class. This class provides all the
+functions that a programmer needs that are not specific to any
+particular part of the scene graph.
+<P>
+The first functions for defining system specific behaviors are
+<BLOCKQUOTE>
+<TT>public static String getName();<BR>
+public static String getVersion();</TT>
+</BLOCKQUOTE>
+<P>
+These strings are defined by the browser writer and identify the
+browser in some unspecified way. If this information is not available,
+then empty strings are returned.
+<P>
+If you are programming expensive calculations, then you may wish
+to know how this is affecting the rendering speed of the system.
+The <TT>getCurrentFrameRate()</TT>
+method returns the value in frames per second. If this information
+is not available, then the return value is 100.0.
+<BLOCKQUOTE>
+<TT>public static float getCurrentFrameRate();</TT>
+</BLOCKQUOTE>
+<P>
+Two more handy pieces of information to know in systems where
+prediction is used are what mode the user is navigating the scene
+in, and at what speed they are traveling. In a similar style to
+the <TT>getName()</TT> method, the
+string returned to describe the navigation type is browser dependent.
+VRML defines that at a minimum the following types must be supported:
+<TT>&quot;WALK&quot;</TT>, <TT>&quot;EXAMINE&quot;</TT>,
+<TT>&quot;FLY&quot;</TT> and <TT>&quot;NONE&quot;</TT>.
+However, if you are building applications for an intranet where
+it is known what type of browser is used, this information could
+be quite handy for varying the behavior, depending on how a user
+is approaching the object of interest. Information on navigation
+is available from the following methods:
+<BLOCKQUOTE>
+<TT>public static String getNavigationType();
+<BR>
+public static void&nbsp;&nbsp;&nbsp;setNavigationType(String type)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throws InvalidNavigationTypeException;
+<BR>
+<BR>
+public static float getNavigationSpeed();<BR>
+public static void&nbsp;&nbsp;setNavigationSpeed(float speed);
+<BR>
+<BR>
+public static float getCurrentSpeed();</TT>
+</BLOCKQUOTE>
+<P>
+The difference between navigation speed and current speed is in
+the definition. VRML 2.0 defines a <TT>navigationInfo</TT>
+node that contains default information about how to act if given
+no other external cues. The navigation speed is the default speed
+in units per second. There is no specification about what this
+speed represents, only hints. A reasonable assumption would be
+the movement speed in <TT>WALK</TT>
+and <TT>FLY</TT> mode and in panning
+and dollying in <TT>EXAMINE</TT> mode.
+The current speed is the actual speed that the user is traveling
+at that point in time. This is the speed that the user has set
+with the browser controls.
+<P>
+Having two different descriptions of speed may seem to be wasteful,
+but it comes in quite handy when moving between different worlds.
+The first world may be a land of giants where traveling at 100
+units per second is considered slow, but in the next world, which
+models a molecule that is only 0.001 units across, this speed
+would be ridiculous. The navigation speed value can be used to
+scale speeds to something that is reasonable for the particular
+world.
+<P>
+Also contained in the <TT>navigationInfo</TT>
+node is a boolean field for a headlight. The headlight is a directional
+light that points in the direction the user is facing. Where the
+scene creator has used other lighting effects, such as radiosity,
+the headlight is usually turned off. In the currently available
+browsers this has lead to a lot of bugs, where turning off the
+headlight results in the whole scene becoming black. It is recommended
+that the programmer not use the headlight feature within behaviors.
+If you wish to access them, the following functions are provided
+by the Browser class:
+<BLOCKQUOTE>
+<TT>public static boolean getHeadlight();
+<BR>
+public static void setHeadlight(boolean onOff);</TT>
+</BLOCKQUOTE>
+<P>
+So far, the methods described enable the programmer to change
+individual components of the world. The other requirement is to
+completely replace the world with some internally generated one.
+This enables you to use VRML to generate new VRML worlds on the
+fly. This still assumes that you already are part of a VRML world-you
+cannot use this in an application to generate a 3D graphics front-end.
+<BLOCKQUOTE>
+<TT>public static void replaceWorld(node
+nodes[]);</TT>
+</BLOCKQUOTE>
+<P>
+This is a non-returning call that unloads all the old scene and
+replaces it with the new one.
+<H3>Modifying the Scene</H3>
+<P>
+There is only so much you can do with what is already available
+in a scene. Complex worlds use a mix of static and dynamically
+generated scenery to achieve their impressive special effects.
+<P>
+The first thing that you may want to do is find out where you
+are from the URL.
+<BLOCKQUOTE>
+<TT>public static String getWorldURL();</TT>
+</BLOCKQUOTE>
+<P>
+<TT>GetWorldURL()</TT> returns the
+URL of the root of the scene graph rather than the URL of the
+currently occupied part of the scene. VRML enables a complex world
+to be created using a series of small files which are included
+into the world-called <I>inlining</I> in VRML parlance.
+<P>
+In order to completely replace the scene graph, the <TT>loadWorld()</TT>
+method should be called. Like all URL references within VRML,
+an array of strings is passed. These strings are a list of URLs
+and URNs to be loaded in order of preference. Should the load
+of the first URL fail, it attempts to load the second, and so
+on until it is either successful or the end of the list is reached.
+If the load fails, then it should notify the user in some browser-specific
+manner. At this stage the exact specification of URNs is still
+being debated. URNs are legal within fields that contain strings
+for URLs. The VRML specification states that if the browser is
+not capable of supporting them, they are to be silently ignored.
+The specification also states that it is up to the browser whether
+the <TT>loadWorld()</TT> call blocks
+or starts a separate thread when loading a new scene.
+<BLOCKQUOTE>
+<TT>public static void loadWorld(String[]
+url);<BR>
+public static Node createVrmlFromString(String vrmlSyntax);<BR>
+public static void createVrmlFromURL(String[] url,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+node,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String&nbsp;&nbsp;&nbsp;eventInNam
+e);</TT>
+</BLOCKQUOTE>
+<P>
+In addition to just replacing the whole scene, you may wish to
+add bits at a time. This can be done in one of two ways. If you
+are very familiar with VRML syntax, then you can create strings
+on the fly and pass them to the <TT>createVrmlFromString()</TT>
+call. The node that is returned can then be added into the scene
+as required.
+<P>
+Perhaps the most useful of the above functions is the <TT>createVrmlFromURL()</TT>
+method. You may notice from the definition that apart from a list
+of URLs it also takes a node instance and a string that refers
+to an <TT>eventIn</TT> field name.
+This call is a non-blocking call that starts a separate thread
+to retrieve the given file from the URL, converts it into the
+internal representation, and then finally sends the newly created
+list of nodes to the specified node's <TT>eventIn</TT>.
+The <TT>eventIn</TT> type is required
+to be an <TT>MFNode</TT>. The <TT>Node</TT>
+reference can be any sort of node, not just a part of the script
+node. This enables the script writer to add these new nodes directly
+to the scene graph without having to write extra functionality
+in the script.
+<P>
+With both of the create functions, the returned nodes do not become
+visible until they have been added to some pre-existing node that
+already exists within the scene. While it is possible to create
+an entire scene on the fly within a stand-alone applet, there
+is no way to make it visible because this applet does not have
+a prior node instance to which to add the dynamically generated
+scene.
+<P>
+Once you have created a set of new nodes, you also want to be
+able to link them together to get the same behaviors system as
+the original world. The Browser class defines methods for dynamically
+adding and deleting <TT>ROUTEs</TT>
+between nodes.
+<BLOCKQUOTE>
+<TT>public void addRoute(Node fromNode, String
+fromEventOut,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node
+toNode,&nbsp;&nbsp;&nbsp;String toEventIn)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throws InvalidRouteException;<BR>
+public void addRoute(Node fromNode, String fromEventOut,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node
+toNode,&nbsp;&nbsp;&nbsp;String toEventIn)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throws InvalidRouteException;</TT>
+</BLOCKQUOTE>
+<P>
+For each of these you need to know the node instance for both
+ends of the <TT>ROUTE</TT>. In VRML,
+you are not able to obtain an instance pointer to an individual
+field in a node. It is also assumed that if you know you will
+be adding a route, you also know what fields you are dealing with,
+so a string is used to describe the field name corresponding to
+an <TT>eventIn/eventOut</TT>. Exceptions
+are thrown if either of the nodes or fields do not exist or an
+attempt to delete a non-existent <TT>ROUTE</TT>
+is made.
+<P>
+You now have all the tools required to generate a world on the
+fly, respond to user input, and modify the scene. The only thing
+that remains is to add the finesse to create responsive worlds
+that won't get bogged down in Java code.
+<H2><A NAME="TheScriptExecutionModel"><FONT SIZE=5 COLOR=#FF0000>The
+Script Execution Model</FONT></A></H2>
+<P>
+When tuning the behaviors in a virtual world, the methods used
+depend on the execution model. The VRML API enables a lot of control
+over exactly how scripts are executed and how events that are
+passed to it are distributed.
+<P>
+The arrival of an <TT>eventIn</TT>
+at a script node causes the execution of the matching method.
+There is no other way to invoke these methods. A script may start
+an asynchronous thread, which in turn calls another non-<TT>eventIn</TT>
+method of the script, or even send events directly to other nodes.
+At the current Draft #2 of the VRML 2.0 specification no mention
+is made about scripts containing  non-<TT>eventIn</TT>
+public methods. It would be wise to assume that it is not possible.
+You should check the latest version of the VRML specification
+before considering doing this. While it is possible to call an
+<TT>eventIn</TT> method directly,
+it is in no way encouraged. Such programming interferes with the
+script execution model by preventing browser optimization and
+could effect the running of other parts of the script. It also
+could cause performance penalties in other parts of the world,
+not to mention re-entrancy problems within the <TT>eventIn</TT>
+method itself. If you find it necessary to have to call an <TT>eventIn</TT>
+of the script, then you should use the <TT>postEventIn()</TT>
+method so that the operation of the browser's execution engine
+is not affected.
+<P>
+Unless the <TT>mustEvaluate</TT> field
+is set, all the events are queued in timestamp order from oldest
+to newest. For each event that has been queued, the corresponding
+<TT>eventIn</TT> method is called.
+Each <TT>eventIn</TT> calls exactly
+one method. If an <TT>eventOut</TT>
+has fan out to a number of <TT>eventIns</TT>,
+then multiple <TT>eventIns</TT> are
+generated-one for each node. Once the queue is empty, the <TT>eventsProcessed()</TT>
+for that script is called. The <TT>eventsProcessed()</TT>
+method enables any post-processing data to be performed.
+<P>
+A typical use of this post-processing was illustrated in the earlier
+example of the color-changing cube. Notice that the <TT>eventIn</TT>
+method just took the data and stored it in an internal variable.
+The <TT>eventsProcessed()</TT> method
+then took the internal value and generated the <TT>eventOut</TT>.
+This was overkill for such simple behavior. Normally such simplistic
+behavior would use <TT>VRMLscript</TT>
+instead of Java. The separation of data processing from the collection
+is very effective in a high-traffic environment, where event counts
+are very high and the overheads of data processing are best absorbed
+into a single longer run instead of many short ones.
+<P>
+Once the <TT>eventsProcessed()</TT>
+method has completed execution, any <TT>eventOuts</TT>
+generated as a result are sent as events. If the script generates
+multiple <TT>eventOuts</TT> on the
+one <TT>eventOut</TT> field, then
+only one event is sent. All <TT>eventOuts</TT>
+generated during the execution of the script have the same time
+stamp.
+<P>
+If your script has spawned a thread, and that script is removed
+from the scene graph, then the browser is required to call the
+<TT>shutdown()</TT> method for each
+active thread, enabling a graceful exit.
+<P>
+Should you wish to maintain static data between invocations of
+the script, then it is recommended that the <TT>VRML
+script</TT> node have fields to hold the values. While
+it is possible to use static variables within the Java class,
+VRML makes no guarantees that these will be retained, especially
+if the script is unloaded from memory.
+<P>
+If you are a hardcore programmer, you probably want to keep track
+of all the event handling mechanisms yourself. VRML provides the
+facility to do this. The <TT>processEvents()</TT>
+method is what you need. It is called when the browser decides
+to process the queued <TT>eventIns</TT>
+for a script. It is sent an array of the events waiting to be
+processed, which programmers can then do with as they please.
+Graphics programmers should already be familiar with event handling
+techniques from either the MS-Windows, Xlib, or Java AWT systems.
+Unfortunately, the VRML 2.0 draft 2 specification has not specified
+what the individual event names may be.
+<H3>Circular Event Loops</H3>
+<P>
+The <TT>ROUTE</TT> syntax makes it
+very easy to construct circular event loops. Circular loops can
+be quite handy. The VRML specifications state that if the browser
+finds event loops, then it only processes each event once per
+timestamp. Events generated as a result of a change are given
+the same timestamp as the original change. This is because events
+are considered to happen instantaneously. When event loops are
+encountered in this situation then the browser will enforce a
+breakage of the loop. The sample script from the VRML specification
+using <TT>VRMLscript</TT> illustrates
+this example:
+<BLOCKQUOTE>
+<TT>DEF S Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;a
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;b
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut SFInt32&nbsp;&nbsp;&nbsp;&nbsp;c
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;save_a&nbsp;&nbsp;&nbsp;&nbsp;0
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;save_b&nbsp;&nbsp;&nbsp;&nbsp;0
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;&quot;data:x-lang/x-vrmlscript,
+TEXT;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;function a(val)
+{ save_a = val; c = save_a+save_b;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;function b(val)
+{ save_b = val; c = save_a+save_b;}<BR>
+}<BR>
+ROUTE S.c to S.b</TT>
+</BLOCKQUOTE>
+<P>
+<TT>S</TT> computes <TT>c=a+b</TT>
+with the <TT>ROUTE</TT>, completing
+a loop from the output <TT>c</TT>
+back to the input <TT>b</TT>. After
+the initial event with <TT>a=1</TT>
+it leaves the <TT>eventOut c</TT>
+with a value of <TT>1</TT>. This causes
+a cascade effect where <TT>b</TT>
+is set to <TT>1</TT>. Normally this
+should generate and <TT>eventOut</TT>
+on <TT>c</TT> with the value of <TT>2</TT>,
+but the browser has already seen that the <TT>eventOut</TT>
+c has been traversed for this timestamp and therefore enforces
+a break in the loop. This leaves the values <TT>save_a=1</TT>,
+<TT>save_b=1</TT>, and the <TT>eventOut
+c=1</TT>.
+<H2><A NAME="CreatingEfficientBehaviors"><FONT SIZE=5 COLOR=#FF0000>Creating
+Efficient Behaviors</FONT></A></H2>
+<P>
+Like all animation programming, the ultimate goal is to keep the
+frame rate as high as possible. In a multi-threaded application
+like a VRML browser, the less time spent in behaviors code the
+more time that can be spent rendering. VR behavior programming
+in VRML is still very much in its infancy. This section outlines
+a few common sense approaches to keep up reasonable levels of
+performance, not only for the renderer, but also for the programmer.
+<P>
+The first technique is to only use Java where necessary. This
+many sound a little strange from a book about Java programming,
+but consider the resources required to have not only a 3D rendering
+engine but a Java VM loaded to run even a simple behavior and
+the fact that the majority of viewers will be people using low-end
+pcs. Because most VRML browsers specify that a minimum of 16MB
+of RAM is required (and preferably 32MB), to also load the Java
+VM into memory would require lots of swapping to keep the behaviors
+going. The inevitable result is bad performance. For this reason,
+the interpolator nodes and <TT>VRMLscript</TT>
+were created-built-in nodes for common basic calculations and
+a small light language to provide basic calculation abilities.
+Use of Java should be limited to the times when you require the
+capabilities of a full programming language, such as multi-threading
+and network interfaces.
+<P>
+When you do have to use Java, keep the amount of calculation in
+the script to a minimum. If you are producing behaviors that require
+either extensive network communication or data processing, then
+these behaviors should be kept out of the script node and sent
+off in separate threads. The script should start the thread as
+either part of its constructor, or in response to some event,
+and then return as soon as possible.
+<P>
+In VR systems frame rate is king. Don't aim to have a one-hundred
+percent correct behavior if it leads to twice the frame rate when
+a ninety percent one will do. It is quite amazing how users don't
+notice an incorrect behavior, but as soon as they notice that
+the picture update is slowing down they start to complain. Every
+extra line of code in the script delays the return of the CPU
+back to the renderer. In military simulations, the goal is to
+achieve 60fps, but even for Pentium class machines the goal should
+be to maintain at least 20fps. Much of this comes down not only
+to how detailed the world is, but also to how complex the behaviors
+are. As always, the amount of tradeoff between accuracy and frame
+rate is up to the individual programmer and application requirements.
+A user usually accepts that a door does not open smoothly so long
+as they can move around without watching individual frames redraw.
+<P>
+Don't play with the event processing loop unless you <I>really</I>
+must. Your behaviors code will be distributed on many different
+types of machines and browsers. Each browser writer knows best
+how to optimize the event-handling mechanism to mesh with their
+internal architecture. With windowing systems, dealing with the
+event loop is a must in order to respond to user input, but in
+VR you no longer have control over the whole system. The <TT>processEvents()</TT>
+method only applies to the individual script, not as a common
+method across all scripts. So while you might think that you are
+optimizing the event handling, you are only doing it for one script.
+In a reasonably-sized world, there may be another few hundred
+scripts also running, so the optimization of an individual script
+isn't generally worth the effort.
+<H3>Changing the Scene</H3>
+<P>
+Only add to the scene graph what is necessary. If it is possible
+to modify existing primitives, then use this in preference to
+adding new ones. Every primitive added to a scene requires the
+renderer to convert it to its internal representation and then
+reoptimize the scene graph to take account of the new objects.
+In modifying existing primitives, the browser is not required
+to resort the scene graph structure, saving computation time.
+A cloudy sky is better simulated using a multiframed texturemap
+image format, such as MJPEG, or PNG, on the background node than
+using lots of primitives that are constantly modified or dynamically
+added.
+<P>
+If your scene requires objects to be added and removed on the
+fly and many of these are the same, don't just delete them from
+the scene graph. It is better to remove them from a node but keep
+an instance pointer to them so that they may be reinserted at
+a later time. At the expense of a little extra memory, this saves
+time. If you don't take the time now, later you may have to access
+the objects from a network or construct them from the ground up
+from a string representation.
+<P>
+Another trick is to create objects but not add them to the scene
+graph. VRML enables objects to be created but not added to the
+scene graph. Any object not added isn't drawn. For node types
+such as sensors, interpolators, and scripts, there is no need
+for these objects to be added. Doing so causes extra events to
+be generated, resulting in a slower system. Normal Java garbage
+collection rules apply for when these nodes are no longer referenced.
+VRML, however, adds one little extra. Adding a <TT>ROUTE</TT>
+to any object is the same as keeping a reference to the object.
+If a script creates a node, adds one or more <TT>ROUTE</TT>s,
+and then exits, the node stays allocated and it functions as though
+it were a normal part of the scene graph.
+<P>
+There are dangers in this approach. Once you have lost the node
+instance pointer there is no way to delete it. You need this pointer
+if you are to delete the <TT>ROUTE</TT>.
+Deleting <TT>ROUTEs</TT> to the object
+is the only way to remove these floating nodes. Therefore, you
+should always keep the node instance pointers for all floating
+nodes you create so you can delete the <TT>ROUTE</TT>s
+to them when they're no longer needed. You must be particularly
+careful when you delete a section of the scene graph that has
+the only <TT>ROUTEd</TT> <TT>eventIn</TT>
+to a floating node that also contains an <TT>eventOut</TT>
+to a section of an undeleted section. This creates the VRML equivalent
+of memory leaks. The only way to remove this node is to replace
+the whole scene or remove the part of the scene that the <TT>eventOut</TT>
+references.
+<H2><A NAME="DynamicWorldsCreatingVRMLontheFly"><FONT SIZE=5 COLOR=#FF0000>Dynamic
+Worlds-Creating VRML on the Fly</FONT></A></H2>
+<P>
+An earlier section described how it was not possible to create
+a world from a completely stand-alone application. While it would
+be nice to have this facility, it would be the same as being able
+to create a whole HTML page in the same manner. In order to create
+an HTML page applet, you need to first start it from an <TT>&lt;APPLET&gt;</TT>
+tag. A Java enabled page may consist of no more than an opening
+<TT>&lt;HTML&gt;</TT> tag followed
+by an <TT>&lt;APPLET&gt;</TT> tag
+pair and a closing <TT>&lt;/HTML&gt;</TT>
+tag. VRML is no different. You can enclose a whole 3D application
+based on VRML in a similar manner.
+<P>
+While this is not quite as efficient as creating a 3D application
+using a native 3D toolkit such as Java3D, VRML could be considered
+an abstraction on this, enabling programmable behaviors in a simplified
+manner-rather like using a GUI builder to create an application
+rather than writing it all by hand.
+<P>
+The next section develops a framework for creating worlds on the
+fly. This can have quite a few different applications-from developing
+Cyberspace Protocol-based seamless worlds, to acting as a VR based
+scene editor-generating VRML or other 3D format output files.
+Throughout the development it is assumed that you are already
+familiar with at least VRML 1.0 syntax.
+<H3>The VRML Source File</H3>
+<P>
+Just as in HTML, you need to start with a skeleton file to include
+the Java application. In VRML a little more than just including
+an applet and a few param tags is required.
+<P>
+The first thing you need is at least one node to which you can
+add things. Remember that there is no method of adding a primitive
+to the root of the scene graph, so a pseudo root to which objects
+are added is required. For simplicity, a <TT>Group</TT>
+node is used. The bounding box is set to be large because you
+don't know how much space will be occupied. Leave the rest of
+the fields alone. The <TT>Group</TT>
+node has two <TT>eventIns</TT>-<TT>add_children</TT>
+and <TT>remove_children</TT> that
+are used later. The definition is
+<BLOCKQUOTE>
+<TT>DEF root_node Group { bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1000
+1000 1000}</TT>
+</BLOCKQUOTE>
+<P>
+A few objects need to be put into the scene that are representative
+of the three methods of adding an object to the world. Taking
+the three primitives that form the VRML logo, the cube shall represent
+creating objects from a downloaded file, the sphere from an internal
+text description, and the cone will take the user to another VRML
+world by using the internal call to <TT>loadWorld()</TT>.
+They are surrounded in a transform to make sure they are located
+in different parts of the world (all objects are located at the
+origin by default). The cube definition follows:
+<BLOCKQUOTE>
+<TT>Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1 1 1
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;translation&nbsp;&nbsp;&nbsp;&nbsp;2 0
+0<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;children [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF cube_sensor
+TouchSensor{}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Box { size&nbsp;&nbsp;&nbsp;&nbsp;1
+1 1}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# script node
+will go here<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;]<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Notice that only the <TT>TouchSensor</TT>
+itself has been <TT>DEF'd</TT>, not
+the whole object. The <TT>TouchSensor</TT>
+is the object that events are taken from. If there was no sensor,
+then the cube would exists as itself. Any mouse click (or touch
+if using a dataglove) on the cube does nothing. The other two
+nodes are similar in definition.
+<P>
+For demonstration purposes, the separate scripts have been put
+with each of the objects. It makes no difference if you have lots
+of small scripts or one large one. For a VR scene creator, it
+is probably better to have one large script to keep track of the
+scene graph for the output file representation, but a virtual
+factory would have many small scripts, perhaps with some &quot;centralized&quot;
+script acting as the system controller.
+<H3>Defining the Script Nodes</H3>
+<P>
+Once the basic file is defined, behaviors need to be added. The
+VRML file stands on its own at this point. You can click on objects,
+but nothing happens. Because each object has its own behavior,
+the requirement for each script is different. Each script requires
+one <TT>eventIn</TT>, which is the
+notification from its <TT>TouchSensor</TT>.
+<P>
+The example presented does not have any hard realtime constraints,
+so the <TT>mustEvaluate</TT> field
+is left with the default setting of <TT>FALSE</TT>.
+For the cone, no outputs will be sent directly to nodes, so the
+<TT>directOutputs</TT> fields are
+left at <TT>FALSE</TT>. For the sphere,
+outputs are sent directly to the <TT>Group</TT>
+node, so it is set to <TT>TRUE</TT>.
+The cube needs to be set to <TT>TRUE</TT>
+as well, for reasons explained in the next section.
+<P>
+Besides the <TT>eventIn</TT>, the
+<TT>Box</TT> script also needs an
+<TT>eventOut</TT> to send the new
+object to the <TT>Group</TT> node
+acting as the scene root. Good behavior is desirable if the user
+clicks on the cube more than once, so an extra internal variable
+is added, keeping the position of the last object that was added.
+Each new object added is translated two units along the z-axis
+from the previous one. A field is also needed to store the URL
+of the sample file that will be loaded. The <TT>Box</TT>
+script definition follows:
+<BLOCKQUOTE>
+<TT>DEF box_script Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;boxscript.class&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;directOutputs&nbsp;&nbsp;&nbsp;&nbsp;TRUE
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;isClicked
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;MFNode&nbsp;&nbsp;&nbsp;&nbsp;newNodes
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp;MFNode&nbsp;&nbsp;&nbsp;&nbsp;childlist
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;zposition&nbsp;&nbsp;&nbsp;&nbsp;0
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFNode&nbsp;&nbsp;&nbsp;&nbsp;thisScript&nbsp;&nbsp;&nbsp;&nbsp;USE
+box_script<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MFNode&nbsp;&nbsp;&nbsp;&nbsp;newUrl&nbsp;&nbsp;&nbsp;&nbsp;[]
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Notice that there is an extra <TT>eventIn</TT>.
+Processing needs to be done on the node returned from the <TT>createVrmlFromURL()</TT>
+method, so you need to provide an <TT>eventIn</TT>
+for the argument. If you did not need to process the returned
+nodes then you could have used the <TT>root_node.add_children</TT>
+<TT>eventIn</TT> instead.
+<P>
+The other interesting point to note is that the script declaration
+includes a field which is a reference to itself. At the time this
+chapter was written, the draft specifications did not specify
+how a script was to refer to itself when calling its own <TT>eventIns</TT>.
+To play it safe, this method is guaranteed to work, however, it
+should be possible for the script itself to specify this as the
+node reference when referring to itself. Check the most current
+version of the specification, which will be available at <TT><A HREF="http://vag.vrml.org/">http://vag.vrml.org/</A></TT>
+<P>
+To illustrate the use of direct outputs, the sphere uses the <TT>postEventIn</TT>
+method to send the new child directly to <TT>root_node</TT>.
+To do this, a copy of the name that was <TT>DEF'd</TT>
+for the <TT>Group</TT> is taken, which,
+when resolved in Java, essentially becomes an instance pointer
+to the node. Using direct writing to nodes means you no longer
+require the <TT>eventOut</TT> from
+the cube's script but you keep the other fields:
+<BLOCKQUOTE>
+<TT>DEF sphere_script Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;sphere_script.class&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;directOutputs&nbsp;&nbsp;&nbsp;&nbsp;TRUE
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;isClicked
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFNode&nbsp;&nbsp;&nbsp;&nbsp;root&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;USE
+root_node<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;zposition&nbsp;&nbsp;&nbsp;&nbsp;0
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The script for the cone is very simplistic. When clicked on, all
+it does is fetch some named URL and set that as the new scene
+graph. In this case, the URL being used belongs to the independent
+virtual community called Terra Vista, of which the author is a
+part. At the time of writing, this was a complete VRML 1.0c distributed
+community that was starting to move towards version 2.0. By the
+time you read this, it should give you many examples of how to
+use behaviors both simple and complex.
+<BLOCKQUOTE>
+<TT>DEF cone_script Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;cone_script.class&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp; SFBool&nbsp;&nbsp;&nbsp;&nbsp;isClicked
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+MFString&nbsp;&nbsp;&nbsp;&nbsp;target_url [&quot;http://www.alaska.net/~pfennig/flux/&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT><FONT FACE="ZapfDingbats">&Acirc;</FONT><TT>flux.wrl&quot;]
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Now that the scripts are defined, they need to be wired together.
+A number of <TT>ROUTE</TT>s are added
+between the sensors and scripts, as shown in the complete code
+listing.
+<H3>Completed VRML Description</H3>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 15.1. Main world VRML description.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>#VRML Draft #2 V2.0 utf8<BR>
+#<BR>
+# Demonstration dynamically created world<BR>
+# Created by Justin Couch May 1996<BR>
+<BR>
+# first the pseudo root<BR>
+DEF root_node Group { bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1000 1000
+1000}<BR>
+<BR>
+# The cube<BR>
+Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1 1 1
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;translation&nbsp;&nbsp;&nbsp;&nbsp;2 0
+0<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;children [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF cube_sensor
+TouchSensor{}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Box { size&nbsp;&nbsp;&nbsp;&nbsp;1
+1 1}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF box_script
+Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;boxscript.class&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;directOutputs&nbsp;&nbsp;&nbsp;&nbsp;TRUE
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;isClicked
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;MFNode&nbsp;&nbsp;&nbsp;&nbsp;newNodes
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp;MFNode&nbsp;&nbsp;&nbsp;&nbsp;childList
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;zPosition&nbsp;&nbsp;&nbsp;&nbsp;0
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFNode&nbsp;&nbsp;&nbsp;&nbsp;thisScript&nbsp;&nbsp;&nbsp;&nbsp;USE
+box_script;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MFString&nbsp;&nbsp;&nbsp;&nbsp;newUrl
+[&quot;sample_world.wrl&quot;]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;]<BR>
+}<BR>
+ROUTE cube_sensor.isActive TO cube_script.isClicked<BR>
+ROUTE cube_script.childlist TO root_node.add_children<BR>
+<BR>
+# The sphere<BR>
+Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1 1 1
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# no translation needed as it the origin
+already<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;children [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF sphere_senor
+TouchSensor {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sphere { radius&nbsp;&nbsp;&nbsp;&nbsp;0.5
+}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF sphere_script
+Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;sphere_script.class&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;directOutputs&nbsp;&nbsp;&nbsp;&nbsp;TRUE
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;isClicked
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFNode&nbsp;&nbsp;&nbsp;&nbsp;root&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;USE
+root_node<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFInt32&nbsp;&nbsp;&nbsp;&nbsp;zPosition&nbsp;&nbsp;&nbsp;&nbsp;0
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;]<BR>
+}<BR>
+<BR>
+ROUTE sphere_sensor.isActive TO sphere_script.isClicked<BR>
+<BR>
+# The cone<BR>
+Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1 1 1
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;translation&nbsp;&nbsp;&nbsp;&nbsp;-2
+0 0<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;children [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF cone_sensor
+TouchSensor {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cone {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bottomRadius&nbsp;&nbsp;&nbsp;&nbsp;0.5
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;height&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF cone_script
+Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;cone_script.class&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;isClicked
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MFString&nbsp;&nbsp;&nbsp;&nbsp;targetUrl
+[&quot;http://www.alaska.net/~pfennig/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&Acirc;flux/flux.wrl&quot;]
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;]<BR>
+}<BR>
+<BR>
+ROUTE cone_sensor.isActive TO cone_script.isClicked<BR>
+<BR>
+# end of file dynamic_VRML.wrl</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The box sensor adds objects to the scene graph from an external
+file. This external file contains a <TT>Transform</TT>
+node with a single box as a child. Because the API does not permit
+use to create node types and you need to place the newly created
+box at a point other than the origin, you need to use a <TT>Transform</TT>
+node. You could just load in a box from the external scene and
+then create a <TT>Transform</TT> node
+with the <TT>createVrmlFromString()</TT>
+method, but this then requires more code, slowing down execution
+speed. Remember that behavior writing is about getting things
+done as quickly as possible, so the more that is moved to external
+static file descriptions the better.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 15.2. The external VRML world file.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>#VRML Draft #1 V2.0 utf8<BR>
+#<BR>
+# Demonstration sample world to be loaded<BR>
+# Created by Justin Couch May 1996<BR>
+<BR>
+Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bboxSize&nbsp;&nbsp;&nbsp;&nbsp;1 1 1
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;children [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Box { size&nbsp;&nbsp;&nbsp;&nbsp;1
+1 1}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;]<BR>
+}<BR>
+<BR>
+# end of file sample_world.wrl</TT>
+</BLOCKQUOTE>
+<HR>
+<H3>The Java Behaviors</H3>
+<P>
+Probably the most time-consuming task for someone writing a VRML
+scene with behaviors is deciding how to organize the various parts
+in relation to the scene graph structure. In a simple file like
+this, there are two ways to arrange the scripts. Imagine what
+could happen in a moderately complex file of two or three thousand
+objects.
+<P>
+All the scripts in this example are simple. When the node is received
+back in <TT>newNodes eventIn</TT>,
+the node needs to be translated to the new position. Ideally,
+you should be able to do this directly by setting the <I>translation</I>
+field, but you are not able to do so. The only way of doing this
+is to post an event to the node, naming that field as the destination-the
+reason for setting <TT>directOutputs</TT>
+to <TT>TRUE</TT>. After this is done,
+you can then call the <TT>add_children</TT>
+<TT>eventIn</TT>. Because each of
+the scripts are short, the <TT>processEvents()</TT>
+method is not used.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 15.3. Java source for the cube script.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import vrml;<BR>
+<BR>
+class box_script extends Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private SFInt32&nbsp;&nbsp;zPosition&nbsp;&nbsp;=
+(SFInt32)getField(&quot;zPosition&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private SFNode&nbsp;&nbsp;&nbsp;thisScript
+= (SFNode)getField(&quot;thisScript&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private MFString newUrl&nbsp;&nbsp;&nbsp;&nbsp;
+= (MFString)getField(&quot;newUrl&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// declare the eventOut field<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private MFNode&nbsp;&nbsp;&nbsp;childList&nbsp;&nbsp;=
+(MFNode)getEventOut(&quot;childList&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// now declare the eventIn methods<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void isClicked(ConstSFBool clicked,
+SFTime ts)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// check to see
+if picking up or letting go<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(clicked.getValue()
+== FALSE)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Browser.createVrmlFromUrl(newUrl.getValue(),
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thisScript,
+&quot;newNodes&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void newNodes(ConstMFNode nodelist,
+SFTime ts)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node[]&nbsp;&nbsp;&nbsp;nodes
+= (Node[])nodelist.getValue();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float[3] translation;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set up the
+translation<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;zPosition.setValue(zPosition.getValue()
++ 2);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translation[0]
+= zPosition.getValue();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translation[1]
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translation[2]
+= 0;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// There should
+only be one node with a transform at the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// top. No error
+checking.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nodes[0].postEventIn(&quot;translation&quot;,
+(Field)translation);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// now send the
+processed node list to the eventOut<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;childList.setValue(nodes);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The sphere class is similar, except that you need to construct
+the text string equivalent of the <TT>sample_world.wrl</TT>
+file. This is a straight-forward string buffer problem. All you
+need to do is make sure that the <TT>Transform</TT>
+has the correct value for the translation field.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 15.4. Java source for the sphere script.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>Import vrml<BR>
+<BR>
+class sphere_script extends Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private SFInt32&nbsp;&nbsp;zPosition =
+(SFInt32)getField(&quot;zPosition&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private SFNode&nbsp;&nbsp;&nbsp;root&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+(SFNode)getField(&quot;root&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// now declare the eventIn methods<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void isClicked(ConstSFBool clicked,
+SFTime ts)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;StringBuffer vrml_string
+= new StringBuffer();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MFNode&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+nodes;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// set the new
+position<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;zPosition.setValue(zPosition.getValue()
++ 2);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// check to see
+if picking up or letting go<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(clicked.getValue()
+== FALSE)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vrml_string.append(&quot;Transform
+{ bboxSize 1 1 1 &quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vrml_string.append(&quot;translation
+&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vrml_string.append(zPosition.getValue());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vrml_string.append(&quot;
+0 0 &quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vrml_string.append(&quot;children
+[ &quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vrml_string.append(&quot;sphere
+{ radius 0.5} ] }&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nodes.setValue(
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Browser.createVrmlFromUrl(vrml_string));
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;root.postEventIn(&quot;add_children&quot;,
+(Field)nodes);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>cone_script</TT> class is
+the easiest of the lot. As soon as it receives a confirmation
+of a touch, it starts to load the world with the provided URL.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 15.5. Java Source for the </B><TT><B></TT>cone_script</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import vrml<BR>
+<BR>
+class cone_script extends Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;isClicked = (SFBool)getField(&quot;isClicked&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;MFString targetUrl = (MFString)getField(&quot;targetUrl&quot;);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The eventIn method<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void isClicked(ConstSFBool clicked,
+SFTime ts)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(clicked.getValue()
+== FALSE)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Browser.loadWorld(targetUrl.getValue());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+By compiling the preceding Java code and placing these and the
+two VRML source files in your Web directory, you can serve this
+basic dynamic world to the rest of the world and they will get
+the same behavior as you-regardless of what system they're running.
+<H2><A NAME="CreatingReusableBehaviors"><FONT SIZE=5 COLOR=#FF0000>Creating
+Reusable Behaviors</FONT></A></H2>
+<P>
+It would be problematic if this code had to be rewritten every
+time you wanted to use it in another file. You could always just
+reuse the Java bytecodes, but this means that you'd need to put
+identical copies of the script declaration every time you wanted
+to use it. It is not a particularly nice practice, from the software
+engineering point of view. Eventually you will be caught with
+the cut-and-paste routine of having extra details of <TT>ROUTE</TT>s
+floating around (and extra fields) that could accidentally be
+connected to nodes in the new scene, resulting in difficult to
+trace bugs.
+<P>
+VRML 2.0 provides a mechanism similar to the C/C++ <TT>#include</TT>
+directive and <TT>typedef</TT> statements
+all rolled into one-the <TT>PROTO</TT>
+and <TT>EXTERNPROTO</TT> statement
+pair. The <TT>PROTO</TT> statement
+acts like a <TT>typedef</TT>: you
+<TT>PROTO</TT> a node and its definition
+and then you can use that name as though it were an ordinary node
+within the context of that file.
+<P>
+If you wish to access that prototyped node outside of that file,
+you can use the <TT>EXTERNPROTO</TT>
+statement to include it in the new file and then use it as though
+it were an ordinary node.
+<P>
+While this is useful for creating libraries of static parts, where
+it really comes into its own is in creating canned behaviors.
+A programmer can create a completely self-contained behavior and
+in the best object-oriented traditions only provide the interfaces
+to the behaviors that he wishes to. The syntax of the <TT>PROTO</TT>
+and <TT>EXTERNPROTO</TT> statements
+follow:
+<BLOCKQUOTE>
+<TT>PROTO <I>prototypename</I> [ # any collection
+of<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<I>eventTypeName eventName<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<I>eventTypeName
+eventName<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;exposedField&nbsp;&nbsp;<I>fieldTypeName
+fieldName initialValue<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<I>fieldTypeName
+fieldName initialValue<BR>
+</I>] {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# scene graph structure. Any combination
+of<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# nodes, prototypes, and ROUTEs<BR>
+}<BR>
+<BR>
+EXTERNPROTO <I>prototypename</I> [ # any collection of<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<I>eventTypeName eventName<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<I>eventTypeName
+eventName<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;exposedField&nbsp;&nbsp;<I>fieldTypeName
+fieldName<BR>
+</I>&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<I>fieldTypeName
+fieldName<BR>
+</I>]<BR>
+&quot;URL&quot; or [ &quot;URN1&quot; &quot;URL2&quot;]</TT>
+</BLOCKQUOTE>
+<P>
+A behavior can then be added to a VRML file by just using the
+<I>prototypename</I> in the file. For example, if you had a behavior
+that simulated a taxi, you would like to have many taxis in a
+number of different worlds representing different countries. The
+cabs are identical except for their color. Note again the ability
+to specify multiple URLs for the behavior. If it cannot retrieve
+the first URL, it tries the second until it gets one cab.
+<P>
+A taxi can have many behaviors, such as speed and direction, that
+the user of a cab does not really care about when they want to
+use it (well, if they were going in the wrong direction once they
+got in they might!). But to incorporate a virtual taxi into your
+world all you really care about is a few things, such as being
+able to signal a cab, get in, tell it where to go, pay the fare,
+and then get out when it has reached its destination. From the
+world author's point of view, how the taxi finds its virtual destination
+is unimportant. A declaration of the taxi prototype file might
+look like the following:
+<BLOCKQUOTE>
+<TT>#VRML Draft #2 V2.0 utf8<BR>
+#<BR>
+# Taxi prototype file taxi.wrl<BR>
+PROTO taxicab [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;exposedField SFBool&nbsp;&nbsp;&nbsp;&nbsp;isAvailable&nbsp;&nbsp;TRUE
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;inCab
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFString&nbsp;&nbsp;destination
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFFloat&nbsp;&nbsp;&nbsp;payFare
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp; SFFloat&nbsp;&nbsp;&nbsp;fareCost
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp; SFInt32&nbsp;&nbsp;&nbsp;speed
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp; SFVec3f&nbsp;&nbsp;&nbsp;direction
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFColor&nbsp;&nbsp;&nbsp;colour&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+1. 0 0<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# rest of externally available variables
+<BR>
+] {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;DEF root_group Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#
+Taxi geometry description here<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;DEF taxi_script Script {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;url&nbsp;&nbsp;&nbsp;&nbsp;[&quot;taxi.class&quot;]
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# rest of event
+and field declarations<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# ROUTE statements to connect it altogether
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+To include the taxi in your world the file would look something
+like the following:
+<BLOCKQUOTE>
+<TT>#VRML Draft #2 V2.0 utf8<BR>
+#<BR>
+# myworld.wrl<BR>
+EXTERNPROTO taxi [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;exposedField SFBool&nbsp;&nbsp;&nbsp;&nbsp;isAvailable
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFBool&nbsp;&nbsp;&nbsp;&nbsp;inCab
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFString&nbsp;&nbsp;destination
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventIn&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFFloat&nbsp;&nbsp;&nbsp;payFare
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp; SFFloat&nbsp;&nbsp;&nbsp;fareCost
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp; SFInt32&nbsp;&nbsp;&nbsp;speed
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eventOut&nbsp;&nbsp;&nbsp;&nbsp; SFVec3f&nbsp;&nbsp;&nbsp;direction
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;field&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SFColor&nbsp;&nbsp;&nbsp;colour
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;# rest of externally available variables
+<BR>
+]<BR>
+[ &quot; http://myworld.com/taxi.wrl&quot;, &quot;http://yourworld.com/taxi.wrl&quot;]
+<BR>
+<BR>
+# some scene graph<BR>
+#....<BR>
+Transform {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;children [<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# other VRML nodes.
+Then we use the taxi<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEF my_taxi taxi
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;colour&nbsp;&nbsp;0
+1. 0<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;]<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Here is a case where you would be more likely to use the <TT>postEventIn()</TT>
+method to call a cab. Somewhere in the scene graph you would have
+a control that your avatar queries a nearby cab for its <TT>isAvailable</TT>
+field. If <TT>TRUE</TT>, then the
+avatar sends the event to flag the cab. Apart from the required
+mechanics to signal the cab with the various instructions, the
+world creator does not care how the cab is implemented. By using
+the <TT>EXTERNPROTO</TT> call, the
+world creator and users can always be sure of getting the latest
+version of the taxi implementation and that there will be uniform
+behavior regardless of which world they are in.
+<H2><A NAME="TheFutureVRMLJavaandAI"><FONT SIZE=5 COLOR=#FF0000>The
+Future: VRML, Java, and AI</FONT></A></H2>
+<P>
+What has been presented so far has relied on static predefined
+behaviors that are available either within the original VRML file
+or retrievable from somewhere on the Internet.
+<P>
+The ultimate step in creating VR worlds is autonomous agents that
+have some degree of artificial intelligence. Back in the early
+days of programming, self-modifying code was common, but it faded
+away as more resources and higher-level programming languages
+removed the need. A true VR world brings this back.
+<P>
+Stephenson's Librarian from Snow Crash was just one example of
+how an independent agent could act in a VR world. His model was
+very simple-a glorified version of today's 2D HTML based search
+engines that, when requested, would search the US Library of Congress
+for information on the desired and related topics (he also had
+speech recognition and synthesis capabilities). The next generation
+of intelligent agents will include learning behavior as well.
+<P>
+The VRML API enables you to go the next step further-a virtual
+assistant that can modify its own behavior to suit your preferences.
+This is not just a case of loading in some canned behaviors. With
+the combination of VRMLscript and Java behaviors, a programmer
+can create customized behaviors on the fly by concatenating together
+the behavior strings and script nodes, calling the <TT>createVrmlFromString()</TT>
+method, and adding it to the scene graph in the appropriate place.
+Although probably not feasible with current Pentium class machines,
+those of the next generation probably will make it so.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+With the tools presented in this chapter you should be able to
+create whatever you require of the real cyberspace. There is only
+so much that you can do with a 2D screen in terms of new information
+presentation techniques. The 3rd dimension of VRML enables you
+to create experiences that are far beyond that of the Web page.
+3D representation of data and VR behaviors programming is still
+very much in its infancy-so much so that at the time of this writing
+only one (alpha test) VRML 2.0 browser, Sony's CyberPassage, 
+was available for testing the examples and even then many parts
+were not implemented correctly.
+<P>
+If you are serious about creating behaviors, then learning VRML
+thoroughly is a must. There are many little problems that catch
+the unwary, particularly in the peculiarities of the VRML syntax
+when it comes to ordering objects within the scene graph. An object
+placed at the wrong level severely restricts its actions. A book
+on VRML is a must for this work.
+<P>
+Whether it is creating reusable behavior libraries, an intelligent
+postman that brings the mail to you wherever you are, or simply
+a functional Java machine for your virtual office, the excitement
+of behavior programming awaits.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch14.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch16.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

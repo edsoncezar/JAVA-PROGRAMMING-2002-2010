@@ -1,0 +1,170 @@
+<html>
+<head>
+<title>You're Not My Type (Ch. 5, Sec. 7) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-five.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-five-6.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Attack Applets: Exploiting Holes in the Security Model
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-five-1.html">1</a> / <a href="chapter-five-2.html">2</a> / <a href="chapter-five-3.html">3</a> / <a href="chapter-five-4.html">4</a> / <a href="chapter-five-5.html">5</a> / <a href="chapter-five-7.html">6</a> / <b>7</b> / <a href="chapter-five-8.html">8</a> / <a href="chapter-five-9.html">9</a> / <a href="chapter-five-10.html">10</a> / <a href="chapter-five-11.html">11</a> / <a href="chapter-five-12.html">12</a> / <a href="chapter-five-13.html">13</a> / <a href="chapter-five-14.html">14</a> / <a href="chapter-five-15.html">15</a> / <a href="chapter-five-16.html">16</a> / <a href="chapter-five-17.html">17</a> / <a href="chapter-five-18.html">18</a> / <a href="chapter-five-19.html">19</a> / <a href="chapter-five-20.html">20</a><p>
+
+<font size="+2" color="#000000"><b>Section 7 -- You're Not My Type</b></font>
+</td><td width=60 align=center>
+<a href="chapter-five-8.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+As discussed in <a href="..\chapter-two\index.html">Chapter 2</a>, the most common kind of serious security problem in Java involves type confusion. A type-confusion attack confuses the Java system about the types of data objects it is manipulating.<p>
+
+The Java system treats objects as blocks of memory. Allocated memory contains the data fields of all objects, lined up one after the other. When a Java program has a reference to an object, what it really has internally is a pointer to the memory address storing the object. You can think of the pointer as tagged with a type that says what kind of object the pointer is pointing to.<p>
+
+As mentioned in <a href="..\chapter-two\index.html">Chapter 2</a>, every aspect of Java security depends critically on the type-safety of the language. This means that if Java is going to be secure, it has to make sure that all pointers are properly tagged; that is, the tag must match the actual type of object that is being pointed to.<p>
+
+In a type-confusion attack, a malicious applet creates two pointers to the same object-with incompatible type tags. When this happens, the Java system is in trouble. The applet can write into that memory address through one pointer, and read it through another pointer. The result is that the applet can bypass the typing rules of Java, completely undermining its security.<p>
+
+Figure 5.4 shows a type-confusion attack at work. The applet has two pointers to the same memory: one pointer tagged with type T and one tagged with type U. Suppose that T and U are defined like this:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>class T {
+     SecurityManager x; 
+}
+
+class U {
+     MyObject x;
+}</pre>
+</td></tr></table></center><p>
+
+Now the applet can run code like this:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>T t = the pointer tagged T;
+U u = the pointer tagged U;
+t.x = System.getSecurity(); // the Security Manager
+MyObject m = u.x;</pre>
+</td></tr></table></center><p>
+
+The result is that the object ends up with a pointer, tagged as having type MyObject, to the memory representing Java's Security Manager object. By changing the fields of m, the applet can then change the Security Manager, even though the Security Manager's fields have been declared private.<p>
+
+While this example showed how type confusion can be used to corrupt the Security Manager, the tactic may be exploited to corrupt virtually any part of the running Java system.<p>
+
+<center>
+<table border=0 width=223><tr><td>
+<img src="..\images\fig05.04.gif" width=223 height=129 alt="Fig 5.4"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 5.4  Type-confusion attack.</b></center><br>
+Two of the objects in the reference table, t and u, are supposed to be of different types, but actually reference the same object in memory.
+</font>
+</td></tr></table>
+</center>
+<p><br>
+
+
+<center><font size="+1"><b>An Example of Type Confusion</b></font></center><p>
+
+Drew Dean discovered a typical type-confusion attack, based on Java's handling of array types. Java allows a program that uses a type T to use the type array of T. These array types are not explicitly declared by the programmer, but exist automatically. The Java Virtual Machine defines them automatically when they are needed.<p>
+
+These array types are defined by the VM for internal use. Java gives them a name beginning with an open square bracket ([). As this character is not allowed to be the first character of a programmer-defined classname, there is no danger of conflict.<p>
+
+Dean discovered, however, that in Netscape Navigator 3.0beta5, a Java byte code file could declare its own type name to be one of the special array type names. Attempting to load such a class would generate an error, but the Java VM would install the name in its internal table anyway.<p>
+
+This redefined one of Java's array types and created a classic type-confusion scenario: Java considered the object an array, but it actually had some other type. The result was full system penetration. This problem was fixed in Navigator 3.0beta6.<p><br>
+
+
+<center><font size="+1"><b>The Type-Confusion Toolkit</b></font></center><p>
+The Princeton team, as a feasibility demonstration, created a toolkit that allows any type-confusion attack to be turned into a disarming of Java's security. In other words, the toolkit serves as a way of turning a small security breach into a complete system penetration. The type-confusion toolkit has not been released to the public and is considered too dangerous to describe in any detail here. The toolkit was recently revised to work against Java 2 systems.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-five-6.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-five-8.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+
+

@@ -1,0 +1,173 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>However, none of these methods actually defines how to create a bean or get access to one. In order to maximize flexibility, Sun decided to use a coding convention to specify factory methods for enterprise beans. This coding convention says that the home interface for a bean should do the following:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;Provide methods named create with application-specific arguments.
+<DD><B>&#149;</B>&nbsp;&nbsp;Use the remote interface as a return type for all create methods.
+<DD><B>&#149;</B>&nbsp;&nbsp;Declare that each create method can throw CreateExceptions and RemoteExceptions.
+<DD><B>&#149;</B>&nbsp;&nbsp;Use only argument types that are allowed by the RMI standard.
+</DL>
+<TABLE WIDTH="100%">
+<TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 16.3</B> EJBHome Methods
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="60%" VALIGN="TOP" ALIGN="LEFT">METHOD
+<TH VALIGN="TOP" ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void remove(Handle handle)<BR>throws RemoteException, RemoveException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Removes a bean from the server based on its handle.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void remove(Object primaryKey)<BR>throws RemoteException, RemoveException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Removes a bean from the server based on its primary key.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public EJBMetaData getEJBMetaData()<BR>throws RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Returns metadata for a bean type.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+</TABLE>
+<P>Given these guidelines, you can define any number of create methods that are used by the server to instantiate enterprise beans. The create methods that you define are the ones used by clients to generate and access enterprise beans on the server. This means that you will want to think about what the client expects when deciding on the create methods to define.
+</P>
+<P>In the stateless id example from above, the following home interface is defined:</P>
+<PRE>
+package stateless;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+
+import stateless.*;
+
+public interface StatelessIdHome extends EJBHome
+{
+    StatelessId create() throws CreateException, RemoteException;
+}
+</PRE>
+<P>In this case, only one method was needed; it didn&#146;t require any arguments. You might create other methods that take arguments such as primary keys, names, file locations, database log in information, and any other data necessary for your EJB to be created appropriately for your applications. The example below, from the CD-ROM, provides two methods for creating beans:
+</P>
+<PRE>
+package nextprime;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+
+import nextprime.*;
+
+public interface NextPrimeHome extends EJBHome
+{
+    NextPrime create() throws CreateException, RemoteException;
+    NextPrime create(long start) throws CreateException, RemoteException;
+}
+</PRE>
+<P>As demonstrated later in this chapter, you may also define a set of find methods in the home interface. These find methods are like the create methods in that they are defined by convention rather than by implementing methods from an interface. Their purpose is to make entity beans searchable. For example, a home interface for checking-account beans might provide a find method that accepts a checking-account number and returns the associated bean.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading10"></A><FONT COLOR="#000077">Define the Enterprise Bean</FONT></H4>
+<P>The first step in defining an enterprise bean is to define its typing information. The typing information is defined by the superclass and implemented interfaces. The EJB specification doesn&#146;t require beans to have any particular superclass. Most of the beans in the examples in this book simply extend Object. However, all enterprise JavaBeans must implement the javax.ejb.EnterpriseBean interface. This interface is used for typing and doesn&#146;t provide any methods.
+</P>
+<P>Beans must also implement one of two interfaces, EntityBean or SessionBean. These interfaces actually extend EnterpriseBean, so you need to declare only that your class implements SessionBean or EntityBean; the reset is automatic. Remember that session beans are used to perform actions for a client. For example, a session bean might represent an ATM session for a bank customer. Entity beans are used to represent data of some sort. Using the same example, an entity bean might represent the customer&#146;s checking account. The details of these two interfaces are discussed in a moment. Each require the bean class to implement a number of methods.</P>
+<P>The second step in defining the enterprise bean is to define methods that correspond to the home interface&#146;s create methods. For each create method in the home interface, the EJB must have a method named ejbCreate that contains the same arguments as the create method from the home interface. The create method should also declare any exceptions that the ejbCreate method declares. However, the ejbCreate method doesn&#146;t need to declare that it can throw remote exceptions. The return type for this ejbCreate method depends on the type of bean. For session beans, it is void; for entity beans, it is usually an object that represents the primary key.</P>
+<P>One interesting feature of the EJB architecture is that these create methods are not really constructors, as are those that would be defined for most objects. Enterprise beans are constructed using the default constructor via the newInstance method in their class. This allows the EJB host to create a bean from a class name, without having to be recompiled to support the new bean type. However, it also means that these create methods are more like initialization methods performed by the beans themselves rather than constructors that represent special Java constructs.</P>
+<P>The final step is to implement the methods defined in the remote interface and any other methods that the bean requires. This is the meat of the programming task, and the entire specification is designed to focus your time on this step. Although this step has been minimized in this discussion, implementing your business logic will probably represent a vastly larger task than the mechanics of meeting the EJB specification as described here.</P>
+<P>The stateless id example actually doesn&#146;t do much. It is discussed more later, but it is used as a test tool here. Each bean gets a unique id, which the client can request from the bean. The complete code for the bean is as follows:</P>
+<PRE>
+package stateless;
+
+import javax.ejb.*;
+import java.io.Serializable;
+import java.util.*;
+
+import stateless.*;
+
+public class StatelessIdBean implements <B>SessionBean</B>
+{
+    protected SessionContext context;
+    <B>protected int id;
+
+    protected static int nextId=0;
+
+    public static int nextId()
+    {
+       return (nextId&#43;&#43;);
+    }</B>
+
+    public void ejbActivate()
+    {
+       // id = nextId();
+    }
+    public void ejbRemove()
+    {
+    }
+    public void ejbPassivate()
+    {
+    }
+    public void setSessionContext(SessionContext ctx)
+    {
+        context = ctx;
+    }
+    public void ejbCreate()
+    {
+        <B>id = nextId();</B>
+    }
+
+    <B>public int getId()
+    {
+         try
+         {
+             Thread.sleep(1000);
+         }
+         catch(Exception exp)
+         {
+         }
+         return id;
+    }</B>
+}
+</PRE>
+<P>In this case, because the business logic is almost nonexistent, the bean code outweighs it. You probably can guess how that could change in a real application that includes tens, hundreds, or even thousands of lines of application-specific code.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>WARNING:&nbsp;&nbsp;</B>This bean demonstrates one of the programming rules for EJBs, or at least anti-demonstrates it. Beans cannot be rely on static variables, because it is possible that each client gets a separate virtual machine. Therefore, your beans should not use this technique for storing ids; they should use entity beans or a database instead.</FONT><HR>
+</BLOCKQUOTE>
+<P>
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

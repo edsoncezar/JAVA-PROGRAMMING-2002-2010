@@ -1,0 +1,310 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0552-0556.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0562-0566.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-557"><P>Page 557</P></A>
+
+
+<PRE>
+public class Semaphore {
+
+//S is the &quot;signal&quot; variable.
+private int s = 0;
+
+//C counts the number of threads waiting on this
+//semaphore, because it's often useful to know whether
+//anything is waiting.
+private int c = 0;
+
+
+//Return true if any thread is waiting on this semaphore.
+public synchronized boolean isWaiting() {
+        return (c &gt; 0);
+}
+
+//Wait on the semaphore.  If the wait is interruped,
+//abandon the wait and throw the exception.
+public synchronized void sWait() throws InterruptedException {
+        //If the semaphore has been signaled, then
+        //we may continue and decrement s,
+        //otherwise we must wait.
+        if(s == 0) {
+                //Increment the count of threads waiting.
+                c++;
+                try {
+                        this.wait();
+                }
+                finally {
+                        //Decrement the count of threads
+                        //waiting.
+                        c--;
+                }
+        }
+        //If the wait is interrupted, this line will
+        //not be executed.
+        s -= 1;
+}
+
+public synchronized void sSignal() {
+        //increment the signal count
+        s += 1;
+
+        //notify anyone waiting.  This will
+        //notify only one thread if
+        //there are several waiting.  If no thread
+        //is waiting, then the call has no effect.
+
+</PRE>
+
+
+<A NAME="PAGENUM-558"><P>Page 558</P></A>
+
+
+<PRE>
+        this.notify();
+}
+}
+</PRE>
+
+<P>This is a complete Semaphore class that can be used in any application. The
+sWait() and sSignal() methods are equivalents to wait() and notify(). The names come from
+the operations defined for Dijkstra's semaphore construct. The isWaiting() method provides
+a quick check (returns true) if any threads are waiting on the semaphore.
+</P>
+
+
+<P>The sWait() and sSignal() methods are exactly like wait() and notify() except for
+the following:
+</OL>
+
+
+
+<OL>
+<LI>        There's no need to call them from inside a synchronized block because
+they're already synchronized.
+<LI>        If there's no thread waiting, a call to sSignal() will remember the signal and
+the next thread that calls Wait() won't be suspended. Remember that a call to
+notify() when there's no thread waiting does nothing; the call isn't remembered.
+</P>
+</OL>
+
+
+<P>Listing 13.46 shows the printer access class, rewritten to use the Semaphore class.
+</P>
+
+<P>Listing 13.46 SemaphorePrinterAccess Class
+</P>
+<PRE>import industrial.Semaphore;
+
+public class SemaphorePrinterAccess {
+//paper sizes
+public static final int LETTER=0,
+        LEGAL=1, A4=2,
+        //The number of different paper sizes
+        PAPER_SIZES=3,
+        //A value to indicate no size yet chosen
+        UNKNOWN=-1;
+
+//There are as many elements in this
+//array as there are paper sizes, so there
+//is one semaphore per paper size.
+private Semaphore sems[];
+
+//This array of ints keeps track of jobs
+//waiting on the semaphores.
+private int count[];
+
+//Keep track of which paper size is
+</PRE>
+
+<A NAME="PAGENUM-559"><P>Page 559</P></A>
+
+
+<PRE>
+//in use.  Initially, we don't know
+//what size is set up.
+private int currentPaperSize=UNKNOWN;
+
+//Flag is true if some thread is printing.
+private boolean printing;
+
+private Printer thePrinter;
+
+
+//Constructor
+public SemaphorePrinterAccess() {
+        //Create a Semaphore for each paper size
+        //to use as a condition variable.
+        sems = new Semaphore[PAPER_SIZES];
+        count = new int[PAPER_SIZES];
+        for(int i=0; i&lt;=sems.length; i++) {
+                sems[i] = new Semaphore();
+                count[i] = 0;
+        }
+}
+
+public void printJob(String data, int paperSize)
+throws InterruptedException {
+boolean needToWait;
+
+        //Is there anyone printing?
+        synchronized(this) {
+                needToWait = printing;
+                printing = true;
+
+                //Increment the count so the thread
+                //currently printing knows to signal
+                //us when it's done.
+                if(needToWait)
+                        count[paperSize]++;
+        }
+
+        if(needToWait)
+                sems[paperSize].sWait();
+
+        //set up the right paper size
+        if(currentPaperSize != paperSize)
+                thePrinter.changePaperTray(paperSize);
+
+        //print the job
+        thePrinter.printTheJob(data);
+</PRE>
+
+<A NAME="PAGENUM-560"><P>Page 560</P></A>
+
+<P>Listing 13.46 Continued
+</P>
+<PRE>
+        synchronized(this) {
+                //now wake any suspended thread that wants to
+                //use the same paper size as we just did.  If
+                //there's no job using the same size, then just
+                //find any suspended thread and start it.
+                boolean wokeSomebody = false;
+
+                if(count[paperSize] &gt; 0) {
+
+                        sems[paperSize].sSignal();
+                        wokeSomebody = true;
+                }
+                else
+                {
+                        for(int i=0; i&lt;sems.length; i++) {
+                                if((i != paperSize)
+                                &amp;&amp; (count[i] &gt; 0)) {
+                                        sems[i].sSignal();
+                                        wokeSomebody = true;
+                                        break;
+                                }
+                        }
+                }
+
+                //Finally, clear the printing flag if we're
+                //done and nobody else is about to print.
+                if(!wokeSomebody)
+                        printing = false;
+        }
+}
+}
+</PRE>
+
+<P>There's now one Semaphore for each paper size queue; each used as a condition
+variable. Calling sSignal() on a Semaphore means that any existing or future sWait() call is
+&quot;notified&quot;; thus the race condition that affects EfficientPrinterAccess won't occur.
+</P>
+
+<P>The count array is incremented when any thread intends to suspend itself on a
+Semaphore. If the count array isn't used, another race condition may occur. For example,
+suppose thread B detects a need to wait, but is descheduled immediately before calling
+sWait(). Because no thread is waiting when A checks, none of the semaphores are signaled, and
+B waits &quot;forever&quot; again. The use of the count array ensures that A always signals an
+appropriate semaphore, regardless of scheduling order.
+</P>
+
+<B>
+Synchronizing on Semaphores
+</B>
+
+<P>A synchronized method or block enforces the restriction that only one thread may
+execute
+</P>
+
+<A NAME="PAGENUM-561"><P>Page 561</P></A>
+
+
+<P>inside that block at any one time. However, there are situations when this form of
+synchronization can't be used, such as the following examples:
+</P>
+
+<UL>
+<LI>          An object requires mutual exclusion between the execution of several methods,
+not just while a thread is within one method.
+<LI>          More than one thread (but not an unlimited number) is permitted to execute code
+at any one time.
+</UL>
+
+
+<P>The first of these conditions might be appropriate when an object provides access to
+some resource, but operations on the resource are provided by multiple methods. For
+example, consider a class that provides access to a
+log file. Only one thread may access the logfile at any one time, but while a thread is accessing the file, it may need to call
+several different methods. Listing 13.47 shows such a class.
+</P>
+
+
+<P>Listing 13.47 Mutual Exclusion over Several Methods
+</P>
+<PRE>import industrial.Semaphore;
+import java.io.*;
+
+public class LogFile {
+
+private File             logFile;
+private FileOutputStream logFOS;
+private PrintStream      logPS;
+private Semaphore        logSem;
+
+//Constructor
+public LogFile(String fileName) throws IOException {
+        logFile = new File(fileName);
+        logFOS = new FileOutputStream(logFile);
+        logPS = new PrintStream(logFOS);
+        logSem = new Semaphore();
+        logSem.sSignal();
+}
+
+//Gain exclusive access to the logfile
+public void allocate() throws InterruptedException {
+        logSem.sWait();
+}
+
+//Release the logfile
+public void deallocate() {
+
+</PRE>
+
+
+<P><CENTER>
+<a href="0552-0556.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0562-0566.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

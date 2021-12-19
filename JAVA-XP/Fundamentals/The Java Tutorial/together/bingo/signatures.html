@@ -1,0 +1,260 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Signing and Verifying the BINGO Cards</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="rmi.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="eventqueue.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Signing and Verifying the BINGO Cards
+</h2>
+<p>
+<blockquote>
+
+When a Player joins a game by calling the <code>mayIPlay</code>
+method, the Game generates the cards for the Player to play with.
+Before sending the cards back to the Player, the Game digitally
+signs the cards using the APIs in the <code>java.security</code> package.
+<p>
+Later, when a Player claims to have a winning card, the Game
+verifies the signature to make sure the card was created by this
+Game for the current game.
+<p>
+Let's look at the code in the Game that does this. All of the
+code related to signing and verifying cards is in
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/game/NotaryPublic.java"><code>NotaryPublic</code></a>,
+an object created and used by the <code>RingMaster</code>.
+
+<p>
+<hr>
+<strong>Note</strong>:
+This section discusses how BINGO uses the security APIs in
+the JDK to sign cards and verify signatures. It does not talk about
+the general use of the security APIs. For that, see our online security trail
+<a target="_top" href="..\..\security1.1\index.html">Java Security 1.1</a><a href="..\..\security1.1\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=20 height=20 border=0 alt="(in the Java Security 1.1 trail)"></a>.
+<hr>
+
+<h4>Setting Up to Sign and Verify Cards</h4>
+<blockquote>
+Following is the constructor for the <code>NotaryPublic</code> class:
+<blockquote>
+<pre>
+NotaryPublic() {
+    KeyPair pair = null;
+    try {
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("DSA");
+        keyGen.initialize(1024, new SecureRandom());
+        pair = keyGen.generateKeyPair();
+    } catch (Exception e) {
+        ErrorMessages.error("Cannot sign cards. Continuing anyway.");
+    }
+    priv = pair.getPrivate();
+    pub = pair.getPublic();
+}
+</pre>
+</blockquote>
+This constructor generates a public and private key pair and
+then assigns each member of the pair to separate member variables.
+The private key of a key pair is used to generate signatures.
+The public key of a key pair is used to verify them.
+The <code>NotaryPublic</code> uses the same key pair, the one
+created in the constructor, to generate and verify the signatures
+for all of the cards created for this Game.
+</blockquote>
+
+<h4>Signing the Cards</h4>
+<blockquote>
+<code>NotaryPublic</code> contains a method <code>signTheCard</code>
+that generates a signature for the <code>Card</code> passed into it:
+<blockquote>
+<pre>
+private void signTheCard(Card c, int gameNumber) throws NoSuchAlgorithmException,
+							InvalidKeyException,
+							SignatureException
+{
+    Signature dsa = Signature.getInstance("SHA/DSA");
+    byte[] values = new byte[Card.SIZE*Card.SIZE+1];
+
+    dsa.initSign(priv);
+
+    for (int i = 0; i < Card.SIZE; i++)
+        for (int j = 0; j < Card.SIZE; j ++)
+	    values[Card.SIZE*i + j] = (byte)c.boardValues[i][j].number;
+    values[values.length-1] = (byte)gameNumber;
+
+    dsa.update(values);
+    c.setSignature(dsa.sign());
+}
+</pre>
+</blockquote>
+This method creates a <code>Signature</code> object and, using the
+private key from the <code>KeyPair</code>, initializes the
+<code>Signature</code> object for signing.
+Next, the method fills a byte array with the
+values from the card and the current game number. The method uses
+this byte array to <code>update</code> the <code>Signature</code> object.
+Then, the method gets the signature from the <code>Signature</code> object
+and sets the signature on the <code>Card</code> to it.
+
+<p>
+Note that each value on the <code>Card</code> and
+the current game number are converted to bytes.
+Each value on a <code>Card</code> is in the range 1 to 75 and easily
+fits into a byte.
+However, if the game number exceeds 255
+(the Game does not protect against this),
+then the conversion from an <code>int</code> to a <code>byte</code>
+will truncate the [PENDING: check this] high byte of the integer
+representing the game number.
+This could allow a sneaky Player to use a card
+signed for one game in another game.
+
+<p>
+The <code>Signature</code> class supports a version of the <code>update</code>
+method that lets you update the signature a byte at a time. However,
+this is not efficient (too many method calls), so the <code>signTheCard</code>
+method creates and fills a byte array and updates the signature with
+single method call instead. Generally speaking this is a better way of
+updating signatures.
+
+<p>
+The <code>signTheCard</code> method gets called whenever a Player registers
+for a game. The Player remotely calls the
+<code>mayIPlay</code> method in <code>RegistrarImpl</code>.
+If registration is allowed, <code>mayIPlay</code> generates
+cards for the player and calls <code>signTheCard</code>
+once for each <code>Card</code> to sign it.
+The <code>Card</code>s are passed back to the Player along with
+their signatures.
+
+<p>
+When a player detects a BINGO and clicks the "I Won" button, the Player
+notifies the Game of the win by remotely calling the
+<code>BINGO</code> method and passing in the winning card.
+The <code>Card</code> contains its signature 
+which must be verified by the <code>NotaryPublic's</code>
+<code>verifyTheSignature</code> method to win.
+</blockquote>
+
+<h4>Verifying the Signature</h4>
+<blockquote>
+When a Player has a winning card, it calls the remote method <code>BINGO</code> in
+<code>RegistrarImpl</code>. This method calls <code>RingMaster.verify</code> which
+subsequently calls the <code>verifyTheSignature</code> method in the
+<code>NotaryPublic</code> to make sure that the
+<code>Card</code> was created and signed by this Game for the current game:
+<blockquote>
+<pre>
+boolean verifyTheSignature(Card c, int gameNumber) {
+    try {
+        Signature dsa = Signature.getInstance("SHA/DSA");
+        byte[] values = new byte[Card.SIZE*Card.SIZE+1];
+
+        dsa.initVerify(pub);
+
+        for (int i = 0; i < Card.SIZE; i ++)
+	    for (int j = 0; j < Card.SIZE; j ++)
+	        values[Card.SIZE*i + j] = (byte)c.boardValues[i][j].number;
+        values[values.length-1] = (byte)gameNumber;
+
+        dsa.update(values);
+        return dsa.verify(c.getSignature());
+    } catch (Exception e) {
+        return false;
+    }
+}
+</pre>
+</blockquote>
+The <code>verifyTheSignature</code> method is very similar to
+<code>signTheCard</code> but worth a few notes.
+This method also creates a <code>Signature</code> but
+instead of using the private key from the <code>KeyPair</code>,
+it uses the public key, and initializes the <code>Signature</code>
+for verification with the public key.
+
+<p>
+As with <code>signTheCard</code>, this method creates and
+fills a byte array with the values from the
+<code>Card</code> and the current game number, then updates the
+<code>Signature</code> object with the byte array.
+Finally, the method verifies the signature on the
+card by passing the <code>Card</code>'s signature to the
+<code>Signature</code> object's <code>verify</code> method.
+<p>
+If the values on the <code>Card</code> are different than when the card
+was signed then the signature won't verify. Also, if the game number is
+different than when the card was signed the signature won't verify.
+This protects against Players trying to cheat by generating cards based
+on the announced balls, or using a card that was signed for a different game.
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="rmi.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="eventqueue.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

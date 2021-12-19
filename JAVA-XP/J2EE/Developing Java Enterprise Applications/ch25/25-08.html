@@ -1,0 +1,226 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H4 ALIGN="LEFT"><A NAME="Heading11"></A><FONT COLOR="#000077">ShoppingCart Servlet</FONT></H4>
+<P>The ShoppingCart servlet represents the core of our online store. The servlet stores items in the shopper&#146;s session until a purchase is requested. During normal requests, the servlet displays its contents to the user with forms for editing the contents. Upon receiving a purchase request, the servlet contacts the ShoppingCart bean and checks the pricing and availability of the items before displaying a confirmation page. If the user confirms the purchase, the servlet again contacts the bean and makes the purchase request. If the request succeeds, the user is told. If it fails, the user is notified.
+</P>
+<P>This servlet supports four input parameters, listed in Table 25.5. These parameters are passed to the servlet by the client. In this implementation, these are often part of hidden fields in a form that displays a button the user can press to purchase items or view the cart.</P>
+<P>The servlet also depends on a number of initialization parameters, listed in Table 25.6. These are used to define the servlet&#146;s relationship with the ShoppingCartBean and the DebugLog.</P>
+<P>The servlet uses these parameters to create a JNDI context, DebugLog, and ShoppingCartHome, all stored in instance variables. The servlet also maintains a NumberFormat object that is used to output any currency values. The entire code for</P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 25.5</B> ShoppingCartServlet Input Parameters
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP">PARAMETER
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>action</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Add, adjust, delete, or view.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>item </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">A text description of the item.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>price</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The item&#146;s expected price.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>quantity </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The number to affect.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>confirmed</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Set internally when the user confirms a purchase.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P><BR></P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 25.6</B> ShoppingCartServlet Initialization Parameters
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP">PARAMETER
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>url</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The URL for the JNDI provider.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>user</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The JNDI user.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>password</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The JNDI password.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>logserver</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The IP address for the debug log server.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>ShoppingCartHome</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The JNDI key for the shopping cart bean home.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P>the ShoppingCartServlet follows; regular text is used to break the discussion into reasonable pieces. First are the class definition and instance variables:
+</P>
+<PRE>
+package shopcart.servlets;
+ 
+//Imports removed to save space
+
+public class ShoppingCartServlet extends HttpServlet
+implements SingleThreadModel
+{
+    protected Context ctx;
+    protected ShoppingCartHome home;
+    protected DebugLog logger;
+    protected NumberFormat formatter;
+</PRE>
+<P>The servlet&#146;s init method uses another internal method called findHome to load the JNDI context. It also initializes the NumberFormat and DebugLog for messages.
+</P>
+<PRE>
+    public void init(ServletConfig config) throws ServletException
+     {
+        super.init(config);
+        
+        String logServer;
+        
+        logServer = getInitParameter(&#147;logserver&#148;);
+        
+        logger = new DebugLog();
+        logger.logTo(logServer);
+        
+        formatter = NumberFormat.getCurrencyInstance();
+        
+        findHome();
+    }
+</PRE>
+<P>The findHome method uses the internal method getInitialContext to create a JNDI context. This context is used to look up the ShoppingCartHome object based on the ShoppingCartHome initialization parameter.
+</P>
+<PRE>
+    protected void findHome()
+     {        
+        try
+        {
+            String homeName;
+            
+            homeName = getInitParameter(&#147;ShoppingCartHome&#148;);
+            
+<B>            ctx = getInitialContext();
+            
+            if(ctx != null)
+                home = (ShoppingCartHome) ctx.lookup(homeName);</B>
+        }
+        catch(Exception exp)
+        {
+            ctx = null;
+            home = null;
+        }
+    }
+</PRE>
+<P>The getInitialContext method uses the initialization parameters to create a JNDI context. We have hard-coded the BEA WebLogic context for this example. You could also read it from initialization parameters.
+</P>
+<PRE>
+    protected Context getInitialContext() throws Exception
+     {
+        Properties p = new Properties();
+        String url = null;
+        String user=null;
+        String password=null;
+        
+        url = getInitParameter(&#147;url&#148;);
+        user = getInitParameter(&#147;user&#148;);
+        password = getInitParameter(&#147;password&#148;);
+    
+        p.put(Context.INITIAL_CONTEXT_FACTORY,
+                &#147;weblogic.jndi.T3InitialContextFactory&#148;);
+        
+        if(url != null) 
+            p.put(Context.PROVIDER_URL, url);
+        else 
+            p.put(Context.PROVIDER_URL, &#147;t3://localhost:7001&#148;);
+    
+        if (user != null)
+        {
+            p.put(Context.SECURITY_PRINCIPAL, user);
+    
+            if (password == null) password = &#147;&#148;;
+        
+            p.put(Context.SECURITY_CREDENTIALS, password);
+        } 
+    
+        return new InitialContext(p);
+    }
+</PRE>
+<P>Because the ShoppingCartServlet supports a number of possible actions, the doGet method is quite lengthy. The discussion for this method is broken into sections, associated with the code being discussed.
+</P>
+<P>The first block of code in doGet declares the local variables. Some of these variables are used temporarily during loops. Others hold information such as the current contents of the cart or the PrintWriter with which to send data to the response.</P>
+<PRE>
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+     throws ServletException, IOException
+    {
+        HttpSession session; //The current session
+        String cartName; //The name to use for the cart
+        ShoppingCart cart=null; //The EJB
+        Hashtable items; //The current list of items
+        ShoppingCartItem item; //Used to iterate the list of items
+        PrintWriter out; //The responses PrintWriter
+        String action; //Which action was requested
+        double price=0.0; //Temp variable
+        int quantity=0; //Temp variable
+        String desc=null; //Temp variable
+        String errorMessage = null; //Temp variable
+        String requestURL; // The URL used to request the servlet
+        String referer; // URL for the page that made the request
+        boolean outputCart = true; //Temp variable
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

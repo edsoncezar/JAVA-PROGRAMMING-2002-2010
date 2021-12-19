@@ -1,0 +1,216 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Enterprise JavaBean Business Rules Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Finally, implement the requestCheck method. This method builds a hash table with the provided data. The keys used in the hash table should be documented so that anyone writing a script for the rule or action will know what data is provided and its meaning. This method also includes the Identity of the client in the hash table. The rule and action are loaded from the file with each request, and if the rule is valid, the action is executed. If the rule is not valid, the Boolean false is returned from the method, indicating that the request failed.
+</P>
+<PRE>
+    public boolean requestCheck(String payee
+				,String project
+				,double amount
+				,String desc)
+    {
+	Rule rule = buildRule();
+	Action action = buildAction();
+	boolean valid = false;
+	Hashtable data;
+	
+	data = new Hashtable();
+	
+	data.put(&#147;payee&#148;,payee);
+	data.put(&#147;project&#148;,project);
+	data.put(&#147;amount&#148;,String.valueOf(amount));
+	data.put(&#147;desc&#148;,desc);
+	data.put(&#147;identity&#148;,context.getCallerIdentity());
+	
+	if(rule != null) valid = rule.isValidFor(data);
+	
+	if(valid &amp&amp (action != null))
+	{
+	    action.executeOn(data);
+	}
+	
+	return valid;
+    }
+}
+</PRE>
+<P>We choose to load the scripts for every request in this example to make it easier for you to change the script and rerun the example. In a larger program, you might provide a trigger method that tells the bean to reread the script or use the modification time to test when to reread the script.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading13"></A><FONT COLOR="#000077">IdentityRule: A Custom Rule</FONT></H4>
+<P>The custom rule for this example checks the name of the client&#146;s identity against its specified name. You might reimplement this rule to use a specific security provider if that is appropriate for your installation.
+</P>
+<PRE>
+package checkreq;
+
+import javax.ejb.*;
+import java.security.*;
+import java.util.*;
+
+import busrules.*;
+
+/**
+ * If an identity is provided, then the
+ * &#147;identity&#148; key in the data is used.
+ *
+ * &ltIDENTITYRULE IDENTITY=&#147;&#148;&gt
+ */
+public class IdentityRule implements Rule
+{
+    protected String identity;
+
+    public boolean isValidFor(Hashtable data)
+    {
+	boolean retVal = false;
+	
+	try
+	{
+	    if(identity != null)
+	    {
+<B>                Identity id;
+		
+		id = (Identity) data.get(&#147;identity&#148;);
+	
+		retVal = id.getName().equals(identity);</B>
+            }
+	}
+	catch(Exception exp)
+	{
+	    retVal = false;
+	}
+	
+	return retVal;
+    }
+
+    public double validityFor(Hashtable data)
+    {
+	return (isValidFor(data)) ? 1.0 : 0.0;
+    }
+
+    public void setIdentity(String s)
+    {
+	identity = s;
+    }
+}
+</PRE>
+<P>This is a fairly simple rule. In a larger application, you might create rules that access database data or even look up a user in an LDAP directory to determine the user&#146;s permissions.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading14"></A><FONT COLOR="#000077">IdentityRuleHandler: A Custom Handler</FONT></H4>
+<P>The handler for the IdentityRule uses the RulesParser&#146;s stacks to handle the Identity tags. First, the handler registers for all occurrences of the IDENTITY tag. This registration is implemented in registerWith but is called by RulesParser. When an IDENTITY tag is encountered, the handler creates an IdentityRule object and uses the tag attributes to determine the name to associate with the rule. Once the rule is initialized, it is pushed onto the RulesParser&#146;s rules stack.
+</P>
+<PRE>
+package checkreq;
+
+import busrules.*;
+import checkreq.*;
+
+import java.util.*;
+import java.security.*;
+
+public class IdentityRuleHandler
+implements TagHandler
+{
+    /******* Tag Handler Methods **********/
+
+    public String handleTag(String tag,String data
+			    ,String etag,Hashtable atts)
+    throws ParsingException
+    {
+	IdentityRule r = new IdentityRule();
+	String id,role;
+	
+<B>        id = (String) atts.get(&#147;IDENTITY&#148;);
+	
+	if(id != null)
+	{
+	    r.setIdentity(id);
+	
+	    RulesParser.sharedRulesParser().pushRule(r);
+	}</B>
+	return &#147;&#148;;
+    }
+    public void registerWith(TagParser parser)
+    {
+<B>        parser.registerTagHandler(&#147;IDENTITYRULE&#148;,this);</B>
+    }
+}
+</PRE>
+<P>In general, custom tag handlers will handle one or two tags. The handle tag method will create the appropriate object, initialize it from the information in the tag attributes and data between the start and end tags, and push it onto the appropriate RulesParser stack. In this way, an action&#146;s tag handler pushes the new action on the action stack, and a rules handler pushes rules onto the rules stack.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading15"></A><FONT COLOR="#000077">LogRequestAction: A Custom Action</FONT></H4>
+<P>The custom action implemented for this example simply prints the check request information to the console. In a real application, you might log this request to the database or a financial application for processing. To make printing the request easier, we implement a custom action called LogRequestAction that prints the data for a check request to the console.
+</P>
+<PRE>
+package checkreq;
+
+import java.util.*;
+import busrules.*;
+import checkreq.*;
+
+/**
+ * Logs payee, amount and desc.
+ * from the hashtable
+ * to the console.
+ *
+ * &ltLogRequestAction&gt
+ */
+public class LogRequestAction implements Action
+{
+    public void executeOn(Hashtable data)
+    {
+	System.out.print(&#147;Pay to the order of: &#148;);
+	System.out.println(data.get(&#147;payee&#148;));
+	System.out.println(&#147;$&#148;&#43;data.get(&#147;amount&#148;));
+	System.out.println(data.get(&#147;desc&#148;));
+    }
+}
+</PRE>
+<P>The handler for this action is available on the CD-ROM and is implemented in a manner very similar to the IdentityRuleHandler.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading16"></A><FONT COLOR="#000077">An Example Rule Script</FONT></H4>
+<P>Using the IdentityRule and others provided in the busrules package, the following test Rule Script is provided on the CD-ROM for testing this example.
+</P>
+<P>Only need one rule to be true.</P>
+<PRE>
+&ltRULES TYPE=&#147;or&#148;&gt
+&ltIDENTITYRULE IDENTITY=&#147;stephen&#148;&gt
+&ltBOOLEANRULE TYPE=&#147;and&#148;&gt
+&ltIDENTITYRULE IDENTITY=&#147;scott&#148;&gt
+&ltCOMPARISONRULE OPERATOR=&#147;10&#148; CONSTANT=&#147;secret&#148; KEY=&#147;project&#148;&gt
+&lt/BOOLEANRULE&gt
+&lt/RULES&gt
+</PRE>
+<P>This script defines a rules group that contains two rules. The first rule says that Stephen can request any check. The second says that Scott can request any check for the secret project, but no other project. This script includes a comment at the top to show how the parser will ignore normal text outside of tags or text ignored by a tag handler.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

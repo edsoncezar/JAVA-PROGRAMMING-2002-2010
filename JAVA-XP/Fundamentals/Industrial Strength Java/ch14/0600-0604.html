@@ -1,0 +1,296 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Interfacing C/C++ and Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0597-0599.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0605-0609.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-600"><P>Page 600</P></A>
+
+
+<P>The result of an exec() method is a Process object. Because the Process class
+implements the Runnable interface, call waitFor() to cause the current Java thread to block
+execution until the editor process terminates. Blocking execution is very useful when the results
+of running a native application will not be available until the native application terminates.
+In listing 14.5, you might be waiting for the user to modify the temp.txt file.
+</P>
+
+<P>Listing 14.5 Starting a Text Editor and Waiting for It to Be Terminated
+</P>
+<PRE>
+Process winNotepad;
+try{
+      // Start the windows notepad application.
+      winNotepad = Runtime.getRuntime().exec(&quot;notepad temp.txt&quot;);
+}catch(IOException ex){
+      System.err.println(&quot;Command failed with IO Exception.&quot;);
+}
+try{
+      // Wait until the user has exited the notepad application.
+      winNotepad.waitFor();
+      .
+      .      // Process temp.txt
+      .
+}catch(InterruptedException ex){
+      System.err.println(&quot;Command failed with Interrupted Exception.&quot;);
+}
+</PRE>
+
+<P>Figure 14.1 shows a flowchart of a non-blocking use of exec(). The figure shows
+that exec() starts a new thread that is running the notepad.exe program. Immediately
+after starting the thread, execution continues. A non-blocking program could use this,
+for example, to display a native program to the user that is a reference or file utility that
+has no affect on the current program.
+</P>
+
+<P><a href="images\ch14fg01.jpg"><img src="images\tn_ch14fg01.jpg"></a><BR>
+Figure 14.1
+A state diagram of the runtime.exec() method executing
+a native application and continuing the Java
+program's thread of execution.
+</P>
+
+<A NAME="PAGENUM-601"><P>Page 601</P></A>
+
+
+
+<P>The state diagram in figure 14.2 shows the use of the
+runtime.waitFor() method as it is used in listing 14.5. The Java program is shown creating a thread that is running the
+native application notepad.exe. Immediately after the exec() call, the Java program calls
+the waitFor() method in the process object that represents notepad.exe. By using
+waitFor(), the program will cease execution (that is, block) until notepad.exe terminates.
+</P>
+
+<P><a href="images\ch14fg02.jpg"><img src="images\tn_ch14fg02.jpg"></a><BR>
+Figure 14.2
+The runtime.exec() method executing a native
+application followed by a call to runtime.wairFor().
+</P>
+
+<H3><A NAME="ch14_ 11">
+The Native Interface
+</A></H3>
+
+<P>To understand the native interface, an assumption about the designer's motives must
+be made. The designers were attempting to make a native interface that was as portable
+as possible. Given this assumption, it is easy to understand the
+mapping between Java types and C types. An interesting observation from table 14.1 is that Java promotes
+almost everything to a bigger word size. The only data types that survive at the same size are
+float and double because these are usually the same between different hardware architectures.
+C types like char, int, byte, and long could vary depending on the word size defined by
+the native compiler, so they are all promoted as high as the designers expected them to
+go. This means most types are promoted to 32 bits except long, which is doubled to 64 bits.
+</P>
+
+<A NAME="PAGENUM-602"><P>Page 602</P></A>
+
+<P>Table 14.1<BR>
+Java to C Type 
+Mapping
+</P>
+
+<TABLE>
+
+<TR><TD>
+Java Type
+</TD><TD>
+C/C++ Type
+</TD></TR><TR><TD>
+Boolean
+</TD><TD>
+long
+</TD></TR><TR><TD>
+byte
+</TD><TD>
+long
+</TD></TR><TR><TD>
+char
+</TD><TD>
+long
+</TD></TR><TR><TD>
+short
+</TD><TD>
+long
+</TD></TR><TR><TD>
+int
+</TD><TD>
+long
+</TD></TR><TR><TD>
+long
+</TD><TD>
+int64
+</TD></TR><TR><TD>
+float
+</TD><TD>
+float
+</TD></TR><TR><TD>
+double
+</TD><TD>
+double
+</TD></TR></TABLE>
+
+<P>This mapping may fool a programmer into writing native C software with the types
+that are required to interface with Java. On some machines this may not be speedy or
+memory efficient. Keep to the most efficient types required by your application and only
+promote or demote when interfacing with Java.
+</P>
+
+<H3><A NAME="ch14_ 12">
+Building Java Applications that <BR>Use C/C++
+</A></H3>
+
+<P>The following five steps are required to build a combined Java and C/C++ application:
+</P>
+
+<UL>
+<LI>     Create Java files that define native methods.
+<LI>     Use javah to create C header files and stub files.
+<LI>     Write C code that is called by stub functions.
+<LI>     Compile C code to a loadable library.
+<LI>     In Java code, before native methods are called, add loadLibrary() method to
+link loadable library to Java.
+</UL>
+
+<P>Each of these steps is covered in detail in the following sections.
+</P>
+
+<H4><A NAME="ch14_ 13">
+Using Native Methods in Java Classes
+</A></H4>
+
+<P>The following classes use the native methods that were defined in the
+TestObject class.
+</P>
+
+
+<A NAME="PAGENUM-603"><P>Page 603</P></A>
+
+
+
+<B>
+Testing Native Functions: Class GoNative
+</B>
+
+<P>The class in listing 14.6 contains the main() for the following classes. The
+main() method creates a Native Test object and calls testNative(), which tests different ways to access
+C code. The main() method also traps IOException as well as verifies that the results of
+the test are accurate.
+</P>
+
+<P>Listing 14.6 Creating a Native Test Object and Calling testNative()
+</P>
+<PRE>
+import java.awt.*;
+import java.io.IOException;
+import NativeTest;
+public class GoNative {
+    public static void main(String args[]) {
+        System.out.println(&quot;simple console application&quot;);
+        System.out.println(&quot;&quot;);
+        NativeTest test = new NativeTest();
+        if (test.testNative()){
+            System.out.println(&quot;Native methods completed OK.&quot;);
+            System.out.println(&quot;HAL = &quot;+test.nativeInt(2000));
+        }else{
+            System.out.println(&quot;Native methods FAILED.&quot;);
+        }
+        System.out.println(&quot;&quot;);
+        System.out.println(&quot;(press Enter to exit)&quot;);
+        try {
+            System.in.read();
+        } catch (IOException e) {
+            return;
+        }
+    }
+}
+</PRE>
+<P>
+<B>
+Calling Native Java Methods: Class NativeTest
+</B>
+</P>
+
+<P>This class calls the native methods of the TestObject class. Native test is also
+accessed from C code to prove that class data (statics), object data, and methods can be
+manipulated.
+</P>
+
+<P>The first section of code in listing 14.7a contains a static initializer block. The static
+block calls System.loadLibrary(&quot;NativeTest&quot;). The
+loadLibrary() method loads the NativeTest.dll, which contains the C implementation.
+</P>
+
+<A NAME="PAGENUM-604"><P>Page 604</P></A>
+
+
+<P>
+Listing 14.7a Imports and Static Initializer Block</P>
+
+<PRE>
+import TestObject;
+public class NativeTest{
+    // Static block is used to init
+    // the dynamic library.
+    static{
+        // Load the dynamic library
+        System.loadLibrary(&quot;NativeTest&quot;);
+    }
+    NativeTest(){
+    }
+</PRE>
+
+<P>The next method of the NativeTest class is the class constructor, shown in listing
+14.7b. The constructor is used to call all the native methods that are in the class. Remember
+that because the NativeTest.dll library has been loaded in the static block, the library is
+active, so native C functions within it now exist. The only processing that occurs is that data
+is passed to the native method, and the results returned are compared to what was passed
+in. (The &Acirc; symbol denotes a line that would normally fit on the preceding line, were this
+a computer screen.)
+</P>
+
+<P>Listing 14.7b Class Constructor Calling Native Methods
+</P>
+<PRE>
+    boolean  testNative(){
+        // Dealing with atoms
+        if (nativeInt(1)!=2)return false;
+        if (nativeChar((char)1)!=(char)2)return false;
+        if (nativeShort((short)1)!=(short)2)return false;
+        if (nativeFloat((float)1.0)!=(float)2.0)return false;
+        if (nativeDouble(1.0)!=2.0)return false;
+        if (nativeBoolean(true)!=false)return false;
+        // Dealing with arrays
+        int arraySize = 10;
+        // Test int array
+        int inputIntArray[] = new int[arraySize];
+        for (int i = 0; i &lt; inputIntArray.length; i++){
+            inputIntArray[i] = 1;
+        }
+        int[] outputIntArray = nativeIntArray(inputIntArray);
+        for (int i = 0; i &lt; outputIntArray.length; i++){
+            if (inputIntArray[i] != outputIntArray[i]) return(false);
+        }
+        // Test char array
+</PRE>
+
+<P><CENTER>
+<a href="0597-0599.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0605-0609.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

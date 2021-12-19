@@ -1,0 +1,208 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Distributed Computing with Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0470-0472.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0476-0479.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-473"><P>Page 473</P></A>
+
+
+<B>
+Referential Integrity
+</B>
+
+<P>Consider what it means to pass a collection object to a remote method call,  such as
+the Hashtable of Address objects in the address book example. Not only must the
+Hashtable object be transferred over, but so must all the Address objects it contains, even though
+they are probably scattered across memory and not in a neat contiguous block. Otherwise,
+it will fail as soon as the remote object tries to use an address in the Hashtable. Ensuring
+that references remain valid is known as maintaining
+referential integrity.
+</P>
+
+<P>In some ways it is a similar situation to a hypertext document on the web. A graphical
+web page is not stored as a single file at the server, but rather as a set of files, some textual
+and some binary. The relationships between these files is stored in the HTML text as a set
+of references. When a web browser downloads the page, it must read the page as it is
+being transferred and watch for embedded image references. As these references are
+encountered, the browser must make additional requests to the server to retrieve the images,
+a process that is largely transparent to the browser user who sees only the final rendering
+of the page. It becomes noticeable when the page is saved locally for later viewing.
+Because most browsers save only the HTML document, the images will no longer be
+accessible and are rendered instead as broken icons&#151;referential integrity was not preserved.
+</P>
+
+<P>The Object Serialization Services maintain referential integrity by flattening the
+structure formed by the objects and their references into a stream. Visualizing the structure as
+a graph, with the objects holding data as the nodes and the references between them as
+the arcs or lines, the stream writer traverses the graph, writing the contents of each node to
+the stream. Effectively, each reference is recursively replaced by the contents of the object
+it refers to. If there are multiple references to the same object, the services employ
+a reference sharing mechanism so the object's data is only written once.
+</P>
+
+<B>
+Versioning of Streams
+</B>
+
+
+<P>An interesting challenge tackled by the serialization services occurs when the class
+being reconstituted from the stream is a different version from the class that was written to
+the stream. For example, what if the services were used to stream a copy of the address
+book to disk, and then you chose to change the Address class to include a zip code field?
+How should the updated application behave when the previously saved addresses are read
+in? No single answer will be &quot;right&quot; in every case, but the services provide default
+behavior that is useful in most cases, along with a capability to tailor for specific requirements.
+</P>
+
+<P>Because the names of fields are embedded in the stream along with the data values,
+each of the fields in the new version of the object will be matched with its value in the
+old version, even if these are in a different order. New fields will not have a
+corresponding value and so will take on default values.
+</P>
+
+<A NAME="PAGENUM-474"><P>Page 474</P></A>
+
+
+
+<P>Along with the name of an objects class, a 64-bit Stream Unique Identifier (SUID)
+formed from the hash of the class is placed in the stream. Later versions of the class trying
+to reconstitute themselves from the stream must declare that they are compatible with
+the SUID encoded in the stream. A tool called
+serialver is supplied with the JDK, which determines the SUID for a class. The SUID may then be pasted into later versions of
+the class that are compatible. An example might look like the following:
+</P>
+
+<PRE>
+static final long SerialVersionUID = 3487495895819393L;
+</PRE>
+
+<P>This scheme avoids the possibility of a different class with the same name being
+accidentally reconstituted with incompatible data.
+</P>
+
+<P>Some changes cannot be compensated for, such as if the class is moved in the
+inheritance hierarchy. A comprehensive list of compatible and incompatible forms of type evolution
+is provided in the JDK documentation.
+</P>
+
+<B>
+Security and Serialization
+</B>
+
+
+<P>Serialization is often performed on data when it is leaving the Java VM,
+and deserialization when it is entering. It is reasonable to ask whether the data might
+be tampered with while it is outside the VM, causing a security breach when read back in.
+</P>
+
+<P>Some fields, such as those containing open file handles, might be vulnerable, and
+these should be declared with the &quot;transient&quot; keyword. Transient fields are not serialized. It
+is also worth noting that items reconstituted from a stream are copies of the original
+objects; new memory is allocated as they are created, so they will never overwrite existing
+objects. Finally, classes may be loaded as objects read in from the stream, but they are subject
+to the same standard security management as any other class.
+</P>
+
+<P>Private fields are serialized as well as public fields. Thus, if any data in a class is
+sensitive, you will have to decide how best to deal with it. If it is important that it is transferred
+as part of the stream, an option may be to encrypt it as part of the serialization process.
+This could be done by defining your own serialization routines or by passing the
+unencrypted stream through a separate filter.
+</P>
+
+<B>
+Java Support for Serialization
+</B>
+
+<P>The Object Serialization Services build upon the classes and interfaces already present
+in the JDK 1.0.2 release of the java.io package. Interfaces are added that must be
+implemented by objects using the services, and new stream classes and interfaces
+extend existing streams to handle objects. These new additions are detailed in the
+following sections.
+</P>
+
+
+<A NAME="PAGENUM-475"><P>Page 475</P></A>
+
+
+<B>
+Making Your Objects Serializable
+</B>
+
+<P>To make use of the serialization services, objects to be streamed must implement
+either the Serializable or Externalizable interfaces, which are defined in listing 12.5.
+</P>
+
+<P>Listing 12.5 The Serializable and Externalizable Interfaces
+</P>
+
+<PRE>
+package java.io;
+
+public interface Serializable();
+
+public interface Externalizable extends Serializable {
+    public void writeExternal(ObjectOutput out) throws IOException;
+    public void readExternal(ObjectInput in) throws IOException,
+                                     ClassNotFoundException;
+}
+</PRE>
+
+<P>To be used by RMI, the classes of all arguments and return values used by a remote
+object must therefore implement one of these interfaces. The RemoteObject class itself
+implements the Serializable interface.
+</P>
+
+<P>Classes implementing Serializable specify which of their members are not to be written
+to the stream by preceding them with the &quot;transient&quot; keyword. They may optionally
+declare readObject() and writeObject() methods for their own processing of the streaming, but
+for most applications the default processing will be quite sufficient.
+</P>
+
+<P>Classes implementing Externalizable, however, take full responsibility for their
+external representation. They must implement both readExternal() and writeExternal() methods
+to read and write their contents from the stream, as well as coordinate with their
+superclass to handle its contents.
+</P>
+<B>
+The Enhanced Streams
+</B>
+
+
+<P>Two new interfaces, ObjectInput and ObjectOutput, define the abstract interfaces for
+the new stream classes.
+</P>
+<PRE>
+public interface ObjectOutput extends DataOutput
+public interface ObjectInput extends DataInput
+</PRE>
+
+<P>The existing DataOutput and DataInput interfaces declare methods for streaming
+the primitive Java types&#151;bytes, longs, floats, and the like. ObjectOutput and
+ObjectInput extend them to handle objects (classes derived from java.lang.Object), arrays, and
+Strings.
+</P>
+
+<P><CENTER>
+<a href="0470-0472.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0476-0479.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

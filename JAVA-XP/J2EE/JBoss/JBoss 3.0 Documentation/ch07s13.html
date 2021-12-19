@@ -1,0 +1,124 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Declaring an EJB reference</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch07.html" title="Chapter 7. Advanced container configuration : use of jboss.xml"><link rel="previous" href="ch07s10.html" title="Specifying the deployment name of your beans"><link rel="next" href="ch07s16.html" title="Container configuration"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch07.html"><img src="images\toc.gif" border="0"></a><a href="ch07s10.html"><img src="images\prev.gif" border="0"></a><a href="ch07s16.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e2657"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e2657"></a>Declaring an EJB reference</h2></div></div><p>An EJB reference (see ejb1.1 specification, 14.3, p207) is when a bean A wants 
+to call methods on a bean B.
+We are talking about intra-bean calls also called B2B calls. This is not for 
+clients (that is covered in 
+the beginner trails) this is for bean calls all on the server. Most of these 
+calls are done inside the 
+server VM.</p><p>This call will look like this:</p><pre class="programlisting">public class ABean implements SessionBean {
+
+   public void businessMethod(...) {
+      ...
+      InitialContext namingContext = new InitialContext();
+      Object ref = namingContext.lookup("java:comp/env/ejb/myBean");
+      BHome home = (BHome)PortableRemoteObject(ref);
+      B bean = home.create(pk);
+      ...
+   }
+
+}</pre><p>You can also have a lookup relative to "java:comp/env" like this :</p><pre class="programlisting">public class ABean implements SessionBean {
+
+   public void businessMethod(...) {
+      ...
+      InitialContext namingContext = new InitialContext();
+      Object ref = namingContext.lookup("ejb/myBean");
+      BHome home = (BHome)PortableRemoteObject(ref);
+      B bean = home.create(pk);
+      ...
+   }
+
+}</pre><p>This notation let better understand the redirection done by JBoss for the JNDI lookup.  As we will see, 
+where the bean lives is not specified in the source code but in the deployment descriptor.</p><p>To be allowed this call, the bean A must declare it in the its deployment 
+descriptor. This is done by an &lt;ejb-ref&gt; 
+tag in the bean section of the ejb-jar.xml file. 2 cases may occur: 
+</p><div class="section"><a name="d0e2674"></a><div class="titlepage"><div><h3 class="title"><a name="d0e2674"></a>Internal EJB reference</h3></div></div><p>An EJB reference is called internal when the bean B is in the same application unit as the bean 
+A. This means that the beans are 
+physically packaged in the same jar. In this case, you must provide the &lt;ejb-link&gt; tag, and its value must 
+match the &lt;ejb-name&gt; of bean B. You don't have to provide anything 
+in the jboss.xml file. Your ejb-jar.xml 
+file will look like this: 
+</p><pre class="programlisting">
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+                                                                      
+    &lt;session&gt;
+      &lt;ejb-name&gt;Bean A&lt;/ejb-name&gt;
+      &lt;home&gt;AHome&lt;/home&gt;
+      &lt;remote&gt;A&lt;/remote&gt;
+      &lt;ejb-class&gt;ABean&lt;/ejb-class&gt;
+      &lt;session-type&gt;Stateful&lt;/session-type&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;ejb-ref&gt;
+        &lt;ejb-ref-name&gt;ejb/myBean&lt;/ejb-ref-name&gt;
+        &lt;ejb-ref-type&gt;Entity&lt;/ejb-ref-type&gt;
+        &lt;home&gt;BHome&lt;/home&gt;
+        &lt;remote&gt;B&lt;/remote&gt;
+        &lt;ejb-link&gt;Bean B&lt;/ejb-link&gt;
+      &lt;/ejb-ref&gt;
+    &lt;/session&gt;
+
+    &lt;entity&gt;
+      &lt;ejb-name&gt;Bean B&lt;/ejb-name&gt;
+      &lt;home&gt;BHome&lt;/home&gt;
+      &lt;remote&gt;B&lt;/remote&gt;
+      &lt;ejb-class&gt;BBean&lt;/ejb-class&gt;
+      &lt;persistence-type&gt;Bean&lt;/persistence-type&gt;
+      &lt;prim-key-class&gt;myPK&lt;/prim-key-class&gt;
+      &lt;reentrant&gt;True&lt;/reentrant&gt;
+    &lt;/entity&gt;
+
+  &lt;/enterprise-beans&gt;
+&lt;/ejb-jar&gt;
+
+</pre></div><div class="section"><a name="d0e2681"></a><div class="titlepage"><div><h3 class="title"><a name="d0e2681"></a>External EJB reference</h3></div></div><p>An EJB reference is called external when the bean B comes from another application unit, it may 
+even be deployed on another server. 
+This means that the beans live in different jars on different systems. In this 
+case, you cannot rely on the 
+standard &lt;ejb-link&gt; tag in ejb-jar.xml since there the beans are 
+not covered in the same file. Instead, you must
+provide the full JNDI name of the bean B in jboss.xml. This is necessary to 
+map the names from different ejb-jar.xml 
+files since the 2 beans are defined in different application units. A full 
+name is of the form: 
+</p><p>protocol://host:1234/name/in/other/server
+Note that the &lt;ejb-ref-name&gt; tags in the 2 xml files must match. 
+</p><p>ejb-jar.xml:</p><pre class="programlisting">
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+                                                                      
+    &lt;session&gt;
+      &lt;ejb-name&gt;Bean A&lt;/ejb-name&gt;
+      &lt;home&gt;AHome&lt;/home&gt;
+      &lt;remote&gt;A&lt;/remote&gt;
+      &lt;ejb-class&gt;ABean&lt;/ejb-class&gt;
+      &lt;session-type&gt;Stateful&lt;/session-type&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;ejb-ref&gt;
+        &lt;ejb-ref-name&gt;ejb/myBean&lt;/ejb-ref-name&gt;
+        &lt;ejb-ref-type&gt;Entity&lt;/ejb-ref-type&gt;
+        &lt;home&gt;BHome&lt;/home&gt;
+        &lt;remote&gt;B&lt;/remote&gt;
+      &lt;/ejb-ref&gt;
+    &lt;/session&gt;
+
+  &lt;/enterprise-beans&gt;
+&lt;/ejb-jar&gt;
+</pre><p>jboss.xml: </p><pre class="programlisting">
+&lt;jboss&gt;                                                               
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;ejb-name&gt;Bean A&lt;/ejb-name&gt;
+      &lt;ejb-ref&gt;
+        &lt;ejb-ref-name&gt;ejb/myBean&lt;/ejb-ref-name&gt;
+        &lt;jndi-name&gt;jnp://otherserver/application/beanB&lt;/jndi-name&gt;
+      &lt;/ejb-ref&gt;
+    &lt;/session&gt;
+  &lt;enterprise-beans&gt;
+&lt;/jboss&gt;
+</pre><p>If bean B is deployed in another application, but on the same jboss server, 
+the jndi-name you provide must be 
+the name under which bean B is deployed.</p><p>IMPORTANT NOTE: this will tell jboss where to look for bean B. You also have 
+to tell jboss what bean B is: 
+in case of an external ejb-reference, be sure to include bean B's home and 
+remote interface in bean A's ejb-jar. </p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch07.html"><img src="images\toc.gif" border="0"></a><a href="ch07s10.html"><img src="images\prev.gif" border="0"></a><a href="ch07s16.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

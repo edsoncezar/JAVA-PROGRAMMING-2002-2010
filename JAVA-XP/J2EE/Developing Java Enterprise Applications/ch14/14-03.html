@@ -1,0 +1,183 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Network File-Locking Server</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="14-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="14-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The lock method relies on the RMI libraries&#146; promise to handle different clients in separate threads. Otherwise, we would have a deadlock if the lock fails.
+</P>
+<PRE>
+    //Waits to acquire a lock.
+     public synchronized void lock()
+        throws FileLockingException
+    {
+<B>        while(isLocked())
+        {
+            try
+            {
+                wait();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+</B>        
+        reallyLock();
+    }
+</PRE>
+<P>For clarity, the actual locking code is isolated in the method reallyLock, which follows. This method creates the lock file by opening and closing it. If a problem occurs, a FileLockingException is thrown. This exception will ultimately be passed to the client.
+</P>
+<PRE>
+    private synchronized void reallyLock()
+         throws FileLockingException
+    {
+        FileOutputStream fileOut;
+        
+        //Create the lock file on disk.
+        try
+        {
+<B>            fileOut = new FileOutputStream(lockFile);
+            fileOut.close();
+</B>        }
+        catch(Exception exp)
+        {
+            throw new FileLockingException(<B>&#147;</B>File error.<B>&#148;</B>);
+        }
+    }
+</PRE>
+<P>To unlock the SharedFileLock, delete the lock file and notify any waiting threads. This allows the threads stuck in the lock method to check for the lock&#146;s availability. The first one to check gets the lock, and the others resume waiting. The following code defines the unlock method that deletes the lock file and notifies other threads waiting on this file.
+</P>
+<PRE>
+    public synchronized void unlock()
+         throws FileLockingException
+    {
+        <B>lockFile.delete();
+        notifyAll();</B>
+    }
+}
+</PRE>
+<P>All three locking methods defined in the previous example are synchronized to make sure that one thread doesn&#146;t delete the file while another is checking its existence, or some other inappropriate scenario. This locking is an important part of this program and is the reason that the shared locks must be unique. If synchronized methods were not used, two threads may create the lock file, one immediately after the other, as pictured in Figure 14.2.
+</P>
+<P>With synchronized methods, only one thread can create the lock file at a time, as pictured in Figure 14.3, assuming that there is only one SharedFileLock for that file. This is where the unique locks come in.</P>
+<P>Because only one object represents the file and the lock method is synchronized, at any one time only one thread can lock the file, thus creating the file lock.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading7"></A><FONT COLOR="#000077">A Test Program</FONT></H4>
+<P>A program called SharedLockTester for testing these shared file locks follows and is also available on the CD-ROM. This test program looks up the network lock server using a hard-coded address, requests the lock for a file specified on the command line, and locks the file. The lock is held for 30 seconds and then released. Holding the lock provides time for another copy of the test program to run and have to wait for the lock. The isFileLocked method is used to test whether the file is locked before attempting to lock it. In this case, an attempt to get the lock is made anyway, but in a real program you would probably notify the user that the file is unavailable rather than waiting for the lock indefinitely.
+</P>
+<P><A NAME="Fig2"></A><A HREF="images\14-02.jpg"><IMG SRC="images\14-02t.jpg"></A>
+<BR><A HREF="images\14-02.jpg"><FONT COLOR="#000077"><B>Figure 14.2</B></FONT></A>&nbsp;&nbsp;Locks can fail without synchronization.</P>
+<P><A NAME="Fig3"></A><A HREF="images\14-03.jpg"><IMG SRC="images\14-03t.jpg"></A>
+<BR><A HREF="images\14-03.jpg"><FONT COLOR="#000077"><B>Figure 14.3</B></FONT></A>&nbsp;&nbsp;Locking with synchronization.</P>
+<PRE>
+import java.io.*;
+ import java.util.*;
+import java.rmi.*;
+
+public class SharedLockTester
+{
+    public static void main(String args[])
+    {
+        
+        SecurityManager mng;
+        
+        if(args.length &lt 1)
+        {
+            System.out.println(<B>&#147;</B>usage SharedLockTester file<B>&#148;</B>);
+            System.exit(0);
+        }
+
+        try
+        {
+            NetworkLockServer server;
+            FileLock lock;
+            String lookup;
+            
+            System.out.println(<B>&#147;</B>Setting Security Manager.<B>&#148;</B>);
+            
+            // Create and install a security manager. 
+            mng = new RMISecurityManager();
+            System.setSecurityManager(mng);
+            
+            /*
+              The server network address is hard coded for 
+              the example.  You should change the IP address
+              192.168.0.172 to the network address of the 
+              machine where you RMI registry is located.
+            */
+<B>            lookup = "//192.168.0.172/"+NetworkLockServer.NLS_NAME;</B>
+            
+            System.out.println(<B>&#147;</B>Looking up server.<B>&#148;</B>);
+            
+<B>            server = (NetworkLockServer) Naming.lookup(lookup);</B>
+            
+            System.out.println(<B>&#147;</B>Got Server.<B>&#148;</B>);
+            
+            System.out.println(<B>&#147;</B>Checking for lock.<B>&#148;</B>);
+            
+            if(<B>server.isFileLocked(args[0]</B>))
+                System.out.println(<B>&#147;</B>The file is locked.<B>&#148;</B>);
+            else
+                System.out.println(<B>&#147;</B>The file is not locked.<B>&#148;</B>);
+                
+            System.out.println(<B>&#147;</B>Creating lock object.<B>&#148;</B>);
+            
+<B>            lock = server.getSharedLockFor(args[0]);
+</B>            
+            System.out.println(<B>&#147;</B>Got lock object.<B>&#148;</B>);
+            
+            System.out.println(<B>&#147;</B>Trying to acquire lock.<B>&#148;</B>);
+<B>            lock.lock();
+</B>            System.out.println(<B>&#147;</B>Got lock<B>&#148;</B>);
+        
+            //Hold the lock for 30 seconds.
+<B>            Thread.sleep(30000);
+</B>            
+            System.out.println(<B>&#147;</B>Unlocking.<B>&#148;</B>);
+<B>            lock.unlock();
+</B>            System.out.println(<B>&#147;</B>Unlocked.<B>&#148;</B>);
+        }
+        catch (Exception e)
+        {
+            System.out.println(<B>&#147;</B>SharedLockTester Error: <B>&#148;</B> 
+                                 + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+</PRE>
+<P>Now let&#146;s look at the global locking scheme.
+</P>
+<H3><A NAME="Heading8"></A><FONT COLOR="#000077">Global Locks</FONT></H3>
+<P>The global locking mechanism requires a bit different architecture from that of the shared locks. The reason for this difference is the fact that different machines can refer to the same file by different paths. For example, in Windows, a directory may be mapped from your C drive to my G drive. This means that the file you call c:\temp\test we might call g:\test.
+</P>
+<P>The shared locking scheme required that each file path have a unique lock object. This works because all of the programs on the same computer use the same absolute path for each file, and all paths are translated to an absolute path before using them. But now we can&#146;t rely on this uniqueness, because the route to the file may differ based on how the file is accessed on each computer. We can, however, rely on the lock files being seen, because they are located in the same directory as the file that is locking. The trick is to find a way to make sure that two clients don&#146;t touch this lock file at the same time or in too close succession. To do this, include a simple locking scheme in the NetworkLockServer.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="14-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="14-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

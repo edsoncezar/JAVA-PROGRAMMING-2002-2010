@@ -1,0 +1,147 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Declaring finders</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch06.html" title="Chapter 6. Customizing JAWS"><link rel="previous" href="ch06s04.html" title="Telling JAWS about your tables"><link rel="next" href="ch06s13.html" title="Defining a type mapping"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch06.html"><img src="images\toc.gif" border="0"></a><a href="ch06s04.html"><img src="images\prev.gif" border="0"></a><a href="ch06s13.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e2215"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e2215"></a>Declaring finders</h2></div></div><p>The finders to access your beans must all be declared in the home interface, according to the EJB specification.</p><div class="section"><a name="d0e2220"></a><div class="titlepage"><div><h3 class="title"><a name="d0e2220"></a>Standard finders, automatically generated</h3></div></div><p>JAWS automatically generates the following finders for you:</p><div class="itemizedlist"><ul><li><p><a name="d0e2226"></a>findAll() will return a Collection of all the beans available</p></li><li><p><a name="d0e2229"></a>findByPrimaryKey(YourPK pk) will return a single bean with the corresponding primary key (the primary key class is defined in ejb-jar.xml)</p></li><li><p><a name="d0e2232"></a>for each of the cmp-fields of your bean, findByXX(YY fieldValue), where XX is the name of the cmp-field (NOT case-sensitive) and YY its class, will return a Collection of all the beans with the right value in this field.</p></li></ul></div><p>Note that these finders are only generated if you declare them in your home 
+interface. &#8220;Automatically generated&#8221; only means that JAWS will guess the meaning of your finder from its name, you don't have to add anything.</p></div><div class="section"><a name="d0e2240"></a><div class="titlepage"><div><h3 class="title"><a name="d0e2240"></a>Custom finders</h3></div></div><p>JAWS then allows you to define customized finders. These finders must also be 
+declared in the home interface of your bean. You must then
+provide additional information in jaws.xml about the query to be used for this 
+finder. This is done in a  &lt;finder&gt;  section in the section for
+your entity bean. You have to specify the name of the finder (the same as in 
+the home interface), the WHERE part of the query, and the
+ORDER part.
+</p><p>Example: you want to select classes with a mininum number of students. Your 
+Class bean has the following structure:</p><pre class="programlisting">
+&lt;ejb-jar&gt;
+  &lt;display-name&gt;Class&lt;/display-name&gt;
+  &lt;enterprise-beans&gt;
+
+    &lt;entity&gt;
+      &lt;description&gt;Models a Class&lt;/description&gt;
+      &lt;ejb-name&gt;ClassBean&lt;/ejb-name&gt;
+      &lt;home&gt;org.jboss.docs.cmp.jaws.interfaces.ClassHome&lt;/home&gt;
+      &lt;remote&gt;org.jboss.docs.cmp.jaws.interfaces.Class&lt;/remote&gt;
+      &lt;ejb-class&gt;org.jboss.docs.cmp.jaws.bean.ClassBean&lt;/ejb-class&gt;
+      &lt;persistence-type&gt;Container&lt;/persistence-type&gt;
+      &lt;prim-key-class&gt;java.lang.Integer&lt;/prim-key-class&gt;
+      &lt;reentrant&gt;False&lt;/reentrant&gt;
+      &lt;cmp-field&gt;&lt;field-name&gt;classId&lt;/field-name&gt;&lt;/cmp-field&gt;
+      &lt;cmp-field&gt;&lt;field-name&gt;teacherName&lt;/field-name&gt;&lt;/cmp-field&gt;
+      &lt;cmp-field&gt;&lt;field-name&gt;studentCount&lt;/field-name&gt;&lt;/cmp-field&gt;
+      &lt;primkey-field&gt;classId&lt;/primkey-field&gt;
+    &lt;/entity&gt;
+
+  &lt;/enterprise-beans&gt;
+  ...
+&lt;/ejb-jar&gt;
+ 
+ </pre><p>You want to define a method in ClassHome:</p><pre class="programlisting">
+public Collection findBigClasses(Integer minStudentCount, String teacher)
+throws FinderException, RemoteException;
+  </pre><p>Your jaws.xml file will contain the following:</p><pre class="programlisting">
+&lt;jaws&gt;
+	&lt;enterprise-beans&gt;
+		&lt;entity&gt;
+			&lt;ejb-name&gt;ClassBean&lt;/ejb-name&gt;
+			...
+       		&lt;finder&gt;
+         		&lt;name&gt;findBigClasses&lt;/name&gt;
+         		&lt;query&gt;studentCount &gt; {0} AND teacherName = {1}&lt;/query&gt;
+         		&lt;order&gt;studentCount DESC&lt;/order&gt;
+       		&lt;/finder&gt;
+		&lt;/entity&gt;
+	&lt;/enterprise-beans&gt;
+&lt;/jaws&gt;
+</pre><p>Then a call to findBigClasses(100, "Jones") will generate</p><pre class="programlisting">SELECT classId FROM ClassBean
+  WHERE studentCount &gt; 100 AND teacherName = 'Jones'
+  ORDER BY studentCount DESC;</pre></div><div class="section"><a name="d0e2261"></a><div class="titlepage"><div><h3 class="title"><a name="d0e2261"></a>Custom finders with join queries</h3></div></div><p>Author: 
+            <span class="author">Michel de Groot</span>
+            <tt>&lt;<a href="mailto:Michel.anke@wolmail.nl">Michel.anke@wolmail.nl</a>&gt;</tt> or <tt>&lt;<a href="mailto:rdgr@oce.nl">rdgr@oce.nl</a>&gt;</tt>
+         </p><p>By default, JAWS will use only the table for your bean to perform select queries. You can also use inner join queries on multiple tables with JAWS CMP for finder methods with EJB 1.1.  This allows you to deliver powerful queries with minimal effort.</p><p>Standards compliance note: this feature is not standard or required in EJB 1.1. Therefore, EJBs that use this feature, might not be compile-free portable to other EJB containers.</p><p>You must use a database which has support for SQL92 (most databases do) or T-SQL join queries.</p><p>Example: </p><div class="itemizedlist"><ul><li><p><a name="d0e2287"></a>List your finder method in the EJB's home interface as usual.</p><pre class="programlisting">
+public interface PopulationHome extends EJBHome {
+    /**
+     * Finds all populations of a specific type as defined in 
+     * CreatureTypes of a Province.
+     * @param provinceId the primary key of the province
+     * @param type the type of creatures to find
+     */
+     public Collection findByProvinceAndType(String provinceId, int type) 
+                       throws RemoteException, FinderException;
+}
+</pre></li><li><p><a name="d0e2292"></a>Declare your finder in jaws.xml, using the &lt;query&gt; tag. There are two options. The first presented here conforms to SQL92 and is the more generic and portable one. The second presented here is defined by T-SQL and is useful for MS Access 97 for example.</p><p>Generic SQL92 example:</p><pre class="programlisting">
+&lt;finder&gt;
+    &lt;name&gt;findByProvinceAndType&lt;/name&gt;
+    &lt;query&gt;,CreatureEJBTable 
+    WHERE CreatureEJBTable.id = PopulationEJBTable.creatureId AND
+    provinceId={0} AND type={1}&lt;/query&gt;
+    &lt;order&gt;&lt;/order&gt;
+&lt;/finder&gt;
+</pre><p>T-SQL example:</p><pre class="programlisting">
+&lt;finder&gt;
+    &lt;name&gt;findByProvinceAndType&lt;/name&gt;
+    &lt;query&gt;inner join CreatureEJBTable ON CreatureEJBTable.id =
+    PopulationEJBTable.creatureId WHERE provinceId={0} AND
+    type={1}&lt;/query&gt;
+    &lt;order&gt;&lt;/order&gt;
+&lt;/finder&gt;
+</pre></li></ul></div><p>You must be aware of the following issues:
+            <div class="itemizedlist"><ul><li><p><a name="d0e2306"></a>The query must start with ',&lt;table name to join with&gt;' (for SQL92 query) or with 'inner join &lt;table name to join with&gt;' (for T-SQL). JAWS will append the proper select statement.</p></li><li><p><a name="d0e2309"></a>If SQL92 is used, the WHERE statement must contain the identity statement which joins the tables. If T-SQL is used, the ON statement must contain the identity statement which joins the tables.</p></li><li><p><a name="d0e2312"></a>The query must contain the WHERE statement followed by the conditions of the query.</p></li><li><p><a name="d0e2315"></a>The query always delivers instances of the Entity Bean on which the finder is defined.</p></li><li><p><a name="d0e2318"></a>Field names must be fully qualified with table name if ambiguity can arise.</p></li></ul></div>
+         </p><p>We strongly suggest you use SQL92 as default query language. T-SQL is provided for ease-of-use if you have existing T-SQL queries.</p></div><div class="section"><a name="d0e2324"></a><div class="titlepage"><div><h3 class="title"><a name="d0e2324"></a>Advanced options for declared finders [since JBoss 2.4]</h3></div></div><p>Author:
+            <span class="author">Dan Christopherson</span>
+            <tt>&lt;<a href="mailto:danch@nvisia.com">danch@nvisia.com</a>&gt;</tt> or <tt>&lt;<a href="mailto:danch@danch.com">danch@danch.com</a>&gt;</tt>
+         </p><p>As of JBoss version 2.4, it is possible to request
+         that JAWS preload data for all entities selected by a declared finder. This
+         avoids a performance problem where the database will be queried separately
+         to load data for each bean returned by the finder. To activate this 
+         optimization, simply add &lt;read-ahead&gt;true&lt;/read-ahead&gt; to
+         your finder declaration. Note that as of the same version, you can override
+         this option for the autogenerated findAll method as well.</p><p>Note that the data preloaded by this feature is tied to the
+         transaction it is loaded in. In other words, data preloaded by one 
+         transaction is not seen by another transaction. One practical implication
+         of this is that calling a finder from client code will not take 
+         advantage of this feature. It may be feasable in some circumstances to
+         declare the finder and an entity's getter methods as 'Supports' in which
+         case the data preloaded by the finder will not be tied to any transaction 
+         and may be available when the getter methods are called.</p><p>This is an example jaws.xml showing use of this option</p><pre class="programlisting">
+ &lt;jaws&gt;
+   &lt;enterprise-beans&gt;
+     &lt;entity&gt;
+       &lt;ejb-name&gt;ClassBean&lt;/ejb-name&gt;
+       &lt;finder&gt;
+         &lt;name&gt;findBigClasses&lt;/name&gt;
+         &lt;query&gt;studentCount &gt; {0} AND teacherName = {1}&lt;/query&gt;
+         &lt;order&gt;studentCount DESC&lt;/order&gt;
+         &lt;read-ahead&gt;true&lt;/read-ahead&gt;
+       &lt;/finder&gt;
+       &lt;finder&gt;
+         &lt;name&gt;findAll&lt;/name&gt;
+         &lt;query /&gt;
+         &lt;order /&gt;
+         &lt;read-ahead&gt;true&lt;/read-ahead&gt;
+       &lt;/finder&gt;
+     &lt;/entity&gt;
+   &lt;/enterprise-beans&gt;
+   ...
+ &lt;/jaws&gt;
+
+</pre></div><div class="section"><a name="d0e2349"></a><div class="titlepage"><div><h3 class="title"><a name="d0e2349"></a>Custom finders coded in your beans</h3></div></div><p>Author: 
+            <span class="author">Michel de Groot</span>
+            <tt>&lt;<a href="mailto:Michel.anke@wolmail.nl">Michel.anke@wolmail.nl</a>&gt;</tt> or <tt>&lt;<a href="mailto:rdgr@oce.nl">rdgr@oce.nl</a>&gt;</tt>
+         </p><p>Sometimes, the finders automatically generated by JAWS or the finders defined in jaws.xml using SQL92 are not sufficient for your application. You want to implement a custom finder by coding the query in your bean.</p><p>You can also have Entity Beans with finders which have been developed against a less advanced persistence manager. This forced you to develop custom finders at that time. You want to be able to leverage this work to JBoss.</p><p>To do this, all you have to do is</p><div class="itemizedlist"><ul><li><p><a name="d0e2373"></a>Declare the finder in the EJB's home interface as usual. This name must begin with &#8220;findBy&#8221;. Example: </p><pre class="programlisting">
+public interface PopulationHome extends EJBHome {
+   /**
+    * Finds all populations of a specific type as defined in 
+    * CreatureTypes of a Province.
+    * @param provinceId the primary key of the province
+    * @param type the type of creatures to find
+    */
+ 
+    public Collection findByProvinceAndType(String provinceId, int type) 
+                      throws RemoteException, FinderException;
+}
+</pre></li><li><p><a name="d0e2381"></a>Implement the finder method in the EJB's implementation class. The name of the method must begin with &#8220;ejbFindBy&#8221; and match the name declared in the home interface. Example: </p><pre class="programlisting">
+public class PopulationEJB implements EJBObject {
+    public Collection ejbFindByProvinceAndType(String provinceId, int type) {
+        // .. fill Collection with primary keys of result objects
+        return aResultCollection;
+    }
+}
+</pre></li></ul></div><p>This feature is standard and required in EJB 1.1.</p><p>Custom finders defined this way will ALWAYS be used if present. They override automatic or defined finders. This is according to the EJB 1.1 specification.</p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch06.html"><img src="images\toc.gif" border="0"></a><a href="ch06s04.html"><img src="images\prev.gif" border="0"></a><a href="ch06s13.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

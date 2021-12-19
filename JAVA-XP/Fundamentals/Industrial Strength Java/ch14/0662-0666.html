@@ -1,0 +1,309 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Interfacing C/C++ and Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0657-0661.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0667-0670.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-662"><P>Page 662</P></A>
+
+
+<P>Listing 14.44a The Class WaitForTokens: Initialization and Class Constructor
+</P>
+
+<PRE>
+package SerialDevices;
+import SerialDevices.Action;
+import SerialDevices.SerialData;
+import java.util.Observer;
+import java.util.Observable;
+import java.util.Vector;
+public class WaitForTokens implements Observer{
+    private Vector keys;
+    private Vector actions;
+    private Vector IDs;
+    private int minWhite=' `;
+    private int maxWhite=' `;
+    private int minKeyLength = 100;
+    private int maxKeyLength =  0;
+    private StringBuffer stateBuffer= new StringBuffer(1);
+    private boolean eolIsSignificant=true;
+public WaitForTokens(){
+        keys = new Vector();
+        actions = new Vector();
+        IDs = new Vector();
+    }
+</PRE>
+
+<P>The method eolIsSignificant() enables the user to configure end-of-lines as white space
+or to ignored them, which is important if tokens have embedded EOL characters.
+</P>
+
+<P>Listing 14.44b The Class WaitForTokens: Method eolIsSignificant()
+</P>
+<PRE>
+public void eolIsSignificant(boolean eolIsSignificant){
+        this.eolIsSignificant = eolIsSignificant;
+    }
+</PRE>
+
+<P>The method whitespaceChars() is used to set the ASCII range of characters that is to
+be considered white space between tokens.
+</P>
+
+<P>Listing 14.44c Class WaitForTokens: Method whitespaceChars()
+</P>
+<PRE>
+public void whitespaceChars(int minWhite, int maxWhite)  {
+        this.minWhite = minWhite;
+        this.maxWhite = maxWhite;
+    }
+</PRE>
+
+
+<A NAME="PAGENUM-663"><P>Page 663</P></A>
+
+
+<P>The addKeyAction() method is used to add a key, action handler and the action ID  to
+be trapped. This function is similar to an addObserver() method, except that this method
+lets the user specify a trigger and a trigger value to be sent to a specific observer when
+the token appears.
+</P>
+
+<P>Listing 14.44d Class WaitForTokens: Method addKeyAction()
+</P>
+<PRE>
+public void addKeyAction(String newKey, Action action, int ID){
+        if (newKey.length() &gt; stateBuffer.length()){
+            stateBuffer= new StringBuffer(newKey.length());
+        }
+        minKeyLength = newKey.length() &lt; minKeyLength
+                        ? newKey.length() : minKeyLength;
+        maxKeyLength = newKey.length() &gt; maxKeyLength
+                        ? newKey.length() : maxKeyLength;
+        keys.addElement(newKey);
+        actions.addElement(action);
+        IDs.addElement(new Integer(ID));
+    }
+</PRE>
+
+<P>The update()method is the Observer implementation. Update() gathers data from
+the modem and monitors the data stream for keys to be matched. This function is meant to
+be called by the SerialPortMonitor class.
+</P>
+
+<P>Listing 14.44e class WaitForTokens:The update() Method
+</P>
+<PRE>
+public void update(Observable o, Object arg){
+        String input =new String(((SerialData)arg).buffer,0);
+        // Look for \r echoed back from modem.
+        if (input.length() == 1){
+            if ((input.charAt(0) &gt;= minWhite &amp;&amp;
+                 input.charAt(0) &lt;= maxWhite)
+                 || input.charAt(0) == `\r'
+                 || input.charAt(0) == `\n'){
+                 stateBuffer.setLength(0);
+             }else{
+                 // Update the buffer
+                 stateBuffer.append(input);
+                 if (stateBuffer.length() &gt;= minKeyLength){
+// Look for the key in the vector
+                    int location = keys.indexOf(new
+                                           &Acirc;String(stateBuffer));
+</PRE>
+<PRE>
+                                                                                continues
+</PRE>
+
+<A NAME="PAGENUM-664"><P>Page 664</P></A>
+
+
+
+<P>Listing 14.44e Continued
+</P>
+<PRE>
+                    if (location != -1){
+                        ((Action)actions.elementAt(location)).action(
+                             ((Integer)IDs.elementAt(location)).intValue()
+ );
+                        stateBuffer.setLength(0);
+                        return;
+                    }
+                }
+                if (stateBuffer.length() == maxKeyLength){
+                    stateBuffer.setLength(0);
+                }
+            }
+        }
+    }
+</PRE>
+
+<P>The method checkForShieldedDTE() is used to look for modem messages that may
+come inside the normal data stream (see listing 14.44f). These modem messages are preceded
+by the DTE (Hexadecimal 10) character. The buffer parameter is the current state of the
+data read from the modem. The shieldStat parameter is either null (DTE pending) or
+the shielded DTE code
+</P>
+
+<P>Listing 14.44f The Class WaitForTokens: The checkForShieldedDTE() Method
+</P>
+<PRE>
+void checkForShieldedDTE(char buffer[],char shieldStat[])
+    {
+          int i;
+          // If the test string has been completed then return true else
+          // false Also returns the number of characters that have
+          // matched so far, just in case the testString is
+          // split between two buffers.
+              for (i=0;i&lt;buffer.length;i++){
+              if (shieldStat[0] == 0x10){
+                    shieldStat[0] = buffer[i];
+              }else{
+                    if (buffer[i] == 0x10){
+                          shieldStat[0] = 0x10;
+                    }else{
+                          shieldStat[0] = 0x00;
+                    }
+              }
+          }
+           // By getting to here we have proven that the whole test
+           // string is not in the buffer.
+    }
+</PRE>
+
+
+<A NAME="PAGENUM-665"><P>Page 665</P></A>
+
+
+
+<P>The checkThis()method is used to test the current state of a token, as shown in
+listing 14.44g. If a token is being read, more of its constituent parts are added each time it
+is passed through this function. If the token is complete, the buffer is cleared, and the
+caller is signaled that the token has been read. If a token is partially recognized, but a
+delimiter is encountered, the token workspace is cleared. The parameter buffer is the current state
+of the data read from the modem. The parameter token is the work that is being waited on.
+</P>
+
+<P>Listing 14.44g class WaitForTokens - Method checkThis()
+</P>
+<PRE>
+int checkThis(char buffer[],char token[])
+    {
+          int i;
+          // If the test string has been completed then return true else
+          // false Also returns the number of characters that have
+          // matched so far, just in case the testString
+          // is split between two buffers.
+          for (i=0;i&lt;buffer.length;i++){
+          if (buffer[i] == token.tokenStr[token-&gt;currentPosition]){
+                  if (++token-&gt;currentPosition &gt;= token-&gt;stringLength){
+                token-&gt;currentPosition=0;// reset to keep us out of
+                                 &Acirc;trouble.
+                              return(1);
+                  }
+            }else{
+                token-&gt;currentPosition=0;
+            }
+          }
+          // By getting to here we have proven that the whole test
+          // string is not in the buffer.
+        return(0);
+    }
+*/
+}
+</PRE>
+<P>
+<B>
+Class SerialData
+</B>
+</P>
+<P>The SerialData class is used as a container to pass serial data that also includes the state <BR>
+of the wait mask (see listing 14.45). When passing a single object, functions using
+the information provided by the container can retrieve the reason for data or handle
+signals that do not have data. The SerialData class was written to avoid having to write
+separate read tasks at the native interface level.
+</P>
+
+<A NAME="PAGENUM-666"><P>Page 666</P></A>
+
+
+<P>Listing 14.45 The SerialData Class</P>
+<PRE>
+package SerialDevices;
+public class SerialData{
+    public byte [] buffer;
+    public int dataLength;
+    public long mask;
+    public SerialData(byte [] buffer,int dataLength, long mask){
+        this.buffer = buffer;
+        this.dataLength = dataLength;
+        this.mask = mask;
+    }
+}
+</PRE>
+<P>
+<B>
+Class Action
+</B>
+</P>
+<P>The Action interface is used by the WaitForTokens class to inform classes that
+implement the interface that a token has been found. The action()method accepts one parameter
+that is the token ID. An example of how this interface is used is shown in listing 14.46.
+</P>
+
+<P>Listing 14.46 The Action Class
+</P>
+<PRE>
+package SerialDevices;
+public interface Action{
+    void action(int ID);
+}
+</PRE>
+
+<H4><A NAME="ch14_ 46">
+SerialDevice C Code
+</A></H4>
+
+<P>The following sections describe C implementations for the Java native methods shown
+in listing 14.42.
+</P>
+
+<H4><A NAME="ch14_ 47">
+Closing the Serial Port
+</A></H4>
+
+<P>The closeSerialPort() function closes a specified serial port.
+</P>
+
+<P>Listing 14.47 The closeSerialPort() Method
+</P>
+<PRE>
+long SerialDevices_Win32sSerialPeer_closeSerialPort(struct
+&Acirc;HWin32sSerialPeer *nativeSerial,int64_t port){
+    return(CloseHandle(port));
+}
+</PRE>
+
+
+<P><CENTER>
+<a href="0657-0661.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0667-0670.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

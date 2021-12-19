@@ -1,0 +1,717 @@
+<HTML>
+<HEAD>
+<TITLE>The Finalizable Object Idiom</TITLE>
+<META name="description" content="An object-oriented design idioms from Interface Design: Best Practices in Object-Oriented API Design in Java by Bill Venners.">
+<META name="keywords" content="Java Design, Java Book, Object Oriented Design, Thread Safe Design">
+<LINK rel="stylesheet" type="text/css" href="http://www.artima.com/artima.css">
+</HEAD>
+<BODY text="#000000" alink="#006666">
+<TABLE width="100%" cellspacing="0">
+<TR>
+<TD align="left" valign="bottom">
+<A href="http://www.artima.com/index.jsp"><IMG src="..\images\ac.gif" alt="artima.com" border="0" width="150" height="31"></A>
+</TD>
+<TD align="right">
+<a href="http://www.artima.com/cgi-bin/redirect.cgi/abfe7940?REGION=Cyan&CAMPAIGN=Default&ACCOUNT=Artima&BANNER=ObjDesWkshp" ><img src="..\cgi-bin\getimage.cgi\abfe7940\region=cyan&campaign=default&account=artima&banner" border=0 width=468 height=60 alt="ad" ></a>
+</TD>
+</TR>
+</TABLE>
+<TABLE width="100%" bgcolor="#006666">
+<TR>
+<TD align="center">
+<DIV class="ml">
+<A href="http://www.artima.com/search.html" class="hl">Search</A>&nbsp;|
+<A href="http://www.artima.com/java/index.html" class="hl">Java</A>&nbsp;|
+<A href="http://www.artima.com/javadesign/index.html" class="hl">Design</A>&nbsp;|
+<A href="http://www.artima.com/jvm/index.html" class="hl">JVM</A>&nbsp;|
+<A href="http://www.artima.com/jini/index.html" class="hl">Jini</A>&nbsp;|
+<A href="http://www.artima.com/forums/index.jsp" class="hl">Forums</A>&nbsp;|
+<A href="http://www.artima.com/javaseminars/index.html" class="hl">Seminars</A>&nbsp;|
+<A href="http://lists.artima.com/mailman/listinfo/artima-newsletter/" class="hl">Subscribe</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+<BR>
+<DIV class="vegies">
+<DIV class="tc">
+<SPAN class="sts">Interface Design by Bill Venners</SPAN><BR>
+<SPAN class="sts">(Part of) Chapter 10</SPAN><BR>
+<SPAN class="ts">The Finalizable Object</SPAN><BR>
+</DIV>
+
+<!--BEGIN_PRECISE_OBJECT_LINKS-->
+<CENTER>
+<FONT size="1" face="geneva, arial, sans-serif">
+<STRONG>
+<A href="index.html">Interface&nbsp;Design</A>&nbsp;|
+<A href="contents.html">Contents</A>&nbsp;|
+<A href="canonical.html">Previous</A>&nbsp;|
+Next
+</STRONG>
+</FONT>
+</CENTER>
+<!--END_PRECISE_OBJECT_LINKS-->
+
+<P>
+Use a clean up method to close non-memory resources.
+
+<P>
+<FONT SIZE="+1"><STRONG>Why clean up?</STRONG></FONT><BR>
+Every object in a Java program uses computing resources that are
+finite. Most obviously, all objects use some memory to store their
+images on the heap. (This is true even for objects that declare no
+instance variables. Each object image must include some kind of pointer
+to class data, and can include other implementation-dependent
+information as well.) But objects may also use other finite resources
+besides memory. For example, some objects may use resources such as
+file handles, graphics contexts, sockets, and so on. When you design an
+object, you must make sure it eventually releases any finite
+resources it uses so the system won't run out of those resources.
+
+<P>
+Because Java is a garbage-collected language, releasing the memory
+associated with an object is easy. All you need to do is let go of all
+references to the object. Because you don't have to worry about
+explicitly freeing an object, as you must in languages such as C or
+C++, you needn't worry about corrupting memory by accidentally freeing
+the same object twice. You do, however, need to make sure you actually
+release all references to the object. If you don't, you can end up with
+a memory leak, just like the memory leaks you get in a C++ program when
+you forget to explicitly free objects. Nevertheless, so long as you
+release all references to an object, you needn't worry about explicitly
+"freeing" that memory.
+
+<P>
+Similarly, you needn't worry about explicitly freeing any constituent
+objects referenced by the instance variables of an object you no longer
+need. Releasing all references to the unneeded object will in effect
+invalidate any constituent object references contained in that object's
+instance variables. If the now-invalidated references were the only
+remaining references to those constituent objects, the constituent
+objects will also be available for garbage collection. Piece of cake,
+right?
+
+<P>
+<FONT SIZE="+1"><STRONG>The rules of garbage collection</STRONG></FONT><BR>
+Although garbage collection does indeed make memory management in Java
+a lot easier than it is in C or C++, you aren't able to completely
+forget about memory when you program in Java. To know when you may need
+to think about memory management in Java, you need to know a bit about
+the way garbage collection is treated in the Java specifications.
+
+<P>
+<STRONG>Garbage collection is not mandated</STRONG><BR>
+The first thing to know is that no matter how diligently you search
+through the Java Virtual Machine Specification (JVM Spec), you won't be able
+to find any sentence that commands, <EM>Every JVM must have a garbage
+collector.</em> The Java Virtual Machine Specification gives VM designers a
+great deal of leeway in deciding how their implementations will manage
+memory, including deciding whether or not to even use garbage
+collection at all. Thus, it is possible that some JVMs (such as a
+bare-bones smart card JVM) may require that programs executed in each
+session "fit" in the available memory.
+
+<P>
+Of course, you can always run out of memory, even on a virtual memory
+system. The JVM Spec does not state how much memory will be available
+to a JVM. It just states that whenever a JVM <EM>does</em> run out of
+memory, it should throw an <CODE>OutOfMemoryError</CODE>.
+
+<P>
+Nevertheless, to give Java applications the best chance of executing
+without running out of memory, most JVMs will use a garbage collector.
+The garbage collector reclaims the memory occupied by unreferenced
+objects on the heap, so that memory can be used again by new objects,
+and usually de-fragments the heap as the program runs.
+
+<P>
+<STRONG>Garbage collection algorithm is not defined</STRONG><BR>
+Another command you won't find in the JVM specification is <EM>All JVMs
+that use garbage collection must use the XXX algorithm.</em> The designers
+of each JVM get to decide how garbage collection will work in their
+implementations. Garbage collection algorithm is one area in which JVM
+vendors can strive to make their implementation better than the
+competition's. This is significant for you as a Java programmer for the
+following reason:
+
+<P>
+<EM>Because you don't generally know how garbage collection
+will be performed inside a JVM, you don't know when any particular object will
+be garbage collected.</em>
+
+<P>
+So what? you might ask. The reason you might care when an object is
+garbage collected has to do with finalizers. (A <EM>finalizer</em> is
+defined as a regular Java instance method named <CODE>finalize()</CODE>
+that returns void and takes no arguments.) The Java specifications make
+the following promise about finalizers:
+
+<P>
+<EM>Before reclaiming the memory occupied by an object that has a
+finalizer, the garbage collector will invoke that object's finalizer.</em>
+
+<P>
+Given that you don't know when objects will be garbage collected, but
+you do know that finalizable objects will be finalized as they are
+garbage collected, you can make the following grand deduction:
+
+<P>
+<EM>You don't know when objects will be finalized.</em>
+
+<P>
+You should imprint this important fact on your brain and forever allow
+it to inform your Java object designs.
+
+<P>
+<FONT SIZE="+1"><STRONG>Finalizers to avoid</STRONG></FONT><BR>
+The central rule of thumb concerning finalizers is this:
+
+<P>
+<EM>Don't design your Java programs such that correctness depends upon
+"timely" finalization.</em>
+
+<P>
+In other words, don't write programs that will break if certain objects
+aren't finalized by certain points in the life of the program's
+execution. If you write such a program, it may work on some
+implementations of the JVM but fail on others.
+
+<P>
+<STRONG>Don't rely on finalizers to release non-memory resources</STRONG><BR>
+An example of an object that breaks this rule is one that opens a file
+in its constructor and closes the file in its <CODE>finalize()</CODE>
+method. Although this design seems neat, tidy, and symmetrical, it
+potentially creates an insidious bug. A Java program generally will
+have only a finite number of file handles at its disposal. When all
+those handles are in use, the program won't be able to open any more
+files.
+
+<P>
+A Java program that makes use of such an object (one that opens a file
+in its constructor and closes it in its finalizer) may work fine on
+some JVM implementations. On such implementations, finalization would
+occur often enough to keep a sufficient number of file handles
+available at all times. But the same program may fail on a different
+JVM whose garbage collector doesn't finalize often enough to keep the
+program from running out of file handles. Or, what's even more
+insidious, the program may work on all JVM implementations now but
+fail in a mission-critical situation a few years (and release cycles)
+down the road.
+
+<P>
+<STRONG>Other finalizer rules of thumb</STRONG><BR>
+Two other decisions left to JVM designers are selecting the thread (or
+threads) that will execute the finalizers and the order in which
+finalizers will be run. Finalizers may be run in any order --
+sequentially by a single thread or concurrently by multiple threads. If
+your program somehow depends for correctness on finalizers being run in
+a particular order, or by a particular thread, it may work on some JVM
+implementations but fail on others.
+
+<P>
+You should also keep in mind that Java considers an object to be
+finalized whether the <CODE>finalize()</CODE> method returns normally
+or completes abruptly by throwing an exception. Garbage collectors
+ignore any exceptions thrown by finalizers and in no way notify the
+rest of the application that an exception was thrown. If you need to
+ensure that a particular finalizer fully accomplishes a certain
+mission, you must write that finalizer so that it handles any
+exceptions that may arise before the finalizer completes its mission.
+
+<P>
+One more rule of thumb about finalizers concerns objects left on
+the heap at the end of the application's lifetime. By default, the
+garbage collector will not execute the finalizers of any objects left
+on the heap when the application exits. To change this default, you
+must invoke the <CODE>runFinalizersOnExit()</CODE> method of class
+<CODE>Runtime</CODE> or <CODE>System</CODE>, passing <CODE>true</CODE>
+as the single parameter. If your program contains objects whose
+finalizers must absolutely be invoked before the program exits, be sure
+to invoke <CODE>runFinalizersOnExit()</CODE> somewhere in your
+program.
+
+<P>
+<FONT SIZE="+1"><STRONG>So what are finalizers good for?</STRONG></FONT><BR>
+By now you may be getting the feeling that you don't have much use for
+finalizers. While it is likely that most of the classes you design
+won't include a finalizer, there are some reasons to use finalizers.
+
+<P>
+One reasonable, though rare, application for a finalizer is to free
+memory allocated by native methods. If an object invokes a native
+method that allocates memory (perhaps a C function that calls
+<CODE>malloc()</CODE>), that object's finalizer could invoke a native
+method that frees that memory (calls <CODE>free()</CODE>). In this
+situation, you would be using the finalizer to free up memory allocated
+on behalf of an object -- memory that will not be automatically
+reclaimed by the garbage collector.
+
+<P>
+Another, more common, use of finalizers is to provide a fallback
+mechanism for releasing non-memory finite resources such as file
+handles or sockets. As mentioned previously, you shouldn't rely on
+finalizers for releasing finite non-memory resources. Instead, you
+should provide a method that will release the resource.  But you may
+also wish to include a finalizer that checks to make sure the resource
+has already been released, and if it hasn't, that goes ahead and
+releases it. Such a finalizer guards against (and hopefully will not
+encourage) sloppy use of your class. If a client programmer forgets to
+invoke the method you provided to release the resource, the
+finalizer will release the resource if the object is ever garbage
+collected. The <CODE>finalize()</CODE> method of the
+<CODE>LogFileManager</CODE> class, shown later in this article, is an
+example of this kind of finalizer.
+
+<P>
+<FONT SIZE="+1"><STRONG>Avoid finalizer abuse</STRONG></FONT><BR>
+The existence of finalization produces some interesting complications
+for JVMs and some interesting possibilities for Java programmers. For a
+discussion of the impact of finalizers on JVMs, see the <A name="return1" href="#sidebar1">sidebar</A>, a short excerpt from chapter 9,
+"Garbage Collection," of my book, <A href="http://www.artima.com/insidejvm/blurb.html"><EM>Inside the Java
+Virtual Machine</em></A>.
+
+<P>
+What finalization grants to programmers is power over the life and
+death of objects. In short, it is possible and completely legal in Java
+to resurrect objects in finalizers -- to bring them back to life by
+making them referenced again. (One way a finalizer could accomplish
+this is by adding a reference to the object being finalized to a static
+linked list that is still "live.") Although such power may be tempting
+to exercise because it makes you feel important, the rule of thumb is
+to resist the temptation to use this power. In general, resurrecting
+objects in finalizers constitutes finalizer abuse.
+
+<P>
+The main justification for this rule is that any program that uses
+resurrection can be redesigned into an easier-to-understand program
+that doesn't use resurrection. A formal proof of this theorem is left
+as an exercise to the reader (I've always wanted to say that), but in
+an informal spirit, consider that object resurrection will be as random
+and unpredictable as object finalization. As such, a design that uses
+resurrection will be difficult to figure out by the next maintenance
+programmer who happens along -- who may not fully understand the
+idiosyncrasies of garbage collection in Java.
+
+<P>
+If you feel you simply must bring an object back to life, consider
+cloning a new copy of the object instead of resurrecting the same old
+object. The reasoning behind this piece of advice is that garbage
+collectors in the JVM invoke the <CODE>finalize()</CODE> method of an
+object only once. If that object is resurrected and becomes
+available for garbage collection a second time, the object's
+<CODE>finalize()</CODE> method will not be invoked again.
+
+<P>
+<FONT SIZE="+1"><STRONG>Managing non-memory resources</STRONG></FONT><BR>
+Because heap memory is automatically reclaimed by the garbage
+collector, the main thing you need to worry about when you design an
+object's end-of-lifetime behavior is to ensure that finite non-memory
+resources, such as file handles or sockets, are released. You can take
+any of three basic approaches when you design an object that needs to
+use a finite non-memory resource:
+
+<P>
+<OL>
+<LI>Obtain and release the resource within each method that needs the resource
+<LI>Provide a method that obtains the resource and another that releases it
+<LI>Obtain the resource at creation time and provide a method that releases it
+</OL>
+
+<P>
+<FONT SIZE="+1"><STRONG>Approach 1: Obtain and release within each relevant method</STRONG></FONT><BR>
+As a general rule, the releasing of non-memory finite resources should
+be done as soon as possible after their use because the resources are,
+by definition, finite. If possible, you should try to obtain a
+resource, use it, then release it all within the method that needs the
+resource.
+
+<P>
+<STRONG>A log file class: An example of Approach 1</STRONG><BR>
+An example of a class where Approach 1 might make sense is a log file
+class. Such a class takes care of formatting and writing log messages
+to a file. The name of the log file is passed to the object as it is
+instantiated. To write a message to the log file, a client invokes a
+method in the log file class, passing the message as a
+<CODE>String</CODE>. Here's an example:
+
+<P>
+<PRE>
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+
+class LogFile {
+
+    private String fileName;
+
+    LogFile(String fileName) {
+        this.fileName = fileName;
+    }
+
+    // The writeToFile() method will catch any IOException
+    // so that clients aren't forced to catch IOException
+    // everywhere they write to the log file.  For now,
+    // just fail silently. In the future, could put
+    // up an informative non-modal dialog box that indicates
+    // a logging error occurred. - bv 4/15/98
+    void writeToFile(String message) {
+
+        FileOutputStream fos = null;
+        PrintWriter pw = null;
+
+        try {
+            fos = new FileOutputStream(fileName, true);
+            try {
+                pw = new PrintWriter(fos, false);
+
+                pw.println("------------------");
+                pw.println(message);
+                pw.println();
+            }
+            finally {
+                if (pw != null) {
+                    pw.close();
+                }
+            }
+        }
+        catch (IOException e) {
+        }
+        finally {
+            if (fos != null) {
+                try {
+                    fos.close();
+                }
+                catch (IOException e) {
+                }
+            }
+        }
+    }
+}
+
+</pre>
+
+<P>
+Class <CODE>LogFile</CODE> is a simple example of Approach 1. A more
+production-ready <CODE>LogFile</CODE> class might do things such as:
+
+<P>
+<UL>
+<LI>Insert the date and time each log message was written
+
+<P>
+<LI>Allow messages to be assigned a level of importance (such as ERROR,
+INFO, or DEBUG) and enable a level to be set that will prevent unwanted
+detail (such as DEBUG messages) from making it into the log file
+
+<P>
+<LI>Manage in some way the size of the log file, i.e., by copying it
+to a different filename and starting fresh each time the log file
+achieves a certain size
+</UL>
+
+<P>
+The main feature of this simple version of class <CODE>LogFile</CODE>
+is that it surrounds each log message with a series of dashes and a
+blank line.
+
+<P>
+<STRONG>Using <EM>finally</em> to ensure resource release</STRONG><BR>
+Note that in the <CODE>writeToFile()</CODE> method, the releasing of
+the resource is done in finally clauses. This is to make sure the
+finite resource (file handle) is actually released no matter how the
+code is exited. If an <CODE>IOException</CODE> is thrown, the file will
+be closed.
+
+<P>
+<STRONG>Pros and cons of Approach 1</STRONG><BR>
+The approach to resource management taken by class <CODE>LogFile</CODE>
+(Approach 1 from the above list) helps make your class easy to use,
+because client programmers don't have to worry about explicitly
+obtaining or releasing the resource. In both Approach 2 and 3 from the list above
+client programmers must remember to explicitly invoke a
+method to release the resource. In addition -- and what can be far more
+difficult -- client programmers must figure out when their programs no
+longer need a resource.
+
+<P>
+A problem with Approach 1 is that obtaining and releasing the
+resource each time you need it may be too inefficient. Another problem
+is that, in some situations, you may need to hold onto the resource
+between invocations of methods that use the resource (such as
+<CODE>writeToFile()</CODE>), so no other object can have access to it.
+In such cases, one of the other two approaches is preferable.
+
+<P>
+<FONT SIZE="+1"><STRONG>Approach 2: Offer methods for obtaining and releasing resources</STRONG></FONT><BR>
+In Approach 2 from the list above, you provide one method for
+obtaining the resource and another method for releasing it.  This
+approach enables the same class instance to obtain and release a
+resource multiple times. Here's an example:
+
+<P>
+<PRE>
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+
+class LogFileManager {
+
+    private FileOutputStream fos;
+    private PrintWriter pw;
+    private boolean logFileOpen = false;
+
+    LogFileManager() {
+    }
+
+    LogFileManager(String fileName) throws IOException {
+        openLogFile(fileName);
+    }
+
+    void openLogFile(String fileName) throws IOException {
+        if (!logFileOpen) {
+            try {
+                fos = new FileOutputStream(fileName, true);
+                pw = new PrintWriter(fos, false);
+                logFileOpen = true;
+            }
+            catch (IOException e) {
+                if (pw != null) {
+                    pw.close();
+                    pw = null;
+                }
+                if (fos != null) {
+                    fos.close();
+                    fos = null;
+                }
+                throw e;
+            }
+        }
+    }
+
+    void closeLogFile() throws IOException {
+        if (logFileOpen) {
+            pw.close();
+            pw = null;
+            fos.close();
+            fos = null;
+            logFileOpen = false;
+        }
+    }
+
+    boolean isOpen() {
+        return logFileOpen;
+    }
+
+    void writeToFile(String message) throws IOException {
+
+        pw.println("------------------");
+        pw.println(message);
+        pw.println();
+    }
+
+    protected void finalize() throws Throwable {
+        if (logFileOpen) {
+            try {
+                closeLogFile();
+            }
+            finally {
+                super.finalize();
+            }
+        }
+    }
+}
+</pre>
+
+<P>
+In this example, class <CODE>LogFileManager</CODE> declares methods
+<CODE>openLogFile()</CODE> and <CODE>closeLogFile()</CODE>. Given this
+design, you could write to multiple log files with one instance of this
+class. This design also allows a client to monopolize the resource for
+as long as it wants. A client can write several consecutive messages to
+the log file without fear that another thread or process will slip in
+any intervening messages. Once a client successfully opens a log file
+with <CODE>openLogFile()</CODE>, that log file belongs exclusively to
+that client until the client invokes <CODE>closeLogFile()</CODE>.
+
+<P>
+Note that <CODE>LogFileManager</CODE> uses a finalizer as a fallback
+in case a client forgets to invoke <CODE>closeLogFile()</CODE>. As
+mentioned earlier in this article, this is one of the more common uses
+of finalizers.
+
+<P>
+Note also that after invoking <CODE>closeLogFile()</CODE>,
+<CODE>LogFileManager</CODE>'s finalizer invokes
+<CODE>super.finalize()</CODE>. Invoking superclass finalizers is good
+practice in any finalizer, even in cases (such as this) where no
+superclass exists other than <CODE>Object</CODE>. The JVM does not
+automatically invoke superclass finalizers, so you must do so
+explicitly. If someone ever inserts a class that declares a finalizer
+between <CODE>LogFileManager</CODE> and <CODE>Object</CODE> in the
+inheritance hierarchy, the new object's finalizer will already be
+invoked by <CODE>LogFileManager</CODE>'s existing finalizer.
+
+<P>
+Making <CODE>super.finalize()</CODE> the last action of a finalizer
+ensures that subclasses will be finalized before superclasses. Although
+in most cases the placement of <CODE>super.finalize()</CODE> won't
+matter, in some rare cases, a subclass finalizer may require that its
+superclass be as yet unfinalized. So, as a general rule of thumb, place
+<CODE>super.finalize()</CODE> last.
+
+<P>
+<FONT SIZE="+1"><STRONG>Approach 3: Claim resource on creation, offer method for release</STRONG></FONT><BR>
+In the last approach, Approach 3 from the above list, the object
+obtains the resource upon creation and declares a method that releases
+the resource. Here's an example:
+
+<P>
+<PRE>
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+
+class LogFileTransaction {
+
+    private FileOutputStream fos;
+    private PrintWriter pw;
+    private boolean logFileOpen = false;
+
+    LogFileTransaction(String fileName) throws IOException {
+        try {
+            fos = new FileOutputStream(fileName, true);
+            pw = new PrintWriter(fos, false);
+            logFileOpen = true;
+        }
+        catch (IOException e) {
+            if (pw != null) {
+                pw.close();
+                pw = null;
+            }
+            if (fos != null) {
+                fos.close();
+                fos = null;
+            }
+            throw e;
+        }
+    }
+
+    void closeLogFile() throws IOException {
+        if (logFileOpen) {
+            pw.close();
+            pw = null;
+            fos.close();
+            fos = null;
+            logFileOpen = false;
+        }
+    }
+
+    boolean isOpen() {
+        return logFileOpen;
+    }
+
+    void writeToFile(String message) throws IOException {
+
+        pw.println("------------------");
+        pw.println(message);
+        pw.println();
+    }
+
+    protected void finalize() throws Throwable {
+        if (logFileOpen) {
+            try {
+                closeLogFile();
+            }
+            finally {
+                super.finalize();
+            }
+        }
+    }
+}
+</pre>
+
+<P>
+This class is called <CODE>LogFileTransaction</CODE> because every time
+a client wants to write a chunk of messages to the log file (and then
+let others use that log file), it must create a new
+<CODE>LogFileTransaction</CODE>. Thus, this class models one
+transaction between the client and the log file.
+
+<P>
+One interesting thing to note about Approach 3 is that this is the
+approach used by the <CODE>FileOutputStream</CODE> and
+<CODE>PrintWriter</CODE> classes used by all three example log file
+classes. In fact, if you look through the <CODE>java.io</CODE> package,
+you'll find that almost all of the <CODE>java.io</CODE> classes that
+deal with file handles use Approach 3. (The two exceptions are
+<CODE>PipedReader</CODE> and <CODE>PipedWriter</CODE>, which use
+Approach 2.)
+
+<P>
+<FONT SIZE="+1"><STRONG>Conclusion</STRONG></FONT><BR>
+The most important point to take away from this article is that if a
+Java object needs to take some action at the end of its life, no
+automatic way exists in Java that will guarantee that action is taken
+in a timely manner. You can't rely on finalizers to take the action,
+at least not in a timely way. You will need to provide a method that
+performs the action and encourage client programmers to invoke the
+method when the object is no longer needed.
+
+<P>
+This article contained several guidelines that pertain to finalizers:
+
+<P>
+<UL>
+<LI>Don't design your Java programs such that correctness depends on
+"timely" finalization
+
+<P>
+<LI>Don't assume that a finalizer will be run by any particular
+thread
+
+<P>
+<LI>Don't assume that finalizers will be run in any particular order
+
+<P>
+<LI>Avoid designs that require finalizers to resurrect objects; if you
+must use resurrection, prefer cloning over straight resurrection
+
+<P>
+<LI>Remember that exceptions thrown by finalizers are ignored
+
+<P>
+<LI>If your program includes objects with finalizers that absolutely
+must be run before the program exits, invoke
+<CODE>runFinalizersOnExit(true)</CODE> in class <CODE>Runtime</CODE> or
+<CODE>System</CODE>
+
+<P>
+<LI>Unless you are writing the finalizer for class <CODE>Object</CODE>,
+always invoke <CODE>super.finalize()</CODE> at the end of your
+finalizers
+</UL>
+
+</TD>
+</TR>
+
+</DIV>
+<HR width="100%">
+<TABLE width="100%">
+<TR>
+<TD align="left">
+<DIV class="sp">
+Last Updated: Sunday, March 3, 2002<BR>
+<A href="http://www.artima.com/copyright.html">Copyright</A> &copy; 1996-2002 Artima Software, Inc. All Rights Reserved.
+</DIV>
+</TD>
+<TD align="right">
+<DIV class="sp">
+URL: http://www.artima.com/interfacedesign/Finalizable.html<BR>
+Artima.com is created by <A href="http://www.artima.com/consulting.html">Bill Venners</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+</BODY>
+</HTML>

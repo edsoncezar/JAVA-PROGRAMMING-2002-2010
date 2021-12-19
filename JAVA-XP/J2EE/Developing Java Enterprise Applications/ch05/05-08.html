@@ -1,0 +1,164 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using JNDI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="05-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="05-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<PRE>
+import java.util.Hashtable;
+import javax.naming.*;
+<B>import javax.naming.spi.ObjectFactory;</B>
+
+/*
+   This is an object factory that when given a reference for a Car
+   object, will create an instance of that Car.
+*/
+<B>public class CarFactory implements ObjectFactory </B>
+{
+          public CarFactory()
+    {
+    }
+
+         <B>public Object getObjectInstance(Object obj, Name name, 
+                  Context ctx, Hashtable env) throws Exception</B>
+    {
+        if (obj instanceof Reference)
+        {
+            <B>Reference ref = (Reference)obj;
+            if (ref.getClassName().equals(Car.class.getName()))</B>
+            {
+            <B>RefAddr addr = ref.get(&#147;Car Description&#148;);</B>
+                if (addr != null)
+                {
+                        String s = (String)addr.getContent();
+                    int n = s.indexOf(&#147;:&#148;);
+                    String make = s.substring(0,n);
+                    String model = s.substring(n&#43;1);
+                 <B>return new Car(make,model);</B>
+                }
+            }
+        }
+        <B>return null;</B>
+    }
+}
+</PRE>
+<P>The method getObjectInstance parses the reference&#146;s components and tries to construct a reference that describes a Car object. The factory may ignore non-relevant attributes of the reference. For example, there could be an IP address of a remote Car object; this factory could ignore it and just create a new Car instead. If the factory fails to construct a car from the information in the reference, it can return null or throw an exception. The values of a reference object are interpreted by the factory object, so it is possible to have two different factory objects that construct completely different objects based on the same reference. The reference could be valid in both cases. For example, the car factory creates a simple Car object and returns it based on the make and model. However, the same reference could contain other information about the car such as the plant in which it is physically being built as well as the order id. A second factory class could read this extra information out of the reference and create an object that checks on the status of the car at the assembly plant.
+</P>
+<P>The naming package provides quick access to objects provided by naming services. The next section looks at how directory packages can be used to perform more sophisticated queries.</P>
+<H3><A NAME="Heading8"></A><FONT COLOR="#000077">The Directory Package</FONT></H3>
+<P>The directory package javax.naming.directory extends the javax.naming package to provide functionality for accessing directory services in addition to naming services. This package allows applications to do the following:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;Search a directory for objects based on specific attributes or values
+<DD><B>&#149;</B>&nbsp;&nbsp;Control and optimize the search results
+<DD><B>&#149;</B>&nbsp;&nbsp;Modify attributes of an object
+</DL>
+<P>The directory package is an extension to the naming package and leverages the functionality of the naming context operations. The directory package extends this functionality by providing more sophisticated searching and modification facilities that reflect the nature of directory services and tend to be more complex than a simple naming service. However, all of the searching methods described for naming services also apply to directory services.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading9"></A><FONT COLOR="#000077">Search for Objects</FONT></H4>
+<P>In order to search for objects in a directory, first create an object that implements the javax.naming.directory.DirContext interface, such as the class InitialDirContext. Once the context has been initialized, the methods listed in Table 5.6 can be used to execute several types of searches. DirContext extends the Context interface. This means any directory object can also be treated as a naming context.
+</P>
+<P>There are several techniques for searching using the methods of DirContext. The LDAP example configuration and the LDAP service provider are used for the examples in this chapter.</P>
+<P>The code snippet that follows Table 5.6 defines a class DirectoryExample that accesses an LDAP directory server. The provider URL references an LDAP server by using the ldap: protocol. The host, MyHost, should be replaced with the name of your LDAP server. The example assumes that there is a context called JNDIExample in your directory server.</P>
+<TABLE WIDTH="90%"><TD CAPTION COLSPAN="2"><B>Table 5.6</B> DirContext Searching Methods That Return NamingEnumeration
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="35%" VALIGN="TOP" ALIGN="LEFT">METHOD 
+<TH WIDTH="55%" VALIGN="TOP" ALIGN="LEFT">USE
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>search(String name, Attributes attrs)</SMALL> or <SMALL>search(Name name, Attributes attrs)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Searches a context for objects that contain a set of attributes.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>search(String name, Attributes attrs, String[] returnAttrs)</SMALL> or <SMALL>search(Name name, Attributes attrs, String[] returnAttrs)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Searches a context for objects that contain a set of attributes and retrieves the attributes specified in String[].
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>search(String name, String filter, SearchControls sc)</SMALL> or <SMALL>search(Name name, String filter, SearchControls sc)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Searches in the named context for entries that satisfy the search filter. 
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>search(String name, String filter, Object[] filterArgs, SearchControls sc)</SMALL> or <SMALL>search(Name name, String filter, Object[] filterArgs, SearchControls sc)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Searches in the named context for entries that satisfy the search filter.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+</TABLE>
+<PRE>
+import javax.naming.*;
+<B>import javax.naming.directory.*;</B>
+import java.util.Hashtable;
+
+public class DirectoryExample
+{
+    public static void main(String[] argc)
+    {
+        Hashtable env = new Hashtable(11);
+
+
+        env.put(<B>Context.INITIAL_CONTEXT_FACTORY, 
+            &#147;com.sun.jndi.ldap.LdapCtxFactory&#148;);</B>
+        env.put(<B>Context.PROVIDER_URL, 
+            &#147;ldap://MyHost/o=JNDIExample&#148;);</B>
+        try 
+        {
+            <B>DirContext dctx = new InitialDirContext(env);
+...</B>
+</PRE>
+<P>The DirContext interface defines methods for examining and updating attributes associated with an object in the directory context. The rest of this section describes these search techniques in more detail.
+</P>
+<P><FONT SIZE="+1"><B><I>Searching with Attributes</I></B></FONT></P>
+<P>The simplest technique for searching with DirContext is to search for all objects that contain a certain set of attributes. To do this:
+</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Set the environment properties as you did for the Naming context.
+<DD><B>2.</B>&nbsp;&nbsp;Create a DirContext as demonstrated in the beginning of the &#147;Search for Objects&#148; section.
+<DD><B>3.</B>&nbsp;&nbsp;Specify the attributes you are looking for by defining javax.naming.directory .Attribute objects and storing them in a javax.naming.directory.Attributes array.
+<DD><B>4.</B>&nbsp;&nbsp;Execute the search by calling the search method of DirContext.
+<DD><B>5.</B>&nbsp;&nbsp;Process the results returned in a NamingEnumeration.
+</DL>
+<P>The directory package encapsulates an object&#146;s values in a javax.naming.directory.Attributes object. The javax.naming.directory.BasicAttributes class provides an implementation of the Attributes interface. Table 5.7 lists the methods defined in the Attributes interface.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Don&#146;t confuse <I>Attributes</I>, an interface for managing collections of attributes, with <I>Attribute</I>, an interface for an object that represents a single attribute from a directory service.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>Attributes objects manage collections of objects that implement another interface called Attribute. Objects that implement the Attribute interface map Java objects to specific values from a directory service. The class javax.naming.directory.BasicAttribute implements the Attribute interface.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="05-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="05-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

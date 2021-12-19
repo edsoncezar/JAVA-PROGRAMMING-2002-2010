@@ -1,0 +1,1606 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 14 -- Writing 2D Games</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 14</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Writing 2D Games</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#DGameBasics" >2D Game Basics</A>
+<LI><A HREF="#ScalinganObject" >Scaling an Object</A>
+<LI><A HREF="#TranslatinganObject" >Translating an Object</A>
+<LI><A HREF="#RotatinganObject" >Rotating an Object</A>
+<LI><A HREF="#DGameEngine" >2D Game Engine</A>
+<LI><A HREF="#TheMissileClass" >The Missile Class</A>
+<LI><A HREF="#Asteroids" >Asteroids</A>
+<LI><A HREF="#TheAsteroidsAppletClass" >The Asteroids Applet Class</A>
+<LI><A HREF="#TheAsteroids" >The Asteroids</A>
+<LI><A HREF="#TheShip" >The Ship</A>
+<LI><A HREF="#ThePhotons" >The Photons</A>
+<LI><A HREF="#FinalDetails" >Final Details</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+Expanding on your knowledge of sprites, this chapter focuses on
+developing a Java two-dimensional game engine. Animating game
+objects is not all that different from animating sprite characters.
+A few advanced motion tricks are needed, but the transition is
+not too difficult. The game engine will be used as the basis for
+the arcade standard, <I>Asteroids</I>. In practice, any 2D action
+game could be written using the techniques you'll learn in this
+chapter.
+<H2><A NAME="DGameBasics"><FONT SIZE=5 COLOR=#FF0000>2D Game Basics</FONT></A>
+</H2>
+<P>
+Two-dimensional games require a technique embodied in early Atari
+personal computers, namely, player-missile graphics. Essentially,
+all screen objects need to know their position and if they are
+colliding with another entity. Beyond this, objects need to be
+able to move around and to rotate.
+<P>
+For simplicity, this chapter exploits a class in the AWT for representing
+objects on the screen. The <TT>Polygon</TT>
+class is a wonderful class for manipulating a variety of two-dimensional
+shapes. <TT>Polygon</TT> objects can
+have virtually an unlimited number of vertices and so can represent
+everything from simple squares to a complex space station.
+<P>
+Unfortunately, the <TT>Polygon</TT>
+class does not contain such 2D basics as rotation, scaling, and
+translation. The <TT>Polygon</TT>
+class is used only for displaying an object; a separate class
+is used to represent and track objects around the screen. In order
+to write this class, some two-dimensional basics must first be
+covered.
+<H2><A NAME="ScalinganObject"><FONT SIZE=5 COLOR=#FF0000>Scaling
+an Object</FONT></A></H2>
+<P>
+Given an ordered set of two-dimensional points, how can it be
+grown or shrunk? To start with, define how your points are stored.
+Because the <TT>Polygon</TT> class
+is used for display, it makes sense to store two separate arrays
+of points, one for the x coordinate and one for the y coordinate.
+To scale such a set, simply multiply the scaling factor by each
+vertex. The following code snippet makes a given polygon twice
+as large:
+<BLOCKQUOTE>
+<TT>for ( int v = 0; v &lt; numVertices;
+v++ )<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;xpoints[v] *= 2;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ypoints[v] *= 2;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+This code works to both expand (<TT>scale
+&gt; 1</TT>) and contract (<TT>scale
+&lt; 1</TT>) any polygon. To scale in only the x or y direction,
+multiply only one of the coordinate arrays.
+<H2><A NAME="TranslatinganObject"><FONT SIZE=5 COLOR=#FF0000>Translating
+an Object</FONT></A></H2>
+<P>
+Object translation has nothing to do with foreign languages. Translation
+refers to moving an object without changing its orientation or
+size. The operation is identical to scaling, except instead of
+multiplication, addition (or subtraction) is used. The following
+code snippet translates an object in x-y space:
+<BLOCKQUOTE>
+<TT>for ( int v = 0; v &lt; numVertices;
+v++ )<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;xpoints[v] += 2;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ypoints[v] += 2;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Nothing precludes you from using different additives for the x
+and y coordinates. In fact, this is very common. Usually, the
+previous code is actually written as follows:
+<BLOCKQUOTE>
+<TT>for ( int v = 0; v &lt; numVertices;
+v++ )<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;xpoints[v] += xamount;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ypoints[v] += yamount;<BR>
+}</TT>
+</BLOCKQUOTE>
+<H2><A NAME="RotatinganObject"><FONT SIZE=5 COLOR=#FF0000>Rotating
+an Object</FONT></A></H2>
+<P>
+Object rotation is considerably more complex than scaling or translation.
+Each point is rotated by some angle around the z-axis by using
+the following formula:
+<BLOCKQUOTE>
+<TT>new_x = old_x * cos(angle) + old_y *
+sin(angle)<BR>
+new_y = old_y * cos(angle) - old_x * sin(angle)</TT>
+</BLOCKQUOTE>
+<P>
+Positive angles rotate counter clockwise, while negative angles
+cause clockwise rotation.
+<P>
+After the rotation, the object needs to be moved back to the original
+coordinate space. Figure 14.1 provides a graphical view of the
+process.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f14-1.gif" ><B>Figure 14.1 : </B><I>Rotation and translation of a polygon.</I></A>
+<P>
+To accomplish the move, a bounding box must be computed before
+and after the rotation. The upper-left vertex of the bounding
+boxes can be subtracted to yield the x and y translation values.
+<P>
+The following code rotates a polygon in place. For efficiency,
+the cosine and sine values for the rotation angle are precomputed
+and stored in variables <TT>cos</TT>
+and <TT>sin</TT>:
+<BLOCKQUOTE>
+<TT>for ( int v = 0; v &lt; numVertices;
+v++ )<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int old_x = xpoints[v];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int old_y = ypoints[v];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;xpoints[v] = old_x * cos + old_y * sin;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ypoints[v] = old_y * cos - old_x * sin;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;low_x = Math.min(low_x, xpoints[v]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;low_y = Math.min(low_y, ypoints[v]);<BR>
+}<BR>
+int xlate_x = min_x - low_x;<BR>
+int xlate_y = min_y - low_y;<BR>
+translateObject(xlate_x, xlate_y);</TT>
+</BLOCKQUOTE>
+<H2><A NAME="DGameEngine"><FONT SIZE=5 COLOR=#FF0000>2D Game Engine</FONT></A>
+</H2>
+<P>
+The requirements for the player-missile system are as follows:
+<UL>
+<LI>Maintain a polygon array of vertices in x-y space
+<LI>Be able to translate, scale, and rotate
+<LI>Contain a velocity and rotation orientation
+<LI>Maintain a bounding box and provide collision detection
+<LI>Contain rendering capabilities (draw itself)
+<LI>Provide movement based on velocity
+<LI>Detect and bounce off a confining rectangle (the screen)
+<LI><FONT COLOR=#000000>Implement all functionality within the
+concepts of life and death (that is, won't draw if object is dead)</FONT>
+</UL>
+<P>
+Each object must implement these requirements. Because Java is
+object-oriented, it's easy to capture all this functionality within
+a base class. The <TT>Missile</TT>
+class contains the basis for the 2D game system.
+<H2><A NAME="TheMissileClass"><FONT SIZE=5 COLOR=#FF0000>The </FONT><TT><FONT SIZE=5 COLOR=#FF0000 >Missile</FONT></TT><FONT SIZE=5 COLOR=#FF0000>
+Class</FONT></A></H2>
+<P>
+The <TT>Missile</TT> class has two
+constructors. Both specify the confining rectangle for the object,
+but one provides a color parameter to control what color the polygon
+is painted in when it draws itself to the screen:
+<UL>
+<LI><TT>public Missile(int display_w, int
+display_h);</TT>
+<LI><TT>public Missile(int display_w, int
+display_h, Color colr);</TT>
+</UL>
+<H3>Public Functions</H3>
+<P>
+In addition to the public constructors, the <TT>Missile</TT>
+class contains the following public functions:
+<UL>
+<LI><TT>public void draw(Graphics g);</TT>
+<LI><TT>public void animate();</TT>
+<LI><TT>public boolean collide(Missile mx);</TT>
+<LI><TT>public void die();</TT>
+<LI><TT>public boolean isDead();</TT>
+<LI><TT>public Rectangle getBoundingBox();</TT>
+</UL>
+<P>
+All the public and protected functions in the <TT>Missile</TT>
+class can be overridden in a descendant class. This is expected
+to happen, because descendant classes use <TT>Missile</TT>
+only for default behavior. Any special circumstances are handled
+by overriding the underlying function.
+<H3><TT><FONT SIZE=4 >draw()</FONT></TT></H3>
+<P>
+The <TT>draw()</TT> function simply
+paints the object onto the passed Graphics context. Painting is
+performed by creating an AWT Polygon and filling it with the object's
+color. Notice how the function simply returns if the object is
+dead:
+<BLOCKQUOTE>
+<TT>public void draw(Graphics g)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( dead ) return;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int x[] = new int[dx.length];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int y[] = new int[dy.length];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for ( int v = 0; v &lt; dx.length; v++
+)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x[v] = (int)Math.round(dx[v]);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y[v] = (int)Math.round(dy[v]);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;g.setColor(color);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;g.fillPolygon(x, y, x.length);<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The vertices for <TT>Missile</TT>'s
+polygon are stored in the class as arrays of <TT>float</TT>.
+This is done to enable accurate shape maintenance during rotations.
+Rotations are performed ideally on polar coordinates. Most graphic
+systems, including Java, use Cartesian coordinates. The granularity
+of the rectangular coordinate system causes the rotated object
+to become distorted quickly if integers are used to store the
+points. Any rotations other than 90-degree increments cause the
+shape to become unrecognizable. <TT>float</TT>s
+enable the points to be manipulated so that their original shape
+is maintained. Before displaying the object, the points are mapped
+into the rectangular x-y integer space. This yields an approximation
+of the actual object for display.
+<H3><TT><FONT SIZE=4 >animate()</FONT></TT></H3>
+<P>
+The <TT>animate()</TT> function performs
+all the default movement for the object. First, a rotation is
+performed, provided there was a nonzero rotation angle set. Second,
+the object is moved according to the two velocity components,
+<TT>x_vel</TT> and <TT>y_vel</TT>:
+<BLOCKQUOTE>
+<TT>public void animate()<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( dead ) return;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;rotateMissile();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;moveMissile();<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3><TT><FONT SIZE=4 >collide()</FONT></TT></H3>
+<P>
+Collisions are easy to detect by using the AWT's <TT>Rectangle</TT>
+class. All the point manipulation routines within the <TT>Missile</TT>
+class update the bounding box for the polygon. The AWT provides
+a routine to check whether two <TT>Rectangle</TT>s
+have intersected:
+<BLOCKQUOTE>
+<TT>public boolean collide(Missile mx)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( !dead &amp;&amp; !mx.isDead() )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return boundingBox.intersects(mx.getBoundingBox());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+If the object is already dead, by definition it cannot collide
+with anything else.
+<H3><TT><FONT SIZE=4 >die()</FONT></TT></H3>
+<P>
+The <TT>die()</TT> function is called
+to obliterate an object. The dead flag is set to true, and the
+bounding box is forced completely off the screen:
+<BLOCKQUOTE>
+<TT>public void die()<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dead = true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;min_x = display_w + 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;min_y = display_h + 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;max_x = min_x + 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;max_y = min_y + 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;doneMinMax();<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The size of the bounding box is also changed to one-by-one.
+<H3>Protected Functions</H3>
+<P>
+The remaining methods are protected to enable only descendant
+classes to access them:
+<UL>
+<LI><TT>protected void setShape(float ix[],
+float iy[]);</TT>
+<LI><TT>protected void setRotationAngle(double
+angle);</TT>
+<LI><TT>protected void scaleMissile(double
+scaleFactor);</TT>
+<LI><TT>protected void translateMissile(float
+nx, float ny);</TT>
+<LI><TT>protected void rotateMissile();</TT>
+<LI><TT>protected void moveMissile();</TT>
+<LI><TT>protected void checkBounce();</TT>
+<LI><TT>protected void calculateBoundingBox();</TT>
+</UL>
+<H3><TT><FONT SIZE=4 >setShape()</FONT></TT></H3>
+<P>
+The <TT>setShape()</TT> function is
+used to set the points of the polygon:
+<BLOCKQUOTE>
+<TT>protected void setShape(float ix[], float
+iy[])<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dx = new float[ix.length];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dy = new float[iy.length];<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.arraycopy(ix, 0, dx, 0, ix.length);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.arraycopy(iy, 0, dy, 0, iy.length);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dead = false;<BR>
+}<BR>
+</TT>
+</BLOCKQUOTE>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The object is dead by default until it has a shape to render. A descendant class must call <TT>setShape()</TT> to set the points. It must not set the points directly into <TT>dx</TT> and <TT>dy</TT> or the object will remain dormant.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><TT><FONT SIZE=4 >setRotationAngle()</FONT></TT>
+</H3>
+<P>
+The initial rotation angle is zero. The <TT>setRotationAngle()</TT>
+routine is used to set a new angle. In addition to calculating
+the sine and cosine of the angle, the <TT>direction_inc</TT>
+variable is set to the new angle. If the sine and cosine are set
+directly by a descendant class, the direction pointer is not properly
+oriented:
+<BLOCKQUOTE>
+<TT>protected void setRotationAngle(double
+angle)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;angle = angle * Math.PI / 180;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;cos = Math.cos(angle);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sin = Math.sin(angle);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;direction_inc = angle;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The passed angle is in degrees.
+<H3><TT><FONT SIZE=4 >rotateMissile()</FONT></TT>
+</H3>
+<P>
+The <TT>rotateMissile()</TT> function
+performs a standard rotation based on the preset angle. At the
+end of the rotation, the direction pointer is updated to reflect
+the new orientation of the object:
+<BLOCKQUOTE>
+<TT>protected void rotateMissile()<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( dead ) return;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float low_x = Float.MAX_VALUE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float low_y = Float.MAX_VALUE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for ( int v = 0; v &lt; dx.length; v++
+)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;double t1 = dx[v]
+* cos + dy[v] * sin;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;double t2 = dy[v]
+* cos - dx[v] * sin;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dx[v] = (float)t1;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dy[v] = (float)t2;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;low_x = Math.min(low_x,
+dx[v]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;low_y = Math.min(low_y,
+dy[v]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float off_x = (min_x - low_x);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float off_y = (min_y - low_y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;translateMissile(off_x, off_y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;direction += direction_inc;<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3>The Bounding Box</H3>
+<P>
+Functions <TT>scaleMissile()</TT>,
+<TT>translateMissile()</TT>, and <TT>rotateMissile()</TT>
+all adhere to the principles laid out in the beginning of this
+chapter. As has been mentioned previously, all these routines
+update the bounding box. Three functions are used to perform the
+update: <TT>clearMinMax()</TT>, <TT>updateMinMax()</TT>,
+and <TT>doneMinMax()</TT>. <TT>clear</TT>
+simply sets the minimum and maximum class variables to their logical
+extremes:
+<BLOCKQUOTE>
+<TT>private void clearMinMax()<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;min_x = Float.MAX_VALUE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;min_y = Float.MAX_VALUE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;max_x = Float.MIN_VALUE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;max_y = Float.MIN_VALUE;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+As each new point is generated, it is passed into <TT>updateMinMax()</TT>
+to see whether it contains a minimum or maximum point:
+<BLOCKQUOTE>
+<TT>private void updateMinMax(float nx, float
+ny)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;max_x = Math.max(nx, max_x);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;max_y = Math.max(ny, max_y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;min_x = Math.min(nx, min_x);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;min_y = Math.min(ny, min_y);<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+When all points have been generated, it can be assumed that the
+extremes have been located and stored. These are turned into the
+vertices of the bounding box:
+<BLOCKQUOTE>
+<TT>private void doneMinMax()<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int x = (int)Math.round(min_x);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int y = (int)Math.round(min_y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int h = (int)Math.round(max_y) - y;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int w = (int)Math.round(max_x) - x;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;boundingBox = new Rectangle(x, y, w, h);
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The box vertices are stored as integers because the bounding box
+is only an approximation of the object's position. In addition,
+class <TT>Rectangle</TT> handles only
+integer inputs.
+<P>
+All these functions are private because, technically, a descendant
+class should never have to update the bounding box. There is,
+however, a function to enable it. Routine <TT>calculateBoundingBox()</TT>
+performs all three functions over the points in the polygon. It
+should be called if the points are ever directly manipulated in
+a descendant class:
+<BLOCKQUOTE>
+<TT>protected void calculateBoundingBox()
+<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;clearMinMax();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for ( int v = 0; v &lt; dx.length; v++
+)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;updateMinMax(dx[v],
+dy[v]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;doneMinMax();<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3><TT><FONT SIZE=4 >moveMissile()</FONT></TT>
+</H3>
+<P>
+Function <TT>moveMissile()</TT> performs
+movements using the object's velocity. Each point is translated
+by its velocity component:
+<BLOCKQUOTE>
+<TT>protected void moveMissile()<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bounce_x = false;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bounce_y = false;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;clearMinMax();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for ( int v = 0; v &lt; dx.length; v++
+)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dx[v] += x_vel;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dy[v] += y_vel;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( dx[v] &lt;
+0 || dx[v] &gt;= display_w )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bounce_x
+= true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( dy[v] &lt;
+0 || dy[v] &gt;= display_h )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bounce_y
+= true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;updateMinMax(dx[v],
+dy[v]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;checkBounce();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;doneMinMax();<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+During the move, each point is bounds-checked to see whether it
+has passed the confining rectangle. If any point lies outside
+the confining space, a bounce flag is set. When the movement completes,
+a <TT>checkBounce()</TT> function
+is invoked. The <TT>moveMissile()</TT>
+function only detects a bounce possibility. It does not directly
+cause an object to bounce. That job is left up to the <TT>checkBounce()</TT>
+routine.
+<H3>Bouncing</H3>
+<P>
+How is a bouncing object handled? The bounce code assumes that
+the collision is purely elastic. The velocity component is inverted
+with no loss in absolute speed. Only the direction traveled is
+reversed. In addition, the object is assumed to travel the full
+distance that its velocity would take it. This means that the
+object would bounce away from the wall by the same distance that
+it traveled past the wall. Here is the default bounce routine:
+<BLOCKQUOTE>
+<TT>protected void checkBounce()<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float off_x = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float off_y = 0;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( bounce_x )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_vel *= -1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( min_x &lt;
+0 )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;off_x
+= min_x;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;off_x
+= max_x - display_w;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;off_x *= -2;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( bounce_y )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y_vel *= -1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( min_y &lt;
+0 )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;off_y
+= min_y;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;off_y
+= max_y - display_h;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;off_y *= -2;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;translateMissile(off_x, off_y);<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The distance back to the wall is computed and then doubled to
+yield the full distance to translate the object. Notice that the
+offsets are <TT>float</TT>s. All the
+coordinate components are <TT>float</TT>s
+until the moment just before they are displayed.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+If you do not want your objects to bounce, you should override <TT>checkBounce()</TT>. The default behavior of <TT>checkBounce()</TT> is to enable the object to bounce off the wall.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The entire source for class <TT>Missile</TT>
+is on the CD-ROM; you should now be comfortable enough with it
+to begin using the class for a game.
+<H2><A NAME="Asteroids"><FONT SIZE=5 COLOR=#FF0000>Asteroids</FONT></A>
+</H2>
+<P>
+This game has been around for a long time, but it's fun. It also
+presents a good opportunity to apply the <TT>Missile</TT>
+class in a real-world example.
+<P>
+There is a tiny spaceship floating in an asteroid field. The asteroids
+are moving around and the ship's job is to avoid being hit and
+simultaneously to use its weapons to destroy the asteroids. The
+ship can fire its engines to propel itself, and it can rotate
+a full 360 degrees. Each implementation is slightly different,
+but this is essentially the game. The biggest variations occur
+when an asteroid or the ship hits the edge of the screen. Some
+implementations allow the rocks to bounce, but also allow the
+ship to pass through to the other side of the screen. Some allow
+both to bounce, and some don't allow either to bounce. This implementation
+allows both asteroids and the ship to bounce off the screen edges.
+<H2><A NAME="TheAsteroidsAppletClass"><FONT SIZE=5 COLOR=#FF0000>The
+</FONT><TT><FONT SIZE=5 COLOR=#FF0000 >Asteroids</FONT></TT><FONT SIZE=5 COLOR=#FF0000>
+Applet Class</FONT></A></H2>
+<P>
+The <TT>Asteroids</TT> applet class
+is the focal point for the game. It implements the Runnable interface
+to enable the game objects to move in a consistent, timed manner.
+The applet itself is responsible for painting and handling user
+input, and the applet's thread is responsible for moving the game
+objects, detecting collisions, and keeping score.
+<P>
+The layout of the applet is actually a good template for other
+games such as <I>Pong</I>,<I> Break-Out</I>, and <I>Space Invaders</I>.
+All these early arcade games lend themselves to a Java implementation.
+At one time, these games were state of the art, but now they're
+being transmitted across the Web and run on home computers! Java
+is not limited to these primitive games. This game engine can
+be used for 2D pinball, interactive mazes, and 2-player Internet
+games. The possibilities are endless.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Tip</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Sometimes it's tempting to decompose a game further into multiple threads, but then the load time is increased to retrieve the separate class files. The Runnable interface enables one applet class file to function as two threads of execution.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Listing 14.1 shows the full <TT>Asteroids</TT>
+applet class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.1. </B><TT><B></TT>Asteroids</FONT></B></TT><B>
+applet class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.applet.*;<BR>
+import java.awt.*;<BR>
+import java.awt.image.*;<BR>
+import java.io.*;<BR>
+import Missile;<BR>
+<BR>
+public class Asteroids extends Applet<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;implements Runnable<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private boolean init = false;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+true after init is called<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Image offScreenImage = null;&nbsp;&nbsp;&nbsp;//
+the float buffer<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Graphics offScreen = null;&nbsp;&nbsp;&nbsp;&nbsp;
+// The graphics for float buffer<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Thread animation = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private int numRocks;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Rock asteroids[];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Ship ship;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private int sleepAmt;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private boolean Started = false;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private int score;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private int remainingRocks;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private boolean gameOver;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Standard initialization method for
+an applet<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( init == false
+)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;init
+= true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+strSleep = getParameter(&quot;SLEEP&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( strSleep == null )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;ERROR:
+SLEEP parameter is missing&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strSleep
+= &quot;200&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sleepAmt
+= Integer.valueOf(strSleep).intValue();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+strNum = getParameter(&quot;ASTEROIDS&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( strNum == null )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;ERROR:
+ASTEROIDS parameter is missing&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strNum
+= &quot;10&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numRocks
+= Integer.valueOf(strNum).intValue();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asteroids
+= new Rock[numRocks];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;initialize();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setBackground(Color.black);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offScreenImage
+= createImage(this.size().width,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+this.size().height);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offScreen
+= offScreenImage.getGraphics();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Initialize or reinitialize a game.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Create asteroids and ship.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void initialize()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int a =
+0; a &lt; numRocks; a++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asteroids[a]
+= new Rock(this.size().width,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.size().height);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ship = new Ship(this.size().width,
+this.size().height);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;score = 100;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gameOver = false;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainingRocks
+= numRocks;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Started = false;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Standard paint routine for an applet.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param g contains the Graphics class
+to use for painting<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(Graphics g)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offScreen.setColor(getBackground());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offScreen.fillRect(0,
+0, this.size().width, this.size().height);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offScreen.setColor(Color.green);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int a =
+0; a &lt; numRocks; a++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asteroids[a].draw(offScreen);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ship.draw(offScreen);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( gameOver
+)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+result = getGameOverComment();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offScreen.drawString(result,
+(this.size().width / 2) - 40,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+(this.size().height / 2) - 10);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offScreen.drawString(&quot;Score
+&quot; + score, 0, 20);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g.drawImage(offScreenImage,
+0, 0, this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Formulate an end of game ranking based
+on the score<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public String getGameOverComment()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int grades[] =
+new int[6];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int perfect =
+100 + (numRocks * 10);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int amt = perfect
+/ 5;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int x =
+0; x &lt; 5; x++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grades[x]
+= (x + 1) * amt);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( score &lt;=
+0 )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;score
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;Game Over - Your rank: DEAD&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else if ( score
+&lt; grades[0] )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;Game Over - Your rank: Ensign&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else if ( score
+&lt; grades[1] )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;Game Over - Your rank: Lieutenant&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else if ( score
+&lt; grades[2] )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;Game Over - Your rank: Commander&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else if ( score
+&lt; grades[3] )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;Game Over - Your rank: Captain&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else if ( score
+&lt; grades[4] )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;Game Over - Your rank: Admiral&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;PERFECT SCORE! - Your rank: Admiral&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Override component's version to keep
+from clearing<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * the screen.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void update(Graphics g)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;paint(g);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Standard start method for an applet.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Spawn the animation thread.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void start()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( animation
+== null )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;animation
+= new Thread(this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;animation.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Standard stop method for an applet.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Stop the animation thread.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( animation
+!= null )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;animation.stop();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;animation
+= null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * This applet's run method.&nbsp;&nbsp;Loop
+forever rolling the image<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * back and forth across the screen.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while (true)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+( !Started || gameOver ) sleep(500);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;playGame();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void playGame()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while (!gameOver)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;animate();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sleep(sleepAmt);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void animate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ship.animate();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int a =
+0; a &lt; numRocks; a++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asteroids[a].animate();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( ship.collide(asteroids[a]) )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;score
+-= 10;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( score == 0 ) gameOver = true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( ship.photonsCollide(asteroids[a]) )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;score
++= 10;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;asteroids[a].die();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainingRocks--;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( remainingRocks == 0 ) gameOver = true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Handle mouse clicks<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean mouseDown(Event evt, int
+x, int y)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( Started )
+initialize();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Started = true;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Handle keyboard input<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean keyDown(Event evt, int
+key)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;switch (key)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case Event.LEFT:&nbsp;&nbsp;ship.leftRotation();&nbsp;&nbsp;break;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case Event.RIGHT:
+ship.rightRotation(); break;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case Event.DOWN:&nbsp;&nbsp;ship.fireEngines();&nbsp;&nbsp;&nbsp;break;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case 0x20:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ship.firePhotons();&nbsp;&nbsp;&nbsp;break;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * A simple sleep routine<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param a the number of milliseconds
+to sleep<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private void sleep(int a)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread.currentThread().sleep(a);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (InterruptedException
+e)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The class has an array of asteroids and a ship variable. These
+descendants of <TT>Missile</TT> are
+discussed later in this chapter.
+<H3><TT><FONT SIZE=4 >init()</FONT></TT></H3>
+<P>
+The <TT>init()</TT> method creates
+the double buffer that is used to eliminate flicker. It also calls
+the <TT>initialize()</TT> routine
+to allocate the initial screen objects. That way, when <TT>paint()</TT>
+is called, the applet has something to draw.
+<P>
+Two applet parameters are used to tune performance. Parameter
+<TT>SLEEP</TT> specifies how long
+(in milliseconds) the applet thread will sleep between updates.
+If this value is too short, the objects are moved without a paint.
+Java and Netscape &quot;batch up&quot; repaint requests if they
+come in too fast to handle. This causes objects to appear very
+jerky, because they are moving much further with each paint. The
+same effect would happen if this parameter were too long. Remember,
+animation is based on fooling the eyes into believing discrete
+movements are really smooth transitions. Two hundred seems to
+be an acceptable value.
+<P>
+The second parameter, <TT>ASTEROIDS</TT>,
+has dual uses. First, it enables the game to be made more difficult
+as the system operator sees fit. Secondly, it enables the <TT>Missile</TT>
+class to be tested with only one object. It is much easier to
+debug when the screen is not filled with distracting objects.
+If you change the <TT>Missile</TT>
+class, you may want to initially test with only one asteroid.
+<H3><TT><FONT SIZE=4 >initialize()</FONT></TT></H3>
+<P>
+Why not just allocate all the objects in the <TT>init()</TT>
+method? Well, for one thing, you may want to allow the user to
+restart or, better yet, replay your game. The <TT>initialize()</TT>
+method provides a cleanly packaged way to set up a new game. All
+the screen objects are created and the game is reset. The score
+is also preset to 100.
+<H3>Scoring</H3>
+<P>
+A player begins the game with 100 points. Whenever an asteroid
+collides with the ship, the score is reduced by 10 points. Each
+destroyed asteroid earns 10 points. Ten hits without killing an
+asteroid results in game over. You allow a reasonable number of
+hits because the asteroids are randomly distributed around the
+screen. Some initial hits will happen that are beyond the control
+of the player. A perfect score is 100 plus 10 times the number
+of asteroids configured. For 20 asteroids, a perfect score is
+300.
+<P>
+The end-of-game comment takes the score into account. The total
+possible range of scores is broken into seven categories. Zero
+and perfect are the extremes, and there are five middle ranges.
+Each category is assigned a different phrase.
+<H3><TT><FONT SIZE=4 >paint()</FONT></TT></H3>
+<P>
+The <TT>paint()</TT> method clears
+the offscreen image to black, then draws each asteroid and the
+ship. Actually, it asks the objects to draw themselves. Individual
+objects are in charge of rendering themselves (or not) in the
+correct location and in the proper orientation. No collision detection
+or scoring takes place during the paint loop. At game-end, the
+score and an end-of-game string is displayed. The <TT>paint()</TT>
+method terminates by drawing the offscreen image to the actual
+screen.
+<H3>User Input</H3>
+<P>
+Mouse and keyboard handlers are installed in the applet. Mouse
+clicks are trapped only to start and reset the game. Four keyboard
+keys are trapped: Left, Right, Down, and Space. For each key,
+a separate ship control function is activated. Keys not of the
+four types are ignored.
+<H3>Game Thread</H3>
+<P>
+The applet<TT> run()</TT> thread performs
+all the action. Because the user must click on the applet to enable
+it to receive the keyboard, the <TT>run()</TT>
+thread waits until this has happened before starting a game. In
+the meantime, the <TT>paint()</TT>
+method displays the game objects in their initial frozen state.
+The applet almost begs to be played.
+<P>
+Once the user has clicked on the applet, the <TT>run()</TT>
+thread passes control to <TT>playGame()</TT>.
+Here, the thread loops until the game is over. Each iteration
+through the loop animates all the objects, checks for collisions,
+updates the score, and then issues a repaint request. At this
+point, a sleep is entered for the configured number of milliseconds.
+To animate the objects, simply call each <TT>Missile</TT>
+object's <TT>animate()</TT> function.
+<P>
+Collisions are detected for each asteroid after it has been moved.
+When either the <TT>score</TT> or
+<TT>remainingRocks</TT> goes to zero,
+the game is over and the function returns to the <TT>run()</TT>
+method.
+<H2><A NAME="TheAsteroids"><FONT SIZE=5 COLOR=#FF0000>The Asteroids</FONT></A>
+</H2>
+<P>
+The asteroids are the most complicated object to set up, but the
+simplest to manage. Listing 14.2 shows the <TT>Rock</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.2. </B><TT><B></TT>Rock</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>class Rock extends Missile<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private static float sign = -1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float ix[] = { 0, 8, 7, 5, 3, 1 };<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float iy[] = { 0, 2, 4, 5, 4, 6 };<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Rock(int dw, int dh)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(dw, dh,
+Color.green);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the shape
+of the asteroid<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setShape(ix, iy);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Size the asteroid
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scaleMissile(2
++ (Math.random() * 5));<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the rotation
+angle<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setRotationAngle(Math.random()
+* 60);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the initial
+position<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float init_x =
+(float)(Math.random() * (display_w - max_x));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float init_y =
+(float)(Math.random() * (display_h - max_y));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translateMissile(init_x,
+init_y);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the velocity
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_vel = (float)(1
++ (Math.random() * 10));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y_vel = (float)(1
++ (Math.random() * 10));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_vel *= sign;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y_vel *= sign;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sign *= -1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The asteroids exhibit completely default <TT>Missile</TT>
+class behavior. The class simply sets up the initial object conditions
+and then enables <TT>Missile</TT>'s
+base functions to control it. Each asteroid begins life appearing
+like Figure 14.2. Then the asteroid is scaled by a random value
+between 2.0 and 7.0. It also is assigned a rotation angle between
+0 and 60 degrees. An initial position somewhere on the screen
+is chosen, and finally the rock receives a random x and y velocity
+between 1.0 and 11.0. Although all the asteroids started out looking
+the same, they end up looking quite different.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f14-2.gif" ><B>Figure 14.2 : </B><I>Initial asteroid.</I></A>
+<H2><A NAME="TheShip"><FONT SIZE=5 COLOR=#FF0000>The Ship</FONT></A>
+</H2>
+<P>
+Although the asteroids do not need to override any default <TT>Missile</TT>
+behavior, the <TT>Ship</TT> class
+in Listing 14.3 does override two functions.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.3. </B><TT><B></TT>Ship</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>class Ship extends Missile<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final int MAX_VELOCITY = 20;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int rotations, engines, photons;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float speed_inc;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float ix[] = { 0, 6, 0, 2 };<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float iy[] = { 0, 2, 4, 2 };<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Photon activePhotons[];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;double leftCos, leftSin, rightCos, rightSin;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Ship(int dw, int dh)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(dw, dh,
+Color.red);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setShape(ix, iy);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotations = 0;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;photons = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;engines = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction = 0;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;activePhotons
+= new Photon[6];<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the speed
+increments<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;speed_inc = 2;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Size the ship
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scaleMissile(3);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the initial
+position<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float init_x =
+(display_w / 2) - (2 * scale);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float init_y =
+(display_h / 2) - (2 * scale);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translateMissile(init_x,
+init_y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void leftRotation()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotations++;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void rightRotation()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotations--;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void fireEngines()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;engines++;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void firePhotons()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;photons++;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void animate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float sign;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setRotationAngle(15
+* rotations);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotateMissile();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotations = 0;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( engines !=
+0 )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_vel
++= (float)(Math.cos(direction) * (engines * speed_inc));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y_vel
+-= (float)(Math.sin(direction) * (engines * speed_inc));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( Math.abs(x_vel) &gt; MAX_VELOCITY )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( x_vel &gt; 0 ) sign = 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+sign = -1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_vel
+= MAX_VELOCITY * sign;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( Math.abs(y_vel) &gt; MAX_VELOCITY )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( y_vel &gt; 0 ) sign = 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+sign = -1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y_vel
+= MAX_VELOCITY * sign;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;engines
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( photons !=
+0 )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+( int p = 0; p &lt; activePhotons.length; p++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( activePhotons[p] == null || activePhotons[p].isDead() )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;activePhotons[p]
+= new Photon(display_w, display_h,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+p;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction,
+this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;photons--;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;moveMissile();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int p =
+0; p &lt; activePhotons.length; p++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( activePhotons[p] != null )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;activePhotons[p].animate();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void draw(Graphics g)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int p =
+0; p &lt; activePhotons.length; p++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( activePhotons[p] != null )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;activePhotons[p].draw(g);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super.draw(g);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean photonsCollide(Missile
+mx)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int p =
+0; p &lt; activePhotons.length; p++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( activePhotons[p] != null )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( activePhotons[p].collide(mx) )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;activePhotons[p].die();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The ship must have public methods to fire its engines and photons,
+to rotate left, and to rotate right. The ship must also create
+and track the photons that it fires. An array of photons is used
+to track fired projectiles. Only a limited number can be outstanding
+at any given time, because the code that fires a photon cannot
+operate until an empty slot is found.
+<P>
+Keyboard events happen asynchronously with respect to animate
+calls. For this reason, counters have been created to track how
+many times a particular key is pressed between calls. <TT>animate()</TT>
+is the first <TT>Missile</TT> function
+to be overridden, because the ship needs to animate its photons
+in addition to itself.
+<P>
+When <TT>animate()</TT> is called,
+the ship calculates the new rotation angle and sets it. If variable
+<TT>rotations</TT> is zero (no requests)
+the call to <TT>rotateMissile()</TT>
+does not change anything.
+<P>
+Next, the engines are fired. Velocity is changed based on the
+current orientation. The following equations derive the x and
+y velocity components for a given speed increase:
+<BLOCKQUOTE>
+<TT>x_component = cos(angle) * speed;<BR>
+y_component = -sin(angle) * speed;<BR>
+</TT>
+</BLOCKQUOTE>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Because the coordinate system's Y-axis is upside down, all calculations must invert the sign of the sine coefficients.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Each component is artificially limited to an upper bound, in this
+case 20. The orientation is stored in the <TT>Missile</TT>
+class variable <TT>direction</TT>.
+This value is already in radians and contains the current heading
+of the ship. The periodic nature of sines and cosines is exploited
+by this variable. The value of <TT>direction</TT>
+is continuously increasing, going past 360 degrees after one complete
+rotation. Due to the periodic functionality of the trig functions,
+(the cosine and sine of 90 degrees is the same as the cosine and
+sine of 450 degrees-360 + 90), the equations function properly
+for the variable.
+<P>
+After firing the engines, the ship checks for photon requests.
+If present, the ship searches for a free (or dead) photon slot.
+If one is found, a new photon is created. In keeping with object-oriented
+design, the photon is in charge of its own movements.
+<P>
+After the ship's parameters are adjusted, the photons are animated.
+When all photons have been moved, the ship moves itself by calling
+<TT>moveMissile()</TT>.
+<P>
+The second <TT>Missile</TT> function
+to be overridden is <TT>draw()</TT>.
+The ship is responsible for its photons. This extends to drawing
+them as well. After each photon is told to draw itself, the ship
+calls its ancestor <TT>draw()</TT>
+function to render itself.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+There is a subtle trick going on here. The ship is drawn after the photons so that it will always be on top. The photon code cannot precisely locate the front tip of the ship, so it initializes in the center of the ship's bounding box. If the ship were 
+drawn first, the photons would appear to emulate from the center of the ship, not from the tip.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The final function for the <TT>Ship</TT>
+class is <TT>photonsCollide()</TT>.
+The game thread passes in each asteroid to see whether the ship
+has hit it. The ship doesn't really know, so it asks each of its
+photons whether it has collided with the rock. Any hits destroy
+both the photon and the asteroid.
+<H2><A NAME="ThePhotons"><FONT SIZE=5 COLOR=#FF0000>The Photons</FONT></A>
+</H2>
+<P>
+The photon exhibits nearly default <TT>Missile</TT>
+behavior. The only exception is that photons don't bounce; they
+die when they hit a wall. Listing 14.4 describes the <TT>Photon</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.4. </B><TT><B></TT>Photon</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>class Photon extends Missile<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Missile ship;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float ix[] = { 0, 2, 2, 0 };<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float iy[] = { 0, 0, 2, 2 };<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Photon(float dw, float dh, double pointing,
+Missile firedFrom)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super((int)dw,
+(int)dh, Color.yellow);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setShape(ix, iy);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction = pointing;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ship = firedFrom;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the initial
+position<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Rectangle shipRect
+= firedFrom.getBoundingBox();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float init_x =
+shipRect.x + (shipRect.width / 2);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float init_y =
+shipRect.y + (shipRect.height / 2);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translateMissile(init_x,
+init_y);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the velocity
+components<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_vel = (float)(20
+* Math.cos(direction));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y_vel = (float)(-20
+* Math.sin(direction));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;protected void checkBounce()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( bounce_x
+|| bounce_y )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;die();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+It is not practical to locate the exact front of the ship, so
+the photon is initially placed in the center of the ship's bounding
+box. The speed is fixed at 20, but the components are derived
+from the ship's direction. This enables the photon to travel in
+exactly the direction the ship was facing when the fire request
+was made. When a bounce request comes in, the photon is killed.
+<H2><A NAME="FinalDetails"><FONT SIZE=5 COLOR=#FF0000>Final Details</FONT></A>
+</H2>
+<P>
+Other than the <TT>Missile</TT> class,
+all the source classes are contained in the Asteroid.java source
+file. Compile the source and give it a try.
+<P>
+This implementation has a few limitations, the first of which
+is that photons must be rendered inside an asteroid's bounding
+box for it to be destroyed. Having a photon's trajectory pass
+through an asteroid will not work. This is the primary reason
+to limit a photon's speed to 20. Even at this speed, there will
+be times when you think a rock should have been hit, but the photon
+was rendered before and immediately after the bounding box of
+the asteroid. Figure 14.3 shows this phenomenon.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f14-3.gif" ><B>Figure 14.3 : </B><I>Photon skipping over an asteroid.</I></A>
+<P>
+The second limitation is painting from the game thread. This can
+make the ship's controls feel sluggish because immediate feedback
+on movement-and especially rotation-is delayed. Java is not very
+good at sending key events at a rapid pace, so this also contributes
+to the perceived problem.
+<P>
+The final limitation is the use of the bounding box itself for
+collision detection. There will be times when two objects are
+said to collide when, in reality, none of their points overlapped.
+Because the bounding box is an approximation of the polygon, collision
+detection can never be perfect.
+<P>
+Figure 14.4 shows the applet in action.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f14-4.gif" ><B>Figure 14.4 : </B><I>Asteroids applet.</I></A>
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+This chapter delved into two-dimensional game techniques. Scaling,
+translation, and rotation were introduced for an ordered set of
+points. The <TT>Missile</TT> class
+was developed to implement the basis for a multitude of two-dimensional
+action games. You explored advanced concepts such as velocity
+and bouncing. Rendering made use of AWT classes <TT>Polygon</TT>
+and <TT>Rectangle</TT>.
+<P>
+Finally, a Java <I>Asteroid</I> game was written to exploit the
+<TT>Missile</TT> class. You should
+now have a solid foundation in 2D game techniques. All this chapter's
+concepts are applicable to a wide range of Java games. Game playing
+is an excellent application for Java, because there is no need
+for permanent storage, and feedback is immediate.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch13.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch15.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,1506 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 26 -- The Java Debugging API</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 26</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>The Java Debugging API</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+<UL>
+<LI><A HREF="#RemoteDebugging" >Remote Debugging</A>
+<LI><A HREF="#JavaDebugger" >Java Debugger</A>
+<LI><A HREF="#TheSunJavaDebuggerAPI" >The Sun Java Debugger API</A>
+<LI><A HREF="#SimpleTypes" >Simple Types</A>
+<LI><A HREF="#SomeExamples" >Some Examples</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+In this chapter, you learn about the Java Debugger API. The current
+Sun Java Development Kit (the JDK) includes the Java package <TT>sun.tools.debug</TT>,
+which provides a simple interface into the Java Virtual Machine.
+This API allows another program, probably a debugger, to connect
+and communicate with the Java Virtual Machine to get low-level
+information about a currently executing Java application. For
+security reasons, the Java Virtual Machine must be executed in
+a special <I>debug mode;</I> otherwise, connections are refused.
+Further, an applet running within a browser does not have access
+to this API. This API is geared toward development tools.
+<P>
+In this chapter, you learn what the Debugging API is and how to
+use it. Several examples are included to help demonstrate the
+API. This information is geared toward an advanced developer who
+is writing tools or who just wants to learn more about Sun's Java
+implementation. The Debugging API is within the Java package <TT>sun.tools.debug</TT>,
+which is not part of the standard Java classes. Therefore, you
+may not see it on all implementations of Java Virtual Machines.
+Java Virtual Machine implementers can define their own Debugging
+APIs, or none at all. I, however, suspect that any new commercial
+implementations would support this API, perhaps with small differences
+or additions.
+<H2><A NAME="RemoteDebugging"><B><FONT SIZE=5 COLOR=#FF0000>Remote
+Debugging</FONT></B></A></H2>
+<P>
+The Debugger API is built around the concept of <I>remote debugging</I>.
+This concept implies that not only is the debugger running in
+a separate process than the debuggee, but it also may be running
+on a separate machine. This setup offers great flexibility. Besides
+the obvious benefits of being able to debug from a distance, other
+benefits do exist. The Java application may be running on a resource-challenged
+machine such as a PDA, a Set-top-device, or even a toaster. This
+remote machine may have small amounts of memory, slow CPUs, or
+small screens, among other things-definitely not a worthy machine
+for a developer to use for debugging purposes. With remote debugging,
+the developer can stay within his or her normal development environment
+on a multi-thousand dollar workstation, while debugging a Java
+application on a $300 Internet terminal, or even that toaster.
+Remote debugging is the way to go.
+<P>
+Remote debugging is not very sophisticated; it simply breaks the
+debugger into several parts. There is the debugger client, the
+debugger server, and a communication protocol. The debugger server
+resides in the target-usually code inserted into the target process
+or perhaps embedded in system software. The debugger server performs
+the important low-level work of the debugger. The basic functionality
+of the debugger server is to control the debugger and obtain information
+on its internal state. The debugger client is the part of the
+debugger that the developer will interact with. It may provide
+a fancy user interface and may present a more complicated set
+of features to the developer. Naturally, all of the features it
+provides must be implemented using the basic core functionality
+of the debugger server (for example, if the debugger server provides
+the ability to set breakpoints but not a single-step command).
+The debugger client may provide a single-step command by repeatedly
+setting and removing breakpoints as the user selects the single-step
+command. Finally, the debugger client and server must communicate,
+performed via a communication protocol over some transport mechanism.
+For example, a socket connection may be used and the debugger
+client will invoke commands on the debugger server by sending
+it simple messages. Figure 26.1 shows the basic structure of remote
+debugging.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f26-1.gif" ><B>Figure 26.1 : </B><I>Remote debugging.</I></A>
+<H2><A NAME="JavaDebugger"><B><FONT SIZE=5 COLOR=#FF0000>Java
+Debugger</FONT></B></A></H2>
+<P>
+A Java Debugger that uses the Debugging API fits the preceding
+description of a remote debugger. The debugger itself is written
+in Java and communicates with the target Java Virtual Machine
+using the provided classes in the <TT>sun.tools.debug</TT>
+package-the Debugger API. The communication between the debugger
+and the target application running in a remote Java Virtual Machine
+occurs over sockets. This socket communication, however, is virtually
+transparent to the user (the user does provide the TCP machine
+name where the target machine is running). Even debugging on the
+same machine still utilizes sockets.
+<P>
+The protocol is simple debugger command IDs followed by data specific
+for the command. All the interaction with the target Java Virtual
+Machine by the debugger happens by the Debugger calling methods
+in the supplied classes. The debugger really has no idea the actual
+work is going on in a separate process. The target Java Virtual
+Machine reads the commands from the socket, acts on them, and
+supplies the results back to the debugger. It also can contact
+the debugger via a callback mechanism. This way, the Java Virtual
+Machine can notify the debugger when certain events occur.
+<H3><B>Basic Structure</B></H3>
+<P>
+The Java Debugger API works by setting up agents behind the scenes.
+The debugger does not have to worry about such details. The agents
+consist of some nonpublic classes and some threads that are started
+on both the debugger side and the Java Virtual Machine side. From
+this point on, I refer to the debugger as the <I>debugger client</I>
+and the target Java Virtual Machine side of the debugger as the
+<I>debugger server</I>.
+<H3><B>Java Virtual Machine Debugger Server</B></H3>
+<P>
+When the Java Virtual Machine is started in debug mode-by supplying
+the <TT>-debug</TT> switch when running
+the Java Virtual Machine directly or when a debugger launches
+the Java Virtual Machine-a couple of things occur. An extra thread
+is spawned; it runs a nonpublic class called <TT>sun.tools.debug.Agent</TT>.
+This class implements the <TT>Runnable</TT>
+interface and runs in a thread named &quot;Debugger Agent.&quot;
+The <TT>Agent</TT> class handles the
+communication with the debugger client through the socket and
+also performs much of the execution of the debugger's commands.
+The class itself handles a great deal of work, and it also obtains
+inside information from the Java Virtual Machine via a set of
+native methods that are implemented in the shared library named
+<I>agent</I> (<TT>libagent.so</TT>
+on Solaris; <TT>agent.dll</TT> on
+Win32).
+<P>
+The <TT>Agent</TT> class also makes
+use of several of the other nonpublic debugging classes (see Table
+26.1), most notably the <TT>BreakpointHandler</TT>
+class. The <TT>BreakpointHandler</TT>
+class also executes within another thread named Breakpoint Handler.
+This thread is contacted when actual breakpoints occur; thus being
+in its own thread allows it to contact the Agent thread in an
+asynchronous manner. The <TT>Agent</TT>
+class can then pass the information back to the debugger client.
+A third, less-important thread also exists. The <TT>EmptyApp</TT>
+class contains a single static <TT>main</TT>
+method (a simple Java program), which is executed as a placeholder
+until the real target application is started. It simply lives
+in a suspended state.<BR>
+<P>
+<CENTER><B>Table 26.1. Debugger server classes.</B></CENTER>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=30%>
+<TR><TD WIDTH=150>Agent</TD></TR>
+<TR><TD WIDTH=150>AgentOutputStream</TD></TR>
+<TR><TD WIDTH=150>BreakpointHandler</TD></TR>
+<TR><TD WIDTH=150>BreakpointQueue</TD></TR>
+<TR><TD WIDTH=150>BreakpointSet</TD></TR>
+<TR><TD WIDTH=150>EmptyApp</TD></TR>
+<TR><TD WIDTH=150>LineNumber</TD></TR>
+<TR><TD WIDTH=150>ResponseStream</TD></TR>
+</TABLE></CENTER>
+<P>
+Thus, the Java Virtual Machine uses a couple of threads to manage
+the communication and execution of debugger commands with the
+debugger client. All the debugger knowledge is imbedded within
+these classes. They know how to look at the Java Virtual Machine's
+internals and how to control the Java Virtual Machine. The debugger
+client must simply know how to ask the right questions.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The debugger server classes are not described in any detail in this chapter. To use the Debugging API you neither need them nor need access to them. </BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><B>Java Debugger Client</B></H3>
+<P>
+The debugger client is the program with which the user interacts;
+it drives the target Java Virtual Machine. The presence of the
+Java Debugging API makes the task of controlling and getting information
+from the target Java Virtual Machine trivial. Just about all the
+details of remote debugging are hidden from the debugger client.
+The Java Debugger API consists of a handful of classes and a single
+interface. Each class is discussed later in this chapter, but
+here is an introduction to what goes on.
+<P>
+The Debugger API performs a number of tasks on behalf of the debugger
+client. It manages the communication to and from the debugger
+server. This communication occurs over two socket connections
+made to the debugger server. One socket is used for sending client
+requests to the server. The other socket is used for receiving
+notification events from the server. The requests are synchronous
+actions initiated by the client-such as the client asking the
+server for information about the debuggee, or asking the server
+to perform tasks such as setting a breakpoint. The notification
+events are asynchronous to the client. That is, the client does
+not know when they will come, and the notification events may
+actually arrive while the client is performing requests. Again,
+the Debugger API hides these details from the debugger client.
+<P>
+Requests are simple to perform. The debugger client invokes the
+methods defined in the public classes of the Debugger API (see
+the <TT>Remote*</TT> classes discussed
+in the following section). The Debugger API then translates these
+method calls into command messages and sends them to the server
+over one of the sockets. The debugger client simply blocks on
+a method call while this occurs. The debugger server then fulfills
+the request and simply acknowledges it, or sends information back
+to the client in a reply message over the same socket. The Debugger
+API converts the reply into an appropriate return value for the
+debugger client. All of this communication is handled by the <TT>RemoteAgent</TT>
+class. The <TT>RemoteAgent</TT> class
+is non-public and is never directly accessed by the debugger client.
+You should recall the debugger server is using the <TT>Agent</TT>
+class to perform the actual work. Think of the <TT>RemoteAgent</TT>
+class as a <I>proxy</I> for the <TT>Agent</TT>
+class.
+<P>
+Notification events are implemented with a callback mechanism.
+The debugger client implements the <TT>DebuggerCallback</TT>
+interface (described in the next section) and registers the callback
+with the Debugger API. Once this registration is complete, the
+debugger client does not need to perform any other actions. The
+methods defined by this interface are invoked, almost magically,
+when a notification event occurs-truly a simple process. The Debugger
+API-during intialization-creates a thread. This thread is named
+&quot;Agent Input&quot; and its only task is to read messages
+from one of the sockets-the notification event socket. When a
+message arrives from the debugger server, that message is interpreted
+and the appropriate method of <TT>DebuggerCallback</TT>
+is invoked. You can think of this as the debugger server calling
+the debugger client's code, with the Debugger API hiding the communication
+details.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+You must remember that the methods defined by the <TT>DebuggerCallback</TT> are actually being run by the &quot;Agent Input&quot; thread. As a result, you may need to worry about synchronization issues.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The communication between the debugger client and server over
+the two sockets occurs via a simple message protocol. The messages
+are composed of a simple command ID followed by optional data
+specific to the command. These command IDs are defined in the
+<TT>AgentConstants</TT> interface.
+This interface is not public, but you'll notice some of the public
+classes do imple-<BR>
+ment it.
+<P>
+The Debugger API is initialized by the debugger client when the
+client instantiates the <TT>RemoteDebugger</TT>
+class. When this class is intantiated the client passes the callback
+object to the Debugger API. At this time the two sockets and the
+&quot;Agent Input&quot; thread are created. The call-back object
+is any object created by the debugger client which implements
+the <TT>DebuggerCallback</TT> interface.
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Several of the Debugger API classes implement the <TT>AgentConstants</TT> interface. These classes submit commands to the debugger server.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><B>Tying It All Together</B></H3>
+<P>
+To try to make all this information fit together, look at Figure
+26.2. As you can see, two socket connections run from the debugger
+client to the debugger server-one is for <I>request</I> commands,
+and the other for <I>notification events</I>. The debugger client
+is concerned only with the <TT>RemoteDebugger</TT>,
+<TT>DebuggerCallback</TT>, and the
+miscellaneous <TT>Remote*</TT> classes,
+which are discussed next. The debugger client controls and queries
+the target Java Virtual Machine via commands sent down the <I>command
+socket</I>. It should be prepared to receive requests at any time
+via the <I>notification socket</I>, via calls to its callback
+object.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f26-2.gif" ><B>Figure 26.2 : </B><I>Remote Java Debugger.</I></A>
+<H2><A NAME="TheSunJavaDebuggerAPI"><B><FONT SIZE=5 COLOR=#FF0000>The
+Sun Java Debugger API</FONT></B></A></H2>
+<P>
+Now that you have an idea of what's going on within the Java Debugger
+API, you can concentrate on the interface that your debugger (or
+other tool) will use. This interface is via the <TT>sun.tools.debug.Remote*</TT>
+set of classes and the single <TT>DebuggerCallback</TT>
+interface  previously discussed (see Figure 26.3).
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f26-3.gif" ><B>Figure 26.3 : </B><I>Java debugger client classes.</I></A>
+<P>
+In the following sections, you learn about each of these classes.
+Many of the classes are similar, and after you have looked at
+a few and understand how to use them, you will quickly know how
+to use the rest. For this reason, I do not list every method within
+each class. This information is readily available via the online
+documentation that comes with Sun's JDK. I just point out what
+the class is used for and any possible quirks or special properties
+that may be of importance. You can actually see many of these
+classes in action with the included sample applications; they
+are introduced in the following sections but can be best understood
+by viewing the source code included on the CD-ROM accompanying
+this book.
+<H3><TT><B><FONT SIZE=4 >DebuggerCallback</FONT></B></TT>
+</H3>
+<P>
+<TT>DebuggerCallback</TT> is the only
+public interface in the <TT>sun.tools.debug</TT>
+package. It simply is the debugger server's gateway into your
+code. This class has only five methods: <TT>printToConsole()</TT>,
+<TT>breakpointEvent()</TT>, <TT>exceptionEvent()</TT>,
+<TT>threadDeathEvent()</TT>, and <TT>quitEvent()</TT>.
+They are all straightforward, but here is a quick overview.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+When you implement these methods, you should understand that they can occur any time and will execute within the context of the Debugger API initiated &quot;Agent Input&quot; thread, not within your thread.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The function <TT>printToConsole()</TT>
+acts as the debugger server's standard output. In fact, if the
+target application writes to its standard output (<TT>System.out</TT>),
+this output is redirected to the debugger client via a call to
+<TT>DebuggerCallback.printToConsole()</TT>.
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Output to <TT>System.err</TT> is suppressed and does not show up anywhere while a process is being debugged.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The methods <TT>breakpointEvent()</TT>,
+<TT>threadDeathEvent()</TT>, and <TT>exceptionEvent()</TT>
+are each passed an instance of <TT>RemoteThread</TT>
+(discussed later in this chapter) from which context information
+about the event can be obtained. The last of these three methods
+is also passed a <TT>String</TT> parameter,
+which contains an associated message including a stack trace.
+For an example implementation of this interface, you can view
+the demo programs below.
+<H3><TT><B><FONT SIZE=4 >RemoteDebugger</FONT></B></TT>
+</H3>
+<P>
+The <TT>RemoteDebugger</TT> class
+is the primary class that every debugging client program must
+instantiate. When you create an instance of this object, you are
+effectively initializing the Debugger API. You cause the debugger
+client to connect to the target Java Virtual Machine, you register
+your <TT>DebuggerCallback</TT> object
+with the Debugger API, and you allow the Debugger API to perform
+its background duties, such as starting the agent input<I> </I>thread.
+The usefulness of this class does not end there.
+<P>
+You use the instance of this class to initiate several operations
+on the target Java Virtual Machine. You can look at the operations
+that you can perform via the <TT>RemoteDebugger</TT>
+instance as the <I>root command</I> set. With only an instance
+of <TT>RemoteDebugger</TT>, for example,
+you can set a breakpoint on a specific method in a specific class
+with the following code:
+<BLOCKQUOTE>
+<TT>void StopIn( String class_name, String
+meth_name ) throws Exception<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;// from a class
+name get a representative for that class<BR>
+&nbsp;&nbsp;RemoteClass rClass = rDebugger.findClass( class_name
+);<BR>
+</TT>&nbsp;<TT>&nbsp;// now find the
+method within the class<BR>
+&nbsp;&nbsp;RemoteField rMeth&nbsp;&nbsp;= rClass.getMethod( meth_name
+);<BR>
+</TT>&nbsp;<TT>&nbsp;// now we can
+set a break point at the start of the method<BR>
+&nbsp;&nbsp;rClass.setBreakpointMethod( rMeth );<BR>
+</TT>&nbsp;<TT>&nbsp;System.out.println(
+&quot;Breakpoint set in &quot;+class_name+&quot;.&quot;+meth_name
+);<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Naturally, you may want to do some more error detecting here,
+but this example illustrates the basics. As you can see, the whole
+process starts with the <TT>RemoteDebugger</TT>
+instance.
+<P>
+The methods within the <TT>RemoteDebugger</TT>
+class are straightforward. Some just provide information-such
+as <TT>freeMemory()</TT> and <TT>totalMemory()</TT>,
+which return the amount of free memory and total memory, respectively,
+in the target Java Virtual Machine. Others cause an action to
+occur on the target Java Virtual Machine. The methods <TT>itrace()</TT>
+and <TT>trace()</TT>, for example,
+place the target Java Virtual Machine in tracing mode (either
+instruction or method tracing, respectively). These methods do
+not cause any other action within the debugger; they simply cause
+the target Java Virtual Machine to call the standard Java methods
+<TT>traceInstructions()</TT> or <TT>traceMethods()</TT>
+from the <TT>java.lang.Runtime</TT>
+class on itself. This process causes the Java Virtual Machine
+to output the trace information to its standard output.
+<P>
+When you instantiate the <TT>RemoteDebugger</TT>
+class, you can choose from two methods. One attaches your debugger
+to an already-running Java Virtual Machine, and the other launches
+a Java Virtual Machine and then attaches to it. If you are attaching
+to an executing Java Virtual Machine, you must pass the TCP/IP
+machine the name where the target Java Virtual Machine is executing
+and the password to <TT>RemoteDebugger</TT>.
+This password is emitted by the Java Virtual Machine when it is
+executed with the <TT>-debug</TT>
+flag. If you don't specify the <TT>-debug</TT>
+flag, the Java Virtual Machine does not allow a debugger to attach
+because doing so would be a security violation. The password is
+a hash of the socket port on which the Java Virtual Machine debugger
+server is listening.
+<P>
+The Java Debugger API handles the details of decoding the password.
+If you are executing a new Java Virtual Machine, you simply pass
+parameters to the Java Virtual Machine like those you would pass
+on the command line (items like <TT>-verbose</TT>,
+<TT>-verbosegc</TT>, and so on). Regardless
+of which flavor of the constructor you call, you must pass two
+additional parameters: your instance of the <TT>DebuggerCallback</TT>
+interface and a <TT>boolean</TT> flag
+indicating the <I>verbosity mode</I> in which you want the debugger.
+If you pass a <I>verbosity</I> value of <TT>true</TT>,
+you get all kinds of tracing information from the Debugger API.
+<P>
+Here are two sample calls to <TT>RemoteDebugger</TT>.
+You also can get a small taste of it in the program <TT>easydb</TT>,
+which is included on the CD-ROM (as well as all the samples).
+<BLOCKQUOTE>
+<TT>RemoteDebugger db;&nbsp;&nbsp;// hold
+our instance<BR>
+if ( attach )<BR>
+</TT>&nbsp;<TT>&nbsp;db = new RemoteDebugger(
+&quot;slapshot&quot;, &quot;bas9h&quot;, mycallback, true );<BR>
+else<BR>
+</TT>&nbsp;<TT>&nbsp;db = new RemoteDebugger(
+&quot;-verbose&quot;, mycallback, true );</TT>
+</BLOCKQUOTE>
+<H3><TT><B><FONT SIZE=4 >RemoteStackFrame</FONT></B></TT>
+</H3>
+<P>
+The <TT>RemoteStackFrame</TT> class
+provides an interface for obtaining information for a current
+stack frame of a Java method. Within a Java thread several methods
+are generally active at any given time. I use the term <I>&quot;</I>active&quot;
+to describe a method that has been entered but has not exited;
+it may or may not be executing because it may have invoked another
+method, but it is still active. Consider, for example, the following
+chunk of code:
+<BLOCKQUOTE>
+<TT>void A() { B(); };<BR>
+void B() { C(); };<BR>
+void C() { sleep(1000); );</TT>
+</BLOCKQUOTE>
+<P>
+Assuming that the only way into <TT>C()</TT>
+is via <TT>A()</TT>, then while <TT>C()</TT>
+is executing (or sleeping), the methods <TT>A()</TT>,
+<TT>B()</TT>, and <TT>C()</TT>
+are active. Each active method has a <I>context </I>associated
+with it; that context describes the specific invocation of the
+method (a method can be recursive, so each <I>instance</I> has
+a distinct context). This context is called a <I>stack frame</I>.
+<P>
+I use the word &quot;stack&quot; because you can often view the
+set of active methods as a stack of contexts. In the preceding
+example, for instance, <TT>A()</TT>
+is called first, so a stack frame is created. Then <TT>A()</TT>
+calls <TT>B()</TT>, so a new stack
+frame is created and placed on top of <TT>A()</TT>'s,
+or is stacked on top of <TT>A()</TT>.
+You therefore can view the whole set of current method calls as
+a stack of frames, or more simply the callstack. In conventional
+procedural languages, the frames are often placed adjacent to
+each other, either going up or down in the address space (so that
+the callstack can grow toward upper address space or toward lower
+address space). However, this is an implementation detail and
+does not have to be the case.
+<P>
+The Sun Java implementation actually allocates each Java method's
+stack frame from heap storage and just maintains a link to each
+frame (so, logically, it is still a stack). As you can imagine,
+the callstack is dynamic and changes throughout the life of a
+program.
+<P>
+The stack frame contains all the information about the current
+instance of the method call. An instance of the <TT>RemoteStackFrame</TT>
+class, therefore, tells you all about some Java method (native
+methods are not included). When you obtain an instance of <TT>RemoteStackFrame</TT>,
+you can query this object for the following items:
+<UL>
+<LI>Method name (<TT>getMethodName()</TT>)
+<LI>Method's class (<TT>getRemoteClass()</TT>)
+<LI>Method's local variables (<TT>getLocalVariable()</TT>,
+<TT>getLocalVariables()</TT>)
+<LI><FONT COLOR=#000000>Code position (</FONT><TT>getLineNumber()</TT>,
+<TT>getpc()</TT>)
+</UL>
+<P>
+The <TT>RemoteStackFrame</TT> class
+is used quite frequently by a debugger. As you can imagine, to
+view the local variables of a certain method, you obtain its associated
+<TT>RemoteStackFrame</TT> object and
+obtain its list of local variables (which includes parameters)
+by invoking the <TT>getLocalVariables()</TT>
+method for that frame. The code for doing this may look like:
+<BLOCKQUOTE>
+<TT>RemoteThread thd = MagicallyGetThread();
+<BR>
+RemoteStackFrame frame;<BR>
+<BR>
+thd.suspend();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+//must first suspend thread<BR>
+frame = thd.getCurrentFrame();&nbsp;&nbsp;&nbsp;//get the tops
+stackframe<BR>
+<BR>
+// get and list local variables<BR>
+RemoteStackValue[] locals = frame.getLocalVariables();<BR>
+for(int x=0; x&lt;locals.length; x++)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( locals[x] );<BR>
+<BR>
+thd.resume();<BR>
+</TT>
+</BLOCKQUOTE>
+<H3><TT><B><FONT SIZE=4 >RemoteStackVariable</FONT></B></TT>
+</H3>
+<P>
+A <I>stack variable</I> is a memory location that lives in a specific
+stack frame-thus method-local variables and parameters. When the
+stack frame goes away, the stack variable no longer exists. From
+an active stack frame, you can obtain an instance of <TT>RemoteStackVariable</TT>
+for each stack variable in that frame. With this object, you can
+get the following information on the associated stack variable:
+<UL>
+<LI>Variable name (<TT>getName()</TT>)
+<LI>Current value (<TT>getValue()</TT>)
+<LI><FONT COLOR=#000000>Current status (</FONT><TT>inScope()</TT>)
+</UL>
+<P>
+A stack variable is <I>in scope</I> if the current code position
+is after the declaration point of the variable. For example,
+<BLOCKQUOTE>
+<TT>void meth()<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;System.out.println(
+&quot;Hello&quot; );<BR>
+&nbsp;&nbsp;int x = 5;<BR>
+</TT>&nbsp;<TT>&nbsp;System.out.println(
+&quot;BYE&quot; );<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+At the printing of <TT>&quot;Hello&quot;</TT>,
+the variable <TT>x</TT> is not in
+scope, but at the point of printing <TT>&quot;BYE&quot;</TT>,
+the variable <TT>x</TT> is in scope.
+For example, the following code would print the name, type, and
+value of the stack variables in a specific stack frame.
+<BLOCKQUOTE>
+<TT>// get and list local variables<BR>
+RemoteStackValue[] locals = frame.getLocalVariables();<BR>
+for(int x=0; x&lt;locals.length; x++)<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.out.println(
+&quot;stack var name:&quot;+locals[x].getName()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+&quot;
+type:&quot;+ locals[x].getValue().typeName()<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+&quot;
+value:&quot;+ locals.[x].getValue().description() );<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3><TT><B><FONT SIZE=4 >RemoteField</FONT></B></TT>
+</H3>
+<P>
+The <TT>RemoteField</TT> class represents
+the fields of a class. Two basic kinds of fields are available:
+data<I> </I>fields and method fields. Each of these types can
+have other properties such as <TT>static</TT>,
+<TT>public</TT>, and so on. When you
+get an instance of this class, you can then query the object for
+the following information about the associated field:
+<UL>
+<LI>Field's name (<TT>getName()</TT>)
+<LI><FONT COLOR=#000000>Field information (</FONT><TT>getType()</TT>,
+<TT>getModifiers()</TT>, <TT>isStatic()</TT>)
+</UL>
+<H3><TT><B><FONT SIZE=4 >RemoteValue</FONT></B></TT>
+</H3>
+<P>
+Whether you are examining a stack variable or a class field, when
+you query that item for a value, you get back an instance of <TT>RemoteValue</TT>.
+More specifically, you get back an instance of a subclass of <TT>RemoteValue</TT>.
+This set of classes enables you to obtain information about the
+specific type of value. A useful method in this class is the <TT>description()</TT>
+method. This method usually calls the object's <TT>toString()</TT>
+method, which for the simple types returns a string representation
+of the item's value. But for objects (that is <TT>RemoteObject</TT>),
+it includes the class name and the object's numeric ID. The following
+method will simply report the type and current contents of any
+value passed to it. This method, of course, accepts all the simple
+types, such as <TT>RemoteInteger</TT>,
+as well as the complex types like <TT>RemoteObject</TT>
+or <TT>RemoteClass</TT>.
+<BLOCKQUOTE>
+<TT>void PrintValue( RemoteValue val )<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.out.println(
+&quot; type:&quot;+ val.typeName()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+&quot;
+value:&quot;+ val.description() );<BR>
+}</TT>
+</BLOCKQUOTE>
+<H2><A NAME="SimpleTypes"><B><FONT SIZE=5 COLOR=#FF0000>Simple
+Types</FONT></B></A></H2>
+<P>
+Each simple type in Java has an associated subclass of <TT>RemoteValue</TT>.
+All the primitive value classes allow for exactly the same kind
+of information to be retrieved:
+<UL>
+<LI>The value in the form of the simple type (<TT>getValue()</TT>)
+<LI><FONT COLOR=#000000>The value's type name (</FONT><TT>getType()</TT>)
+</UL>
+<P>
+The simple types and their associated remote value classes are
+as follow:<BR>
+
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=50%>
+<TR><TD WIDTH=101><TT>byte</TT></TD>
+<TD WIDTH=149></TT>RemoteByte</FONT></TD></TR>
+<TR><TD WIDTH=101><TT>char</TT></TD>
+<TD WIDTH=149></TT>RemoteChar</FONT></TD></TR>
+<TR><TD WIDTH=101><TT>short</TT></TD>
+<TD WIDTH=149></TT>RemoteShort</FONT></TD></TR>
+<TR><TD WIDTH=101><TT>int</TT></TD>
+<TD WIDTH=149></TT>RemoteInt</FONT></TD></TR>
+<TR><TD WIDTH=101><TT>long</TT></TD>
+<TD WIDTH=149></TT>RemoteLong</FONT></TD></TR>
+<TR><TD WIDTH=101><TT>boolean </TT>
+</TD><TD WIDTH=149></TT>RemoteBoolean</FONT></TD>
+</TR>
+<TR><TD WIDTH=101><TT>float </TT>
+</TD><TD WIDTH=149></TT>RemoteFloat</FONT></TD>
+</TR>
+<TR><TD WIDTH=101><TT>double </TT>
+</TD><TD WIDTH=149></TT>RemoteDouble</FONT></TD>
+</TR>
+</TABLE></CENTER>
+<P>
+<P>
+An object of the class <TT>RemoteObject</TT>
+enables you to get access to the associated object's fields and
+values, as well as the specific class (see &quot;<TT>RemoteClass</TT>&quot;)
+associated with the object.
+<H3><TT><B><FONT SIZE=4 >RemoteArray</FONT></B></TT>
+</H3>
+<P>
+A <TT>RemoteArray</TT> object enables
+you to get information about the array size and specific information
+on its elements. You can, for example, call <TT>getElement()</TT>,
+which returns a <TT>RemoteValue</TT>
+for the element at the passed index.
+<H3><TT><B><FONT SIZE=4 >RemoteClass</FONT></B></TT>
+</H3>
+<P>
+The <TT>RemoteClass</TT> class is
+important to a tool using the Debugger API. This class enables
+you to do the expected functions of obtaining information specific
+to the associated class-its name, fields, values of static fields,
+and so on.
+<P>
+This class's importance, however, goes further. The <TT>RemoteClass</TT>
+class contains the methods to set or clear breakpoints as well
+as to describe how to handle exceptions. As an example, if you
+wanted to set a breakpoint in every method within a class, this
+method would do that.
+<BLOCKQUOTE>
+<TT>void BreakOnAllMethods( RemoteClass clazz
+)<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+get all the methods<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;RemoteField[] meths = clazz.getMethods();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// set breakpoints on each method<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for(
+int x=0; x&lt;meths.length; x++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clazz.setBreakpointMethod(
+meths[x] );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( &quot;Breakpoint
+set in &quot;+ clazz.getName() +&quot;.&quot;+ <BR>
+</TT><FONT FACE="ZapfDingbats">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&Acirc;</FONT><TT>methos[x].getName() );
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3><TT><B><FONT SIZE=4 >RemoteObject</FONT></B></TT>
+</H3>
+<P>
+If any value in Java is not one of the basic types listed in the
+preceding section, it must be an <TT>Object</TT>
+type. The <TT>RemoteObject</TT> class
+and its subclasses represent this type of value. The subclasses
+of <TT>RemoteObject</TT> provide more
+specific detail to that type of object. <TT>String</TT>'s
+subclasses, for example, have certain specific behaviors that
+deserve special attention.
+<P>
+Some of the value classes such as <TT>RemoteClass</TT>
+and <TT>RemoteThead</TT> have specific
+methods needed by the debugger.
+<H3><TT><B><FONT SIZE=4 >RemoteString</FONT></B></TT>
+</H3>
+<P>
+The <TT>RemoteString</TT> class simply
+provides routines to obtain the value of the associated <TT>String</TT>
+object. It is very simple, much like the <I>simple</I> <I>type</I>
+classes discussed in the preceding section (such as <TT>RemoteInteger</TT>,
+and so on).
+<H3><TT><B><FONT SIZE=4 >RemoteThread</FONT></B></TT>
+</H3>
+<P>
+Another fundamental class for debuggers to use is <TT>RemoteThread</TT>.
+An object of the <TT>RemoteThread</TT>
+class type provides access to the remote <TT>Thread</TT>
+object on the target Java Virtual Machine. Remember, the thread
+may or may not be alive; its object may just exist. This class
+also provides more information. From this class, you can obtain
+the current stack frames on the thread's callstack. Remember that
+the Java Virtual Machine can have multiple threads running at
+a certain point in time. Each thread has its own unique callstack.
+<P>
+You obtain a <TT>RemoteThread</TT>
+object from a variety of places. You can get it from a <TT>RemoteThreadGroup</TT>
+object. The <TT>RemoteDebugger</TT>
+class also has a method to return a list of <TT>RemoteThread</TT>
+objects. Finally, when your <TT>DebuggerCallback</TT>
+object is contacted because of a breakpoint, an exception, or
+a thread death notification, it is handed the current thread's
+<TT>RemoteThread</TT> object.
+<P>
+What can you do with a <TT>RemoteThread</TT>
+object? Because <TT>RemoteThread</TT>
+is a subclass of <TT>RemoteObject</TT>,
+you have all those methods to obtain information about the thread
+object. <TT>RemoteThread</TT> offers
+more. It is the starting point for obtaining all the current information
+about the current callstack. After you obtain a <TT>RemoteStackFrame</TT>
+object, you can perform many operations. The <TT>RemoteThread</TT>
+class also provides many shortcuts for accessing the current stack
+frame. This frame is special because it represents the method
+in which the thread is currently running. You also can use methods
+to easily walk up and down the callstack, obtaining whatever stack
+frame you want. Finally, and perhaps most important for a thread-aware
+debugger, you can suspend and resume threads, continue from a
+breakpoint, and perform single-stepping from the current code
+position. If you write a tool to use the Debugger API, you will
+most likely use <TT>RemoteThread</TT>.
+Several of the included sample programs (see the following section)
+show the use of <TT>RemoteThread</TT>
+in action.
+<H3><TT><B><FONT SIZE=4 >RemoteThreadGroup</FONT></B></TT>
+</H3>
+<P>
+Another descendent of the <TT>RemoteObject</TT>
+class is the <TT>RemoteThreadGroup</TT>.
+Naturally, this group is associated with a <TT>ThreadGroup</TT>
+object on the target Java Virtual Machine. With this class, you
+can easily obtain a list of <TT>RemoteThread</TT>
+objects that are associated with this <TT>RemoteThreadGroup</TT>,
+that is, the threads that belong to the target Java Virtual Machine's
+<TT>ThreadGroup</TT>.
+<H2><A NAME="SomeExamples"><B><FONT SIZE=5 COLOR=#FF0000>Some
+Examples</FONT></B></A></H2>
+<P>
+This section presents some simple demo programs which use the
+Debugger API. The demo programs are not really debuggers, but
+simple utilities. They use various parts of the Debugger API,
+but not all. When you use the Debugger API, you'll notice that
+once you know how to use one, using the others is quite similar.
+For example, using <TT>RemoteInteger</TT>
+is just like using <TT>RemoteFloat</TT>-both
+simply operate on distinct Java types. Therefore, there is really
+not a need to show every class being used. The demo programs each
+have several things in common. They, of course, use the <TT>RemoteDebugger</TT>
+class and the <TT>DebuggerCallback</TT>
+interface. They also each do a certain amount of examination of
+the target process. This examination is not interactive like a
+debugger, but it does function much like a debugger. For example,
+it suspends a thread and gets the thread's stack frame and then
+examines that stack frame. Debuggers must perform this type of
+activity. The examples are meant to get you started. After looking
+through them and perhaps running them, you should have an understanding
+of how to use the Debugger API.
+<H3><TT><B><FONT SIZE=4 >easydb</FONT></B></TT>
+</H3>
+<P>
+The name of the <TT>easydb</TT> program
+is both accurate and misleading. It is a very easy program; however,
+it is not much of a debugger. It does, however, serve a purpose.
+This program does a little bit of what every Java Debugger does:
+It creates an instance of <TT>RemoteDebugger</TT>,
+which creates a connection to a Java Virtual Machine. The <TT>easydb</TT>
+program is sophisticated enough to use both variations of the
+class's constructors. It can attach to a running Java Virtual
+Machine, or it can launch one. Thus, you can execute <TT>easydb</TT>
+in one of the following ways:
+<BLOCKQUOTE>
+<TT>easydb -host slapshot -password bas9h
+<BR>
+easydb Simple</TT>
+</BLOCKQUOTE>
+<P>
+<TT>Simple</TT> is the name of a 20-line
+sophisticated Java application that does nothing.
+<P>
+Here is the part of the program which creates an object of the
+class <TT>RemoteDebugger</TT>. When
+this object is created, the debugger is attached to the target
+Virtual Machine. The <TT>RemoteDebugger</TT>
+constructor either creates a new Virtual Machine, much like you
+would run one, or it connects to an existing Virtual Machine.
+Notice that both constructors are passed the <TT>this</TT>
+object. In <TT>easydb,</TT> the <TT>DebuggerCallback</TT>
+interface is implemented by the <TT>easydb</TT>
+class and thus <TT>this</TT> is passed
+as the callback value. Also, a <TT>true</TT>
+value is passed as the last parameter. This places the debugger
+in a &quot;verbose&quot; mode. This means you will receive a lot
+of information from the target Virtual Machine about its current
+activities. It is analagous to running a Java Virtual Machine
+with the <TT>-verbose</TT> flag.
+<BLOCKQUOTE>
+<TT>//<BR>
+// call RemoteDebugger<BR>
+// note we are setting the remote debugger in 'verbose' mode<BR>
+// (that's the last true in the constructor) which means we will
+<BR>
+// be getting a lot of information from debugger api itself<BR>
+//<BR>
+if ( host == null )<BR>
+{&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// startup a Java VM and then attach to
+it<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;db
+= new RemoteDebugger( &quot;&quot;, this, true );<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+set the client off and running...pass it all args<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;db.run( args.length, args );<BR>
+}<BR>
+else<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// attach to an already running Java VM
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;db
+= new RemoteDebugger( host, pass, this, true );<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In real life you would perform more error detection, but the purpose
+of this code is just to demonstrate how to use the Debugger API.
+Once you have an instance of <TT>RemoteDebugger</TT>,
+you are connected to the target Virtual Machine and can actually
+start controlling it. At this point, you have also registered
+your callback object, and therefore the debugger can also contact
+you. You will notice above that in the case where a Virtual Machine
+was started by the <TT>RemoteDebugger</TT>
+constructor the <TT>db.run()</TT>
+method was immediately invoked. This informs the debugger to actually
+start running the target Virtual Machine because it was started
+in a &quot;suspended&quot; state. By starting it suspended, you
+can perform duties such as setting breakpoints prior to the target
+application running. In the case in which you attach to an existing
+Virtual Machine, there is no need for running it because it is
+already going.
+<P>
+Now that <TT>easydb</TT> is connected,
+it performs its simple duties. First it lists all of the non-standard
+classes currently loaded in the target Virtual Machine. Remember,
+Java performs dynamic loading on demand, so some classes which
+your Java program may use may not be currently loaded. To list
+the classes is very simple. <BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Java performs dynamic loading of classes on demand. This means all of the classes used by a Java application may not be loaded at certain points in time.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<BLOCKQUOTE>
+<TT>//<BR>
+// list the known classes...ignore java.* and sun.tools.debug.*
+<BR>
+//<BR>
+RemoteClass[] classes = db.listClasses();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//easy
+call to get all loaded </TT><FONT FACE="ZapfDingbats">&Acirc;</FONT><TT>classes
+<BR>
+<BR>
+System.out.println( &quot;--------------------------------&quot;
+);<BR>
+for( int x=0; x&lt;classes.length; x++ )<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+print only the names of the ones we want<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String name = classes[x].getName();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+( !( (name.startsWith( &quot;java.&quot; ) ) || <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(name.startsWith(
+&quot;sun.tools.debug.&quot; ) ) ) )<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;class:
+&quot;+name );<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+As you can see, you first invoke the <TT>listClasses()</TT>
+method on the <TT>RemoteDebugger</TT>
+object. This returns an array of <TT>RemoteClass</TT>
+objects. Each element of the array corresponds to a single Java
+class, which is currently loaded in the Java Virtual Machine.
+Once you have this array, you can examine any of the attributes
+of a loaded class with the <TT>RemoteClass</TT>
+object. In the case here, you simply get the name of the class
+with the <TT>getName()</TT> method.
+With this same <TT>RemoteClass</TT>
+object, you can choose to set breakpoints, list the methods of
+the class, and examine the class variables (the static data fields),
+among other operations provided by the <TT>RemoteClass</TT>
+class.
+<P>
+The last functional duty performed by <TT>easydb</TT>
+is to display the current memory usage of the target Virtual Machine.
+This simply involves the <TT>freeMemory()</TT>
+and <TT>totalMemory()</TT> methods
+of the <TT>RemoteDebugger</TT> class.
+<BLOCKQUOTE>
+<TT>//<BR>
+// now get memory info<BR>
+//<BR>
+System.out.println( &quot;--------------------------------&quot;
+);<BR>
+System.out.println( &quot;Free Memory:&nbsp;&nbsp;&quot;+ db.freeMemory()
+);<BR>
+System.out.println( &quot;Total Memory: &quot;+ db.totalMemory()
+);<BR>
+System.out.println( &quot;--------------------------------&quot;
+);<BR>
+</TT>
+</BLOCKQUOTE>
+<P>
+These two methods perform just like the standard <TT>java.System.freeMemory()</TT>
+and <TT>java.System.totalMemory()</TT>
+methods. In fact, the debugger client sends a command to the debugger
+server which then simply invokes those methods within the target
+Virtual Machine and transfers the results back to the debugger
+client.
+<P>
+Also notice that the <TT>easydb</TT>
+class implements the <TT>DebuggerCallback</TT>
+interface itself. This way, it can simply pass itself (via the
+<TT>this</TT> reference) to the constructor
+of <TT>RemoteDebugger</TT>. Every
+debugger must provide an instance of this interface. The implementation
+provided by <TT>easydb</TT> is perhaps
+one of the simpler ones you will see. For notifications such as
+breakpoints and exceptions, it simply prints a message and signals
+the main program to end. Here is <TT>easydb</TT>'s
+complete implementation of the <TT>DebuggerCallback</TT>
+interface:
+<BLOCKQUOTE>
+<TT>/** <BR>
+&nbsp;* This is called by the Debugger Server (i.e. the target
+Java VM) via <BR>
+</TT>&nbsp;<TT>* the proxy classes
+(that means the informaton will travel over the<BR>
+&nbsp;* socket connection) and also by the Debugger Client side
+of the API.<BR>
+</TT>&nbsp;<TT>* The target Java VM
+will also re-direct the debuggee program's standard<BR>
+&nbsp;* output to this routine.<BR>
+</TT>&nbsp;<TT>*/<BR>
+public void printToConsole(String text) throws Exception<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.print( text );<BR>
+}<BR>
+<BR>
+/** A breakpoint has been hit in the specified thread. */<BR>
+public void breakpointEvent(RemoteThread t) throws Exception<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( &quot;Breakpoint:
+&quot;+ t );<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;synchronized
+(this) this.notify();&nbsp;&nbsp;&nbsp;//end the prog<BR>
+}<BR>
+<BR>
+/** An exception has occurred. */<BR>
+public void exceptionEvent(RemoteThread t, String errorText) throws
+Exception<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.out.println(
+&quot;Exception: &quot;+t );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( errorText );<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;synchronized
+(this) this.notify();&nbsp;&nbsp;&nbsp;//end the prog<BR>
+}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+<BR>
+/** A thread has died. */<BR>
+public void threadDeathEvent(RemoteThread t) throws Exception
+<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println( &quot;ThreadDeath:
+&quot;+t );<BR>
+}<BR>
+<BR>
+/** The client interpreter has exited, either by returning from
+its<BR>
+&nbsp;*&nbsp;&nbsp;main thread, or by calling System.exit(). */
+<BR>
+public void quitEvent() throws Exception<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.out.println(
+&quot;Target JVM is gone....&quot; );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;synchronized (this) this.notify();&nbsp;&nbsp;&nbsp;//end
+the prog<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Try running <TT>easydb</TT> with some
+of your existing Java applications, and then tinker around with
+it, adding more functionality and so on. You will find that using
+the Java Debugger API is easy.
+<H3><TT><B><FONT SIZE=4 >JMon</FONT></B></TT></H3>
+<P>
+<TT>JMon</TT> is a demonstration of
+other possible uses of the Java Debugger API. This simple utility
+continually updates its windows with information obtained from
+the target Java Virtual Machine. This program shows the basics
+of using the Java Debugger API.
+<P>
+<TT>JMon</TT> samples the target Java
+Virtual Machine periodically and obtains the amount of free memory
+and total memory. It also provides a list of the current threads
+in the system. The Java Debugger API makes this task simple to
+accomplish. This section looks at the code which deals with the
+Debugger API. The code which implements the AWT windows will not
+be discussed. It is a very simple text window and is included
+with the source code on the CD-ROM.
+<P>
+The first thing <TT>JMon</TT> does
+is get an instance of <TT>RemoteDebugger</TT>.
+This is done via the <TT>Connect()</TT>
+method, which is implemented by <TT>JMon</TT>.
+<TT>Connect()</TT> behaves very similar
+to the code used in <TT>easydb</TT>,
+but it does a little more error checking. <TT>Connect()</TT>
+is not shown here, but you can view it in the source file included
+on the CD-ROM. The <TT>Connect()</TT>
+method is simply passed the set arguments from the <TT>watch</TT>
+command line and returns an instance of <TT>RemoteDebugger</TT>
+which the program can use.
+<BLOCKQUOTE>
+<TT>// connect to Java VM<BR>
+RemoteDebugger db = Connect( args );</TT>
+</BLOCKQUOTE>
+<P>
+After getting the <TT>RemoteDebugger</TT>
+object and before the main processing loop begins, some setup
+chores are performed. This loop periodically gathers information
+about the target Virtual Machine's state, writing it into a buffer-a
+<TT>ByteArrayOutputStream. </TT>It
+then sends this buffer to the AWT window for display. Then the
+program sleeps for a period of time and wakes up and repeats the
+cycle.
+<BLOCKQUOTE>
+<TT>ByteArrayOutputStream&nbsp;&nbsp;bout
+= new ByteArrayOutputStream( 100 );<BR>
+PrintStream&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out&nbsp;&nbsp;=
+new PrintStream( bout );<BR>
+<BR>
+while ( keepgoing )<BR>
+{<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+collect memory information and sent if to viewer<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;out.println( &quot;Free Memory:&nbsp;&nbsp;&nbsp;&quot;+
+db.freeMemory() );<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;out.println(
+&quot;Total Memory:&nbsp;&nbsp;&quot;+ db.totalMemory() );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;view.Information(
+bout );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bout.reset();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// collect thread info and send to user
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;ThreadInfo(
+db, out );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;view.Threads(
+bout );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bout.reset();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// pause before next sample<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Thread.sleep(
+SAMPLE_TIME );<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Just as in <TT>easydb,</TT> the memory
+information is obtained from the <TT>RemoteDebugger</TT>
+object. Information about the current threads in the target Virtual
+Machine is obtained by the <TT>ThreadInfo</TT>
+method. This method is passed the <TT>RemoteDebugger</TT>
+object and an output stream to  which to write its data. The method
+is really uncomplicated. First, obtain a list of thread groups
+within the target Virtual Machine, print the thread group name,
+and list the names of each thread within the thread group. All
+of this information is written to a buffer which is then handed
+to the <TT>view</TT> which is the
+AWT text window displaying the data. The thread groups are retrieved
+with the following code:
+<BLOCKQUOTE>
+<TT>// lets get a list of threads by thread
+group<BR>
+RemoteThreadGroup[] grps = db.listThreadGroups(null);</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>RemoteThreadGroup</TT> object
+not only gives the group name, it also provides the mechanism
+to get information on the threads within the group. Thus to list
+the threads within a group, the <TT>RemoteThreadGroup</TT>
+object is passed to the <TT>ListThreads()</TT>
+method, which is implemented by <TT>JMon</TT>
+in the following manner.
+<BLOCKQUOTE>
+<TT>private void ListThreads( RemoteThreadGroup
+grp, PrintStream out ) throws Exception<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;RemoteThread[]
+thds = grp.listThreads( false );<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for(
+int x=0; x&lt;thds.length; x++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.println(
+&quot;&nbsp;&nbsp;&nbsp;&nbsp;&quot;+ thds[x] );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Once the <TT>listThreads()</TT> method
+is called on the group object, you then get an array of <TT>RemoteThread</TT>
+objects from which you can get the names of the threads. It's
+that simple to get this information using the Debugger API. Obtaining
+other information about a program is equally simple. The next
+demo program shows other information you can obtain once you have
+the <TT>RemoteThread</TT> objects.
+<H3><TT><B><FONT SIZE=4 >watch</FONT></B></TT></H3>
+<P>
+The <TT>watch</TT> tool is another
+simple example of other possible uses for the Debugger API. It
+periodically samples the target Java Virtual Machine and obtains
+the source location of the currently running method in each thread.
+The idea of this program is to get statistical data about where
+the program spends its time. This information is stored in a file
+and that file can be statically analyzed after the program ends.
+<P>
+First, <TT>watch</TT> obtains an instance
+of <TT>RemoteDebugger</TT> using a
+<TT>Connect()</TT> method, which is
+very similar to the one used in the previous <TT>JMon</TT>
+demo. Again, the workings of this method can be viewed in the
+source file on the CD-ROM. There is not much to learn there. It
+is worth highlighting the fact that every client of the Debugger
+API must obtain an instance of <TT>RemoteDebugger</TT>.
+     
+<P>
+As was mentioned, <TT>watch</TT> periodically
+samples the running program and determines the currently executing
+methods in each thread. The system threads are not included in
+this monitoring. All Java applications start with a &quot;main&quot;
+thread group where all new threads and thread groups are placed.
+Therefore this &quot;main&quot; thread group can be viewed as
+the parent group for the application. The method <TT>SetMainThreadGroup()</TT>
+was created to go out and initially get an instance of <TT>RemoteThreadGroup</TT>
+which represents this main group. Later during the sampling phase
+the search for active threads begins at the &quot;main&quot; thread
+group, ignoring the system threads. The code for this method is
+shown later, but for now realize it sets the &quot;main&quot;
+thread group for this sampling phase. Understanding this, you
+can look at the main processing loop of <TT>watch</TT>.
+It simply loops until told to quit performing a sample and then
+sleeps. 
+<BLOCKQUOTE>
+<TT>// get the main threadgroup now so we
+don't have to keep doing it<BR>
+// this effectively will allow us to ignore the system group since
+<BR>
+// we will be starting our thread search one level down in the
+&quot;thread tree&quot;<BR>
+SetMainThreadGroup( db );<BR>
+<BR>
+// simply loop taking samples until told to quit<BR>
+while ( keepgoing )<BR>
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// collect sample<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Sample(
+db, out );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+pause before next sample<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread.sleep( SAMPLE_TIME );<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+This loop is very simple. The real work is going on in the method
+<TT>Sample()</TT>. This method is
+passed the instance of <TT>RemoteDebugger</TT>
+as well as a previously created filestream for emitting its results
+to. Now take a look at what <TT>Sample()</TT>
+is doing. 
+<BLOCKQUOTE>
+<TT>/**<BR>
+&nbsp;* Get a list of the threads running on the remote<BR>
+</TT>&nbsp;<TT>* Java VM.<BR>
+&nbsp;*/<BR>
+private void Sample( RemoteDebugger db, PrintStream out ) throws
+Exception<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;RemoteThread
+thd = null;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+increment our sample counter<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;samp++;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;{
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+get a list of all thread below the main group; we will<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// recurse through
+the thread tree.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RemoteThread[]
+thds = main_grp.listThreads( true /*recurse*/ );<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+now go through each thread and print the class/method/line no
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// for the top
+most stackframe<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for(
+int x=0; x&lt;thds.length; x++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thd&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+thds[x];<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+suspend the thread grab the top frame and then resume <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+the thread. once we have the frame, we have a &quot;snapshot&quot;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+of the information we need.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thd.suspend();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RemoteStackFrame
+frame = thd.getCurrentFrame();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thd.resume();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+note some of these could be null if debug symbols are not present
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+this can be detected and we could walk up the call chain looking
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+for the first frame with debug symbols and use that one.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.println(
+samp + &quot;:&quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
++ thd.getName() + &quot;&gt;&quot; + frame.getRemoteClass().getName()
+<BR>
+</TT><FONT 
+FACE="ZapfDingbats">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&n
+bsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&Acirc;</FONT><TT>+&quot;.&quot;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
++ frame.getMethodName() <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
++ &quot;(): line:&quot;+ frame.getLineNumber() <BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
++&quot; pc:&quot;+ frame.getpc()&nbsp;&nbsp;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;catch ( Exception ee )<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;no_problems++;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+we will quit if we get 3 problems in a row<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( no_problems
+&gt;= 3 )<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.err.println(
+thd.getName()+&quot;: problem accessing stackfrmae&quot; );<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+ee;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// set our problem flag<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;no_problems
+= 0;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The first thing each sample does is get a list of the current
+threads in the main thread group. This is done by using the <TT>RemoteThreadGroup</TT>
+object for the main thread group. A call to the <TT>listThreads()</TT>
+method with a parameter value of <TT>true</TT>
+returns an array containing a <TT>RemoteThread</TT>
+object for every thread under the main thread group. The <TT>true</TT>
+tells the method to recurse through any subgroups, as opposed
+to just listing the threads within the group.
+<P>
+With this array of <TT>RemoteThread</TT>
+objects, you can now find the currently running method for each
+thread. This is exactly what occurs in the <TT>for</TT>
+loop. You simply step through the array, suspend the associated
+thread, grab its topmost stack frame, and then resume the thread.
+The stack frame is obtained by calling the <TT>getCurrentFrame()</TT>
+method. This method returns an instance of <TT>RemoteStackFrame</TT>,
+and its contents contain a snapshot of the information describing
+that specific method context at the time the thread was suspended.
+Thus you can resume the thread right away and then examine the
+contents. The thread is resumed in order to have as little impact
+on the target application as possible. After this, the <TT>watch</TT>
+program simply grabs the class and method name, the line number,
+and the pc value for that stack frame. This data is written to
+the file.
+<P>
+Notice that during the <TT>Sample()</TT>
+method any exceptions encountered simply cause the current sample
+to stop and return to the main loop. This is done in this program
+because the data being gathered represents a statistical measurement
+of the target application, and I chose to simply lose a sample
+rather than perform other actions. The main loop simply sleeps
+and then performs the next sample. If three exceptions turn up,
+the program is exited. A more refined tool may act differently.
+One thing to keep in mind is that the <TT>watch</TT>
+program should avoid affecting the target application as much
+as possible. This is why a thread is suspended for as little time
+as possible and also why not all of these threads are suspended.
+The consequence is that there is an opportunity for a thread to
+end after its <TT>RemoteThread</TT>
+counterpart is grabbed.
+<P>
+The last item to examine about <TT>watch</TT>
+is the <TT>SetMainThreadGroup()</TT>
+method. 
+<BLOCKQUOTE>
+<TT>private void SetMainThreadGroup( RemoteDebugger
+db ) throws Exception<BR>
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+lets get a list of threads by thread group<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;RemoteThreadGroup[] grps = db.listThreadGroups(
+null );<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// for each thread group list its threads
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for(
+int x=0; x&lt;grps.length; x++ )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;main_grp
+= grps[x];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+the main group when under the debugger is &lt;classname&gt;.main
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( main_grp.getName().endsWith( &quot;.main&quot; ) )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+some problem here<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throw new Exception( &quot;ThreadGroup
+'main' not found.&quot; );<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>RemoteDebugger</TT> object
+is used to get an array of all of the thread groups currently
+in the target Java Virtual Machine. Each element in the array
+is a <TT>RemoteThreadGroup</TT> object.
+The watch program steps through this array looking for the group
+whose name ends with &quot;<TT>.main</TT>.&quot;
+In the Sun JDK v1.01 Solaris implementation used to write this
+demo, the Virtual Machine always creates a main group where the
+application is started and therefore where all of its threads
+and thread groups belong (think of the thread/thread group structure
+as a tree). The name is the application's main class name followed
+by  &quot;<TT>.main</TT>.&quot; The
+<TT>watch</TT> program looks for a
+match and then considers this the main group and stores that <TT>RemoteThreadGroup</TT>
+for later use during the sampling phase.
+<P>
+This is pretty much the heart of the <TT>watch</TT>
+program. The <TT>DebuggerCallback</TT>
+implementation is very similar to that used in <TT>easydb</TT>,
+so there is not much new to show. The entire code for <TT>watch</TT>
+is included on the CD-ROM.
+<H2><A NAME="Summary"><B><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></B></A>
+</H2>
+<P>
+After reading this chapter, you should be familiar with the debugger
+model that the current JDK from Sun implements. You have learned
+about each class from the Java Debugger API that a debugging tool
+would utilize. Although the samples are not full-fledged debuggers,
+they do demonstrate how to use the Java Debugger API.
+<P>
+With the Java Debugger API, much of your debugger must concentrate
+on user-interface issues and not as much on low-level issues.
+For example, you do not need to know exactly how a breakpoint
+is set in the bytecode of the Java Virtual Machine. You have the
+luxury of just calling a simple method in a class. The Java Debugger
+API handles the low-level details and leaves the fancy user-interface
+issues to the tool creator. With these pieces, you should now
+be prepared to create the next great debugger for the Java community.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch25.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch27.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

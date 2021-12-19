@@ -1,0 +1,1450 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>JAAS Based Security in JBoss</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s72.html" title="Deployment on JBoss"><link rel="next" href="ch13s98.html" title="Using JavaMail in JBoss"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s72.html"><img src="images\prev.gif" border="0"></a><a href="ch13s98.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="howtojaas"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="howtojaas"></a>JAAS Based Security in JBoss</h2></div><div><h2 class="subtitle">Custom Security in JBoss Using the JBossSX Framework</h2></div></div><p>Author:<span class="author">Scott Stark</span>
+		<tt>&lt;<a href="mailto:Scott_Stark@displayscape.com">Scott_Stark@displayscape.com</a>&gt;</tt>
+	</p><p>
+		<div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10751"></a>Note</h3><p>This document applies to JBoss release 2.2.2 and later. If your
+using an earlier version of JBoss upgrade to the 2.2.2 version.</p></div>
+	</p><div class="section"><a name="Introduction"></a><div class="titlepage"><div><h3 class="title"><a name="Introduction"></a>Introduction</h3></div></div><p>This document describes the setting up secured access to JBoss hosted EJBs
+and web applications for the standard declarative J2EE security model. It should
+be sufficient to allow you to configure a simple security setup for testing and
+also give you a good start to being able to integrate your own custom security
+infrastructure into JBoss. For a more detailed description of the JBossSX
+framework see the JBossSX chapter.</p><div class="itemizedlist"><ul><li><p><a name="d0e10762"></a>
+					<a href="ch13s78.html#jaas1" title="Security Model Overview">Security Model Overview</a>
+				</p></li><li><p><a name="d0e10768"></a>
+					<a href="ch13s78.html#jaas2" title="How to Associate Security With the Container SecurityInterceptor">How to Associate Security With the Component Containers</a>
+				</p></li><li><p><a name="d0e10774"></a>
+					<a href="ch13s78.html#jaas3" title="Using JaasSecurityManager">Using JaasSecurityManager</a>
+				</p></li><li><p><a name="d0e10780"></a>
+					<a href="ch13s78.html#jaas4" title="The Beans and Servlet">The Beans and Servlet</a>
+				</p></li><li><p><a name="d0e10786"></a>
+					<a href="ch13s78.html#jaas5" title="Deploying a Secured J2EE Ear">Deploying a Secure J2EE EAR</a>
+				</p></li></ul></div></div><div class="section"><a name="jaas1"></a><div class="titlepage"><div><h3 class="title"><a name="jaas1"></a>Security Model Overview</h3></div></div><p>The security model in JBoss is based on the server container architecture's
+pluggable method interceptors and the fact that the container factory always
+inserts the security interceptor (org.jboss.ejb.plugins.SecurityInterceptor).
+The SecurityInterceptor delegates the tasks of principal authentication
+and principal role mapping to two different security interfaces:
+org.jboss.security.EJBSecurityManager and org.jboss.security.RealmMapping.
+JBoss includes a number of sample implementations of both interfaces which
+can be found in the org.jboss.security.plugins.samples package.</p><p>The default security implementation that comes pre-configured consists of a JMX service
+bean and a JAAS based implementation of both interfaces. The JMX bean is
+org.jboss.security.plugins.JaasSecurityManagerService and the security
+interfaces implementation is org.jboss.security.plugins.JaasSecurityManager.
+This document will focus on setting up the JaasSecurityManager via the
+JaasSecurityManagerService for a trivial stateless session bean. Once you can
+perform the steps documented to secure the example bean, you should be able
+to introduce your own production ready security using this example as a
+template.</p></div><div class="section"><a name="jaas2"></a><div class="titlepage"><div><h3 class="title"><a name="jaas2"></a>How to Associate Security With the Container SecurityInterceptor</h3></div></div><p>Ok, so you know that every EJB container in JBoss includes a SecurityInterceptor
+that delegates its security checks to a security manager implementation.
+How do you choose which implementations a given container uses?
+You specify this information via the jboss deployment descriptor.</p><div class="section"><a name="d0e10805"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10805"></a>The JBoss Deployment Descriptor(jboss.xml and standardjboss.xml)</h4></div></div><p>The JBoss deployment descriptor is the JBoss application specific deployment
+configuration file. It describes implementation behavior that is outside of the
+EJB spec ejb-jar.xml deployment descriptor. The standardjboss.xml version of the
+file is located in ${jboss_home}/conf/conf_name where ${jboss_home} is the
+directory into which you have installed the JBoss distribution and conf_name is
+the specific runtime configuration that you specify to the run.sh or
+run.bat script when starting the server. The default value for conf_name is
+"default". The standardjboss.xml specifies the global configuration default
+values. You can also specific ejb-jar or j2ee-ear specific jboss.xml descriptors
+that override specific or all configuration properties as appropriate for
+your application. There are a quite a few configurable properties that can be
+set in the file, but all are optional. For all of the possible configuration
+elements and their details see the jboss.dtd. We are only concerned with the
+three security specific elements: </p><div class="itemizedlist"><ul><li><p><a name="d0e10811"></a>security-domain</p></li><li><p><a name="d0e10814"></a>role-mapping-manager</p></li><li><p><a name="d0e10817"></a>authentication-module</p></li></ul></div><div class="section"><a name="d0e10820"></a><div class="titlepage"><div><h5 class="title"><a name="d0e10820"></a>security-domain</h5></div></div><p>The security-domain element specifies an implementation of both the
+org.jboss.security.RealmMapping and org.jboss.security.EJBSecurityManager
+interfaces to use for all J2EE deployment units in the ear or ejb-jar.
+The value is specified as the JNDI name where the object is located.
+Hence, the security-domain is like a JMS TopicConnectionFactory in
+that it is accessed via a JNDI name whose setup is a managed process.</p></div><div class="section"><a name="d0e10825"></a><div class="titlepage"><div><h5 class="title"><a name="d0e10825"></a>role-mapping-manager</h5></div></div><p>The role-mapping-manager element specifies the implementation of the
+org.jboss.security.RealmMapping interface that is to be used by the container
+SecurityInterceptor. The value is specified as the JNDI name where the object is
+located.  As far as the container configuration is concerned, an implementation
+of org.jboss.security.RealmMapping exists in the JBoss server JNDI namespace
+and role-mapping-manager element provides the location.</p></div><div class="section"><a name="d0e10830"></a><div class="titlepage"><div><h5 class="title"><a name="d0e10830"></a>authentication-module</h5></div></div><p>The authentication-module element specifies the implementation of the
+org.jboss.security.EJBSecurityManager interface that is to be used by the
+container SecurityInterceptor. The value is specified as the JNDI name to where
+the object is located, just like the role-mapping-manager.</p></div><div class="section"><a name="d0e10835"></a><div class="titlepage"><div><h5 class="title"><a name="d0e10835"></a>Sample jboss.xml</h5></div></div><p>A sample jboss.xml descriptor is: </p><div class="figure"><p><a name="jboss.xml.sample"></a><b>Figure 13.8. jboss.xml</b></p><pre class="programlisting">&lt;?xml version="1.0"?&gt;
+&lt;jboss&gt;
+    &lt;!-- All bean containers use this security manager by default --&gt;
+    &lt;security-domain&gt;java:/jaas/example1&lt;/security-domain&gt; <a name="jboss.sample.sd"></a><img src="images\callouts\1.png" alt="1" border="0">
+    &lt;container-configurations&gt;
+        &lt;!-- Override the role mapping function from that of the
+        security-domain setting for stateless session beans --&gt;
+        &lt;container-configuration&gt;
+            &lt;!-- Use the standardjboss.xml container-name so we only have
+            to specify the elements we want to override --&gt;
+            &lt;container-name&gt;Standard Stateless SessionBean&lt;/container-name&gt;
+            &lt;role-mapping-manager&gt;java:/jaas/session-roles&lt;/role-mapping-manager&gt;<a name="jboss.sample.rmm"></a><img src="images\callouts\2.png" alt="2" border="0">
+        &lt;/container-configuration&gt;
+    &lt;/container-configurations&gt;
+
+&lt;/jboss&gt;
+</pre></div><div class="calloutlist"><a name="d0e10849"></a><table border="0" summary="Callout list"><tr><td width="5%" valign="top" align="left"><a name="d0e10850"></a><a href="#jboss.sample.sd"><img src="images\callouts\1.png" alt="1" border="0"></a> </td><td valign="top" align="left"><p>Establishes a global security manager via the<tt>security-domain</tt> element. </p></td></tr><tr><td width="5%" valign="top" align="left"><a name="d0e10856"></a><a href="#jboss.sample.rmm"><img src="images\callouts\2.png" alt="2" border="0"></a> </td><td valign="top" align="left"><p>Overrides the global security manager role mapping function for
+stateless session beans.</p></td></tr></table></div><p>Here we are assigning a global security manager for all beans to the
+the object located at java:/jaas/example1 and we are setting a different
+role mapping manager for the &#8220;Standard Stateless SessionBean&#8221; container.
+This means that any stateless session beans bundled in the
+ear or jar will use the RealmMapper located at java:/jaas/session-roles rather
+the the security-domain element setting.
+We will see the reason for choosing JNDI names of the form java:/jaas/XXX
+over the next couple of sections.</p></div></div><div class="section"><a name="d0e10865"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10865"></a>The JBoss Web Deployment Descriptor(jboss-web.xml)</h4></div></div><p>The jboss-web.xml deployment descriptor is the JBoss application
+specific deployment used to set the security manager and JNDI bindings for web applications.
+Like the jboss.xml it uses a security-domain element to declare the JNDI name of the
+security manager that will perform authentication and authorization of users attempting
+to access secured content. An example jboss-web.xml descriptor that uses the same
+security manager used to secure EJBs is given in <a href="ch13s78.html#jboss-web.xml.sample" title="Figure 13.9. jboss.xml">Figure 13.9</a>.
+            </p><div class="figure"><p><a name="jboss-web.xml.sample"></a><b>Figure 13.9. jboss.xml</b></p><pre class="programlisting">&lt;?xml version="1.0"?&gt;
+&lt;jboss-web&gt;
+    &lt;!-- All secured web content uses this security manager --&gt;
+    &lt;security-domain&gt;java:/jaas/example1&lt;/security-domain&gt;
+&lt;/jboss-web&gt;
+</pre></div></div><div class="section"><a name="d0e10877"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10877"></a>Setting Up the Security Manager Implementation in JNDI</h4></div></div><p>So we have setup the container configuration security elements to specify the
+JNDI names where the desired RealmMapping and EJBSecurityManager implementations
+are to be obtained from. Now the question is how to bind implementations into the
+JBoss server JNDI namespace. The answer is to create a JMX mbean that creates and
+binds the desired implementations at server startup. The
+JaasSecurityManagerService is an mbean that has been written that we will use to
+perform the required setup.</p><p>To configure the JaasSecurityManagerService, open the
+${jboss_home}/conf/default/jboss.jcml file and look for an entry like:</p><pre class="programlisting">
+  &lt;!-- JAAS security manager and realm mapping --&gt;
+  &lt;mbean code="org.jboss.security.plugins.JaasSecurityManagerService" name="Security:name=JaasSecurityManager"&gt;
+    &lt;attribute name="SecurityManagerClassName"&gt;org.jboss.security.plugins.JaasSecurityManager&lt;/attribute&gt;
+    &lt;attribute name="SecurityProxyFactoryClassName"&gt;org.jboss.security.SubjectSecurityProxyFactory&lt;/attribute&gt;
+  &lt;/mbean&gt;
+</pre><p>If it is commented out or does not exist, uncomment or add the entry. The
+JaasSecurityManagerService service creates a reference to a JNDI Context at
+java:/jaas that lazily binds instances of org.jboss.security.plugins.JaasSecurityManager
+under java:/jaas as they are requested via JNDI. The details of how this happens are
+not important(if they are to you, look at the code). All we care about is that with the
+JaasSecurityManagerService setup, any lookup on the JBoss server JNDI InitialContext
+using a name of the form java:/jaas/xyz results in an object of type
+org.jboss.security.plugins.JaasSecurityManager that has the name xyz. Translated to code,
+this means:</p><pre class="programlisting">InitialContext ctx = new InitialContext();
+JaasSecurityManager jsm1 = (JaasSecurityManager) ctx.lookup("java:/jaas/xyz");
+String securityDomain = jsm1.getSecurityDomain();
+// securityDomain == "xyz"</pre><p>where <tt>jsm1</tt> is an instance of JaasSecurityManager that was created
+using the name "xyz".
+We are using this feature to bind a single instance of JaasSecurityManager for
+use as both the RealmMapping and EJBSecurityManager implementations in the preceeding
+jboss.xml descriptor. We can do this because JaasSecurityManager implements both
+interfaces. Now we need to know how we can actually authenticate users and specify the
+roles/identies they possess with a JaasSecurityManager.</p></div></div><div class="section"><a name="jaas3"></a><div class="titlepage"><div><h3 class="title"><a name="jaas3"></a>Using JaasSecurityManager</h3></div></div><p>As you would expect, the JaasSecurityManager uses JAAS (Java Authentication and
+Authorization Service) to implement both the user authentication and role mapping
+function of the RealmMapping and EJBSecurityManager interfaces. It does this by creating
+a JAAS Subject using the javax.security.auth.login.LoginContext mechanism. When
+the JaasSecurityManager needs to authenticate a user, it does a JAAS
+login using the following programmatic steps:</p><pre class="programlisting">
+Principal principal = ... passed in by SecurityInterceptor;<a name="jaas.principal"></a><img src="images\callouts\1.png" alt="1" border="0">
+Object credential = ... passed in by SecurityInterceptor;<a name="jaas.credential"></a><img src="images\callouts\2.png" alt="2" border="0">
+/* Access the security domain to which the security manager is bound. This is
+the xyz component of java:/jaas/xyz name used when defining the security-domain
+or role-mapping-manager config elements. */
+String name = getSecurityDomain();
+CallbackHandler handler = new org.jboss.security.plugins.SecurityAssociationHandler();
+handler.setSecurityInfo(principal, credential);
+LoginContext lc = new LoginContext(name, handler);
+// Validate principal, credential using the LoginModules configured for 'name'
+lc.login();
+Subject subject = lc.getSubject();
+Set subjectGroups = subject.getPrincipals(Group.class);
+// Get the Group whose name is 'Roles'
+Group roles = getGroup(subjectGroups, "Roles");
+
+	</pre><div class="calloutlist"><a name="d0e10907"></a><table border="0" summary="Callout list"><tr><td width="5%" valign="top" align="left"><a name="d0e10908"></a><a href="#jaas.principal"><img src="images\callouts\1.png" alt="1" border="0"></a> </td><td valign="top" align="left"><p>A Principal is an identity object. Often it represents the username string,
+but it can be an X509 cert, an http cookie, etc. This is ultimately passed to
+the LoginModule chain and so the interpretation of what the Principal is
+depends on the configured LoginModules for the security domain.</p></td></tr><tr><td width="5%" valign="top" align="left"><a name="d0e10911"></a><a href="#jaas.credential"><img src="images\callouts\2.png" alt="2" border="0"></a> </td><td valign="top" align="left"><p>The credential is the value the principal is attempting to use to
+verify his identity. It could be a password string or one-way has
+of the password, a session key or token, etc.
+This is ultimately passed to the LoginModule chain
+and so the interpretation of what the credential is depends on the
+configured LoginModules for the security domain.</p></td></tr></table></div><p>If you are familiar JAAS, you'll see that the name that was used in the creation of
+the JaasSecurityManager correlates with the LoginContext Configuration
+name. The JAAS LoginContext object looks to a configuration object that is made up
+of named sections that describe the LoginModules that need to be
+executed in order to perform authentication. This abstraction allows the
+authentication API to be independent of a particular implementation. The
+authentication of users and the assignment of user roles comes down to
+implementing a javax.security.auth.spi.LoginModule and creating login
+configuration entry that correlates with the JaasSecurityManager name.
+There exist a number of LoginModule implementations in the
+org.jboss.security.auth.spi package. We are going to go over the use of the
+simple UsersRolesLoginModule as well as the production read DatabaseServerLoginModule
+to demonstrate how to configure LoginModules to work with the JaasSecurityManager.
+You can choose from among the existing LoginModule implementations the one that
+best integrates with your security environment, or implement you own and then
+configure it using the same steps we will use.</p><div class="section"><a name="d0e10916"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10916"></a>Using UsersRolesLoginModule</h4></div></div><p>The UsersRolesLoginModule class is a simple properties file based
+implemention that uses two Java Properties(users.properties and roles.properities)
+to perform authentication and role mapping respectively.</p><div class="section"><a name="d0e10921"></a><div class="titlepage"><div><h5 class="title"><a name="d0e10921"></a>users.properties</h5></div></div><p>The users.properties file is a java properties formatted file that specifies the
+username to password mapping. Its format is:<pre class="programlisting">username1=password1
+username2=password2
+...</pre>with one entry per line. </p></div><div class="section"><a name="d0e10929"></a><div class="titlepage"><div><h5 class="title"><a name="d0e10929"></a>roles.properties</h5></div></div><p>The roles.properties file is a java properties formatted file that specifies
+the username to role(s) mapping. Its format is:<pre class="programlisting">username1=role1[,role2,...]
+username2=role1
+...</pre>with one entry per line. If a user has multiple roles they are specified using a
+comma separated list. You can also specify groups of roles using a syntax like:<pre class="programlisting">username1.GroupName1=role1[,role2,...]
+username2.GroupName2=role1
+...</pre>When no GroupName is specified a group name of 'Roles' is implied.</p></div><div class="section"><a name="d0e10940"></a><div class="titlepage"><div><h5 class="title"><a name="d0e10940"></a>The LoginModule Configuration File</h5></div></div><p>By default JAAS uses a LoginModule configuration file to describe which
+LoginModule instances need to be executed during a login. The default
+config for the JBoss server is ${jboss_home)/conf/default/auth.conf.
+The syntax is:<pre class="synopsis">name {
+        login_module_class_name (required|optional|...)
+        [options]
+        ;
+};</pre>See the JAAS documentation for the complete syntax description. An
+example auth.conf file with two configurations is given below in <a href="ch13s78.html#server.auth.conf" title="Figure 13.10. The JBoss Server JAAS Login Config File&#xA;					($jboss_home/conf/default/auth.conf)">Figure 13.10</a>.</p><div class="figure"><p><a name="server.auth.conf"></a><b>Figure 13.10. The JBoss Server JAAS Login Config File
+					($jboss_home/conf/default/auth.conf)</b></p><pre class="programlisting">example1 {
+// A properties file LoginModule that supports CallerPrincipal mapping
+    org.jboss.security.auth.spi.UsersRolesLoginModule required
+    ;
+};
+
+example2 {
+/* A JDBC based LoginModule
+LoginModule options:
+dsJndiName: The name of the DataSource of the database containing the Principals, Roles tables
+principalsQuery: The prepared statement query equivalent to:
+    "select Password from Principals where PrincipalID=?"
+rolesQuery: The prepared statement query equivalent to:
+    "select Role, RoleGroup from Roles where PrincipalID=?"
+*/
+    org.jboss.security.auth.spi.DatabaseServerLoginModule required
+    dsJndiName="java:/DefaultDS"
+    principalsQuery="select Password from Principals where PrincipalID=?"
+    rolesQuery="select Role, RoleGroup from Roles where PrincipalID=?"
+    ;
+};</pre></div><p>This indicates that the UsersRolesLoginModule we want to use is setup for
+the configuration named 'example1'. This name also matches name of the
+security domain portion of the JNDI name java:/jaas/example1 used as the
+security-domain element in the sample jboss.xml file shown in <a href="ch13s78.html#jboss.xml.sample" title="Figure 13.8. jboss.xml">Figure 13.8</a>.
+The correlation between the security-domain element value and the login config file
+entry determines which LoginModules executed by the JaasSecurityManager to perform
+authentication and authorization. When a user attempts to execute methods on EJBs
+secured under the java:/jaas/example1 security domain, the user will be authenticated
+against the UsersRolesLoginModule since this the the LoginModule configured under the
+example1 name in the server auth.conf file.</p><p>There is also a client side version of the auth.conf that is used by the client
+connecting to JBoss. It is located in ${jboss_home}/client/auth.conf and the default version contents
+are given in <a href="ch13s78.html#client.auth.conf" title="Figure 13.11. The JBoss Client JAAS Login Config File&#xA;						($jboss_home/client/auth.conf)">Figure 13.11</a>. The key entry here is the 'other' entry that contains
+the 'org.jboss.security.ClientLoginModule  required;' setting.
+            <div class="figure"><p><a name="client.auth.conf"></a><b>Figure 13.11. The JBoss Client JAAS Login Config File
+						($jboss_home/client/auth.conf)</b></p><pre class="programlisting">srp {
+    // Example client auth.conf for using the SRPLoginModule
+    org.jboss.srp.jaas.SRPLoginModule required
+        password-stacking="useFirstPass"
+        principalClassName="org.jboss.security.SimplePrincipal"
+        srpServerJndiName="SRPServerInterface"
+        debug=true
+        ;
+
+    // jBoss LoginModule
+    org.jboss.security.ClientLoginModule  required
+        password-stacking="useFirstPass"
+        ;
+
+    // Put your login modules that need jBoss here
+};
+
+other {
+    // Put your login modules that work without jBoss here
+
+    // jBoss LoginModule
+    org.jboss.security.ClientLoginModule  required;
+
+    // Put your login modules that need jBoss here
+};</pre></div>
+					<div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10969"></a>Note</h3><p>The configuration named 'other' is used by JAAS whenever it can't find
+an entry matching the name passed to the LoginContext constructor.</p></div>
+				</p></div></div></div><div class="section"><a name="jaas4"></a><div class="titlepage"><div><h3 class="title"><a name="jaas4"></a>The Beans and Servlet</h3></div></div><p>We have now touched on all of the JBoss security related elements we need to
+configure to secure the deployment of EJBs and web applications.
+Let's now put together two simple session beans and a servlet that we will secure to
+demonstrate the use what we have gone over.</p><p>The following figures give the code listings for the the home, remote
+and bean classes for the simple stateless and stateful session beans we
+are going to secure, along with a simple client that accesses instances
+of the session beans. Also shown is a simple servlet that accesses one
+of the EJBs. The complete source code along with deployment descriptors and
+an Ant build script is available <a href="http://www.jboss.org/doco_files/jaas-howto.zip" target="_top">JAAS-Howto Files</a>.
+        </p><div class="figure"><p><a name="Session.java"></a><b>Figure 13.12. The Session Beans Remote Interface</b></p><pre class="programlisting">import javax.ejb.*;
+import java.rmi.*;
+
+public interface Session extends EJBObject
+{
+    public String echo(String arg) throws RemoteException;
+    public void noop() throws RemoteException;
+}</pre></div><div class="figure"><p><a name="SessionHome.java"></a><b>Figure 13.13. The Session Beans Home Interface</b></p><pre class="programlisting">import javax.ejb.*;
+import java.rmi.*;
+
+public interface SessionHome extends EJBHome
+{
+    public Session create() throws RemoteException, CreateException;
+}</pre></div><div class="figure"><p><a name="StatelessSessionBean.java"></a><b>Figure 13.14. The Stateless Session Bean</b></p><pre class="programlisting">import java.rmi.RemoteException;
+import java.security.Principal;
+import javax.ejb.*;
+
+/**
+@ejbHome: SessionHome
+@ejbRemote: Session
+*/
+public class StatelessSessionBean implements SessionBean
+{
+    private SessionContext sessionContext;
+
+    public void ejbCreate() throws CreateException
+    {
+        System.out.println("StatelessSessionBean.ejbCreate() called");
+    }
+
+    public void ejbActivate()
+    {
+        System.out.println("StatelessSessionBean.ejbActivate() called");
+    }
+
+    public void ejbPassivate()
+    {
+        System.out.println("StatelessSessionBean.ejbPassivate() called");
+    }
+
+    public void ejbRemove()
+    {
+        System.out.println("StatelessSessionBean.ejbRemove() called");
+    }
+
+    public void setSessionContext(SessionContext context)
+    {
+        sessionContext = context;
+    }
+
+    public String echo(String arg)
+    {
+        System.out.println("StatelessSessionBean.echo, arg="+arg);
+        Principal p = sessionContext.getCallerPrincipal();
+        System.out.println("StatelessSessionBean.echo, callerPrincipal="+p);
+        return arg;
+    }
+    public void noop()
+    {
+        System.out.println("StatelessSessionBean.noop");
+        Principal p = sessionContext.getCallerPrincipal();
+        System.out.println("StatelessSessionBean.noop, callerPrincipal="+p);
+    }
+}</pre></div><div class="figure"><p><a name="StatefulSessionBean.java"></a><b>Figure 13.15. The Stateful Session Bean</b></p><pre class="programlisting">import java.rmi.RemoteException;
+import java.security.Principal;
+import javax.ejb.*;
+
+/**
+@ejbHome: SessionHome
+@ejbRemote: Session
+*/
+public class StatefulSessionBean implements SessionBean
+{
+    private SessionContext sessionContext;
+
+    public void ejbCreate() throws CreateException
+    {
+        System.out.println("StatefulSessionBean.ejbCreate() called");
+    }
+
+    public void ejbActivate() 
+    {
+        System.out.println("StatefulSessionBean.ejbActivate() called");
+    }
+
+    public void ejbPassivate() 
+    {
+        System.out.println("StatefulSessionBean.ejbPassivate() called");
+    }
+
+    public void ejbRemove() 
+    {
+        System.out.println("StatefulSessionBean.ejbRemove() called");
+    }
+
+    public void setSessionContext(SessionContext context) 
+    {
+        sessionContext = context;
+    }
+
+    public String echo(String arg)
+    {
+        System.out.println("StatefulSessionBean.echo, arg="+arg);
+        Principal p = sessionContext.getCallerPrincipal();
+        System.out.println("StatefulSessionBean.echo, callerPrincipal="+p);
+        return arg;
+    }
+    public void noop() 
+    {
+        System.out.println("StatefulSessionBean.noop");
+        Principal p = sessionContext.getCallerPrincipal();
+        System.out.println("StatefulSessionBean.noop, callerPrincipal="+p);
+    }
+}</pre></div><div class="figure"><p><a name="ejb-jar.xml"></a><b>Figure 13.16. The ejb-jar Deployment Descriptor</b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;!DOCTYPE ejb-jar PUBLIC "-//Sun Microsystems, Inc.//DTD Enterprise JavaBeans 1.1//EN"
+    "http://java.sun.com/j2ee/dtds/ejb-jar_1_1.dtd"&gt;
+
+&lt;ejb-jar&gt;
+    &lt;display-name&gt;SecurityTests&lt;/display-name&gt;
+    &lt;enterprise-beans&gt;
+        &lt;session&gt;
+            &lt;description&gt;A trival stateless session echo bean&lt;/description&gt;
+            &lt;ejb-name&gt;StatelessSession&lt;/ejb-name&gt;
+            &lt;home&gt;SessionHome&lt;/home&gt;
+            &lt;remote&gt;Session&lt;/remote&gt;
+            &lt;ejb-class&gt;StatelessSessionBean&lt;/ejb-class&gt;
+            &lt;session-type&gt;Stateless&lt;/session-type&gt;
+            &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+        &lt;/session&gt;
+
+        &lt;session&gt;
+            &lt;description&gt;A trival stateful session echo bean&lt;/description&gt;
+            &lt;ejb-name&gt;StatefulSession&lt;/ejb-name&gt;
+            &lt;home&gt;SessionHome&lt;/home&gt;
+            &lt;remote&gt;Session&lt;/remote&gt;
+            &lt;ejb-class&gt;StatefulSessionBean&lt;/ejb-class&gt;
+            &lt;session-type&gt;Stateful&lt;/session-type&gt;
+            &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+        &lt;/session&gt;
+    &lt;/enterprise-beans&gt;
+
+    &lt;assembly-descriptor&gt;
+        &lt;security-role&gt;
+            &lt;role-name&gt;Echo&lt;/role-name&gt;
+        &lt;/security-role&gt;
+
+        &lt;method-permission&gt;
+            &lt;role-name&gt;Echo&lt;/role-name&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;StatelessSession&lt;/ejb-name&gt;
+                &lt;method-name&gt;*&lt;/method-name&gt;
+            &lt;/method&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;StatefulSession&lt;/ejb-name&gt;
+                &lt;method-name&gt;*&lt;/method-name&gt;
+            &lt;/method&gt;
+        &lt;/method-permission&gt;
+
+        &lt;method-permission&gt;
+            &lt;role-name&gt;Coder&lt;/role-name&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;StatefulSession&lt;/ejb-name&gt;
+                &lt;method-name&gt;create&lt;/method-name&gt;
+            &lt;/method&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;StatefulSession&lt;/ejb-name&gt;
+                &lt;method-name&gt;remove&lt;/method-name&gt;
+            &lt;/method&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;StatefulSession&lt;/ejb-name&gt;
+                &lt;method-name&gt;noop&lt;/method-name&gt;
+            &lt;/method&gt;
+        &lt;/method-permission&gt;
+    &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;
+</pre></div><div class="figure"><p><a name="jboss.xml"></a><b>Figure 13.17. The jboss.xml Deployment Descriptor</b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;jboss&gt;
+    &lt;!-- All bean containers use this security manager by default --&gt;
+    &lt;security-domain&gt;java:/jaas/example1&lt;/security-domain&gt;
+
+    &lt;enterprise-beans&gt;
+        &lt;session&gt;
+            &lt;ejb-name&gt;StatelessSession&lt;/ejb-name&gt;
+            &lt;jndi-name&gt;example1/StatelessSession&lt;/jndi-name&gt;
+        &lt;/session&gt;
+
+        &lt;session&gt;
+            &lt;ejb-name&gt;StatefulSession&lt;/ejb-name&gt;
+            &lt;jndi-name&gt;example1/StatefulSession&lt;/jndi-name&gt;
+        &lt;/session&gt;
+    &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+</pre></div><div class="figure"><p><a name="SessionClient.java"></a><b>Figure 13.18. The Client</b></p><pre class="programlisting">
+import java.io.IOException;
+import javax.naming.InitialContext;
+import javax.rmi.PortableRemoteObject;
+import javax.security.auth.callback.*;
+import javax.security.auth.login.*;
+
+/** A simple session client that access the two secured EJBs as the user
+passed in on the command line.
+
+@author Scott_Stark@displayscape.com
+@version $Revision: 3.0 $
+*/
+public class SessionClient
+{
+    static class AppCallbackHandler implements CallbackHandler
+    {
+        private String username;
+        private char[] password;
+
+        public AppCallbackHandler(String username, char[] password)
+        {
+            this.username = username;
+            this.password = password;
+        }
+
+        public void handle(Callback[] callbacks) throws
+            java.io.IOException, UnsupportedCallbackException
+        {
+            for (int i = 0; i &lt; callbacks.length; i++)
+            {
+                if (callbacks[i] instanceof NameCallback)
+                {
+                    NameCallback nc = (NameCallback)callbacks[i];
+                    nc.setName(username);
+                }
+                else if (callbacks[i] instanceof PasswordCallback)
+                {
+                    PasswordCallback pc = (PasswordCallback)callbacks[i];
+                    pc.setPassword(password);
+                }
+                else
+                {
+                    throw new UnsupportedCallbackException(callbacks[i], "Unrecognized Callback");
+                }
+            }
+        }
+    }
+
+    public static void main(String args[]) throws Exception
+    {
+        if( args.length != 3 )
+            throw new IllegalArgumentException("Usage: username password example");
+
+        String name = args[0];
+        char[] password = args[1].toCharArray();
+        String example = args[2];
+        System.out.println("+++ Running SessionClient with username="+name+", password="+args[1]+", example="+example);
+        try
+        {
+            AppCallbackHandler handler = new AppCallbackHandler(name, password);
+            LoginContext lc = new LoginContext("TestClient", handler);
+            System.out.println("Created LoginContext");
+            lc.login();
+        }
+        catch (LoginException le)
+        {
+            System.out.println("Login failed");
+            le.printStackTrace();
+        }
+
+        try
+        {
+            InitialContext iniContext = new InitialContext();
+            SessionHome home = (SessionHome) iniContext.lookup(example+"/StatelessSession");
+            System.out.println("Found StatelessSessionHome");
+            Session bean = home.create();
+            System.out.println("Created StatelessSession");
+            System.out.println("Bean.echo('Hello') -&gt; "+bean.echo("Hello"));
+            bean.remove();
+        }
+        catch(Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        try
+        {
+            InitialContext iniContext = new InitialContext();
+            SessionHome home = (SessionHome) iniContext.lookup(example+"/StatefulSession");
+            System.out.println("Found StatefulSessionHome");
+            Session bean = home.create();
+            System.out.println("Created StatefulSession");
+            bean.noop();
+            System.out.println("Bean.noop() called");
+            System.out.println("Bean.echo('Hello') -&gt; "+bean.echo("Hello"));
+            bean.remove();
+        }
+        catch(Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+}
+</pre></div><div class="figure"><p><a name="SecureEJBServlet.java"></a><b>Figure 13.19. The Secure Servlet</b></p><pre class="programlisting">
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.security.Principal;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import Session;
+import SessionHome;
+
+/** A simple servlet that accesses the stateless session bean.
+@author Scott_Stark@displayscape.com
+*/
+public class SecureEJBServlet extends HttpServlet
+{
+    protected void processRequest(HttpServletRequest request, HttpServletResponse response)
+        throws ServletException, IOException
+    {
+        String echoMsg = null;
+        try
+        {
+            InitialContext ctx = new InitialContext();
+            SessionHome home = (SessionHome) ctx.lookup("java:comp/env/ejb/SecuredEJB");
+            Session bean = home.create();
+            echoMsg = bean.echo("Hello");
+        }
+        catch(Exception e)
+        {
+            throw new ServletException("Failed to call SecuredEJB.echo", e);
+        }
+        Principal user = request.getUserPrincipal();
+        response.setContentType("text/html");
+        PrintWriter out = response.getWriter();
+        out.println("&lt;html&gt;");
+        out.println("&lt;head&gt;&lt;title&gt;SecureEJBServlet&lt;/title&gt;&lt;/head&gt;");
+        out.println("&lt;h1&gt;SecureServlet Accessed&lt;/h1&gt;");
+        out.println("&lt;body&gt;&lt;pre&gt;You have accessed this servlet as user: "+user);
+        out.println("The SecuredEJB.echo('Hello') returned: "+echoMsg);
+        out.println("&lt;/pre&gt;&lt;/body&gt;&lt;/html&gt;");
+        out.close();
+    }
+
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+        throws ServletException, IOException
+    {
+        processRequest(request, response);
+    }
+
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+        throws ServletException, IOException
+    {
+        processRequest(request, response);
+    }
+}
+</pre></div><div class="figure"><p><a name="web-app.xml"></a><b>Figure 13.20. The web-app Deployment Descriptor</b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;!DOCTYPE web-app
+    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.2//EN"
+    "http://java.sun.com/j2ee/dtds/web-app_2_2.dtd"&gt;
+
+&lt;web-app&gt;
+&lt;!-- ### Servlets --&gt;
+    &lt;servlet&gt;
+        &lt;servlet-name&gt;SecureServlet&lt;/servlet-name&gt;
+        &lt;servlet-class&gt;SecureEJBServlet&lt;/servlet-class&gt;
+    &lt;/servlet&gt;
+    &lt;servlet-mapping&gt;
+        &lt;servlet-name&gt;SecureServlet&lt;/servlet-name&gt;
+        &lt;url-pattern&gt;/restricted/SecureServlet&lt;/url-pattern&gt;
+    &lt;/servlet-mapping&gt;
+
+&lt;!-- ### Security --&gt;
+    &lt;security-constraint&gt;
+        &lt;web-resource-collection&gt;
+            &lt;web-resource-name&gt;Restricted&lt;/web-resource-name&gt;
+            &lt;description&gt;Declarative security tests&lt;/description&gt;
+            &lt;url-pattern&gt;/restricted/*&lt;/url-pattern&gt;
+            &lt;http-method&gt;HEAD&lt;/http-method&gt;
+            &lt;http-method&gt;GET&lt;/http-method&gt;
+            &lt;http-method&gt;POST&lt;/http-method&gt;
+            &lt;http-method&gt;PUT&lt;/http-method&gt;
+            &lt;http-method&gt;DELETE&lt;/http-method&gt;
+        &lt;/web-resource-collection&gt;
+        &lt;auth-constraint&gt;
+            &lt;role-name&gt;Echo&lt;/role-name&gt;
+        &lt;/auth-constraint&gt;
+        &lt;user-data-constraint&gt;
+            &lt;description&gt;no description&lt;/description&gt;
+            &lt;transport-guarantee&gt;NONE&lt;/transport-guarantee&gt;
+        &lt;/user-data-constraint&gt;
+    &lt;/security-constraint&gt;
+
+    &lt;login-config&gt;
+        &lt;auth-method&gt;BASIC&lt;/auth-method&gt;
+        &lt;realm-name&gt;JAAS Tutorial Servlets&lt;/realm-name&gt;
+    &lt;/login-config&gt;
+
+    &lt;security-role&gt;
+        &lt;description&gt;A user allowed to invoke echo methods&lt;/description&gt;
+        &lt;role-name&gt;Echo&lt;/role-name&gt;
+    &lt;/security-role&gt;
+
+&lt;!-- ### EJB References (java:comp/env/ejb) --&gt;
+    &lt;ejb-ref&gt;
+        &lt;ejb-ref-name&gt;ejb/SecuredEJB&lt;/ejb-ref-name&gt;
+        &lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;
+        &lt;home&gt;SessionHome&lt;/home&gt;
+        &lt;remote&gt;Session&lt;/remote&gt;
+    &lt;/ejb-ref&gt;
+
+&lt;/web-app&gt;
+</pre></div><div class="figure"><p><a name="jboss-web.xml"></a><b>Figure 13.21. The jboss-web.xml Deployment Descriptor</b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;jboss-web&gt;
+    &lt;security-domain&gt;java:/jaas/example1&lt;/security-domain&gt;
+
+    &lt;ejb-ref&gt;
+        &lt;ejb-ref-name&gt;ejb/SecuredEJB&lt;/ejb-ref-name&gt;
+        &lt;jndi-name&gt;example1/StatelessSession&lt;/jndi-name&gt;
+    &lt;/ejb-ref&gt;
+&lt;/jboss-web&gt;
+</pre></div><p>The session beans are trivial and both the stateless and stateful bean use the
+same home and remote interfaces. The client is also trivial except for the use
+of a JAAS LoginContext and CallbackHandler implementation. This is how a client
+establishes the username and password that is sent to JBoss. The servlet looks up
+the home interface of the StatelessSession bean and creates a Session instance.
+It then invokes echo on this and displays the user principal that accessed the
+servlet and the output of the Session.echo method.
+Now, finally let's put everything together and deploy the session beans
+and servlet as a J2EE ear.</p></div><div class="section"><a name="jaas5"></a><div class="titlepage"><div><h3 class="title"><a name="jaas5"></a>Deploying a Secured J2EE Ear</h3></div></div><p>This section details the procedure for building, deploying and testing
+a secured J2EE ear made up of the EJBs and servlet shown in the preceeding figures. 
+I'll walk you through the build of two different versions of the ears using Ant
+and the build.xml file contained in the tutorial files bundle.
+The files bundle is available from <a href="http://www.jboss.org/doco_files/jaas-howto.zip" target="_top">JAAS-Howto Files</a>.</p><div class="procedure"><p><a name="d0e11043"></a><b>Procedure 13.3. Deployment Steps</b></p><ol type="1"><li><a name="d0e11046"></a><p>Download the JBoss/Tomcat bundle. Go to<a href="http://sourceforge.net/projects/jboss/" target="_top">JBoss @ SourceForge</a>and download the JBoss-2.2.2/Tomcat-3.2.2 bundle or later version. The 2.2.2 version of
+JBoss is the first to ship with the integrated ejb/web security that is required for this
+tutorial example. Unpack the archive to create a JBoss-2.2.2_Tomcat-3.2.2 directory
+that contains jboss and tomcat subdirectories. I have downloaded and unpacked the
+archive into /tmp on my machine so the directory structure looks like that shown
+in <a href="ch13s78.html#jaas.bundle.structure" title="Figure 13.22. JBoss-2.2.2 Tomcat-3.2.2 Bundle Structure">Figure 13.22</a>. The jboss.dist and servlet.jar labels
+in red will be used below to configure the Ant build script.</p><div class="figure"><p><a name="jaas.bundle.structure"></a><b>Figure 13.22. JBoss-2.2.2 Tomcat-3.2.2 Bundle Structure</b></p><div class="mediaobject"><img src="images\jaas_bundle_structure.jpg"></div></div></li><li><a name="d0e11060"></a><p>Download the tutorial files bundle. If you have not already, download
+the tutorial files from here: <a href="http://www.jboss.org/doco_files/jaas-howto.zip" target="_top">JAAS-Howto Files</a>.
+Unpack the archive to create a jaas directory with the contents shown in <a href="ch13s78.html#jaas.files" title="Figure 13.23. JAAS Tutorial Files">Figure 13.23</a>.<div class="figure"><p><a name="jaas.files"></a><b>Figure 13.23. JAAS Tutorial Files</b></p><div class="mediaobject"><img src="images\jaas_files.jpg"></div></div>
+				</p></li><li><a name="d0e11075"></a><p>Build and deploy the tutorial ears.</p><ol type="a"><li><a name="d0e11079"></a><p>Edit the build.xml to set the correct location of
+the jboss.dist and servlet.jar variables to the corresponding paths of your
+JBoss/Tomcat bundle distribution installation. See <a href="ch13s78.html#jaas.bundle.structure" title="Figure 13.22. JBoss-2.2.2 Tomcat-3.2.2 Bundle Structure">Figure 13.22</a>for the items in the distribution to which jboss.dist and servlet.jar refer. For
+my installation of the distribution under /tmp as shown above, the correct settings
+are given in <a href="ch13s78.html#build.xml.paths" title="Figure 13.24. JAAS Tutorial Files">Figure 13.24</a>.<div class="figure"><p><a name="build.xml.paths"></a><b>Figure 13.24. JAAS Tutorial Files</b></p><pre class="programlisting">
+&lt;project name="JAAS Howto Build Script" default="ears" basedir="."&gt;
+...
+    &lt;!-- Override with your JBoss server dist location --&gt;
+    &lt;property name="jboss.dist" value="/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss"/&gt;
+    &lt;!-- Override with your web server servlet jar location --&gt;
+    &lt;property name="servlet.jar" value="/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar"/&gt;
+</pre></div>    
+						</p></li><li><a name="d0e11092"></a><p>Download and install Ant1.3 or later. If you don't
+have a copy of Ant on your system download version 1.3 or later from the Apache
+site <a href="http://jakarta.apache.org/ant/index.html" target="_top">here</a>.</p></li><li><a name="d0e11098"></a><p>Build and install the tutorial ears. From within
+the jaas directory that contains the Ant build.xml file, execute the following
+command:<div class="literallayout">&nbsp;&nbsp;&nbsp;&nbsp;<br>
+								<b>bash-2.04$&nbsp;ant&nbsp;ears<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[mkdir]&nbsp;Created&nbsp;dir:&nbsp;/tmp/jaas/build/classes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[javac]&nbsp;Compiling&nbsp;7&nbsp;source&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/classes<br>
+<br>
+jar1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[mkdir]&nbsp;Created&nbsp;dir:&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[jar]&nbsp;Building&nbsp;jar:&nbsp;/tmp/jaas/build/ssbean1.jar<br>
+<br>
+war1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[mkdir]&nbsp;Created&nbsp;dir:&nbsp;/tmp/jaas/build/WEB-INF/classes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/WEB-INF/classes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[jar]&nbsp;Building&nbsp;jar:&nbsp;/tmp/jaas/build/tutorial1.war<br>
+<br>
+ear1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[jar]&nbsp;Building&nbsp;jar:&nbsp;/tmp/jaas/build/tutorial1.ear<br>
+<br>
+jar2:<br>
+&nbsp;&nbsp;&nbsp;[delete]&nbsp;Deleting&nbsp;directory&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[mkdir]&nbsp;Created&nbsp;dir:&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[jar]&nbsp;Building&nbsp;jar:&nbsp;/tmp/jaas/build/ssbean2.jar<br>
+<br>
+war2:<br>
+&nbsp;&nbsp;&nbsp;[delete]&nbsp;Deleting&nbsp;directory&nbsp;/tmp/jaas/build/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[mkdir]&nbsp;Created&nbsp;dir:&nbsp;/tmp/jaas/build/WEB-INF/classes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/WEB-INF/classes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[jar]&nbsp;Building&nbsp;jar:&nbsp;/tmp/jaas/build/tutorial2.war<br>
+<br>
+ear2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/jaas/build/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[jar]&nbsp;Building&nbsp;jar:&nbsp;/tmp/jaas/build/tutorial2.ear<br>
+<br>
+ears:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/deploy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/deploy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[copy]&nbsp;Copying&nbsp;1&nbsp;files&nbsp;to&nbsp;/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/conf/tomcat<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;8&nbsp;seconds</b><br>
+							</div>
+						</p><p>This has created two ears(tutorial1.ear, tutorial2.ear)
+that contain the ejbs and servlet presented earlier and placed them into the
+JBoss server deploy directory. It has also replaced the contents of the JBoss
+server auth.conf file with the jaas/server_auth.conf file contents. This file
+is the same as that show in <a href="ch13s78.html#server.auth.conf" title="Figure 13.10. The JBoss Server JAAS Login Config File&#xA;					($jboss_home/conf/default/auth.conf)">Figure 13.10</a>.</p></li></ol></li><li><a name="d0e11111"></a><p>Start the JBoss/Tomcat server. Go to the jboss/bin
+directory of your JBoss/Tomcat bundle installation and execute the
+run_with_tomcat.sh for *nix platforms and run_with_tomcat.bat for w32
+platforms. A number of messages will be displayed on your console. Some of
+the key messages you should see are:</p><div class="literallayout">&nbsp;&nbsp;&nbsp;&nbsp;<br>
+					<b>bash-2.04$&nbsp;run_with_tomcat.sh<br>
+JBOSS_CLASSPATH=:/lib/tools.jar:run.jar:../lib/crimson.jar<br>
+jboss.home&nbsp;=&nbsp;/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;JAAS&nbsp;LoginConfig:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/conf/tomcat/auth.conf<br>
+Using&nbsp;configuration&nbsp;"tomcat"<br>
+...<br>
+[EmbeddedTomcatSX]&nbsp;Starting<br>
+[EmbeddedTomcatSX]&nbsp;Starting&nbsp;EmbeddedTomcatSX....<br>
+2001-05-25&nbsp;08:45:45&nbsp;-&nbsp;ContextManager:&nbsp;Adding&nbsp;context&nbsp;Ctx(&nbsp;/examples&nbsp;)<br>
+2001-05-25&nbsp;08:45:45&nbsp;-&nbsp;ContextManager:&nbsp;Adding&nbsp;context&nbsp;Ctx(&nbsp;/admin&nbsp;)<br>
+[EmbeddedTomcatSX]&nbsp;Starting&nbsp;tomcat.&nbsp;Check&nbsp;logs/tomcat.log&nbsp;for&nbsp;error&nbsp;messages&nbsp;<br>
+2001-05-25&nbsp;08:45:46&nbsp;-&nbsp;ContextManager:&nbsp;Adding&nbsp;context&nbsp;Ctx(&nbsp;&nbsp;)<br>
+2001-05-25&nbsp;08:45:47&nbsp;-&nbsp;ContextManager:&nbsp;Adding&nbsp;context&nbsp;Ctx(&nbsp;/test&nbsp;)<br>
+2001-05-25&nbsp;08:45:49&nbsp;-&nbsp;PoolTcpConnector:&nbsp;Starting&nbsp;HttpConnectionHandler&nbsp;on&nbsp;8080<br>
+[EmbeddedTomcatSX]&nbsp;OK<br>
+[EmbeddedTomcatSX]&nbsp;Started<br>
+...<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;Deploy&nbsp;J2EE&nbsp;application:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/deploy/tutorial1.ear<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;Create&nbsp;application&nbsp;tutorial1.ear<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;inflate&nbsp;and&nbsp;install&nbsp;module&nbsp;tutorial1.war<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;install&nbsp;module&nbsp;ssbean1.jar<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;add&nbsp;all&nbsp;ejb&nbsp;jar&nbsp;files&nbsp;to&nbsp;the&nbsp;common&nbsp;classpath<br>
+[Container&nbsp;factory]&nbsp;Deploying:file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial1.ear<br>
+[Verifier]&nbsp;Verifying&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial1.ear/ejb1004.jar<br>
+[Container&nbsp;factory]&nbsp;Deploying&nbsp;StatelessSession<br>
+[Container&nbsp;factory]&nbsp;lookup&nbsp;securityManager&nbsp;name:&nbsp;java:/jaas/example1<br>
+[Container&nbsp;factory]&nbsp;JAAS.Created&nbsp;securityMgr=org.jboss.security.plugins.JaasSecurityManager@114460<br>
+[Container&nbsp;factory]&nbsp;JAAS.setCachePolicy,&nbsp;c=null<br>
+[Container&nbsp;factory]&nbsp;JAAS.Added&nbsp;example1,&nbsp;org.jboss.security.plugins.JaasSecurityManager@114460&nbsp;to&nbsp;map<br>
+[Container&nbsp;factory]&nbsp;Deploying&nbsp;StatefulSession<br>
+[Container&nbsp;factory]&nbsp;lookup&nbsp;securityManager&nbsp;name:&nbsp;java:/jaas/example1<br>
+[Bean&nbsp;Cache]&nbsp;Cache&nbsp;policy&nbsp;scheduler&nbsp;started<br>
+[Container&nbsp;factory]&nbsp;Deployed&nbsp;application:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial1.ear<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;Starting&nbsp;module&nbsp;tutorial1.war<br>
+[Auto&nbsp;deploy]&nbsp;deploy,&nbsp;ctxPath=/jaas-example1,&nbsp;warUrl=file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial1.ear/web1003/<br>
+2001-05-25&nbsp;08:45:55&nbsp;-&nbsp;ContextManager:&nbsp;Adding&nbsp;context&nbsp;Ctx(&nbsp;/jaas-example1&nbsp;)<br>
+[Auto&nbsp;deploy]&nbsp;AbstractWebContainer.parseWebAppDescriptors,&nbsp;Begin<br>
+[Auto&nbsp;deploy]&nbsp;addEnvEntries<br>
+[Auto&nbsp;deploy]&nbsp;linkResourceRefs<br>
+[Auto&nbsp;deploy]&nbsp;linkEjbRefs<br>
+[Auto&nbsp;deploy]&nbsp;Linking&nbsp;ejb-ref:&nbsp;ejb/SecuredEJB&nbsp;to&nbsp;JNDI&nbsp;name:&nbsp;example1/StatelessSession<br>
+[Auto&nbsp;deploy]&nbsp;linkSecurityDomain<br>
+[Auto&nbsp;deploy]&nbsp;Linking&nbsp;security/securityMgr&nbsp;to&nbsp;JNDI&nbsp;name:&nbsp;java:/jaas/example1<br>
+[Auto&nbsp;deploy]&nbsp;AbstractWebContainer.parseWebAppDescriptors,&nbsp;End<br>
+[Auto&nbsp;deploy]&nbsp;Initialized:&nbsp;{WebApplication:&nbsp;/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial1.ear/web1003/,&nbsp;URL:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial1.ear/web1003/,&nbsp;classLoader:&nbsp;AdaptiveClassLoader(&nbsp;&nbsp;):5909743}<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;J2EE&nbsp;application:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/deploy/tutorial1.ear&nbsp;is&nbsp;deployed.<br>
+[Auto&nbsp;deploy]&nbsp;Auto&nbsp;deploy&nbsp;of&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/deploy/tutorial2.ear<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;Deploy&nbsp;J2EE&nbsp;application:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/deploy/tutorial2.ear<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;Create&nbsp;application&nbsp;tutorial2.ear<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;inflate&nbsp;and&nbsp;install&nbsp;module&nbsp;tutorial2.war<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;install&nbsp;module&nbsp;ssbean2.jar<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;add&nbsp;all&nbsp;ejb&nbsp;jar&nbsp;files&nbsp;to&nbsp;the&nbsp;common&nbsp;classpath<br>
+[Container&nbsp;factory]&nbsp;Deploying:file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial2.ear<br>
+[Verifier]&nbsp;Verifying&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial2.ear/ejb1006.jar<br>
+[Container&nbsp;factory]&nbsp;Deploying&nbsp;StatelessSession<br>
+[Container&nbsp;factory]&nbsp;lookup&nbsp;securityManager&nbsp;name:&nbsp;java:/jaas/example2<br>
+[Container&nbsp;factory]&nbsp;JAAS.Created&nbsp;securityMgr=org.jboss.security.plugins.JaasSecurityManager@3ac93e<br>
+[Container&nbsp;factory]&nbsp;JAAS.setCachePolicy,&nbsp;c=null<br>
+[Container&nbsp;factory]&nbsp;JAAS.Added&nbsp;example2,&nbsp;org.jboss.security.plugins.JaasSecurityManager@3ac93e&nbsp;to&nbsp;map<br>
+[Container&nbsp;factory]&nbsp;Deploying&nbsp;StatefulSession<br>
+[Container&nbsp;factory]&nbsp;lookup&nbsp;securityManager&nbsp;name:&nbsp;java:/jaas/example2<br>
+[Container&nbsp;factory]&nbsp;Deployed&nbsp;application:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial2.ear<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;Starting&nbsp;module&nbsp;tutorial2.war<br>
+[Auto&nbsp;deploy]&nbsp;deploy,&nbsp;ctxPath=/jaas-example2,&nbsp;warUrl=file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial2.ear/web1005/<br>
+2001-05-25&nbsp;08:45:57&nbsp;-&nbsp;ContextManager:&nbsp;Adding&nbsp;context&nbsp;Ctx(&nbsp;/jaas-example2&nbsp;)<br>
+[Auto&nbsp;deploy]&nbsp;AbstractWebContainer.parseWebAppDescriptors,&nbsp;Begin<br>
+[Auto&nbsp;deploy]&nbsp;addEnvEntries<br>
+[Auto&nbsp;deploy]&nbsp;linkResourceRefs<br>
+[Auto&nbsp;deploy]&nbsp;linkEjbRefs<br>
+[Auto&nbsp;deploy]&nbsp;Linking&nbsp;ejb-ref:&nbsp;ejb/SecuredEJB&nbsp;to&nbsp;JNDI&nbsp;name:&nbsp;example2/StatelessSession<br>
+[Auto&nbsp;deploy]&nbsp;linkSecurityDomain<br>
+[Auto&nbsp;deploy]&nbsp;Linking&nbsp;security/securityMgr&nbsp;to&nbsp;JNDI&nbsp;name:&nbsp;java:/jaas/example2<br>
+[Auto&nbsp;deploy]&nbsp;AbstractWebContainer.parseWebAppDescriptors,&nbsp;End<br>
+[Auto&nbsp;deploy]&nbsp;Initialized:&nbsp;{WebApplication:&nbsp;/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial2.ear/web1005/,&nbsp;URL:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/tmp/deploy/Default/tutorial2.ear/web1005/,&nbsp;classLoader:&nbsp;AdaptiveClassLoader(&nbsp;&nbsp;):86840}<br>
+[J2EE&nbsp;Deployer&nbsp;Default]&nbsp;J2EE&nbsp;application:&nbsp;file:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/deploy/tutorial2.ear&nbsp;is&nbsp;deployed.<br>
+...<br>
+[Service&nbsp;Control]&nbsp;Started&nbsp;25&nbsp;services<br>
+[Default]&nbsp;JBoss&nbsp;2.2.2&nbsp;Started&nbsp;in&nbsp;0m:19s</b><br>
+				</div><p>At this point you have the JBoss server running with
+the embeded Tomcat servlet engine and the two tutorial ears have been deployed.</p></li><li><a name="d0e11121"></a><p>Test access to the session bean</p><p>At this point the session beans are deployed and only
+users with a role of 'Echo' are allowed to execute all home and remote interface
+methods of the StatelessSession and StatefulSession beans. There is one user with a
+username 'scott' and a password 'echoman' that has this role. We have another user
+with a username 'stark' and a password 'javaman' with roles of 'Java' and 'Coder' that 
+should not be able to execute any methods of the StatelessSession because he does not
+have the required 'Echo' role. He should be able to create and remove StatefulSession
+beans and execute the noop method since the role of 'Coder' is allowed these
+operations. Lets run through 4 test cases that confirm we have properly secured the
+EJBs and servlet using the UsersRolesLoginModule.</p><ol type="a"><li><a name="d0e11127"></a><p>Run the SessionClient as user 'scott' with
+password 'echoman'. Do this by executing the following command:</p><div class="literallayout"><br>
+							<tt><br>
+bash-2.04$&nbsp;ant&nbsp;example1-test0<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+example1-test0:<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+<br>
+client-test0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;+++&nbsp;Running&nbsp;SessionClient&nbsp;with&nbsp;username=scott,&nbsp;password=echoman,&nbsp;example=example1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;LoginContext<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatelessSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;StatelessSession<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.echo('Hello')&nbsp;-&gt;&nbsp;Hello<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatefulSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;StatefulSession<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.noop()&nbsp;called<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.echo('Hello')&nbsp;-&gt;&nbsp;Hello<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;2&nbsp;seconds<br>
+<br>
+---&nbsp;Server&nbsp;console:<br>
+<br>
+User&nbsp;'scott'&nbsp;authenticated.<br>
+[StatelessSession]&nbsp;StatelessSessionBean.ejbCreate()&nbsp;called<br>
+[StatelessSession]&nbsp;StatelessSessionBean.echo,&nbsp;arg=Hello<br>
+[StatelessSession]&nbsp;StatelessSessionBean.echo,&nbsp;callerPrincipal=caller_scott<br>
+[StatefulSession]&nbsp;StatefulSessionBean.ejbCreate()&nbsp;called<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop,&nbsp;callerPrincipal=caller_scott<br>
+[StatefulSession]&nbsp;StatefulSessionBean.echo,&nbsp;arg=Hello<br>
+[StatefulSession]&nbsp;StatefulSessionBean.echo,&nbsp;callerPrincipal=caller_scott<br>
+[StatefulSession]&nbsp;StatefulSessionBean.ejbRemove()&nbsp;called<br>
+</tt><br>
+						</div></li><li><a name="d0e11135"></a><p>Ok, so that succeeded as desired. Now we need to make sure that unauthorized
+users are actually denied access. This time run as username 'stark' with password 'javaman'
+by executing the following command:</p><div class="literallayout"><br>
+							<tt><br>
+bash-2.04$&nbsp;ant&nbsp;example1-test1<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+example1-test1:<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+<br>
+client-test1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;+++&nbsp;Running&nbsp;SessionClient&nbsp;with&nbsp;username=stark,&nbsp;password=javaman,&nbsp;example=example1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;LoginContext<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatelessSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invokeHome(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.HomeProxy.invoke(HomeProxy.java:248)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy0.create(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:77)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatefulSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;StatefulSession<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.noop()&nbsp;called<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo];&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo];&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invoke(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.StatefulSessionProxy.invoke(StatefulSessionProxy.java:186)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy1.echo(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:96)<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;2&nbsp;seconds<br>
+<br>
+---&nbsp;Server&nbsp;console:<br>
+<br>
+User&nbsp;'stark'&nbsp;authenticated.<br>
+[StatelessSession]&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;StatefulSessionBean.ejbCreate()&nbsp;called<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop,&nbsp;callerPrincipal=caller_stark<br>
+[StatefulSession]&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;TRANSACTION&nbsp;ROLLBACK&nbsp;EXCEPTION:checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo];&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.checkSecurityAssociation(SecurityInterceptor.java:232)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.invoke(SecurityInterceptor.java:169)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.StatefulSessionInstanceInterceptor.invoke(StatefulSessionInstanceInterceptor.java:209)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invokeNext(TxInterceptorCMT.java:133)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.runWithTransactions(TxInterceptorCMT.java:263)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invoke(TxInterceptorCMT.java:99)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.LogInterceptor.invoke(LogInterceptor.java:195)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.StatefulSessionContainer.invoke(StatefulSessionContainer.java:326)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker.invoke(JRMPContainerInvoker.java:392)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.reflect.Method.invoke(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:241)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport$1.run(Transport.java:152)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.security.AccessController.doPrivileged(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport.serviceCall(Transport.java:148)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:465)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:706)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.Thread.run(Thread.java:484)<br>
+</tt><br>
+						</div></li><li><a name="d0e11143"></a><p>This demonstrates that user 'stark' cannot execute any methods of
+the StatelessSession home or remote interfaces. Also demonstrated is that 'stark' can create a
+StatefulSession bean and invoke the noop method on it, but he cannot invoke the echo method which
+is correct. Now let's try username 'scott' with an invalid password to see if authentication
+fails:</p><div class="literallayout"><br>
+							<tt><br>
+bash-2.04$&nbsp;ant&nbsp;example1-test2<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+example1-test2:<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+<br>
+client-test2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;+++&nbsp;Running&nbsp;SessionClient&nbsp;with&nbsp;username=scott,&nbsp;password=badpass,&nbsp;example=example1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;LoginContext<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatelessSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invokeHome(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.HomeProxy.invoke(HomeProxy.java:248)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy0.create(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:77)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatefulSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invokeHome(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.HomeProxy.invoke(HomeProxy.java:248)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy0.create(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:92)<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;2&nbsp;seconds<br>
+<br>
+---&nbsp;Server&nbsp;console:<br>
+<br>
+[StatelessSession]&nbsp;Bad&nbsp;password&nbsp;for&nbsp;username=scott<br>
+[StatelessSession]&nbsp;LoginException:&nbsp;Password&nbsp;Incorrect/Password&nbsp;Required<br>
+[StatelessSession]&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;Bad&nbsp;password&nbsp;for&nbsp;username=scott<br>
+[StatefulSession]&nbsp;LoginException:&nbsp;Password&nbsp;Incorrect/Password&nbsp;Required<br>
+[StatefulSession]&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;TRANSACTION&nbsp;ROLLBACK&nbsp;EXCEPTION:checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.checkSecurityAssociation(SecurityInterceptor.java:213)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.invokeHome(SecurityInterceptor.java:144)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.StatefulSessionInstanceInterceptor.invokeHome(StatefulSessionInstanceInterceptor.java:99)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invokeNext(TxInterceptorCMT.java:135)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.runWithTransactions(TxInterceptorCMT.java:263)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invokeHome(TxInterceptorCMT.java:86)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.LogInterceptor.invokeHome(LogInterceptor.java:106)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.StatefulSessionContainer.invokeHome(StatefulSessionContainer.java:311)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker.invokeHome(JRMPContainerInvoker.java:369)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.reflect.Method.invoke(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:241)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport$1.run(Transport.java:152)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.security.AccessController.doPrivileged(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport.serviceCall(Transport.java:148)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:465)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:706)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.Thread.run(Thread.java:484)<br>
+</tt><br>
+						</div></li><li><a name="d0e11151"></a><p>All is working as expected using a Java client. Now
+we need to try to access the secure servlet and see that the same username and
+password we have been using to access the EJBs allows us access to the servlet.
+Since the servlet also calls the EJBs, we will see if the servlet user principal
+and credentials are passed correctly to the EJB. To try this, click on the
+this link: <a href="http://localhost:8080/jaas-example1/restricted/SecureServlet" target="_top">CLICK HERE</a>and enter scott as the username and echoman as the password. You should see a
+page like that in the following figure.</p><div class="figure"><p><a name="jaas.browser"></a><b>Figure 13.25. http://localhost:8080/jaas-example1/restricted/SecureServlet Output</b></p><div class="mediaobject"><img src="images\jaas_browser.jpg"></div></div><p>The output on the server console due to the client
+accessing the web will look like the following:</p><div class="literallayout"><br>
+							<tt><br>
+[EmbeddedTomcatSX]&nbsp;Bad&nbsp;password&nbsp;for&nbsp;username=null<br>
+[EmbeddedTomcatSX]&nbsp;LoginException:&nbsp;Password&nbsp;Incorrect/Password&nbsp;Required<br>
+[EmbeddedTomcatSX]&nbsp;User:&nbsp;null&nbsp;is&nbsp;NOT&nbsp;authenticated<br>
+User&nbsp;'scott'&nbsp;authenticated.<br>
+[EmbeddedTomcatSX]&nbsp;User:&nbsp;scott&nbsp;is&nbsp;authenticated<br>
+[EmbeddedTomcatSX]&nbsp;User:&nbsp;scott&nbsp;is&nbsp;authorized<br>
+User&nbsp;'scott'&nbsp;authenticated.<br>
+[StatelessSession]&nbsp;StatelessSessionBean.ejbCreate()&nbsp;called<br>
+[StatelessSession]&nbsp;StatelessSessionBean.echo,&nbsp;arg=Hello<br>
+[StatelessSession]&nbsp;StatelessSessionBean.echo,&nbsp;callerPrincipal=caller_scott<br>
+</tt><br>
+						</div><p>The first set of error messages result from the
+web container trying to authenticate a 'null' username meaning an anonymous
+user. The JBossSecurityMgrRealm passes the null username and password onto the
+JBoss security manager rather than simply returning an unauthorized error in case
+the configured security manager wishes to treat a null username as a special user.</p></li></ol></li></ol></div><div class="section"><a name="d0e11172"></a><div class="titlepage"><div><h4 class="title"><a name="d0e11172"></a>Using the DatabaseServerLoginModule</h4></div></div><p>We have tested authenticating users based on the simple
+UsersRolesLoginModule module that reads the users.properties and roles.properties
+files bundled in the deployed ejb jar. This is convient for development, but it
+is not realistic of a production environment. In this section we will run through
+the same tests as the preceeding section, but we will be authenticating the
+users against a JDBC database using the DatabaseServerLoginModule.</p><div class="procedure"><p><a name="d0e11177"></a><b>Procedure 13.4. </b></p><ol type="1"><li><a name="d0e11178"></a><ol type="a"><li><a name="d0e11180"></a><p>Build the security database. The first thing we need to
+do is to create the database tables required by the DatabaseServerLoginModule.
+The DatabaseServerLoginModule expects a Principals table that contains the
+principal id to password mapping and a Roles table that contains the
+principal id to roles mapping. The psuedo-schema for the two tables is:<div class="literallayout">&nbsp;&nbsp;Principals(PrincipalID&nbsp;text,&nbsp;Password&nbsp;text)<br>
+&nbsp;&nbsp;Roles(PrincipalID&nbsp;text,&nbsp;Role&nbsp;text,&nbsp;RoleGroup&nbsp;text)</div>The DatabaseServerLoginModule doesn't actually care about the real schema
+of the tables since you can specify the prepared statement sql to use for
+each query. If don't don't specify any options to the DatabaseServerLoginModule
+it does assume that there is a Principals and Roles table accessible via
+the DataSource located under the JNDI name java:/DefaultDS and it forms the
+default sql queries based on the above schema. We are going to create our
+security tables using a schema that equates to the default, but we pass
+in values for all of the DatabaseServerLoginModule options to illustrate that
+this is what you should use to map your existing database schema into the
+form of result sets expected by the DatabaseServerLoginModule.</p><p>To create the security tables that contain the
+user and role data equivalent to that in the users and roles properties files, we
+need to run the BuildDatabase Java program. With the JBoss server still running,
+execute:<div class="literallayout"><br>
+									<tt><br>
+bash-2.04$&nbsp;ant&nbsp;buildDB<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+<br>
+buildDB:<br>
+Created&nbsp;Principals&nbsp;table,&nbsp;result=false<br>
+INSERT&nbsp;INTO&nbsp;Principals&nbsp;VALUES&nbsp;('scott',&nbsp;'echoman'),&nbsp;result=false<br>
+INSERT&nbsp;INTO&nbsp;Principals&nbsp;VALUES&nbsp;('stark',&nbsp;'javaman'),&nbsp;result=false<br>
+Created&nbsp;Roles&nbsp;table,&nbsp;result=false<br>
+INSERT&nbsp;INTO&nbsp;Roles&nbsp;VALUES&nbsp;('scott',&nbsp;'Echo',&nbsp;'Roles'),&nbsp;result=false<br>
+INSERT&nbsp;INTO&nbsp;Roles&nbsp;VALUES&nbsp;('scott',&nbsp;'caller_scott',&nbsp;'CallerPrincipal'),&nbsp;result=false<br>
+INSERT&nbsp;INTO&nbsp;Roles&nbsp;VALUES&nbsp;('stark',&nbsp;'Java',&nbsp;'Roles'),&nbsp;result=false<br>
+INSERT&nbsp;INTO&nbsp;Roles&nbsp;VALUES&nbsp;('stark',&nbsp;'Coder',&nbsp;'Roles'),&nbsp;result=false<br>
+INSERT&nbsp;INTO&nbsp;Roles&nbsp;VALUES&nbsp;('stark',&nbsp;'caller_stark',&nbsp;'CallerPrincipal'),&nbsp;result=false<br>
+</tt><br>
+								</div>                    
+							</p><p>This creates a Principals and Roles tables with the indicated
+values in the Hypersonic database that is configured as the default in the standard
+JBoss distribution.
+                    </p></li><li><a name="d0e11196"></a><p>Run the SessionClient as user 'scott' with
+password 'echoman' using the DatabaseServerLoginModule to perform the
+authentication. Do this by executing the following command:</p><div class="literallayout"><br>
+								<tt><br>
+bash-2.04$&nbsp;ant&nbsp;example2-test0<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+example2-test0:<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+<br>
+client-test0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;+++&nbsp;Running&nbsp;SessionClient&nbsp;with&nbsp;username=scott,&nbsp;password=echoman,&nbsp;example=example2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;LoginContext<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatelessSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;StatelessSession<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.echo('Hello')&nbsp;-&gt;&nbsp;Hello<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatefulSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;StatefulSession<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.noop()&nbsp;called<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.echo('Hello')&nbsp;-&gt;&nbsp;Hello<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;2&nbsp;seconds<br>
+<br>
+---&nbsp;Server&nbsp;console:<br>
+<br>
+User&nbsp;'scott'&nbsp;authenticated.<br>
+[StatelessSession]&nbsp;StatelessSessionBean.ejbCreate()&nbsp;called<br>
+[StatelessSession]&nbsp;StatelessSessionBean.echo,&nbsp;arg=Hello<br>
+[StatelessSession]&nbsp;StatelessSessionBean.echo,&nbsp;callerPrincipal=caller_scott<br>
+[StatefulSession]&nbsp;StatefulSessionBean.ejbCreate()&nbsp;called<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop,&nbsp;callerPrincipal=caller_scott<br>
+[StatefulSession]&nbsp;StatefulSessionBean.echo,&nbsp;arg=Hello<br>
+[StatefulSession]&nbsp;StatefulSessionBean.echo,&nbsp;callerPrincipal=caller_scott<br>
+[StatefulSession]&nbsp;StatefulSessionBean.ejbRemove()&nbsp;called<br>
+</tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+							</div></li></ol></li><li><a name="d0e11204"></a><p>This time run as username 'stark' with password 'javaman'
+by executing the following command:</p><div class="literallayout"><br>
+						<tt><br>
+<br>
+bash-2.04$&nbsp;ant&nbsp;example2-test1<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+example2-test1:<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+<br>
+client-test1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;+++&nbsp;Running&nbsp;SessionClient&nbsp;with&nbsp;username=stark,&nbsp;password=javaman,&nbsp;example=example2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;LoginContext<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatelessSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invokeHome(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.HomeProxy.invoke(HomeProxy.java:248)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy0.create(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:77)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatefulSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;StatefulSession<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Bean.noop()&nbsp;called<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo];&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo];&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invoke(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.StatefulSessionProxy.invoke(StatefulSessionProxy.java:186)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy1.echo(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:96)<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;2&nbsp;seconds<br>
+<br>
+---&nbsp;Server&nbsp;console:<br>
+<br>
+User&nbsp;'stark'&nbsp;authenticated.<br>
+[StatelessSession]&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=create,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;StatefulSessionBean.ejbCreate()&nbsp;called<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop<br>
+[StatefulSession]&nbsp;StatefulSessionBean.noop,&nbsp;callerPrincipal=caller_stark<br>
+[StatefulSession]&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;TRANSACTION&nbsp;ROLLBACK&nbsp;EXCEPTION:checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo];&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;java.lang.SecurityException:&nbsp;Insufficient&nbsp;method&nbsp;permissions,&nbsp;principal=stark,&nbsp;method=echo,&nbsp;requiredRoles=[Echo]<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.checkSecurityAssociation(SecurityInterceptor.java:232)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.invoke(SecurityInterceptor.java:169)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.StatefulSessionInstanceInterceptor.invoke(StatefulSessionInstanceInterceptor.java:209)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invokeNext(TxInterceptorCMT.java:133)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.runWithTransactions(TxInterceptorCMT.java:263)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invoke(TxInterceptorCMT.java:99)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.LogInterceptor.invoke(LogInterceptor.java:195)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.StatefulSessionContainer.invoke(StatefulSessionContainer.java:326)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker.invoke(JRMPContainerInvoker.java:392)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.reflect.Method.invoke(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:241)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport$1.run(Transport.java:152)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.security.AccessController.doPrivileged(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport.serviceCall(Transport.java:148)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:465)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:706)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.Thread.run(Thread.java:484)<br>
+</tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+					</div></li><li><a name="d0e11212"></a><p>As before, this demonstrates that user 'stark' cannot execute any methods
+of the StatelessSession home or remote interfaces. Also demonstrated is that 'stark' can create a
+StatefulSession bean and invoke the noop method on it, but he cannot invoke the echo method which
+is correct. Now let's try username 'scott' with an invalid password to see if authentication
+fails:</p><div class="literallayout"><br>
+						<tt><br>
+bash-2.04$&nbsp;ant&nbsp;example2-test2<br>
+Searching&nbsp;for&nbsp;build.xml&nbsp;...<br>
+Buildfile:&nbsp;/tmp/jaas/build.xml<br>
+<br>
+example2-test2:<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+Using&nbsp;jboss.dist=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss<br>
+Using&nbsp;classpath=/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/ejb.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jaas.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jbosssx-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jboss-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/jboss/client/jnp-client.jar:/tmp/JBoss-2.2.2_Tomcat-3.2.2/tomcat/lib/servlet.jar:/tmp/jaas/build/classes<br>
+<br>
+compile:<br>
+<br>
+client-test2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;+++&nbsp;Running&nbsp;SessionClient&nbsp;with&nbsp;username=scott,&nbsp;password=badpass,&nbsp;example=example2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Created&nbsp;LoginContext<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatelessSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invokeHome(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.HomeProxy.invoke(HomeProxy.java:248)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy0.create(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:77)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Found&nbsp;StatefulSessionHome<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.ServerException:&nbsp;RemoteException&nbsp;occurred&nbsp;in&nbsp;server&nbsp;thread;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;javax.transaction.TransactionRolledbackException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.exceptionReceivedFromServer(StreamRemoteCall.java:245)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.StreamRemoteCall.executeCall(StreamRemoteCall.java:220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastRef.invoke(UnicastRef.java:122)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker_Stub.invokeHome(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.interfaces.HomeProxy.invoke(HomeProxy.java:248)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;$Proxy0.create(Unknown&nbsp;Source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;SessionClient.main(SessionClient.java:92)<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;2&nbsp;seconds<br>
+<br>
+---&nbsp;Server&nbsp;console:<br>
+<br>
+[StatelessSession]&nbsp;Bad&nbsp;password&nbsp;for&nbsp;username=scott<br>
+[StatelessSession]&nbsp;LoginException:&nbsp;Password&nbsp;Incorrect/Password&nbsp;Required<br>
+[StatelessSession]&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;Bad&nbsp;password&nbsp;for&nbsp;username=scott<br>
+[StatefulSession]&nbsp;LoginException:&nbsp;Password&nbsp;Incorrect/Password&nbsp;Required<br>
+[StatefulSession]&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;TRANSACTION&nbsp;ROLLBACK&nbsp;EXCEPTION:checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;java.rmi.RemoteException:&nbsp;checkSecurityAssociation;&nbsp;nested&nbsp;exception&nbsp;is:&nbsp;<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;java.lang.SecurityException:&nbsp;Authentication&nbsp;exception,&nbsp;principal=scott<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.checkSecurityAssociation(SecurityInterceptor.java:213)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.SecurityInterceptor.invokeHome(SecurityInterceptor.java:144)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.StatefulSessionInstanceInterceptor.invokeHome(StatefulSessionInstanceInterceptor.java:99)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invokeNext(TxInterceptorCMT.java:135)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.runWithTransactions(TxInterceptorCMT.java:263)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.TxInterceptorCMT.invokeHome(TxInterceptorCMT.java:86)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.LogInterceptor.invokeHome(LogInterceptor.java:106)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.StatefulSessionContainer.invokeHome(StatefulSessionContainer.java:311)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker.invokeHome(JRMPContainerInvoker.java:369)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.reflect.Method.invoke(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:241)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport$1.run(Transport.java:152)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.security.AccessController.doPrivileged(Native&nbsp;Method)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.Transport.serviceCall(Transport.java:148)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:465)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:706)<br>
+[StatefulSession]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;java.lang.Thread.run(Thread.java:484)<br>
+</tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+					</div></li></ol></div></div></div><div class="section"><a name="d0e11220"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11220"></a>Wrap Up</h3></div></div><p>This has been an introduction to the steps required to enable security
+for EJB and web containers using the JBossSX security implementation. Support for more
+advanced customization of security is documented in the JBossSX chapter.</p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s72.html"><img src="images\prev.gif" border="0"></a><a href="ch13s98.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

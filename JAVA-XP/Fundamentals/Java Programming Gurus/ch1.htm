@@ -1,0 +1,876 @@
+
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 1 -- Communication Between Applets</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 1</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Communication Between Applets</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#getAppletTheOfficialMechanism" >getApplet: The &quot;Official&quot; Mechanism</A>
+<LI><A HREF="#StaticVariablesandMethods" >Static Variables and Methods</A>
+<LI><A HREF="#NetworkCommunication" >Network Communication</A>
+<LI><A HREF="#ThreadBasedCommunication" >Thread-Based Communication</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+Depending on what you need to accomplish, one applet, or even
+several distinct applets, might not always be enough. Fortunately,
+applets can communicate with each other and cooperate to perform
+more complicated jobs. Teams of applets can produce effects that
+single applets working alone cannot.
+<P>
+Applet communication is accomplished in conventional ways: applets
+can call methods on one another or communicate through sockets
+or other data streams. The tricky part is actually <I>finding</I>
+one another. Applets can actually find each other in more than
+one way, and each mechanism has its advantages and limitations.
+This chapter discusses four mechanisms and presents a complete
+example applet that uses one of them.
+<H2><A NAME="getAppletTheOfficialMechanism"><TT><FONT SIZE=5 COLOR=#FF0000 >getApplet</FONT></TT><FONT SIZE=5 COLOR=#FF0000>:
+The &quot;Official&quot; Mechanism</FONT></A></H2>
+<P>
+The Java API has a built-in feature that is explicitly intended
+to support applet cooperation: the <TT>getApplet</TT>
+and <TT>getApplets</TT> methods in
+the <TT>AppletContext</TT> class.
+Using these facilities, applets can find each other by name. Here's
+how to call <TT>getApplet</TT>:
+<BLOCKQUOTE>
+<TT>Applet friend = getAppletContext().getApplet(&quot;Friend&quot;);</TT>
+</BLOCKQUOTE>
+<P>
+Once that call completes, the <TT>friend</TT>
+variable will be set to the actual applet instance of the applet
+called &quot;Friend&quot; (if such an applet exists). If  &quot;Friend&quot;
+is an instance of, say, Sun's Animator applet, <TT>friend</TT>
+will contain a reference to that object.
+<P>
+Applet names are specified in HTML, not in the Java code. To create
+an animator applet that could be found using the previous call,
+you could write HTML like this:
+<BLOCKQUOTE>
+<TT>&lt;applet code=&quot;Animator.class&quot;
+width=25 height=25 name=&quot;Friend&quot;&gt;<BR>
+&lt;!-- applet parameters go here --&gt;<BR>
+&lt;/applet&gt;</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>getApplets</TT> method is
+similar to the singular <TT>getApplet</TT>,
+except that it returns an <TT>Enumeration</TT>,
+which lists all the accessible applets. Applets can then be queried
+for various characteristics, including name. Here's how to find
+the &quot;Friend&quot; applet using <TT>getApplets</TT>:
+<BLOCKQUOTE>
+<TT>Applet friend;<BR>
+for (&nbsp;&nbsp;&nbsp;&nbsp;Enumeration e = getAppletContext().getApplets();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.hasMoreElements();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Applet t = (Applet)
+e.nextElement();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (&quot;Friend&quot;.equals(t.getParameter(&quot;name&quot;)))
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;friend
+= t;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;catch (ClassCastException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+That's obviously a lot more work, so you wouldn't want to use
+that method to find just a single applet. It can sometimes be
+useful in situations when you are looking for multiple applets,
+however, or where you don't know the precise names of the applets
+with which you need to rendezvous. For example, it's fairly easy
+with <TT>getApplets</TT> to find all
+the applets with names that begin with a certain string, such
+as &quot;Helper&#173;&quot;, so that your applet could work with
+any number of appropriately named helper applets that might appear
+on the same Web page.
+<P>
+Unfortunately, there are at least two serious problems with these
+official applet location mechanisms. First, the proper behavior
+of these mechanisms currently is not completely specified, so
+different applications may choose to implement them in different
+ways. For example, the <TT>getApplets</TT>
+method returns only accessible applets, but there is no definition
+of what is meant by &quot;accessible.&quot; You might only be
+able to see applets on the same page, applets that were loaded
+from the same network site, or the smaller set of applets that
+meet both of those restrictions, depending on the browser (or
+the version of a browser) within which your applet is running.
+There are other such implementation dependencies, and current
+applet environments actually differ in their interpretations.
+This limitation should cease to be a factor as Sun and Java's
+licensees work out a consistent, thorough specification for applet
+coordination mechanisms. For now, however, implementation differences
+are a nuisance.
+<P>
+The other problem is not so likely to go away. It's easy to understand,
+but it complicates things somewhat, and it has taken many applet
+programmers by surprise. The problem is that <TT>getApplet</TT>
+and <TT>getApplets</TT> won't show
+you an applet until that applet has been fully loaded and initialized.
+Because of the vagaries of the network and other variables such
+as applet size, there's no way to predict which applet on a page
+will be loaded first, or which will be loaded last. This means
+that the obvious implementation approach-where one controlling
+applet starts, looks up the other applets, and begins directing
+the coordinated effort-won't work without some extra effort.
+<P>
+There are ways around that problem, though. The controlling applet
+can check for its collaborators and, if they are not all present,
+sleep for a short while (a second or so) before checking again,
+looping until all the members of the team have been initialized.
+Such polling is inefficient and may result in a longer startup
+delay than necessary, but it will work. A better solution would
+be a two-way search-and-notification mechanism, in which the controlling
+applet searches for other applets when it is initialized, and
+the other applets attempt to locate and notify the controlling
+applet when they are initialized. That way, if all the helpers
+initialize first, the controller will find them immediately and
+can begin directing the cooperation, but if some of the helpers
+are initialized later, the controller will be notified immediately.
+<H2><A NAME="StaticVariablesandMethods"><FONT SIZE=5 COLOR=#FF0000>Static
+Variables and Methods</FONT></A></H2>
+<P>
+In many circumstances, it's possible to establish inter-applet
+communication by using static variables and methods within a common
+class. If multiple applets all depend on a common class in some
+way, they can use the class as a rendezvous point, registering
+their presence there and learning about the presence of other
+applets.
+<P>
+Here is an example to illustrate the point. If the ColorRelay
+applet is used multiple times on a Web page, the different instances
+will cooperate to flash their own copies of an image, in different
+colors, in round-robin fashion. You can think of the applets as
+relaying a token between themselves. Whoever has the token flashes
+an image in color, and the rest of the images are in black and
+white. Figure 1.1 shows ColorRelay in action on a page, with the
+middle applet flashing green. Listing 1.1 shows the HTML file
+for the page shown in Figure 1.1.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f1-1.gif" ><B>Figure 1.1 : </B><I>The ColorRelay applet in action.</I></A>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 1.1. ColorRelay.html.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>&lt;html&gt;<BR>
+&lt;body&gt;<BR>
+&lt;h1&gt;Used Applets Sale!&lt;/h1&gt;<BR>
+<BR>
+&lt;p&gt;<BR>
+&lt;applet align=baseline code=&quot;COM.MCP.Samsnet.tjg.ColorRelay.class&quot;
+<BR>
+width=50 height=50 name=&quot;first&quot;&gt;<BR>
+&lt;param name=&quot;flashColor&quot; value=&quot;0x0000ff&quot;&gt;
+<BR>
+&lt;param name=&quot;sleepTime&quot; value=&quot;1&quot;&gt;<BR>
+&lt;param name=&quot;image&quot; value=&quot;spiral.gif&quot;&gt;
+<BR>
+&lt;/applet&gt;<BR>
+Low, low prices!<BR>
+<BR>
+&lt;p&gt;<BR>
+&lt;applet align=baseline code=&quot;COM.MCP.Samsnet.tjg.ColorRelay.class&quot;
+<BR>
+width=50 height=50&gt;<BR>
+&lt;param name=&quot;flashColor&quot; value=&quot;0x00ff00&quot;&gt;
+<BR>
+&lt;/applet&gt;<BR>
+This week only!<BR>
+<BR>
+&lt;p&gt;<BR>
+&lt;applet align=baseline code=&quot;COM.MCP.Samsnet.tjg.ColorRelay.class&quot;
+<BR>
+width=50 height=50&gt;<BR>
+&lt;param name=&quot;flashColor&quot; value=&quot;0xff0000&quot;&gt;
+<BR>
+&lt;param name=&quot;sleepTime&quot; value=&quot;3&quot;&gt;<BR>
+&lt;/applet&gt;<BR>
+We won't be undersold!<BR>
+<BR>
+&lt;/html&gt;</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 1.2 is an overview of the ColorRelay applet, with methods
+replaced by comments. The code for the methods will appear in
+later listings.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 1.2. ColorRelay.java (part 1).<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+ * ColorRelay.java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 1.0 96/04/14
+Glenn Vanderburg<BR>
+ */<BR>
+<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.applet.*;<BR>
+import java.awt.*;<BR>
+import java.awt.image.*;<BR>
+<BR>
+/**<BR>
+ * An applet which coordinates with other instances of itself
+on a Web<BR>
+ * page to alternately flash copies of an image in different colors.
+<BR>
+ *<BR>
+ * @version&nbsp;&nbsp;&nbsp;&nbsp; 1.0, 14 Mar 1996<BR>
+ * @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn Vanderburg
+<BR>
+ */<BR>
+<BR>
+public class<BR>
+ColorRelay extends Applet implements Runnable<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// These are used to maintain the list
+of active instances<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static ColorRelay list, listTail;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ColorRelay next, prev;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// This thread switches between instances
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static Thread relayer;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// This is the original, unmodified base
+image which all<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// of the instances use.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static Image originalImage;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The color that this instance uses to
+flash.&nbsp;&nbsp;White is the default.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Color flashColor = Color.white;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The modified, colorized image.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Image modifiedImage;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The image currently being displayed.&nbsp;&nbsp;This
+reference<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// alternates between originalImage and
+modifiedImage.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Image image;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// We use a media tracker to help manage
+the images.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;MediaTracker tracker;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The time we wait while flashing.&nbsp;&nbsp;Two
+seconds is the default.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int sleepSecs = 2;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: static synchronized<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addToList(ColorRelay
+elem)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Listing 1.3
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: static synchronized<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;removeFromList(ColorRelay
+elem)&nbsp;&nbsp;&nbsp;Listing 1.3<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public init()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Listing
+1.4<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public start()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Listing
+1.5<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public stop()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Listing
+1.5<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public run()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+Listing 1.5<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public getAppletInfo()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+on CD<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public getParameterInfo ()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;on
+CD<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public paint(Graphics g)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+on CD<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method: public update(Graphics g)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;on
+CD<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flash()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;on
+CD<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Method:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parseRGB(String
+str)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;on
+CD<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+As you can see, there are several ordinary instance variables:
+a couple of images, a color, a media tracker, a duration in seconds,
+and a couple of link fields so that an instance of ColorRelay
+can be a member of a linked list. In addition, there are four
+static variables: the original image, which all the instances
+display when it's not their turn to flash, a thread that coordinates
+the activities of the applets, and the head and tail elements
+of the list of applets.
+<H3>Finding Each Other</H3>
+<P>
+Using static variables for communication doesn't mean that the
+applets are somehow magically all initialized at the same time.
+The different instances are all started separately, and there's
+no guarantee that they will be initialized in any particular order.
+There is one guarantee, however: before even the first ColorRelay
+applet is created and initialized, the <TT>ColorRelay</TT>
+class will have been initialized, so all the applets will have
+the static variables available as soon as they start.
+<P>
+You have to be careful when you use static variables, though,
+because multiple instances might be trying to use them simultaneously.
+To help manage that, I've used two <TT>synchronized</TT>
+methods to add and remove applets from the list. Because they
+are synchronized static methods, the <TT>ColorRelay</TT>
+class is locked while they are running, preventing concurrent
+access. The two methods are shown in Listing 1.3. Note that, as
+soon as the first element is added to the list, the controller
+thread is started. We'll see later that the thread is written
+to stop automatically when the last element is removed from the
+list at some later time.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 1.3. ColorRelay.java (part 2).<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Adds an instance to the list of active
+instances maintained in the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * class.&nbsp;&nbsp;No check is made
+to prevent adding the same instance twice.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param elem the ColorRelay instance
+to add to the list.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @see #removeFromList<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static synchronized void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;addToList(ColorRelay elem) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (list == null)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list
+= listTail = elem;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elem.next
+= elem.prev = null;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Because the list has elements now, we should start the thread.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;relayer
+= new Thread(new ColorRelay());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;relayer.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elem.prev
+= listTail;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;listTail.next
+= listTail = elem;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elem.next
+= null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Removes an instance from the list
+of active instances maintained in<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* the class.&nbsp;&nbsp;Works properly
+but does &lt;em&gt;not&lt;/em&gt; signal an error if<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* the element was not actually on
+the list.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param elem the ColorRelay instance
+to be removed from the list.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @see #addToList<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static synchronized void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;removeFromList(ColorRelay elem) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorRelay curr
+= list;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while (curr !=
+null &amp;&amp; curr != elem) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;curr
+= curr.next;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (curr == elem)
+{&nbsp;&nbsp;&nbsp;&nbsp; // We found it!<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(list == curr) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list
+= curr.next;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(listTail == curr) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;listTail
+= curr.prev;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(curr.next != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;curr.next.prev
+= curr.prev;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(curr.prev != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;curr.prev.next
+= curr.next;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;curr.next
+= curr.prev = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// If curr is
+null, then the element is not on the list<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// at all.&nbsp;&nbsp;We
+could treat that as an error, but I'm<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// choosing to
+report success.<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3>Initializating Shared Data</H3>
+<P>
+The <TT>init</TT> method-called when
+the applet is created-checks, converts, and stores the applet's
+parameters. Special care must be taken with the <TT>image</TT>
+parameter, because it is stored in another static variable. Instead
+of synchronized methods, a <TT>synchronized</TT>
+guard statement is used to lock the <TT>ColorRelay</TT>
+class before trying to access the <TT>originalImage</TT>
+static variable. (Really, only one instance of ColorRelay should
+have an <TT>image</TT> parameter,
+but this precaution helps the code to deal sensibly with HTML
+coding errors.) Listing 1.4 shows the <TT>init</TT>
+method.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 1.4. ColorRelay.java (part 3).<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Initializes the applet instance.&nbsp;&nbsp;Checks
+and stores<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * parameters and initializes other instance
+variables.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;init() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String flash =
+getParameter(&quot;flashColor&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (flash != null)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flashColor
+= new Color(parseRGB(flash));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(NumberFormatException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Ignore a bad parameter and just go with the default.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String sleep =
+getParameter(&quot;sleepTime&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (sleep != null)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sleepSecs
+= Integer.parseInt(sleep);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(NumberFormatException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Ignore a bad parameter and just go with the default.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String imageURL
+= getParameter(&quot;image&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (imageURL !=
+null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Class
+cr = Class.forName(&quot;COM.MCP.Samsnet.tjg.ColorRelay&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;synchronized
+(cr) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(originalImage == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;originalImage
+= getImage(getDocumentBase(), imageURL);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tracker = new
+MediaTracker(this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3>Working Together</H3>
+<P>
+The <TT>start</TT> method, called
+when the browser is ready for the applet to begin execution, actually
+adds the applet to the list. The <TT>stop</TT>
+method removes it from the list. As you saw earlier, adding the
+first applet to the list causes the controller thread to begin
+execution. The thread simply loops through the list over and over,
+directing each applet in turn to flash. It's up to the individual
+applets to flash their color for the appropriate amount of time
+and return when they are finished. The thread finishes automatically
+when there are no more applets on the list. Listing 1.5 shows
+the <TT>start</TT> and <TT>stop</TT>
+methods, along with the <TT>run</TT>
+method for the controller thread.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 1.5. ColorRelay.java (part 4).<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Starts the applet running.&nbsp;&nbsp;The
+ColorRelay hooks up with<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* other instances on the same page
+and begins coordinating<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* when this method is called.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;start() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Ordinarily,
+we want to display the original image.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image = originalImage;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorRelay.addToList(this);
+// Let's get to work!<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Stops the applet.&nbsp;&nbsp;The
+ColorRelay instance removes itself from the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* group of cooperating applets when
+this method is called.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;stop() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorRelay.removeFromList(this);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Loops through the list of active
+instances for as long as it is<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* non-empty, calling each instance's
+'flash' method.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @see #flash<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;run () {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorRelay curr;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Continue running
+through the list until it's empty ...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while (list !=
+null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(curr = list; curr != null; curr = curr.next) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;curr.flash();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(InterruptedException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3>Finishing Touches and Potential Hazards</H3>
+<P>
+The rest of the code for ColorRelay doesn't really have much to
+do with inter-applet communication, so it is omitted from this
+chapter (although it can be found on the CD accompanying this
+book). The <TT>getAppletInfo</TT>
+and <TT>getParameterInfo</TT> methods
+are recommended (but nonessential) parts of the Applet interface-sort
+of &quot;good citizen&quot; methods. <TT>getAppletInfo</TT>
+returns information about the applet, its author, and copyright
+conditions, whereas <TT>getParameterInfo</TT>
+returns information about the applet's HTML parameters and how
+to use them. The <TT>parseRGB</TT>
+method is used to parse an RGB color specification passed in as
+a parameter. The <TT>paint</TT>, <TT>update</TT>,
+and <TT>flash</TT> methods handle
+the graphics operations of the applet. Finally, <TT>ColorRelay</TT>
+also makes use of another class, <TT>ColorizeFilter</TT>,
+which makes a new image from an original by changing all-white
+pixels to a specified color.
+<P>
+In most cases, using static variables for communication has advantages
+over <TT>getApplet</TT>. Each applet
+must register itself when it initializes, but that's simple, especially
+because the class is guaranteed to be available to accept the
+registration. The class may begin orchestrating the cooperation
+between applets immediately, as in <TT>ColorRelay</TT>,
+or it may need to wait until a particular applet registers. Applets
+can communicate with each other even when they are not on the
+same Web page.
+<P>
+In this example, all the applets are the same, but that doesn't
+have to be the case. The applets could be completely different
+and still communicate via a common class. The class doesn't even
+have to be a superclass of the applets-each applet can simply
+refer to the common class, and the Java virtual machine will detect
+the dependency and load the class before the first applet is initialized.
+For example, any number of different applets could communicate
+through an <TT>AppletRendezvous</TT>
+class by means of statements such as this:
+<BLOCKQUOTE>
+<TT>// Register my name and type at the rendezvous
+...<BR>
+AppletRendezvous.RegisterApplet(&quot;Applet1&quot;, &quot;Bouncer&quot;);</TT>
+</BLOCKQUOTE>
+<P>
+None of the applets would have to inherit from <TT>AppletRendezvous</TT>
+in any way.
+<P>
+In spite of these advantages, however, inter-applet communication
+using static variables doesn't solve every problem. For one thing,
+under current security schemes, it's not possible for applets
+to communicate this way if they were loaded from different sites
+on the network. Of course, such communication is also prohibited
+by current applications when using <TT>getApplet</TT>.
+<P>
+A more serious problem is related to something mentioned as an
+advantage a couple of paragraphs ago: applets communicating via
+static variables can communicate across Web pages. When that's
+what you want, it's very useful, but when you aren't expecting
+it, it can be disastrous. Unless you explicitly intend for applets
+to continue to be a part of the team when the user moves on to
+another page, you need to write your applets carefully so that
+they use their <TT>stop</TT> methods
+to remove themselves from the team. Otherwise, if you try to use
+related applets together on one page to achieve one effect, and
+in a different way on another page to produce a different effect,
+those applets might step all over each other and get very confused
+if a user were to visit both pages in a single session.
+<P>
+The ColorRelay applet suffers from this problem to a degree. If
+you use it on one page with one image, and then on another page
+with a different image, the group of applets on the second page
+will continue to use the image that was loaded on the first page.
+With care, it is possible to avoid such confusion. One way is
+for applets to use the class only for establishing communication,
+storing references to shared information in instance variables
+rather than in the class. (The list of applets could stay in the
+class, because it's primarily a communication mechanism and applets
+are careful to remove themselves from the list when their <TT>stop</TT>
+method is called.) Another way of handling the situation is to
+use a hash table where the controlling applet on each page could
+store page-specific information, using itself as a key.
+<P>
+There is one final problem that might apply if you are doing something
+that requires applets to stay active after the user moves on from
+the applet's page: <I>trimming</I>. Under certain circumstances
+(such as when the browser's in-memory cache is full) the browser
+will forcibly destroy applets. Each browser will probably have
+a different trimming policy. There's nothing you can do to avoid
+trimming, but you can take action when it happens by overriding
+<TT>Applet.destroy</TT>.
+<H2><A NAME="NetworkCommunication"><FONT SIZE=5 COLOR=#FF0000>Network
+Communication</FONT></A></H2>
+<P>
+It's possible for applets to learn about each other and communicate
+using a network server. The server could accept connections from
+applets and inform them about other applets that were connecting
+from the same host. This mechanism doesn't offer any real advantages
+on its own, however. It turns out to be roughly equivalent to
+communication via static variables. Applets from different sites
+still can't communicate with each other, at least within Netscape
+Navigator, because of the restriction that applets can make network
+connections only to the site from which they were loaded. Furthermore,
+if two people on a multiuser system such as UNIX are both running
+Web browsers looking at the same page, it will be difficult, if
+not impossible, for the applets to determine that they are not
+even in the same browser. That could be a real mess.
+<P>
+It could also be wonderful! Occasionally you might want applets
+to communicate with each other between browsers. Several applets
+already use this technique. One particularly interesting example
+is Paul Burchard's Chat Touring applet, which provides a fairly
+typical interactive chat service with a twist-people who are viewing
+the Chat Touring page and chatting with each other can direct
+each others' Web browsers. You can type in the URL of a Web page
+you find interesting and the Chat Touring applet arranges for
+everyone else's browser to also jump to that page. Occasionally,
+there are &quot;guided tour&quot; events, where one individual
+is in control, showing the others a selection of Web pages and
+guiding discussion about them. The Chat Touring applet can be
+found at the following address:
+<BLOCKQUOTE>
+<TT><A HREF="http://www.cs.princeton.edu/~burchard/www/interactive/chat/">http://www.cs.princeton.edu/~burchard/www/interactive/chat/</A></TT>
+</BLOCKQUOTE>
+<P>
+Using the network for applet communication is primarily useful
+when the network is already an important part of what you want
+to accomplish. Communicating between different users is one example;
+another is a client applet, which interacts with a server to perform
+expensive calculations or access a database. If you are implementing
+such an applet and you think that having multiple cooperating
+applets might make your Web page easier to use, easier to understand,
+or more exciting, you might piggyback your inter-applet communication
+on the network, because you'll be using it anyway. On the other
+hand, if you don't already need to use the network, it's probably
+not the best choice for inter-applet communication.
+<H2><A NAME="ThreadBasedCommunication"><FONT SIZE=5 COLOR=#FF0000>Thread-Based
+Communication</FONT></A></H2>
+<P>
+One final mechanism deserves mention, because although it's extremely
+limited in most ways, it does permit some communication that isn't
+otherwise possible. One applet can learn about other applets by
+searching through the <TT>ThreadGroup</TT>
+hierarchy to find the threads in which the applets are running.
+<A HREF="ch23.htm" >Chapter 23</A>, &quot;Pushing the Limits of
+Java Security,&quot; contains an example applet, <TT>AppletKiller</TT>,
+which demonstrates how to find other applets in this manner. However,
+although <TT>AppletKiller</TT> is
+pretty good at finding other applets, it's not really concerned
+with communicating with any of them (except in an extreme sense!),
+so a discussion of the communication potential of the approach
+is worthwhile.
+<P>
+Even after you've found an applet's thread, communication isn't
+easy, because you haven't actually found the applet object itself-just
+the thread in which it is running. Because applets must inherit
+from the <TT>Applet</TT> class, and
+Java doesn't support multiple inheritance, applets can't actually
+be instances of <TT>Thread</TT>; instead,
+they must implement the <TT>Runnable</TT>
+interface and create new <TT>Thread</TT>
+objects.
+<P>
+Having found a thread, there are only a few things you can do.
+You can find out several pieces of information about the thread
+itself, but that doesn't lead you to the applet. You can interrupt
+the thread, but that's a pretty poor form of communication. The
+only real way to establish communication with the applet is to
+try to stop the thread by throwing an object of some type other
+than <TT>ThreadDeath</TT>:
+<BLOCKQUOTE>
+<TT>// 'appthread' contains the thread we've
+found<BR>
+appthread.stop(new CommunicationHandle(this));</TT>
+</BLOCKQUOTE>
+<P>
+If the applet is prepared to catch such an object, it can use
+that object to find your applet and establish communication, but
+you still will have aborted whatever the applet was in the process
+of doing. Even worse, if the applet isn't prepared to accept the
+<TT>CommunicationHandle</TT>, you
+will have inadvertently killed the entity you were trying to talk
+to, just like they occasionally do on <I>Star Trek</I>. As if
+that weren't bad enough, if the other applet was loaded from another
+site, applet security mechanisms might prevent the other applet
+from recognizing the object you pass in the <TT>stop</TT>
+method.
+<P>
+Because of all of these pitfalls, locating other applets via the
+<TT>ThreadGroup</TT> hierarchy is
+really more useful for control purposes than for cooperation.
+It's possible for one applet to keep watch over others, enabling
+a user to investigate what applets are currently active and kill
+those that are misbehaving.
+<P>
+Applets really shouldn't be able to control other threads, and
+their current ability to do so probably represents a security
+bug. <A HREF="ch23.htm" >Chapter 23</A> discusses this issue in
+some detail. If you build applets that depend on this capability
+to do their job, they may cease to work as applications tighten
+thread security. At the same time, though, mechanisms for more
+flexible security will be appearing, permitting you to grant special
+privileges to applets loaded from trusted sources (<A HREF="ch22.htm" >see Chapter 22</A>,
+&quot;Authentication, Encryption, and Trusted Applets,&quot; for
+more details). An applet that gives the user control over other,
+ill-behaving applets might remain a useful tool.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+Inter-applet communication can be extremely useful. It can help
+you produce improved visual effects which enhance the content
+of a Web site, and it can help you build useful applets that are
+easy to understand. Unfortunately, there are also a lot of traps
+for the unwary. There are several ways of establishing communication
+between different applets, and each mechanism has its problems.
+<P>
+For most purposes, you should use <TT>AppletContext.getApplet</TT>
+or static variables in a shared class to establish communication.
+They work fairly well in most situations, and their limitations
+are not too serious. Additionally, <TT>getApplet</TT>
+should work more consistently in the future, as application implementors
+hammer out the details of how it really should work.
+<P>
+In certain special cases, applets can communicate using the network
+or locate each other by searching the thread hierarchy. These
+mechanisms have serious disadvantages, but they also offer unique
+capabilities, which might be essential for the function you have
+in mind.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch2.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>

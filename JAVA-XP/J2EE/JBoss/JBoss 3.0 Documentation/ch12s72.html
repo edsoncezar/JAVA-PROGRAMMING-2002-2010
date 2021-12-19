@@ -1,0 +1,51 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Tracing the call through container</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch12.html" title="Chapter 12. Container architecture - design notes"><link rel="previous" href="ch12s68.html" title="Security"><link rel="next" href="ch13.html" title="Chapter 13. HOWTO"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s68.html"><img src="images\prev.gif" border="0"></a><a href="ch13.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e8749"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e8749"></a>Tracing the call through container</h2></div></div><p>The preceding sections discussed specific pieces of call handling
+    at length.  Now it is time to put all the pieces together to see how a
+    complete method invocation is handled.  In particular, let's look at the
+    handling of method calls on an Entity Bean.</p><p>The call is first logged. Then the TxInterceptor decides how to manage
+    transactions for this call. The information needed for this decision
+    comes from the standard XML descriptor. Then, the SecurityInterceptor
+    checks if the caller is allowed to perform this call, again by using
+    information from the XML descriptor. Up until this point no instance
+    has been acquired. After all interceptors have been passed the container
+    will invoke the business method on the EJB instance, so now we
+    acquire this instance.</p><p>The interceptor calls the InstanceCache with
+    the given primary key to perform this. Since the cache does not yet
+    have an instance associated with the given primary key, it first gets
+    a free instance from the instance pool, which it associates with the
+    primary key. It then calls the persistence manager which will activate
+    the instance. This usually only involves calling ejbActivate.</p><p>After instance acquisition the next interceptor deals with how this
+ 	instance is
+    synchronized with the database. There are a number of options (load on
+    transaction start, load on each call, load on activate, etc.) and the
+    interceptor has been configured to perform one of these options. In
+    this example it will load on activate, so it calls the persistence
+    manager to perform this. This will cause an ejbLoad call to be made
+    on the instance.</p><p>Next, the last interceptor is invoked, which is the
+    container itself. The container always adds itself as the last interceptor
+    at the end of the chain. The call is now delegated to the EJB instance.
+    The instance performs some work, and returns a result. The interceptor
+    chain is now followed in reverse by having each interceptor return from
+    the invoke-operation. The instance synchronization interceptor chooses
+    to store the current state into the database and hence calls storeEntity
+    on the persistence manager. Another valid option would be to wait until
+    transaction commit.</p><p>Next, the instance is returned to the cache. If the
+    transaction does not end with this call, it will first lock the instance
+    to this transaction so that no other transaction may use it for the
+    duration of this current transaction. This is the same as pessimistic
+    locking. The transaction interceptor handles the method return according
+    to the transaction settings, possibly commiting or rollbacking the current
+    transaction. Finally, the container invoker returns the result to the
+    client. This completes the call.</p><p>As you can see, all implementation decisions are performed by various
+plugins.
+    These decisions are fairly loosely coupled, which allows the deployer of
+    the EJB-application to tweak the behaviour of the container to a great
+    degree. This also allows for a number of independent plugins to co-exist,
+    each one allowing for slightly, or radically, different behaviour.</p><p>For example, some persistence managers could use an XML-file as the
+backing
+    store instead of an RDBMS, and some security interceptor could use ACL's
+    from a database instead of the XML descriptor to perform security checks.
+    Or multiple security checks could be done by configuring the container
+    to have several security interceptors of different types. All of these
+    options are available by this componentized container architecture.</p></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s68.html"><img src="images\prev.gif" border="0"></a><a href="ch13.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

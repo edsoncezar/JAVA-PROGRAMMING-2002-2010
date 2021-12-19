@@ -1,0 +1,242 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="..\ch10\0376-0376.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0381-0383.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-377"><P>Page 377</P></A>
+
+<H3><A NAME="ch11_ 1">
+Chapter 11
+</A></H3>
+
+<H2>
+
+Advanced Networking
+
+</H2>
+
+<P>This chapter builds upon your basic networking knowledge to help you create
+complex client/server applications. Servers are simply network applications that provide a
+service to client applications or applets. You build servers using many of the same techniques
+used for any Java application. Servers also pose their own unique problems, however:
+They potentially handle many different clients concurrently and thus must run for long
+periods of time. Most servers start when the host computer starts and run until the host
+computer shuts down.
+</P>
+
+<P>Java is a natural language for building servers. In addition to the many benefits
+Java provides to any application writer, several language features help you build robust
+servers. Automatic garbage collection, for example, helps eliminate memory leaks (storage that
+is allocated but never released). Servers contain the inherent ability of multitasking,
+which requires threads and synchronization support. In addition, the exception
+mechanism ensures that errors are detected and handled before crashing the server. Although it
+is certainly possible to build reliable servers using other languages, Java's clean
+integration of these features makes it a natural choice for this task.
+</P>
+
+<P>As you progress through this chapter, you will develop a set of classes ready to use
+in creating your own internet or intranet clients and servers. Your goal in this chapter is
+to build an e-mail application, but you can use the illustrated techniques to build servers
+and clients for other TCP-based applications, such as network news, chat, file transfer,
+remote login, and custom web servers.
+</P>
+
+<A NAME="PAGENUM-378"><P>Page 378</P></A>
+
+
+
+<H3><A NAME="ch11_ 2">
+The Application&#151;An E-Mail <BR>
+Client/Server
+</A></H3>
+
+<P>Assume that your company wants you to create a LAN-based e-mail solution.
+This application would require the following characteristics:
+</P>
+
+<UL>
+<LI>          Integrates easily with the Internet
+<LI>          Is accessible from a variety of different user platforms, such as Mac, PC, and Unix
+<LI>          Supports a variety of information types
+<LI>          Enables users to turn their computers off at night
+<LI>          Enables users to search the corporate information database to find the
+e-mail address assigned to any individual
+</UL>
+
+<P>Although many other requirements might exist, these characteristics are key for
+this development project.
+</P>
+
+<H4><A NAME="ch11_ 3">
+Client/Server Protocol Issues
+</A></H4>
+
+<P>You must first translate these high-level requirements into a selection of the protocols
+used in your e-mail application. Network protocols define in detail the interactions and
+exchanges allowed between a client and a server. A protocol must specify the following:
+</P>
+
+<UL>
+<LI>          The set of messages to be sent and received. A protocol could have
+USERNAME and PASSWORD messages, for example.
+<LI>          The exact format of each message, even down to the bit level. USERNAME,
+for example, is message code 4.
+<LI>          The sequence of messages allowed. PASSWORD must follow a
+USERNAME message, for example.
+<LI>          The actions to take when sending or receiving a specific message. In this
+example, the protocol must check the user's password.
+</UL>
+
+<P>Many different client-server protocols currently exist in common use; you likely
+make frequent use of such protocols as NNTP (network news), HTTP (web access), SMTP
+and POP (e-mail), NFS (file service), telnet (remote
+login), and FTP (file transfer). All of these protocols can be divided into broad categories based on the type of connection between
+the client and server, and the amount of information, known as state, kept by the server.
+</P>
+
+<A NAME="PAGENUM-379"><P>Page 379</P></A>
+
+
+
+<B>
+Connection or Connectionless Servers
+</B>
+
+<P>The first major distinction among different groups of client-server protocols is
+operation over a connection-oriented or connectionless service. For Java, that means TCP
+(Transmission Control Protocol) or UDP (User Datagram Protocol).
+Connection-oriented protocols depend on TCP's reliable delivery service; the sender either receives
+transmitted data in an error-free manner, or the protocol notifies the sender of the failure. Because it
+is connectionless, UDP provides no guarantees of service; it instead relies only upon the
+best efforts of the underlying transport networks. UDP packets can be inadvertently
+lost, reordered or even duplicated during their transmission through
+the Internet, so your client and server application must be able to
+handle these occurrences.
+</P>
+
+<P>Unlike UDP, TCP's extra service is an added overhead cost.
+Before you send your application data over TCP, a two-packet
+exchange usually appears to set up the connection&#151;this is called a
+three-way handshake, but the third packet can often carry user data.
+Another two or three packets are exchanged when you close the
+connection. Sending your simple query and gaining a response, therefore,
+can entail exchanging seven or more packets between the client
+and server computers. Different TCP implementations vary in
+their effectiveness in piggy-backing TCP control packets with user
+data packets. Figure 11.1 shows the packet exchanges for a
+request/response transaction using TCP and using UDP.<BR>
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Java 1.0 does not provide a standard means of
+accessing IP-level services. For example, you
+cannot implement PING in Java without using native
+methods. Likewise, you cannot implement any new transport protocol
+that runs directly over IP. 
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<P><a href="images\ch11fg01.jpg"><img src="images\tn_ch11fg01.jpg"></a><BR>
+Figure 11.1
+Packet exchanges for TCP versus UDP.
+</P>
+
+<A NAME="PAGENUM-380"><P>Page 380</P></A>
+
+
+
+<P>With UDP, you simply format a request packet and send it to the server. This
+action returns a response packet, unless the network discards the request or the response
+packet. If you decide to use UDP, you must code the reliability mechanisms built into TCP
+into your client and server programs.  For most applications, the added implementation
+effort is not worth the performance gains of using UDP. With general mechanisms, TCP may
+not be as efficient as a protocol tailored for a specific application, but only the most <BR>
+performance-critical protocols, such as network file service, justify the added
+effort. Because most client/server protocols are based on connections, your focus in this
+chapter is to build servers using TCP sockets.
+</P>
+
+<B>
+Stateless Servers
+</B>
+
+<P>The second major distinction among different client-server protocols is the amount of
+state information the server remembers.
+</P>
+
+<P>Assume that you want to build an elapsed time server. In
+one approach, your client opens a TCP connection to your server.
+The server remembers the time the connection opens (the
+&quot;state&quot;), computes, and returns the elapsed time on command (a
+newline character). Your client periodically processes a println() to send
+a newline character and then reads and displays the time
+spent waiting. When the expected event occurs, your client processes
+a println(), reads the final elapsed time computed by the
+server (ignoring the transmission delay between the client and
+server computers), and closes the TCP connection. The server absorbs
+most of the burden of keeping state information (in this case, the
+start time). The client deals simply with maintaining the TCP
+connection and sending commands to the server. Each command can
+implicitly or explicitly reference state information stored by the server.
+Of course, in this example, maintaining the TCP connection
+demands much more work than locally computing the elapsed time.
+</P>
+
+<P>In a stateless approach, one in which your server keeps no
+state information, the client opens a TCP connection to the server, sends
+a request to obtain a start-time, stores the returned 64-bit value, and closes the
+connection. This model of open-request-response-close is the same approach used by HTTP.
+When your client needs to compute the elapsed time, the client opens a connection to the
+server and writes the 64-bit value. Your server reads the value, computes, and returns the
+elapsed time as text. The server then closes the connection to indicate that the transaction
+is complete. 
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Extensions to HTTP, particularly those that maintain state in
+the client and pass it to the server, complicate HTTP's
+stateless model. HTTP uses a technique called
+<I>cookies</I> to save state information related
+to a specific server. Browsers that support cookies add the
+saved state information to the HTTP request header.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+<P><CENTER>
+<a href="..\ch10\0376-0376.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0381-0383.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

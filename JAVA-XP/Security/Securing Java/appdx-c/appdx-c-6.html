@@ -1,0 +1,280 @@
+<html>
+<head>
+<title>Signing Code with Sun's Java 2 (Appdx. C, Sec. 6) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\appdx-c.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="appdx-c-5.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>How to Sign Java Code
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="appdx-c-1.html">1</a> / <a href="appdx-c-2.html">2</a> / <a href="appdx-c-3.html">3</a> / <a href="appdx-c-4.html">4</a> / <a href="appdx-c-5.html">5</a> / <b>6</b> / <a href="appdx-c-7.html">7</a> / <a href="appdx-c-8.html">8</a><p>
+
+<font size="+2" color="#000000"><b>Section 6 -- Signing Code with Sun's Java 2</b></font>
+</td><td width=60 align=center>
+<a href="appdx-c-7.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+The javakey tool from JDK 1.1 has been replaced by two tools in Java 2.<p>
+
+One tool manages keys and certificates in a database. The other is responsible for signing and verifying JAR files. Both tools require access to a keystore that contains certificate and key information to operate. The keystore replaces the identitydb.obj from JDK 1.1. New to Java 2 is the notion of policy, which controls what resources applets are granted access to outside of the sandbox (see <a href="..\chapter-three\index.html">Chapter 3</a>).<p>
+
+The javakey replacement tools are both command-line driven, and neither requires the use of the awkward directive files required in JDK 1.1.x. Management of keystores, and the generation of keys and certificates, is carried out by keytool. jarsigner uses certificates to sign JAR files and to verify the signatures found on signed JAR files.<p><br>
+
+
+<center><font size="+1"><b>Getting Started with <font face="Courier New">Keytool</font></b></font></center><p>
+
+The first step in working with Java 2 is getting the latest beta version from Sun. Members of the Java Developers Connection (JDC) can download Early Access releases of Java 2 software. Membership in the JDC is free with registration. Once registered, point your browser to <a href="http://developer.java.sun.com/developer/earlyAccess/jdk12/index.html">developer.java.sun.com/developer/earlyAccess/jdk12/index.html</a>.<p>
+
+The Win32 version of JDK 1.2beta4 comes with the latest version of the Java Plug-In, which supports Java 2. During the Install, answer yes when it wants to know if the JRE and the Plug-In should be installed as well-it will be needed later.<p>
+
+The keytool command operates on a keystore file. The name of the keystore file is .keystore by default, and it is located in the directory named by the user.home Java System Property. It is possible to have multiple keystores. Changing the keystore on which the current keytool command will operate is done through the <font face="Courier New">-keystore &lt;path to keystore&gt;</font> option.<p>
+
+Documentation from the Sun Java Web pages states that Java 2 VMs will run and properly authenticate JARs signed with JDK 1.1's keytool. It also states that the last beta release of JDK 1.2 does not yet support 1.1-signed JARs. The keytool utility also supposedly allows porting keys and certificates from 1.1 identitydb.obj files into a Java 2 keystore. According to the documentation, the command to perform the translation is:<p>
+
+<center><pre>keytool -identittydb -file &lt;path to identitydb.obj file&gt;</pre></center><p>
+
+Unfortunately, an identitydb.obj file created with JDK 1.1.6 did not successfully import into the keystore when we tested the keytool from JDK 1.2 beta4-we tried on both Win32 and Unix platforms. The error message returned from keytool mentions an InvalidClassError and states that a class used in key management became obsolete, resulting in a serialization error. Until this problem works itself out in later beta and production versions, the certificates and keys used under 1.1 cannot be used in Java 2. New certificates and keys will need to be generated for use with jarsigner and keytool.<p>
+
+Generating a public and private key pair and self-signed certificate can be performed from the command line in one shot without the need to create any directives files. All keys and certificates stored in the keystore are accessible through an alias. An alias is a name associated with a certificate entry that keytool uses to uniquely identify each certificate under its control. To generate a certificate keyed by the alias keyname, run the command:<p>
+
+<center><pre>keytool -alias keyname -genkey</pre></center><p>
+
+keytool will begin prompting for information. The first prompt is for a keystore password, which will be needed for all further keytool and jarsigner operations on this keystore. It must be at least six characters long and is unfortunately echoed to the screen as it is typed. This means that the keystore password can be leaked to casual observers whenever keytool or jarsigner is used.<p>
+
+Once the password has been entered, keytool prompts for some personal information, such as name, company name, city, state, and country. All this information is stored in the generated self-signed certificate, which is saved in the default keystore location. All the personal information is displayed for verification before keytool generates the keys and certificate. After the certificate and keys are generated, keytool prompts for another password. Each certificate has its own password, separate from the keystore password. Entering nothing does not give the key an empty password. It gives the certificate the same password as the keystore. jarsigner will not prompt for the passwords of certificates that have the same password as the keystore, so it may appear that a certificate has no password. However, if the password of the keystore changes, the passwords of the certificates do not change, so jarsigner will start prompting for not only the password of the keystore, but for the certificate as well. The command to change the password of a keystore is:<p>
+
+<center><pre>keytool -storepasswd</pre></center><p>
+
+keytool will prompt for the old password, and the new password twice, all in cleartext. This command does not affect the passwords of certificates in the keystore, including those that happen to have the same password as the keystore.<p>
+
+An apparent weakness of the keytool certificate generation system is that a user can accept all the default values for the personal information prompted for before certificate generation. The default value for all the questions is "Unknown." So keytool will generate a valid certificate that can be used to sign JAR files, but is filled with bogus information. No data validation is performed by keytool, so it is possible to, say, create a certificate for Elvis.<p>
+
+Certificates generated by the system will be valid for just under one year by default. To change the length of validity for a certificate to n days, add the flag -validity n to the keytool -genkey command.<p>
+
+To view the fingerprints of certificates in the keystore, use the command:<p>
+
+<center><pre> keytool -list</pre></center><p>
+
+To view the personal information about the issuer and owner of the certificate, run:<p>
+
+<center><pre>keytool -list -v</pre></center><p><br>
+
+
+<center><font size="+1"><b>Signing a JAR</b></font></center><p>
+
+Once a private key has been generated, jarsigner can be used to mark a JAR file with the public key of the signer. The command to sign a JAR file called SignMe.jar with the keyname private key generated previously is:<p>
+
+<center><pre> jarsigner SignMe.jar keyname</pre></center><p>
+
+jarsigner will prompt for the keystore password and the private key password if different than the keystore password before signing the JAR file. To monitor the progress of the signing process, run:<p>
+
+<center><pre> jarsigner -verbose SignMe.jar keyname</pre></center><p>
+ 
+jarsigner can also be used to verify that a JAR has or has not been signed, and by whom. For a simple signed/not signed answer for a JAR file Unknown.jar, run:<p>
+
+<center><pre> jarsigner -verify Unknown.jar</pre></center><p>
+
+To get more information from the verification process, such as the signing status of each file in the JAR file, the personal information from the certificates used to sign each file in the JAR, and whether or not the certificate is known in the default keystore, run:<p>
+
+<center><pre> jarsigner -verify -verbose -certs Unknown.jar</pre></center><p>
+
+After each signed file in the listing will be the personal information encoded in the certificate for the entity that signed the file. If that certificate is known in the keystore, the name it is known by will appear in parentheses after the certificate's personal information.<p><br>
+
+
+<center><font size="+1"><b>Enter the CA</b></font></center><p>
+
+So far, the only changes from JDK 1.1 are the syntax and the names of the commands. Certificates can be generated by keytool with any personal information at all. There is nothing to stop anyone from creating a certificate that claims that it is owned by someone else and signing a JAR with it. What a Certificate Authority can provide is a level of assurance that a certificate truly represents the individual that it claims to represent. That is, of course, if you trust that a Certificate Authority isn't being spoofed, and is properly checking the certificates it vouches for. (Recall, this way madness lies.)<p>
+
+Certificates generated by keytool can be exported in a form suitable for submission to a Certificate Authority such as VeriSign. This can be accomplished by running:<p>
+
+<center><pre>keytool -certreq -alias keyname -file requestfile</pre></center><p>
+
+That command puts a Certificate Signing Request into requestfile for the certificate know by the keyname alias. However, there is no information as to how to submit this data to a CA for validation. According to the keytool documentation, the CA will validate the certificate and return something that must be imported into the keystore. Although we haven't tested it, the command to import the response from the CA into the keystore is supposed to be:<p>
+
+<center><pre>keytool -import -alias newalias -trustcacerts -file response</pre></center><p>
+
+That command imports the response from the CA stored in a file called response into the keystore under the name newalias, which must not already exist in the keystore. The -trustcacerts flag tells keytool to check the response certificate against the five VeriSign certificates that come shipped with Java 2 (at least there were five in JDK 1.2beta4).<p><br>
+
+
+<center><font size="+1"><b>Turning Over the Keys</b></font></center><p>
+
+Until the certificate used to sign the JAR is made public, no one can grant any permissions to the enclosed applet. To retrieve a copy of the keyname certificate from the keystore into a file mycert, use:<p>
+
+<center><pre>keytool -export -alias keyname -file mycert</pre></center><p>
+
+As usual, keytool will prompt for the appropriate passwords. When the command finishes, the file mycert can be distributed to users who wish to grant additional privileges to applets signed by that certificate.<p>
+
+As in JDK 1.1, there is currently limited support for a JAR signed with the JDK  tools. Again, Sun provides support through the Java Plug-In. Plug-In version 1.1.1 does not necessarily support Java 2. Although the Java Plug-In can be configured to use different VMs installed on the local system, the Plug-In hangs the browser when pointed to a Java 2 VM on Solaris. Documentation for the Win32 version of the Plug-In mentions running a program off the Start menu to configure the Plug-In. The installation script does not create a program group for a Plug-In Control Panel as advertised under Windows NT unless the user performing the installation has permission to create program groups.<p>
+
+An Early Access version of Plug-In version Java 2 for Solaris is available to members of the Java Developer's Connection. The latest version of the Plug-In for Win32 ships with JDK 1.2beta4.<p>
+
+As with JDK 1.1, any HTML pages that contain Java 2-signed JAR files must be converted using the same HTMLConverter used in JDK 1.1. Converting the HTML ensures that the applet will run in the Plug-In and not in the browser's default VM. See the section on JDK 1.1 JAR signing for information on where to get the HTMLConverter.<p><br>
+
+
+<center><font size="+1"><b>Running a Signed Applet</b></font></center><p>
+
+The first step upon encountering a signed applet is to locate the certificate of the entity that signed the JAR file and import it into the local keystore. Assuming that the certificate can be located and placed into a file called acert, run:<p>
+
+<center><pre>keytool -import -alias analias -file acert</pre></center><p>
+
+An entry in the keystore is created keyed by the name analias for the certificate stored in acert. This is now a trusted entity. Whereas in JDK 1.1, aliases could either be trusted or untrusted, all aliases in Java 2 keystores are trusted. However, in JDK 1.1, trusted aliases could do anything they wanted; aliases in Java 2 cannot do anything unless granted permission. Permissions are granted to aliases through the use of policy files (see <a href="..\chapter-three\index.html">Chapter 3</a>).<p><br>
+
+
+<center><font size="+1"><b>Creating a Simple Policy for Signed Applets</b></font></center><p>
+
+Java 2 introduces the notion of policy. Creating, understanding, and managing security policy for signed mobile code is a difficult and complex problem. Since this discussion is about signing code and not about constructing policy, an extremely simple example of how to construct policy is presented. Creating good policy is beyond the scope of this tutorial. The example policy is strong enough to allow an applet limited file access to the host machine.<p>
+
+Java policy files can be created with the new policytool. This application has a GUI to guide users though the many twists and turns encountered when creating policy files. It's a very simplistic GUI with no online help. In its current form as of beta4, it is only useful if one does not know the syntax of a policy file.<p>
+
+Policy files are plaintext files that follow a format outlined at <a href="http://java.sun.com/products/jdk/1.2/docs/guide/security/PolicyFiles.html">java.sun.com/products/jdk/1.2/docs/guide/security/PolicyFiles.html</a>.<p>
+
+The default security policy system first reads a system-level policy file from the lib/security/ subdirectory under the Java installation directory. It then tries to read a .java.policy file from the current user's user.home directory. In this file, users specify their personal security policy, which merges with the system security policy. Permissions that can be granted in a Java policy file are outlined at java.sun.com/products/jdk/1.2/docs/guide/security /permissions.html, as well as in <a href="..\chapter-three\index.html">Chapter 3</a>.<p>
+
+If the policy file is to make reference to a certificate stored in a keystore, a keystore entry must appear in the policy file. The keystore entry specifies the path relative to the policy file itself and the name of the keystore file. To keep things simple and use the default keystore file, add the following line to the .java.policy file in the user.home directory:<p>
+
+<center><pre> keystore ".keystore";</pre></center><p>
+
+To grant an applet permission to write or create any file in the c:\tmp directory, assuming the applet comes from www.friendly.com/~mybuddy/applets/ and is signed by a certificate known in the default keystore as friend, add to the .java.policy file:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre> keystore ".keystore";
+ grant signedBy "friend", 
+  codeBase "http://www.friendly.com/~mybuddy/applets/" {
+   permission java.io.FilePermission "c:\\tmp\\*", "write";
+ };</pre>
+ </td></tr></table></center><p>
+ 
+Note the double backslashes. All Win32 pathnames must use double backslashes to indicate directories. Unix pathnames use regular singleton forward slashes. CodeBase follows URL syntax.<p><br>
+
+<!-- See the <a href="/dpig/jdk.html">Dancing Pigs signed applet example</a><p><br> -->
+
+
+<center><font size="+1"><b>Sign Only Privileged Code</b></font></center><p>
+
+Applets that request permission to leave the sandbox are usually built for greater purposes than saving a high-score list on the local drive. Applets that do serious business and hence require access to the local system are most likely some of the larger applets in existence. It is unlikely that these applets will be built completely by one developer or one software company. Chances are some of the components of an applet will be bits of utility code found on the Internet or purchased from a tool vendor. A smart organization wants to sign only code that it produces; third-party utility code cannot be safely vouched for.<p>
+
+If all the code is signed, then any code can leave the sandbox based on the policy. However, if some code in an applet is from a third party, it should not be signed unless the individual signing the code is willing to vouch that the third-party code won't try to do anything malicious (or introduce a security hole that others can exploit). To say the least, we don't recommend signing code you don't completely understand.<p>
+
+Java 2 presents an API for privileged blocks. Privileged blocks are meant to be small sections of code that have a higher privilege than the code that invoked them. JDK 1.2beta4 introduced a new API for privileged blocks. Using this API, the only code that needs to be signed is the code that invokes the AccessController class, and the code that performs the privileged action.<p>
+
+All other code can remain unsigned, preventing it from leaving the sandbox on its own (or tempting others to attack it). Documentation on the new API can be found at <a href="http://java.sun.com/products/jdk/1.2/docs/guide/security/doprivileged.html">java.sun.com/products/jdk/1.2/docs/guide/security/doprivileged.html</a>.<p>
+
+There are two things to consider when writing signed code that will be integrated with unsigned code. First, make the code in the privileged block as small as possible. The less code that is privileged, the less chance that granting it higher privilege will result in nasty and unwanted side effects. Second, to prevent mix-and-match attacks, all the code for the applet should live in one JAR file, even if the third-party libraries that are used by the applet live in their own JAR. (See Guidelines for Java Developers in <a href="..\chapter-seven\index.html">Chapter 7</a>, "Java Security Guidelines: Developing and Using Java More Securely.")<p>
+
+To sign some portions of a JAR file and leave others unsigned takes a number of steps we'll cover now. First, create a JAR file containing all classes that need to be signed.<p>
+
+<center><pre>jar cvf MyApp.jar Signme1.class Signme2.class</pre></center><p>
+
+List all the classes that need to be signed in the previous command. Once the JAR containing classes that need to be signed is created, sign the JAR with jarsigner.<p>
+
+<center><pre>jarsigner MyApp.jar mykey</pre></center><p>
+
+Now, add the remainder of the classes in the application to MyApp.jar. The Java 2 version of jar added the v flag, which allows JAR files to be updated with new files.<p>
+
+<center><pre>jar uvf MyApp.jar Other1.class Others.class</pre></center><p>
+
+List the remaining classes in the application in this step. If parts of the application are already in a JAR or ZIP file, they will need to be unarchived before being JARed into the new partially signed JAR file. To verify that all went correctly, use jarsigner to verify the contents.<p>
+
+<center><pre>jarsigner -verify -verbose MyApp.jar</pre></center><p>
+
+Only the classes that were added before jarsigner was invoked the first time to create the signature will be marked as signed. All the other classes will be listed, but no certificate or signature will be associated with their listing.
+If jarsigner fails to verify the entire JAR, or classes that are supposed to be signed appear not to be, use the jar command to list the contents of the JAR.<p>
+
+<center><pre> jar tvf MyApp.jar</pre></center><p>
+
+The first entry in the JAR must be META-INF/MANIFEST.MF. If the manifest file is missing or not in the first position in the file, the JAR will not verify properly. Following the MANIFEST.MF file should be a .SF and .DSA (or .RSA) file. If either of those files is missing, then the signature is missing from the JAR. Remove the JAR file and start over. If the commands listed earlier still move the META-INF/MANIFEST.MF file out of the first position in the file, it may not be possible to create a JAR containing signed and unsigned code. (The JAR command with JDK 1.2beta4 did not move the META-INF/MANIFEST.MF file around in the JARs we created.)<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="appdx-c-5.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="appdx-c-7.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="..\chapter-five\index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="..\chapter-five\index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+

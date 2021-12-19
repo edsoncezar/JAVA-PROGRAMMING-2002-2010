@@ -1,0 +1,278 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Distributed Computing with Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0460-0464.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0470-0472.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-465"><P>Page 465</P></A>
+
+
+
+<B>
+Client-Side Modifications
+</B>
+
+<P>Two areas in the client code require changes. They are related to the following:
+</P>
+
+<UL>
+<LI>          Binding to a remote object
+<LI>          Handling of remote exceptions
+</UL>
+
+<P>In the local case, the client could simply refer to the AddressBook object because
+it obtained a reference to it when it constructed it. In the remote case, this situation
+changes because getting a reference to the AddressBook requires knowing the name of the
+instance of AddressBook (there could be many of them); the code must handle the situation
+where one doesn't exist (see listing 12.4).
+</P>
+
+<P>Listing 12.4 The Client-Side Method to Obtain Reference to Remote
+AddressBook
+</P>
+
+<PRE>
+public void getAddressBook(String where) {
+    try {
+        String name = &quot;//servername/AddressBook1&quot;;
+        Remote obj = Naming.lookup(name);
+
+        if (obj instanceof AddressBook) {
+            book = (AddressBook)obj;
+            System.out.println(&quot;Found AddressBook: &quot; + name);
+        }
+        else {
+            System.out.println(name + &quot; is not an AddressBook&quot;);
+            reportStatus(name + &quot; is not an AddressBook&quot;);
+            }
+        System.out.flush();
+        }
+
+    catch (RemoteException ex) {
+        ex.printStackTrace();
+        reportStatus(&quot;RemoteException during lookup.&quot;);
+        }
+    }
+</PRE>
+
+<P>For simplicity the example uses a single name which is known at compilation time to
+both client and server sides&#151;&quot;AddressBook1.&quot;  To get a reference to the remote object,
+the Naming class is used to access the registry on the server. The Naming.lookup()
+method returns a reference to the remote AddressBookImpl object, which allows its methods to
+be called, just as they would be on a local object.
+</P>
+
+<A NAME="PAGENUM-466"><P>Page 466</P></A>
+
+
+
+<P>There is a slight difference. Because the object is remote, there are many more ways
+in which method invocations can fail. As a result, the client has to add handlers for
+the remote exceptions that may occur. In the example, these simply report that such
+an exception occurred, but in a real application they would be tied in to a recovery procedure.
+</P>
+
+<B>
+An Elegant Solution
+</B>
+
+<P>It should be evident by now that RMI provides an elegant way for objects on
+different machines to communicate. In return for relatively minor modifications to the code,
+RMI provides great flexibility regarding where objects are located. The following
+sections provide a more detailed explanation of the key issues, expanding on several themes
+that were glossed over in the presentation of the example. For the complete story, see
+the reference documentation and samples in the JDK.
+</P>
+
+<H4><A NAME="ch12_ 15">
+The Layered RMI Architecture
+</A></H4>
+
+<P>RMI can be visualized as a three-layer architecture,
+ as shown in figure 12.5, each layer providing services to the layer above.
+</P>
+
+<UL>
+<LI>          Stubs and skeletons layer
+<LI>          Remote reference layer
+<LI>          Transport layer
+</UL>
+
+<P>The application code which uses RMI resides above the top layer.<BR>
+</P>
+
+
+<P><a href="images\ch12fg05.jpg"><img src="images\tn_ch12fg05.jpg"></a><BR>
+Figure 12.5
+The layered RMI architecture.
+</P>
+
+<A NAME="PAGENUM-467"><P>Page 467</P></A>
+
+
+
+<P>When a client invokes a remote method, the call flows down through the layers,
+being transformed as it goes, thus creating a data stream that travels across the transport. It
+is then reconstituted as it moves up through the layers on the server side and emerges as
+a call to the remote method. The results of the invocation make the reverse journey,
+with control finally returning to the calling code in the client.
+</P>
+
+<P>Figure 12.6 shows the flow of a method invocation.
+</P>
+
+
+<P><a href="images\ch12fg06.jpg"><img src="images\tn_ch12fg06.jpg"></a><BR>
+Figure 12.6
+A remote method invocation.
+</P>
+
+<P>Each layer has different responsibilities as described in the sections that follow:
+</P>
+
+<B>
+Stubs and Skeletons Layer
+</B>
+
+<P>Stubs and skeletons perform complementary functions. They form the interface
+between the RMI services and the code that calls and implements remote objects. They are
+responsible for marshaling the arguments and unmarshaling return values. To do this, they
+use the Object Serialization service, a set of APIs new to JDK 1.1, which converts objects to
+a stream representation and back again. The serialization is what allows objects to be
+moved transparently between processes. Object Serialization is usable (and useful) even if
+no remote objects are involved, as shown later when it is used to add persistence to
+the address book. In this case, the Reference Layer provides the marshaling streams to
+the stubs and skeletons. Both stubs and skeletons are specific to the types of remote
+objects. For this reason, they must be generated from the application supplied code, hence the
+need for the rmic compiler.
+</P>
+
+<A NAME="PAGENUM-468"><P>Page 468</P></A>
+
+
+
+<B>
+Remote Reference Layer
+</B>
+
+<P>The remote reference layer provides a constant interface to the stubs and
+skeletons mentioned above. To accomplish this it has to mask the differences between
+different server protocol implementations. For instance,
+</P>
+
+<UL>
+<LI>          Servers may support only point-to-point invocations, where a single client
+interacts with only a single object.
+<LI>          Servers may also support replication, where a number of replicated remote
+objects must be kept in synchronization whenever one instance is modified.
+<LI>          Remote objects may not be continually active and might only be loaded from
+disk when a client invokes one of their methods.
+</UL>
+
+<P>The code at this layer can be selected by the user by choosing (or implementing) a
+suitable base class, which is extended by the remote object's implementation.
+</P>
+
+<B>
+Transport Layer
+</B>
+
+<P>The transport layer handles the connection details and provides a channel between
+the Java Virtual Machines (VMs), which execute the client and host code. At this level,
+object identifiers are used to specify remote objects, and endpoints denote specific Java
+VMs. The wire transport protocol, including the network data representation, is fully
+documented in the RMI specification.
+</P>
+
+<H4><A NAME="ch12_ 16">
+The Packages
+</A></H4>
+
+<P>The RMI API is contained in four packages, java.rmi, java.rmi.server,
+java.rmi.registry, and java.rmi.dgc. The following list shows only the classes and interfaces, and omits
+the various exceptions which may occur. RMI exceptions extend
+java.rmi.RemoteException, which itself extends java.io.IOException. Although there appear to be many classes
+to learn about, those marked with an asterisk are used internally by the generated stubs
+and skeletons or distributed garbage collector, and are irrelevant to mainstream RMI users.
+</P>
+
+<UL>
+<LI>          java.rmi
+<BLOCKQUOTE>
+interface Remote<BR>
+class Naming<BR>
+class RMISecurityManager<BR>
+</BLOCKQUOTE>
+</UL>
+
+
+<A NAME="PAGENUM-469"><P>Page 469</P></A>
+
+
+
+<UL>
+<LI>          java.rmi.server
+<BLOCKQUOTE>
+interface LoadHandler<BR>
+interface RMIFailureHandler<BR>
+interface RemoteCall *<BR>
+interface RemoteRef *<BR>
+interface ServerRef *<BR>
+interface Skeleton *<BR>
+class LogStream<BR>
+class Operation *<BR>
+class ObjID *<BR>
+class RMIClassLoader<BR>
+class RMISocketFactory<BR>
+class RemoteObject<BR>
+class RemoteServer<BR>
+class RemoteStub *<BR>
+class UID *<BR>
+class UnicastRemoteObject<BR>
+</BLOCKQUOTE>
+<LI>          java.rmi.registry
+<BLOCKQUOTE>
+interface Registry<BR>
+interface RegistryHandler<BR>
+class LocateRegistry<BR>
+</BLOCKQUOTE>
+<LI>          java.rmi.dgc
+<BLOCKQUOTE>
+interface DGC *<BR>
+class Lease *<BR>
+class VMID *<BR>
+</BLOCKQUOTE>
+</UL>
+
+<H4><A NAME="ch12_ 17">
+Name Binding and the Registry
+</A></H4>
+
+<P>To call methods on an object, a reference to that object is needed. For local objects, this
+is simply returned from the &quot;new&quot; operator when the object is created. Remote objects
+are different in that they already exist elsewhere, and a mechanism is needed to obtain
+a reference so they can be used.
+</P>
+
+<P><CENTER>
+<a href="0460-0464.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0470-0472.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

@@ -1,0 +1,230 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The actual bean code shows two things. First, notice that each life-cycle message has an associated string printed to the log. Second, the environment properties are used to get the name of the log file or log server. The complete contents of the environment are logged when the context is set. The value of this environment is determined during deployment. In this case, one computer is set up as a log server, and the other computer logs to that server. You could change the deployment information to log to a file or localhost instead.
+</P>
+<PRE>
+package statelesssessionprint;
+
+import javax.ejb.*;
+import java.io.*;
+import java.util.*;
+
+import sessionprint.*;
+
+public class <B>StatelessSessionPrintBean</B> implements <B>SessionBean</B>
+{
+    protected SessionContext context;
+    protected DebugLog logger;
+
+    public void ejbActivate()
+    {
+        logger.log(&#147;Stateless- Activating&#148;);
+    }
+    public void ejbRemove()
+    {
+        logger.log(&#147;Stateless- Removing&#148;);
+    }
+    public void ejbPassivate()
+    {
+        logger.log(&#147;Stateless- Passivating&#148;);
+    }
+    <B>public void setSessionContext(SessionContext ctx)</B>
+    {
+        String logFile=null,logServer=null;
+        Properties environ;
+
+        <B>context = ctx;
+        environ = context.getEnvironment();</B>
+
+        logger = new DebugLog();
+
+        if(environ != null)
+        {
+            logFile = environ.getProperty(&#147;logfile&#148;);
+            logServer = environ.getProperty(&#147;logserver&#148;);
+        }
+
+        if(logServer != null)
+        {
+         logger.logTo(logServer);
+        }
+        else if(logFile != null)
+        {
+            logger.logTo(new File(logFile));
+        }
+
+        logger.log(&#147;Stateless- Set Context&#148;);
+
+        if(environ != null)
+        {
+             Enumeration names = environ.propertyNames();
+             String key,value;
+
+             while(names.hasMoreElements())
+             {
+                key = (String)names.nextElement();
+                value = environ.getProperty(key);
+
+                logger.log(&#147;Stateless- &#148;&#43;key&#43;&#147;=&#148;&#43;value);
+             }
+        }
+    }
+    public void ejbCreate()
+    {
+         logger.log(&#147;Stateless- Creating&#148;);
+    }
+
+    <B>public void log(String str)
+    {
+         logger.log(&#147;Stateless- &#148;&#43;str);
+    }</B>
+}
+</PRE>
+<P>The client for the two beans&#151;this one and the StatefulSessionPrintBean on the CD-ROM&#151;creates one instance of each bean and allows the user to log messages to both beans. The results of running this client, as viewed by the log server, should look something like those pictured in Figure 16.3. If viewed in real time, the connection messages for the stateful bean are printed when the client is launched. The connection messages for the stateless bean are printed when the first message is sent, indicating that the server waits until the stateless bean is needed to create it.
+</P>
+<P>Keep in mind that different EJB hosts may treat stateless beans differently, so this is just one possible example. However, it does show the interesting possibility that a stateless bean is not created until its first real message.</P>
+<P>All the code for SessionPrintClient is included in a single main method. This method accesses, then creates, one each of the session printing beans before accepting user input. Each string entered by the user is sent to both beans. When the user enters the string q, the beans are removed and the program exits.</P>
+<P><A NAME="Fig3"></A><A HREF="images\16-03.jpg"><IMG SRC="images\16-03t.jpg"></A>
+<BR><A HREF="images\16-03.jpg"><FONT COLOR="#000077"><B>Figure 16.3</B></FONT></A>&nbsp;&nbsp;SessionPrint LogServer output.</P>
+<PRE>
+package sessionprintclient;
+
+import javax.ejb.*;
+import javax.naming.*;
+import java.rmi.*;
+import java.util.*;
+import java.io.*;
+
+import statelesssessionprint.*;
+import statefulsessionprint.*;
+
+public class SessionPrintClient
+{
+    public static void main(String[] args)
+    {
+        Context ctx=null;
+        InputStreamReader readIn;
+        BufferedReader bufIn;
+        String str;
+
+        try
+        {
+            ctx = getInitialContext(args);
+
+            <B>StatelessSessionPrintHome lesshome =
+            (StatelessSessionPrintHome)
+                            ctx.lookup(&#147;statelesssessionprint&#148;
+                            &#43;&#147;.StatelessSessionPrintHome&#148;);
+
+            StatelessSessionPrint lesslogger = lesshome.create();
+
+            StatefulSessionPrintHome fulhome =
+            (StatefulSessionPrintHome)
+                             ctx.lookup(&#147;statefulsessionprint&#148;
+                                 &#43;&#147;.StatefulSessionPrintHome&#148;);
+            StatefulSessionPrint fullogger = fulhome.create();</B>
+
+            readIn = new InputStreamReader(System.in);
+            bufIn = new BufferedReader(readIn);
+
+            do
+            {
+                System.out.print(&#147;Please enter a phrase to log&#148;);
+                System.out.println(&#147; or \&#145;q\&#146; to quit.&#148;);
+
+                str = bufIn.readLine();
+
+                <B>lesslogger.log(str);
+                fullogger.log(str);</B>
+            }
+            while(!str.equals(&#147;q&#148;));
+
+            <B>lesshome.remove(lesslogger.getHandle());
+            fulhome.remove(fullogger.getHandle());</B>
+       }
+       catch (Exception e)
+       {
+           System.out.println(&#147;Error.&#148;);
+           e.printStackTrace();
+       }
+       finally
+       {
+           try
+           {
+              ctx.close();
+           }
+           catch(Exception exp)
+           {
+           }
+       }
+    }
+    static public Context getInitialContext(String[] args) throws Exception
+    {
+        <B>//Removed to save space</B>
+    }
+}
+</PRE>
+<P>To save space, the getInitialContext method for this client doesn&#146;t appear here. It is available on the CD-ROM and is equivalent to the implementation from the IsPrimeClient and others earlier in the chapter.
+</P>
+<P>A stateful version of the session id bean that was discussed previously is also included on the CD-ROM. This pair of beans is useful for investigating the difference between statefulness and statelessness. If you run several clients for each bean, you will see that the stateful beans&#146; clients always &#147;talk&#148; to the same bean, while the stateless beans&#146; clients often &#147;wander&#148; between various beans in the pool.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading21"></A><FONT COLOR="#000077">Programming Rules for Session Beans</FONT></H4>
+<P>Based on the specification, the following rules indicate the guidelines you should follow when creating session beans:
+</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Session beans must implement the javax.ejb.SessionBean interface.
+<DD><B>2.</B>&nbsp;&nbsp;Session beans must not be abstract.
+<DD><B>3.</B>&nbsp;&nbsp;Session beans must implement all of the necessary ejbCreate methods described in their home interfaces. These methods must be public, and the return type must be void.
+<DD><B>4.</B>&nbsp;&nbsp;Session beans must implement their remote interfaces, including any Exception throws declarations. These methods must be public.
+<DD><B>5.</B>&nbsp;&nbsp;The home interface for a session bean must define a create method that takes RMI-safe arguments and uses the remote interface for their return type. Stateless beans should only have a create method with no arguments. Stateful beans must have at least one create method. All create methods can throw CreateException and RemoteException.
+<DD><B>6.</B>&nbsp;&nbsp;The home interface must extend EJBHome.
+<DD><B>7.</B>&nbsp;&nbsp;Remote methods must be declared to throw RemoteException.
+<DD><B>8.</B>&nbsp;&nbsp;The remote interface must extend EJBObject.
+<DD><B>9.</B>&nbsp;&nbsp;Clients should remove beans when they are done with them.
+</DL>
+<P>Certainly, you should also follow standard programming conventions, but these guidelines summarize some of the specific issues surrounding session beans.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading22"></A><FONT COLOR="#000077">Container Responsibilities</FONT></H4>
+<P>The container for a session bean has a number of responsibilities:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;The container provider should also provide tools to create the classes that implement the remote and home interfaces. These classes should forward methods appropriately, that is, create messages to the home object, which should initiate ejbCreate messages to the bean.
+<DD><B>&#149;</B>&nbsp;&nbsp;The code generated by the container should allow only one client to talk to a session bean at a time.
+<DD><B>&#149;</B>&nbsp;&nbsp;A serializable handle must be provided.
+</DL>
+<P>In general, these requirements are met by the EJB host&#146;s deployment tools, although they may be part of another tool as well.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

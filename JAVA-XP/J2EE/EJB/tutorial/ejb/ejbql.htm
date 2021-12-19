@@ -1,0 +1,316 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 4.0">
+<link REL="stylesheet" TYPE="text/css" HREF="../cursos.css" />
+<title>EJB: Query Language</title>
+</head>
+
+<body>
+
+<h1 align="center">EJB: Query Language</h1>
+
+<h2>Introdução</h2>
+
+<ul>
+  <li>EJB QL = Enterprise JavaBeans Query Language
+    <ul>
+      <li>Semelhante a OQL</li>
+    </ul>
+  </li>
+  <li>Define queries para os métodos &quot;finder&quot; e &quot;select&quot; ao usar um
+    Entity Bean com Container-Managed-Persistence (CMP)</li>
+  <li>É um subconjunto de SQL92 com algumas extensões para navegar nos relacionamentos
+    definidos no esquema abstrato do bean</li>
+  <li>EJB QL queries são definidos no Deployment Descriptor do bean<ul>
+      <li>Tipicamente, uma ferramenta traduz isso para o SQL do BD final</li>
+      <li>Resultado: transportabilidade</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Terminologia</h2>
+
+<ul>
+  <li>Esquema abstrato<ul>
+      <li>A parte do Deployment Descriptor do entity bean que define os campos persistentes e de
+        relacionamento do bean</li>
+      <li>Há um esquema abstrato para cada entity bean com CMP</li>
+    </ul>
+  </li>
+  <li>Nome do esquema abstrato<ul>
+      <li>Um nome lógico referenciado em queries EJB QL</li>
+    </ul>
+  </li>
+  <li>Tipo do esquema abstrato<ul>
+      <li>Todas as expressões EJB QL possuem um tipo resultante</li>
+      <li>Se a expressão for um nome do esquema abstrato, seu tipo default é a interface home
+        local do entity bean para o qual o nome do esquema abstrato é definido</li>
+    </ul>
+  </li>
+  <li>Navegação<ul>
+      <li>Atravessar os relacionamentos numa expressão EJB QL</li>
+      <li>O operador de navegação é o ponto</li>
+    </ul>
+  </li>
+  <li>Path expression<ul>
+      <li>Uma expressão que navega até um entity bean relacionado</li>
+    </ul>
+  </li>
+  <li>Campo persistente<ul>
+      <li>Um campo virtual de um entity bean com CMP, armazenado num BD </li>
+    </ul>
+  </li>
+  <li>Campo de relacionamento<ul>
+      <li>Um campo virtual de um entity bean com CMP</li>
+      <li>Identifica um entity bean relacionado</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Sintaxe Simplificada</h2>
+
+<ul>
+  <li>A sintaxe geral de um query:<ul>
+      <li>select_clause from_clause [where_clause]</li>
+    </ul>
+  </li>
+  <li>A cláusula SELECT define os tipos de objetos ou valores retornados pelo query<ul>
+      <li>O tipo de retorno pode ser:<ul>
+          <li>Interface local</li>
+          <li>Interface remota</li>
+          <li>Campo persistente</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>A cláusula FROM define o escopo do query pela declaração de variáveis de
+    identificação que podem ser referenciadas nas cláusulas SELECT e WHERE<ul>
+      <li>Uma variável de identificação representa um dos seguintes:<ul>
+          <li>O nome do esquema abstrato</li>
+          <li>Um membro de uma coleção (do lado &quot;muitos&quot; de um relacionamento
+            &quot;um-para-muitos&quot;)</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>A cláusula WHERE é uma expressão condicional que restringe os objetos ou valores
+    retornados pelo query</li>
+</ul>
+
+<h2>Exemplos</h2>
+
+<h3>Queries simples de &quot;finder&quot; methods</h3>
+
+<h4>Exemplo 1</h4>
+
+<pre class="clsCode">  SELECT OBJECT(p)
+  FROM Player p</pre>
+
+<ul>
+  <li>Retorna todos os jogadores<ul>
+      <li>Associado ao método findall()</li>
+      <li>A cláusula FROM declara uma variável de identificação p</li>
+      <li>Também poderia ser &quot;FROM Player AS p&quot;</li>
+      <li>O elemento &quot;Player&quot; é o nome do esquema abstrato do entity bean PlayerEJB</li>
+      <li>Este bean define findall() na interface LocalPlayerHome, os objetos retornados pelo
+        query têm este tipo (LocalPlayerHome)</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Exemplo 2</h4>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p)
+  FROM Player p
+  WHERE p.position = ?1</pre>
+
+<ul>
+  <li>Retorna os jogadores com a posição especificada no parâmetro do método<ul>
+      <li>Associado ao método findByPosition(String position)</li>
+      <li>Numa cláusula SELECT, a palavra OBJECT deve estar antes de uma variável de
+        identificação tal como p</li>
+      <li>A palavra DISTINCT elimina valores duplicados</li>
+      <li>A cláusula WHERE restringe os jogadores retornados através da verificação de suas
+        posições, um campo persistente</li>
+      <li>O elemento ?1 significa o parâmetro do método findByPosition</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Exemplo 3</h4>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p) 
+  FROM Player p 
+  WHERE p.position = ?1 AND p.name = ?2</pre>
+
+<ul>
+  <li>Retorna os jogadores com posição e nome especificados<ul>
+      <li>Método: findByPositionAndName(String position, String name)</li>
+      <li>?1 é o primeiro parâmetro, ?2 é o segundo, ...</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Queries de &quot;finder&quot; methods que navegam para beans relacionados</h3>
+
+<h4>Exemplo 4</h4>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p)
+  FROM Player p, IN (p.teams) AS t
+  WHERE t.city = ?1</pre>
+
+<ul>
+  <li>Retorna os jogadores cujos times são da cidade especificada<ul>
+      <li>Método: findByCity(String city)</li>
+      <li>A cláusula FROM declara duas variáveis de identificação: p e t</li>
+      <li>A variável p representa o entity bean PlayerEJB e a variável t representa os entity
+        beans TeamEJB relacionados</li>
+      <li>A declaração de t referencia a variável p</li>
+      <li>A palavra IN significa que &quot;teams&quot; é uma coleção de beans relacionados</li>
+      <li>A expressão p.teams navega de um bean PlayerEJB para seus beans TeamEJB relacionados</li>
+      <li>O ponto é o operador de navegação</li>
+      <li>Na cláusula WHERE, o ponto antes de &quot;city&quot; é um delimitador e não um
+        navegador de operação<ul>
+          <li>Expressões podem navegar para campos de relacionamento (beans relacionados) mas não
+            para campos persistentes</li>
+          <li>Para acessar um campo persistente, uma expressão usa o ponto como delimitador</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Exemplo 5</h4>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p) 
+  FROM Player p, IN (p.teams) AS t 
+  WHERE t.league = ?1</pre>
+
+<ul>
+  <li>Retorna os jogadores da liga (divisão) indicada<ul>
+      <li>Método: findByLeague(LocalLeague league)</li>
+      <li>As expressões deste query navegam em dois relacionamentos</li>
+      <li>A expressão p.team navega o relacionamento PlayerEJB-TeamEJB</li>
+      <li>A expressão t.league navega o relacionamento TeamEJB-LeagueEJB</li>
+      <li>Neste exemplo, o parâmetro&nbsp; é um objeto (uma liga) de tipo da interface
+        LocalLeague</li>
+      <li>Este tipo casa com t.league na cláusula WHERE</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Exemplo 6</h4>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p)
+  FROM Player p, IN (p.teams) AS t
+  WHERE t.league.sport = ?1</pre>
+
+<ul>
+  <li>Retorna os jogadores do esporte especificado<ul>
+      <li>Método: findBySport(String sport)</li>
+      <li>O campo persistente &quot;sport&quot; pertence ao bean LeagueEJB</li>
+      <li>Para chegar a este campo, o query deve primeiro navegar do bean PlayerEJB até o bean
+        TeamEJB (p.teams) e depois do bean TeamEJB até o bean LeagueEJB (t.league)</li>
+      <li>Já que o campo de relacionamento &quot;league&quot; não é uma coleção, podemos
+        seguir adiante e pedir o campo sport: t.league.sport</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Queries de &quot;finder&quot; methods com outras expressões condicionais</h3>
+
+<ul>
+  <li>Cada cláusula WHERE deve especificar uma expressão condicional</li>
+  <li>Há vários tipos de expressões condicionais</li>
+  <li>Nos exemplos anteriores, testamos a igualdade</li>
+  <li>Veremos outros exemplos agora</li>
+</ul>
+
+<h4>Exemplo 7</h4>
+
+<pre class="clsCode">  SELECT OBJECT(p)
+  FROM Player p
+  WHERE p.teams IS EMPTY</pre>
+
+<ul>
+  <li>Retorna todos os jogadores que não estão num time<ul>
+      <li>Método: findNotOnTeam()</li>
+      <li>O campo de relacionamento &quot;teams&quot; do bean PlayerEJB é uma coleção</li>
+      <li>Se um jogador não pertencer a um time, então a coleção de times está vazia</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Exemplo 8</h4>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p)
+  FROM Player p
+  WHERE p.salary BETWEEN ?1 AND ?2</pre>
+
+<ul>
+  <li>Retorna os jogadores com salário na faixa indicada<ul>
+      <li>Método: findBySalaryRange(double low, double high)</li>
+      <li>A expressão BETWEEN é equivalente a:</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">        p.salary &gt;= ?1 AND p.salary &lt;= ?2</pre>
+
+<h4>Exemplo 9</h4>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p1) 
+  FROM Player p1, Player p2 
+  WHERE p1.salary &gt; p2.salary AND p2.name = ?1</pre>
+
+<ul>
+  <li>Retorna todos os jogadores com salário maior que o do jogador com nome dado<ul>
+      <li>Método: findByHigherSalary(String name)</li>
+      <li>A cláusula FROM declara duas variáveis de identificação p1 e p2 do mesmo tipo
+        (Player)</li>
+      <li>Precisamos de 2 variáveis porque queremos comprar o salário de p1 com o salário de p2</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Queries &quot;select&quot;</h3>
+
+<h4>Exemplo 10</h4>
+
+<pre class="clsCode">  SELECT DISTINCT t.league
+  FROM Player p, IN (p.teams) AS t
+  WHERE p = ?1</pre>
+
+<ul>
+  <li>Retorna as ligas às quais o jogador especificado pertence<ul>
+      <li>Método &quot;select&quot;: ejbSelectLeagues(LocalPlayer player)</li>
+      <li>O tipo de retorno é o tipo de esquema abstrato do entity bean LeagueEJB</li>
+      <li>Este esquema mapeia para a interface LocalLeagueHome</li>
+      <li>Já que t.league não é uma variável de identificação, a palavra OBJECT é omitida<ul>
+          <li>Já sabemos que t.league é um object, não precisa dizer</li>
+          <li>Quando usamos uma variável como p, temos que dizer se é object ou não</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Exemplo 11</h4>
+
+<pre class="clsCode">  SELECT DISTINCT t.league.sport
+  FROM Player p, IN (p.teams) AS t
+  WHERE p = ?1</pre>
+
+<ul>
+  <li>Retorna os esportes dos quais um jogador especificado participa<ul>
+      <li>Método &quot;select&quot;: ejbSelectSports(LocalPlayer player)</li>
+      <li>Este query retorna um campo persistente do bean LeagueEJB</li>
+    </ul>
+  </li>
+</ul>
+
+<p class="botref" align="left">ejbql <a href="../j2ee-2.htm">programa</a> </p>
+</body>
+</html>

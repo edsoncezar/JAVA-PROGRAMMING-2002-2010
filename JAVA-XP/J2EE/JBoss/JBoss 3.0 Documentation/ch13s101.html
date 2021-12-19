@@ -1,0 +1,305 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>EJX/AWT Development HowTo</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s98.html" title="Using JavaMail in JBoss"><link rel="next" href="ch13s126.html" title="External JNDI Configuration and JNDI Viewing"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s98.html"><img src="images\prev.gif" border="0"></a><a href="ch13s126.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e11311"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e11311"></a>EJX/AWT Development HowTo</h2></div></div><p>Author:<span class="author">Andreas Shaefer</span>
+		<tt>&lt;<a href="mailto:andreas.schaefer@madplanet.com">andreas.schaefer@madplanet.com</a>&gt;</tt>     
+	</p><div class="section"><a name="d0e11325"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11325"></a>Introduction</h3></div></div><p>         This How To serie is about how to develop EJX plugins with the help of Rickard's AWT, XML and
+         BeanContext and NOT about how to use EJX and its plugins (at least for now)!! </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e11331"></a>
+					<a href="ch13s101.html#ejx1" title="EJX Insights">Insights to EJX internals by Simon Bordet</a>
+				</p></li><li><p><a name="d0e11337"></a>
+					<a href="ch13s101.html#ejx2" title="Getting strted with EJX">Getting started with EJX</a>
+				</p></li><li><p><a name="d0e11343"></a>
+					<a href="ch13s101.html#ejx3" title="EJX/AWT GUI Basics HowTo">GUI Basics</a>
+				</p></li></ol></div><p>         Next steps
+         </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e11352"></a>How to use resources (especially XML files) in EJX </p></li><li><p><a name="d0e11355"></a>Advanced GUIs </p></li></ol></div></div><div class="section"><a name="ejx1"></a><div class="titlepage"><div><h3 class="title"><a name="ejx1"></a>EJX Insights</h3></div></div><p>EJX (created by Rickard Oeberg and are available at his DreamBean Website: www.dreambean.com) is a launcher for JavaBean plugins
+that are written following the Glasgow specification, in particular the Extensible Runtime Containment and Services Protocol. This
+document is intended for programmers that want to write plugins for EJX, and will (try to) explain the insights of the bean context
+hierarchy of EJX, and also classloader issues regarding this hierarchy. </p></div><div class="section"><a name="d0e11363"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11363"></a>The launcher</h3></div></div><p>com.dreambean.ejx.editor.Main is the launcher for EJX. It does the following: </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e11369"></a>creates a new URLClassLoader, whose parent is the current context classloader </p></li><li><p><a name="d0e11372"></a>all files under ../lib and ../lib/ext are added to this URLClassLoader (PENDING: really all files or only jars) </p></li><li><p><a name="d0e11375"></a>the context class loader is set to this URLClassLoader  </p></li><li><p><a name="d0e11378"></a>the class com.dreambean.ejx.editor.EJX is instantiated using the new context class loader (ie the URLClassLoader) </p></li></ol></div><p>All plugins you would like to show in the EJX framework must be under ../lib or ../lib/ext, so that their classes can be loaded through the
+context class loader. If this is not the case, your plugin is not even shown in the EJX first window, where you can choose, among the
+available plugins, which one you want to use.</p><p>Every EJX plugin is archived in a jar and must have an entry in the manifest file that reads:</p><p>EJX-plugin: &lt;factory-class-name&gt;</p><p>where &lt;factory-class-name&gt; is the fully qualified name of the ResourceManagerFactory implementation that can instantiate the
+ResourceManager implementation for that plugin.</p></div><div class="section"><a name="d0e11389"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11389"></a>The bean context framework</h3></div></div><p>Following the Glasgow specification, JavaBeans can be logically grouped in containers, called BeanContext. A BeanContext can
+contain other nested BeanContext, or directly BeanContextChild JavaBeans. While normal JavaBeans can be added to BeanContexts,
+to obtain the full potentiality of the new framework, they should implement the BeanContextChild interface. A BeanContextChild is
+normally a terminal child of the containment hierarchy, so it cannot have nested JavaBeans. JavaBeans, being they BeanContext or
+BeanContextChild can be added to or removed from a BeanContext, and notification of these events is delivered to registered
+membership listeners.</p><p>A BeanContext can expose services to its children, services that can easily accessed by them simply specifying the interface that
+represent the wanted service. The interfaces that provides this support are BeanContextServices and BeanContextServiceProvider.</p><p>BeanContextServices is a BeanContext with the possibility to be queried for services that it hosts. BeanContextServiceProvider is the
+service hosted by a BeanContextServices. Services can be added or removed from a BeanContextServices, and notification of these
+events is delivered to registered service listeners.</p><p>Within this framework, JavaBeans can obtain a reference to the BeanContext in which they are hosted and thus be aware of the
+environment in which they're running; plus they can query the BeanContext for services, if the BeanContext hosting them is a
+BeanContextServices. If this BeanContextServices does not have the requested service, the request goes up in the hierarchy, eventually
+finding the BeanContextServices that provides the service.</p></div><div class="section"><a name="d0e11400"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11400"></a>The bean context root and the services</h3></div></div><p>As you may have guessed, com.dreambean.ejx.editor.EJX is a BeanContextServices instance, and is the root of the bean context
+hierarchy of the application.</p><p>It hosts 2 services: </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e11408"></a>a Preference service, used to store user preferences like screen size </p></li><li><p><a name="d0e11411"></a>an XMLManager service, used to allow JavaBeans to read from / write to XML files.</p></li></ol></div><p>Direct children EJX are the plugins, that implements the ResourceManager interface. ResourceManager extends BeanContextChild so
+that implementors can be directly plugged in the containment hierarchy, but normally implementors of the ResourceManager interface
+implements BeanContextServices, to provide plugin-specific services to their nested JavaBeans.</p><p>PENDING: add a figure / schema of the containment tree with different colors representing services</p></div><div class="section"><a name="d0e11418"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11418"></a>Where the GUI comes in ?</h3></div></div><p>We saw the bean context hierarchy, but what you can see on the screen is not totally related to it (though there is a relationship). How
+can EJX show the GUI for JavaBeans component seamlessly ?</p><p>Every JavaBean that wants to display a GUI in EJX must implement either BeanContextContainerProxy or
+BeanContextChildComponentProxy. </p><p>com.dreambean.ejx.editor.EJX implements BeanContextContainerProxy and its getContainer() method expose a JDesktopPane of a
+JFrame (also held by com.dreambean.ejx.editor.EJX [NOTE: this JFrame is not exposed (as of 15 Nov 2000), so it is not accessible from
+nested JavaBeans if they want play with the menu bar. I have in mind to change this and indirectly expose the JFrame as a EJX
+service]).</p><p>JDesktopPane is the specialized class that hosts JInternalFrames. Normally plugins implement the BeanContextChildComponentProxy
+interface returning a java.awt.Component (subclass) that can be added to a JInternalFrame and finally added to the JDesktopPane.</p><p>The difference between BeanContextChildComponentProxy and BeanContextContainerProxy is that the former is implemented by
+JavaBeans whose enclosing BeanContext is responsible to call getComponent and add the resulting java.awt.Component to some
+existing GUI, while the latter is implemented by JavaBeans whose enclosed JavaBeans are responsible to call getContainer() and add to
+this java.awt.Container GUI components taken from somewhere else. The former says "I know my children, let's take their GUI
+components and add them here", the latter says "I know my parent, let's add this GUI components to its GUI container".</p></div><div class="section"><a name="ejx2"></a><div class="titlepage"><div><h3 class="title"><a name="ejx2"></a>Getting strted with EJX</h3></div></div><div class="section"><a name="d0e11434"></a><div class="titlepage"><div><h4 class="title"><a name="d0e11434"></a>Introduction</h4></div></div><p>       EJX/AWT written by Rickard Oeberg</p><p>         Both packages are created by Rickard Oeberg and are available at his DreamBean Website: www.dreambean.com.
+         Both packages are heavily used in jBoss do create/maintain EJB descriptor and other XML files. 
+         The reason or motivation for me to write this HowTo was that I struggle to understand EJX and AWT. On the
+         other hand Rickard was so busy with other stuff that I had to dig throug myself and to save time for other
+         members of jBoss I started writing this HowTo. This document is still under construction and will maybe never
+         be finished. </p><p> Idea of EJX</p><p>         EJX is a package and runtime environment enabling you to create a plugin to add new functionality and new GUI
+         elements. EJX will dynamically lookup for plugins on the predefined package /lib/ext and load them for you.
+         Whenever you create a new file or open a given file it will instantiate your plugin and show as an Frame within
+         the EJX framework. 
+         EJX uses XML but at the moment this is not quite clear for me but I am working on it (AS 9/15/00), </p><p>         Idea of AWT</p><p> 
+         AWT (or here called Advanced Window Toolkit and do not mix it up with java.awt.*) enables you to use an
+         uniform GUI Environment and to use BeanContext with an easy to write XML definition file. 
+         I am still at the beginning to understand AWT and EJX but I will upgrade this document as soon as I have more
+         information and examples. </p></div><div class="section"><a name="d0e11449"></a><div class="titlepage"><div><h4 class="title"><a name="d0e11449"></a>Project</h4></div></div><div class="section"><a name="d0e11452"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11452"></a>Introduction</h5></div></div><p>      Based on the first draft of this document I separated the core EJX stuff from the EJX examples to make it a little bit more
+      clear. Afterwards I implemented these changes in the EJX module of jBoss CVS server. If you now download the EJX
+      module you can create a slim release of EJX without the examples. If you need them you can just jump to the examples
+      directory and build the example from there (one by one) and only the examples you want or need. </p></div><div class="section"><a name="d0e11457"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11457"></a>Structure</h5></div></div><p>      To go through this document download the EJX module from the jBoss CVS server. 
+      Attention: Before you start with compiling any examples you have to run the compilation of the core project first. For this
+      go to the "ejx/src/build" and start the build.bat file. This compiles the core project, copies the necessary jar-files to the
+      right place and creates the necessary ejxeditor.jar file. 
+      Now you are ready for the examples. </p></div><div class="section"><a name="d0e11462"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11462"></a>Plain Pane Example</h5></div></div><p>      This example can be found under "ejx/examples/plain.pane". 
+      This was my first example and the goal was to creat a Panel within EJX framework to display just a simple text. I used
+      this example to find simplest example within EJX. 
+      According to the EJX spec the only necessary thing you have to to is: </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e11468"></a>Create a class extending the com.dreambean.ejx.FileManagerFactory interface </p></li><li><p><a name="d0e11471"></a>Create a class extending the com.dreambean.ejx.FileManager interface</p></li><li><p><a name="d0e11474"></a>Create an appropriate Manifest file with looks like this for this example: 
+
+                         Class-Path: awt.jar ejb.jar EJX-plugin:
+                         com.madplanet.plainPane.FileManagerFactoryImpl Name:
+                         com/madplanet/plainPane/ Specification-Title: PlanePane
+                         0.1 Specification-Version: v0.1 Specification-Vendor: MAD
+                         plaNET plc Implementation-Title: ejx-plain-pane
+                         Implementation-Version: build1 Implementation-Vendor: MAD
+                         plaNET plc 
+
+              </p></li><li><p><a name="d0e11477"></a>Compile these two classes </p></li><li><p><a name="d0e11480"></a>Put these two classes and the Manifest file into a jar-file (name does not matter but I always name
+                 it this way: ejx.&lt;ProjectName&gt;.jar).</p></li><li><p><a name="d0e11483"></a>And last but not least the just created jar-file into the ejx/dist/lib/ext directory. </p></li></ol></div><p> 
+      Now the only thing left is to start EJX (go to ejx/dist/bin directory and start EJX with "java -jar ejx.jar"). When the EJX
+      Frame comes up go to file/new and select "Plain Pane XML" and you will see our plugin coming up. 
+      Now let's have a closer look to the classes we created in our plugin.</p></div><div class="section"><a name="d0e11488"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11488"></a>FileManagerFactoryImpl</h5></div></div><p> 
+      Implements the com.dreambean.ejx.FileManagerFactory and enables the EJX framework to select the right file for you.
+      But now let's delf into the code </p><p>                 Classes to be imported </p><pre class="programlisting">                         import java.io.File; 
+				 import javax.swing.filechooser.FileFilter; 
+                         import com.dreambean.ejx.FileManager; 
+                         import com.dreambean.ejx.FileManagerFactory; 
+				 </pre><p>                 Class definition (to extend this class from FileFilter is just convenience because it is needed either
+                 way):</p><pre class="programlisting">                         public class FileManagerFactoryImpl extends FileFilter
+                         implements FileManagerFactory </pre><p>   
+                 These methods must be implement due FileManagerFactory interface. The first method creates the
+                 FileManager when a file is selected or in a given directory a new one can be created. The second
+                 method returns a FileFilter to select a file or directory and the last is used to get a name for the
+                 Plugin to select the right one. </p><pre class="programlisting">  
+                         public FileManager createFileManager() { 
+					return new FileManagerImpl( this ); 
+                         } 
+				 public FileFilter getFileFilter() { 
+					return this; 
+				 } 
+				 public String toString(){ 
+					return "Plain Pane XML"; 
+				 } 
+				 </pre></div><div class="section"><a name="d0e11505"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11505"></a>FileManagerImpl</h5></div></div><p>      Implements the com.dreambean.ejx.FileManager and enables the plugin to decide what GUI element to display. For each
+      file or directory selected a new instance of this class is created. </p><p>                 Classes to be imported </p><pre class="programlisting">  
+                         import java.awt.BorderLayout; 
+				 import java.awt.Component;
+                         import java.beans.beancontext.BeanContextServicesSupport;
+                         import java.io.File; 
+				 import javax.swing.JPanel; 
+				 import javax.swing.JLabel; 
+				 import com.dreambean.ejx.FileManager;
+                         import com.dreambean.ejx.FileManagerFactory; 
+				 </pre><p> 
+                 I am only so pitty about what classes are imported to show you at the header where the used
+                 classes are coming from. 
+                 Constructor of the class: </p><pre class="programlisting"> 
+                         FileManagerImpl( FileManagerFactory pCaller ) { 
+					mFactory = pCaller; 
+				 } 
+				 </pre><p>                 Methods must be overwriten by the class, The important part is the getComponent() method which
+                 is called by the EJX framework to get the GUI component to be displayed. </p><pre class="programlisting"> 
+                         public boolean isChanged() { 
+					return true; 
+				 } 
+				 public void createNew() {
+				 } 
+				 public void load( File file ) throws Exception {
+				 } 
+				 public void save( File f ) throws Exception{
+                         } 
+				 public File getFile() { 
+					return null; 
+				 } 
+				 public void setFile( File pFile ) {
+				 } 
+				 public FileManagerFactory getFactory() {
+				  return mFactory; 
+				 } 
+				 public Component getComponent() {
+					 JPanel lPane = new JPanel( new BorderLayout() ); 
+					 lPane.add( new JLabel(
+                             "&lt;HTML&gt;&lt;BODY&gt;&lt;H1&gt;Hello World&lt;/H1&gt;" 
+					 + "&lt;H2&gt;Next Step&lt;/H2&gt;&lt;/BODY&gt;&lt;/HTML&gt;" ), 
+						BorderLayout.CENTER ); 
+				   return lPane;
+				 }
+                         </pre></div><div class="section"><a name="d0e11522"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11522"></a>Simple Component Example</h5></div></div><p>   
+      This example can be found under "ejx/examples/simple.component". 
+      This example is an introduction to AWT and how it can be used to define a GUI by the XML description file, compiled and
+      display on the Panel in the EJX framework. To shorten the further discussion I only show the important stuff having
+      changed or is new. </p><p>      The only thing with AWT you have to consider is that you have to use XMLBeans to compile the BeanInfo XML
+      description into a Java class and then to compile it to a java bytecode class. For that have a look at the build.xml and look
+      for xmlbeans. </p><p>      According to the AWT spec the only necessary thing you have to to is:</p><div class="orderedlist"><ol type="1"><li><p><a name="d0e11532"></a>Create an Bean Info XML description file like this: 
+
+                         
+                         &lt;bean class="com.madplanet.simpleComponent.MainPane"
+                         displayname="Simple Component's Main Pane"
+                         iconcolor16="/images/container.gif"&gt; &lt;property
+                         name="FirstProperty" class="java.lang.String"
+                         displayname="First Property"/&gt; &lt;property
+                         name="SecondProperty" class="java.lang.String"
+                         displayname="Second Property"/&gt; 
+              </p></li><li><p><a name="d0e11535"></a>Create a GUI component class and add the GenericCustomizer to it (as parameter you have to
+                 pass the class instance which is referred above (here it is
+                 com.madplanet.singleComponent.MainPane). There are other classes you can use but at the
+                 moment I have no more informations. </p></li><li><p><a name="d0e11538"></a>Compile all the java classes</p></li><li><p><a name="d0e11541"></a>User XMLBeans to create the java sourcecode from the XML beaninfo. The newly created java
+                 classes are named like the referred class but with Beaninfo at the end (same package structure). </p></li><li><p><a name="d0e11544"></a>Compile the bean info java sourcecode files. </p></li></ol></div><p>      That's it. </p></div><div class="section"><a name="d0e11549"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11549"></a>FileManagerImpl</h5></div></div><p>Like the one before except the getComponent() method: </p><pre class="programlisting">              public Component getComponent() { // Create the Property Container and
+                return its GUI component return new MainPane().getComponent(); 
+	      } 
+	      </pre></div><div class="section"><a name="d0e11556"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11556"></a>MainPane</h5></div></div><p> This class now creates the GUI component using AWT to display the properties this class have.</p><p>                 Classes to be imported </p><pre class="programlisting">                         import java.awt.BorderLayout; 
+				 import java.awt.Component;
+                         import java.beans.beancontext.BeanContextSupport; 
+				 import java.beans.beancontext.BeanContextChildComponentProxy;
+                         import javax.swing.JPanel; 
+				 import com.dreambean.awt.GenericCustomizer; 
+				 </pre><p>                 This class has to supclass the BeanContextSupport </p><pre class="programlisting">                         public class MainPane extends BeanContextSupport </pre><p>                 There are the properties the Main Pane offer and which can then be set by GUI component defined
+                 by the Bean Context Attention: All the properties in the BeanInfo XML file need here a public
+                 getter and setter method with the appropriate type. </p><pre class="programlisting"> 
+                         public String getFirstProperty() { 
+					return mFirstProperty;
+                         } 
+				 public void setFirstProperty( String pToSet ) {
+					mFirstProperty = pToSet; 
+				 } 
+				 public String getSecondProperty() { 
+					return mSecondProperty; 
+				 } 
+				 public void setSecondProperty( String pToSet ) { 
+					mSecondProperty = pToSet; 
+				 }
+				 </pre><p>   
+                 This method returns the GUI component which contains the Generic Customizer need to display
+                 the properties of this instance accordingly to the Bean Info XML description mentioned above.</p><pre class="programlisting">        		     public Component getComponent() { 
+					JPanel lPane = new JPanel( new BorderLayout() );
+				 lPane.add( new GenericCustomizer( this ), BorderLayout.CENTER ); 
+				    return lPane; 
+				 } 
+			     </pre><p> 
+      Eh voil&agrave;, that's it. When you build this example, start EJX and select Simple Component XML you will see two lines with
+      the tag "First Property" and a Text Field (and also for Second Property).</p><p> 
+      That's all for now. In the next step I will delf further into AWT and how you can use the Bean Info XML description to
+      describe more advanced application. In addition I will then use the save() and load() method to load XML files which are
+      the persistent part of a plugin. </p><p>   I anything is wrong or not correct please contact me at andreas.schaefer@madplanet.com. Also if you want to know more in
+   detail or have a request for changes in this HowTo document. </p></div></div></div><div class="section"><a name="ejx3"></a><div class="titlepage"><div><h3 class="title"><a name="ejx3"></a>EJX/AWT GUI Basics HowTo</h3></div></div><div class="section"><a name="d0e11586"></a><div class="titlepage"><div><h4 class="title"><a name="d0e11586"></a>Introduction</h4></div></div><p>       In this How To I will discuss the use of the BeanContext und AWT to create GUIs and GUI components within
+       EJX but you can also use AWT outside of EJX.Attention: please note that I always mean Rickard Oeberg's AWT
+       and not the Java AWT!</p><p>The AWT provides you with the following opportunities: </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e11594"></a>Customizers for your Beans</p></li><li><p><a name="d0e11597"></a>Property Editors to edit or select properties</p></li></ol></div><p>       This seems to be simple but combining them together with the Java Bean Support and ordinary Swing coding
+       leads to advanced GUIs like the actual version of EJX used in jBoss (I am not taking about the lack of User
+       guidance but about the abilities of the GUI to display and edit the data). </p><p> 
+       My biggest problem to understand EJX/AWT was that you have to deal with EJX, AWT, Java Bean Support,
+       XML and Swing coding. Therefore I started from the simplest example to understand each component, its
+       function and how to use it. In the "Getting-Started" How To I showed how to create an EJX plugin and then
+       create a basic Bean GUI. Now I go a step further to dynamically manage GUI components, use of more BeanInfo
+       features and to edit properties with the AWT property editors. So let's start it! </p></div><div class="section"><a name="d0e11604"></a><div class="titlepage"><div><h4 class="title"><a name="d0e11604"></a>    Tabbed Panes and Editors</h4></div></div><div class="section"><a name="d0e11607"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11607"></a>Goals</h5></div></div><p>       From the last example of the first How To create and remove GUI Components (Tabbed Panes) dynamically and
+       edit the properties of the data instance with the AWT editors. </p></div><div class="section"><a name="d0e11612"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11612"></a>Design</h5></div></div><p>       First of all I want correct I mistake in the previous example. In the MainPane class it is said that getComponent()
+       is implemented because of BeanContextChildComponentProxy which is not implemented in the class but it works
+       because the caller does not relay on this fact. But in this example I fixed this. The question but still remains why
+       it should (will maybe be explained later). </p><p>       This example is really not a good example how to use EJX but it shows how to use EJX/AWT. The idea is to use
+       a tabbed pane to display different views in our EJX frame. In addition the user can create and remove the tabbed
+       pane as long as there is at least one left. And last but not least the user should be able to select a value through
+       an editor instead of a plain input field. </p><p>       As we saw in the last example the initial GUI component to show the plugin is created in the ResourceManager
+       on the getComponent() call which is called by the BeanContext structure we use. But instead of create a Panel
+       which just keeps the GUI of the plugin we create now a viewer of the plugin to display itself. This makes the
+       design more flexible because it is now defined in the Viewer instead of the ResourceManager where it does not
+       belong. Now the viewer is an inner class because it is so closely related to its outer component that it makes
+       sense to be there. </p><p>       The construct following is a little bit ugly and should not be MADE this way but it is enough for us. 
+       The ResourceManager getComponent() now calls the MainPane's getComponent() method and this instantiate its
+       viewer and returns this Viewer as the GUI component to be shown. </p><p>       When the users now hits the create a new Tab or remove this tab the appropriate method is called (by the
+       BeanContext) and it will create a new MainPane instance and adds its also created Viewer instance as a new
+       Tab to the tabbed pan or remove the actual shown tab from the tabbed pane. 
+       As you can see above the buttons we have a text input field and a drop down box letting the user select between
+       two items. Both are AWT editors. </p></div><div class="section"><a name="d0e11625"></a><div class="titlepage"><div><h5 class="title"><a name="d0e11625"></a>Implementation</h5></div></div><p>       First lets have a look at the changes in the ResourceManager where the getComponent() just instanciate the
+       MainPane and returns its GUI component.</p><pre class="programlisting">              public Component getComponent() { 
+	         // Create the Property Container and return its GUI component
+                 return new MainPane().getComponent(); 
+	      } 
+	      </pre><p>       Now let's look at the new BeanInfo description of the MainPane: </p><pre class="programlisting">    
+              &lt;bean class="com.madplanet.tabbedEditor.MainPane"
+              displayname="Tab Pane and Editor's Main Pane"
+              iconcolor16="/images/container.gif"&gt; &lt;property
+              name="FirstProperty" class="java.lang.String"
+              displayname="First Property"
+              propertyeditor="com.dreambean.awt.editors.TextEditor"/&gt;
+              &lt;property name="SecondProperty"
+              class="java.lang.String" displayname="Second
+              Property"
+              propertyeditor="com.madplanet.tabbedEditor.editors.SecondPropertyEditor"/&gt;
+              &lt;method name="createTab" displayname="Create a new
+              Tab"&gt; &lt;parameter displayname="Title"/&gt; &lt;/method&gt;
+              &lt;method name="removeTab" displayname="Remove this
+              Tab"&gt; &lt;/method&gt; &lt;/bean&gt; 
+              </pre><p>       As you can see there are property editors settings for the first and second property and the second
+       property uses its own editors. In addition you have methods listed which appears as buttons in the
+       GUI because we use the GenericCustomizer. </p><p>       The new editor is just a simple subclass of the AWT TagsEditor defining what items it has to show and to what
+       value the item relate to (you can use any Java Object you like): </p><pre class="programlisting">              package com.madplanet.tabbedEditor.editors; 
+              import com.dreambean.awt.editors.TagsEditor; 
+              /** * Editor to select the Second Property in a DD - editor */
+              public class SecondPropertyEditor extends TagsEditor
+              { // Constructors
+              --------------------------------------------------
+                public SecondPropertyEditor() { 
+            		super(new String[] {"First Selection","Second Selection"}, 
+         		new Object []{"First", "Second"}); 
+	        } 
+	      } </pre><p>       And as "Grande Finale" we come to the heart of the plugin to the MainPane class. </p><p>                The new viewer class is an inner class to the MainPane and creates a GUI to display the
+                instance of its outer class instance. It keeps a list of outer class instances to find the
+                index of the tab to be removed. The setObject() creates a new tab and memorize the given
+                outer class. The removeTab() looks for the given outer instance and removes its related
+                tab (by this index). </p><pre class="programlisting">                      public class Viewer extends JTabbedPane implements Customizer { // Attributes
+                      ---------------------------------------------------
+                      private Vector mDataObjectList = new Vector(); // Customizer implementation
+                      ------------------------------------
+                      public void setObject( Object pDataObject ) { 
+				// Init UI
+    	                  addTab( "Main", new GenericCustomizer( pDataObject ) );
+	                  mDataObjectList.addElement( pDataObject ); 
+			  } 
+			  /** * Removes the given Tab with the given Data Object * from the
+                      Tabbed Pane * * @param pDataObject Tab with this Data
+                      Object has to be removed if found **/ 
+
+			  public void removeTab(Object pDataObject ) { 
+				int lIndex = mDataObjectList.indexOf(
+                         pDataObject ); 
+				if( lIndex &gt;= 0 ) { 
+					remove( lIndex );
+     		            mDataObjectList.removeElementAt( lIndex ); 
+				} 
+			  } 
+			 } </pre><p>                These are the new methods (already defined in the BeanInfo see above) which are called if
+                the appropriate button is pressed. </p><pre class="programlisting">                      public void createTab( String pTitle ) throws Exception { 
+			    System.out.println("Create new Tab with title: " + pTitle);
+				MainPane lNewPane = new MainPane();
+                        lNewPane.mCustomizer = mCustomizer;
+                        lNewPane.mCustomizer.setObject(
+                        lNewPane ); 
+			  } 
+			  public void removeTab() {
+     	                 System.out.println( "Remove this tab"); 
+				 ( (Viewer) mCustomizer ).removeTab(this ); 
+			  }
+                      </pre></div></div><div class="section"><a name="d0e11652"></a><div class="titlepage"><div><h4 class="title"><a name="d0e11652"></a> Remarks</h4></div></div><p> 
+       This is more ore less EJX and AWT. But it does not end here. The power of EJX lays in the BeanContext and
+       how you combine EJX, BeanContext and AWT. You maybe think what's about XML and we will come to XML
+       soon but (in my opinion) this is not a core part of EJX and AWT just use it but just as the name of the EJX base
+       classes said they manage resources (or earlier just files). Therefore it must be a way do deal with resources and
+       especially with XML resources. </p></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s98.html"><img src="images\prev.gif" border="0"></a><a href="ch13s126.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

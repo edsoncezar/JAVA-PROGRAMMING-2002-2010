@@ -1,0 +1,173 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Basic JDBC Programming</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Our query retrieves all columns from the Inventory table (SELECT * FROM Inventory), so we need to determine the number of columns by looking at the metadata of the result set. Bold lines indicate the typical code used for creating a connection, querying the database, and querying the result set metadata to determine how many rows were returned from the query. Figure 3.3 shows the results.
+</P>
+<PRE>
+import java.sql.*;
+
+public class Example
+{
+    public static void main (String args[])
+    {
+        try
+        {
+        /*
+          Load the JDBC&#150;ODBC bridge,
+          it will register itself with DriverManager.
+        */
+          Class.forName(&#147;sun.jdbc.odbc.JdbcOdbcDriver&#148;);
+        } catch (Exception e)
+        {
+            System.out.println(&#147;JDBC&#150;ODBC driver failed to load.&#148;);
+            return;
+        }
+  
+        try
+        {  
+         /*
+           Pass the url to the DriverManager.
+           It should find our driver and return a database
+           connection to an ODBC data source called &#147;inventory.&#148;
+         */
+
+            <B>Connection con =
+              DriverManager.getConnection(&#147;jdbc:odbc:inventory&#148;,&#147;&#148;,&#147;&#148;);</B>
+  
+          // Create a statement and use it to execute a query.
+          Statement stmt = con.createStatement();
+          /*
+            This returns a result set.
+            We will assume it is not null for simplicity.
+          */
+            <B>ResultSet rs =
+              stmt.executeQuery(&#147;SELECT * FROM inventory&#148; &#43;
+                                &#147;ORDER BY price&#148;);</B>
+  
+          /*
+            In order to determine the type and amount of data returned
+            by our query, we access the metadata of the result set.
+          */
+<B>            ResultSetMetaData rsmd = rs.getMetaData();</B>
+
+          /*
+            From the metadata, we determine how many columns were
+            actually returned.
+          */
+            int numberOfColumns = rsmd.getColumnCount();
+            int rowCount = 1;
+          /*
+            We will loop through the result set, printing out
+            values for each row.
+          */
+            while (rs.next())
+            {
+                for (int i = 1; i &lt= numberOfColumns; i&#43;&#43;)
+                {
+                    System.out.print(rs.getString(i)&#43;&#147; &#148;);
+                }              
+                System.out.println(&#147;&#148;);
+                rowCount&#43;&#43;;
+            }
+            // We are done with the statement, so we close it.
+            stmt.close();
+            // We are done with our connection, so we close it.
+            con.close();
+        } catch (Exception e)
+        {
+            System.out.println(e);
+        }
+    }
+}
+</PRE>
+<P>You can experiment with the SELECT statement by specifying which columns of Inventory you want to retrieve. The next section looks at the specifics of connecting to any data source.
+</P>
+<H3><A NAME="Heading5"></A><FONT COLOR="#000077">Connecting to a Data Source</FONT></H3>
+<P>The last section provided a simple example of a complete JDBC application. This section provides a detailed look at the process for choosing a driver and connecting to a data source.
+</P>
+<P>Any item with a JDBC driver, such as a database management system (DBMS), a file system, or a text file, can be a data source. To connect to a data source, first identify the data source you intend to connect to. For example, is it Oracle? Sybase? Is it another relational database or some other type of data source such as a file system? Next, obtain a JDBC driver for your data source. Typically, the data source vendor will provide the driver; however, you can get a complete list of the registered vendors from the Sun Web site.</P>
+<P><A NAME="Fig3"></A><A HREF="images\03-03.jpg"><IMG SRC="images\03-03t.jpg"></A>
+<BR><A HREF="images\03-03.jpg"><FONT COLOR="#000077"><B>Figure 3.3</B></FONT></A>&nbsp;&nbsp;Example results.</P>
+<P>Determine if the data source will be local to the application or remotely accessed. If the driver will be remotely accessed, make sure you consider the standard Java security issues involved in loading Java classes over the network, such as loading classes in an applet. There are no unusual security issues for local access. Just make sure the driver is in your CLASSPATH.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>JDBC tracks the class loader that provides each driver. When the DriverManager class opens a connection, it uses only drivers from the local file system or from the same class loader as the code requesting the connection.</FONT><HR>
+</BLOCKQUOTE>
+<P>Load the appropriate driver in your code. One way to load drivers is to put the name of the driver in the jdbc.drivers System property. This will be checked when the DriverManager class is initialized. If you want to load several drivers, define a list of drivers, separated by colons. Your property entry might look something like this:
+</P>
+<PRE>
+jdbc.drivers= sun.jdbc.odbc.JdbcOdbcDriver:another.typeof.driver
+</PRE>
+<P>Another option is to use the Class.forName() method to load the class explicitly. When a driver is loaded, it is expected to call the DriverManager method registerDriver(). This registers the driver so it can be used later. If you want to know what drivers are available, call the DriverManager method getDrivers().
+</P>
+<P>Once you have loaded the driver, call DriverManager.getConnection() to get a connection to your data source. There are several versions of the getConnection() method; they are listed in Table 3.6. All of these versions take a URL parameter. The URL is a JDBC protocol that specifies the data source to load. The URL takes the form</P>
+<PRE>
+jdbc:sub&#150;protocol:datasource&#150;name;optional&#150;parameter=value
+</PRE>
+<P>Table 3.7 lists the meaning of each URL component.
+</P>
+<P>Each of the getConnection() methods returns a Connection object representing a physical connection to the specified URL.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>A driver developer can reserve a name to be used as the subprotocol in a JDBC URL. JavaSoft acts as an informal registry for JDBC subprotocol names. To register a subprotocol name, JavaSoft recommends you send e&#150;mail to jdbc@wombat.eng.sun.com.</FONT><HR>
+</BLOCKQUOTE>
+<P>Use the Connection returned by DataManager to access the data source. A Connection object represents a session with a data source. Any number of SQL statements can be executed over this Connection, as shown in Figure 3.4. An application can have one or more connections to a single data source, or it can have connections to several databases.
+</P>
+<TABLE WIDTH="70%"><TD CAPTION VALIGN="TOP" ALIGN="LEFT" COLSPAN="3"><B>Table 3.6</B> The getConnection Methods
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="35%" VALIGN="TOP" ALIGN="LEFT">METHOD
+<TH WIDTH="35%" VALIGN="TOP" ALIGN="LEFT">USE
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public static Connection getConnection(String url, Properties info) throws SQLException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">&#149; url is of the form jdbc:subprotocol:datasourcename <BR>&#149; info is a list of keys/values that are useful for the driver; the property list contains at least a username and password field
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public static Connection getConnection(String url, String user, String password) throws SQLException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">&#149; url is of the form jdbc:subprotocol:datasourcename <BR>&#149; user is the name of the database user making this connection password is the database password used to connect with this user name
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public static Connection getConnection(String url) throws SQLException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">&#149; url is of the form jdbc:subprotocol:datasourcename
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

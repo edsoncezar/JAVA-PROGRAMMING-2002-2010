@@ -1,0 +1,299 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Introducing Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0340-0343.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0349-0352.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-344"><P>Page 344</P></A>
+
+
+
+<P>Listing 10.15 Continued
+</P>
+
+<PRE>
+public class socketServer
+{
+  public static void main(String args[])
+  {
+    // main creates an instance of firstServ
+    firstServ fs = new firstServ(1976);
+  }
+}
+</PRE>
+
+<P>The firstServ class contains only two variables, the ServerSocket itself and the Socket,
+that could be used to communicate with the client (return information). Refer to listing
+10.16, which has only one possible constructor and no methods that are part of this class.
+When an instance of firstServ is constructed, it waits for a client, prints the IP address, and
+shuts down.
+</P>
+
+<P>Listing 10.16 firstServ.java
+</P>
+<PRE>
+class firstServ
+{
+  ServerSocket ss;
+  Socket s;
+
+  firstServ(int port)
+ {
+  try
+  {
+   // initialize the ServerSocket
+    ss = new ServerSocket(port);
+    System.out.println(&quot;Server started on port: &quot; + port);
+   // wait for a connection, this blocks the current thread
+    s = ss.accept();
+  }
+  catch(Exception e)     //print error message
+  {
+    System.out.println(&quot;could not create sockets&quot;);
+    System.out.println(e);
+  }
+    //print client's InetAddress
+    System.out.println(&quot;connection from &quot; + s.getInetAddress());
+    System.out.println(&quot;shutting down the server&quot;);
+    try
+</PRE>
+
+<A NAME="PAGENUM-345"><P>Page 345</P></A>
+
+
+<PRE>
+    {
+    //shut down server, release port
+    ss.close();
+    }
+    catch(Exception e)
+    {
+      System.out.println(&quot;could not close server socket&quot;);
+      System.out.println(e);
+    }
+ }
+}
+</PRE>
+
+<P>The easiest way to test a server is to use a telnet program that enables you to specify
+the port to which you want to connect. If you are on a Unix machine, you can leave a
+space after the IP address and then type the port number. Most telnet programs designed
+for personal computers also enable you to specify the port. Listing 10.17 is an example of
+a connection; the left-hand column represents the server, whereas the right represents
+the client. The relative times of the events are displayed from top to bottom (that is, what
+is higher up occurs first).
+</P>
+
+<P>Listing 10.17 firstServ Sample Run
+</P>
+<PRE>
+%java socketServer
+Server started on port: 1976
+                                       %telnet 134.48.4.25 1976
+                                       %
+connection from 169.207.8.123
+shutting down the server
+%
+</PRE>
+
+<P>Although this server is almost useless, you should now understand the basic steps taken
+to implement a server. Whatever processing the server has to do before it returns data
+is the same as any other code. You will learn about using streams to pass data back and
+forth and how to deal with multiple clients at the same time later in this
+chapter's chat example. The next example deals with a simple client/server program that is implemented
+using datagrams.
+</P>
+
+<P>Listing 10.18 demonstrates a slightly more complex server that uses datagrams instead
+of sockets. It is an echo server. After a connection is made, it echoes back whatever is sent
+by the client instead of simply hanging up the connection. It is more complex because it
+has to listen to the client and then repeat what the client says.
+</P>
+
+
+<A NAME="PAGENUM-346"><P>Page 346</P></A>
+
+
+
+<P>The block of code in listing 10.18 is simple. The necessary variables are declared, and
+the DatagramSocket is initialized. Two final variables are also declared&#151;the port on
+which the server is to run, and the maximum size of the message to be passed to the server
+and then back to the client.
+</P>
+
+<P>Listing 10.18 echoServer.java First of Two2
+</P>
+<PRE>
+package industrial;
+
+import java.net.*;
+import java.io.*;
+
+public class echoServer
+{
+  static final int serverPort = 1976;
+  static final int packetsize = 1024;
+
+  public static void main (String[] args)
+    throws SocketException
+  {
+    DatagramPacket packet;
+    DatagramSocket socket;
+    byte[] data;
+    int clientPort;
+    InetAddress address;
+    String str;
+     socket = new DatagramSocket(serverPort);
+</PRE>
+
+<P>Listing 10.19 contains an infinite loop. The server runs forever, listening for an
+incoming packet on port 1976, echoing the packet back to the client, and then waiting again.
+This does not imply that the server can handle multiple packets coming in at the same
+time. After a packet is received, the server stops listening until the entire loop has been
+executed and the blocking DatagramSocket.receive() method is called again.
+</P>
+
+<P>Listing 10.19 echoServer.java Second of Two
+</P>
+<PRE>
+     for(;;)
+     {
+         data = new byte[packetsize];
+         packet = new DatagramPacket(data, packetsize);
+         try
+         {  // wait infinitely for a packet to arrive
+           socket.receive(packet);
+         }
+
+</PRE>
+
+
+<A NAME="PAGENUM-347"><P>Page 347</P></A>
+
+
+<PRE>
+         catch(IOException e)
+         {
+           System.out.println(&quot;DatagramSocket could not receive a
+                        &Acirc;packet&quot;);
+           System.out.println(e);
+           System.exit(0);
+         }
+
+         //get data about client in order to echo data back
+         address = packet.getAddress();
+         clientPort = packet.getPort();
+
+         //print string that was received on server's console
+         str = new String(data, 0, 0, packet.getLength());
+         System.out.println(&quot;String: &quot; + str);
+         System.out.println(&quot;From: &quot; + address);
+
+         //echo data back to client
+         packet = new DatagramPacket(data, packetsize, address,
+                  &Acirc;clientPort);
+         try
+           {
+           socket.send(packet);
+         }
+         catch(IOException e)
+         {
+           System.out.println(&quot;DatagramSocket could not return the
+                      &Acirc;packet&quot;);
+           System.out.println(e);
+           System.exit(0);
+         }
+       }
+  }
+}
+</PRE>
+
+<P>The server-side of this example is now complete. Unlike when writing a server that
+uses sockets, there is no simple tool, such as telnet, for testing a server that uses
+datagrams. Writing the client-side of this application, however, is as simple as the server-side
+implementation.
+</P>
+
+<H4><A NAME="ch10_ 17">
+Developing the Client Side
+</A></H4>
+
+<P>The client-side networking code actually looks very similar to the server-side
+networking code. This is true with many applications that use datagrams because the
+java.net.Data-     gramSocket class is used to both send and receive
+DatagramPackets.
+</P>
+
+<A NAME="PAGENUM-348"><P>Page 348</P></A>
+
+
+
+<P>In the following code, listing 10.20, the needed variables are declared. As in the
+server code, the port number of the server and the maximum packet size are hard-coded.
+In addition, this piece of code checks to make sure that two command-line arguments
+are passed; if not, it exits the code and displays usage instructions.
+</P>
+
+<P>Listing 10.20 echoClient.java First of Three
+</P>
+
+<PRE>
+package industrial;
+
+import java.net.*;
+import java.io.*;
+
+public class echoClient
+{
+  static final int serverPort = 1976;     // the port number to connect
+  static final int packetsize = 1024;     // at a common packet size
+
+   public static void main(String args[])
+    throws SocketException, UnknownHostException //not handling exceptions
+  {
+    DatagramSocket socket;        // how we send it
+       DatagramPacket packet;     // what we send it in
+       InetAddress address;       // where it is going
+       String messageSend;        // what is sent
+       String messageReturn;      // what we get back
+       byte[] data;
+
+       if (args.length != 2)      // make sure command line parameters
+                                  // correct
+       {
+         System.out.println(&quot;usage: java echoClient &lt;server name&gt;
+                   &Acirc;&lt;message&gt;&quot;);
+         System.exit(0);
+       }
+</PRE>
+
+<P>Listing 10.21 deals with initializing the variables. The command line parameters
+are parsed, and the needed variables are set so that enough information is available to create
+a DatagramPacket. You might want to review the method
+java.lang.String.getBytes() if you are unfamiliar with it. It is used often when dealing with datagrams because they
+transfer data as arrays of bytes and not strings.
+</P>
+
+
+<P><CENTER>
+<a href="0340-0343.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0349-0352.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

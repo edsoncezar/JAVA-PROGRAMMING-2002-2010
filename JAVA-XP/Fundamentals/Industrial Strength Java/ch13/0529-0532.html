@@ -1,0 +1,267 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0526-0528.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0533-0536.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-529"><P>Page 529</P></A>
+
+
+
+<P>A daemon Thread object controls a thread that may not be
+intended to stop running. The Java VM treats daemon threads differently
+in one way&#151;it continues running until all non-daemon threads
+have been stopped and then automatically kills all daemon Threads
+before exiting.
+</P>
+
+<P>Examples of threads that might run &quot;forever&quot; include the Java
+VM garbage collector or a &quot;watchdog&quot; thread that monitors the
+system for deadlock. These are often implemented as low-priority
+threads. The Java VM should ignore threads such as these when
+determining if the system should terminate via the exit() method and so
+these threads are marked as daemons.
+</P>
+
+<P>Also, consider a threaded object that provides an onscreen
+clock. This thread updates the display every second and sleeps
+between updates. To stop this thread when the application quits, some
+object could be responsible for monitoring the Thread and calling stop()
+on it appropriately. A more elegant design results if the thread
+doesn't need to be stopped but is left to die when the JVM exits. This
+design requires the JVM to be capable of distinguishing between
+self-terminating threads and daemon threads that can simply be killed.
+</P>
+
+<P>The methods defined in listing 13.21 enable setting and checking
+of the daemon status of a Thread object.
+</P>
+
+<P>Listing 13.21 java.lang.Thread Methods Operating on a Thread's Daemon Flag
+</P>
+<PRE>
+//Set on to true to mark this thread as
+//a daemon.  This method must be called
+//before start() or the exception is thrown.
+public final void setDaemon(boolean on)
+        throws IllegalThreadStateException;
+
+//Returns the daemon flag of the Thread.
+public final boolean isDaemon();
+</PRE>
+
+<P>A Thread object created by a daemon thread is marked automatically as a
+daemon; Threads created by non-daemon threads aren't. The daemon status of a Thread object
+can be changed at any time by calling setDaemon() and passing true to make the thread
+a daemon
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+TIP
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+A trick that is sometimes used to encourage
+garbage collection is to place a call to
+System.gc() (or Runtime.gc(); both are methods that
+call the VM garbage-collection code) at the end of
+run() methods. These calls enable a thread that is about to finish
+to use the last of its runtime operations to perform
+garbage collection. Note that a call to gc()
+doesn't guarantee garbage collection. You should also know
+that finalize() methods can be called by your thread from inside gc().
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<A NAME="PAGENUM-530"><P>Page 530</P></A>
+
+
+<P>or false to make it non-daemon.
+</P>
+
+<H3><A NAME="ch13_ 23">
+Thread Grouping
+</A></H3>
+
+<P>Complex applications can contain many threads performing many separate tasks.
+Sometimes these tasks are distinct as in a spreadsheet application where one thread manages
+a GUI and another performs calculations. In this case, there's only one thread to control
+if the user asks to suspend the calculation; however, if many spreadsheets are open,
+it's likely that a good design would assign one thread to each sheet (specifically, each
+object representing a spreadsheet would implement its own thread). Being able to handle
+all threads as a single &quot;group&quot; would be convenient, such as when the need to suspend all
+the calculating threads at once occurs. The java.lang.ThreadGroup class enables this with
+a ThreadGroup object controlling a set of Threads.
+</P>
+
+<H4><A NAME="ch13_ 24">
+Threads and ThreadGroups
+</A></H4>
+
+<P>Every Thread object in the JVM is a member of one ThreadGroup (known as its
+&quot;parent&quot; ThreadGroup). Just as an initial thread is created when an application starts, a
+default ThreadGroup (called &quot;main&quot;) is also created (in fact there might be several initial
+Threads and ThreadGroups; see the later section on Debugging for more details).
+Further ThreadGroups can be created as required. ThreadGroup provides the constructors
+shown in listing 13.22.
+</P>
+
+<P>Listing 13.22 java.lang.ThreadGroup Constructors
+</P>
+<PRE>
+//Create a new ThreadGroup as a member of the
+//same ThreadGroup as the current Thread, with
+//the given name.
+public ThreadGroup(String name);
+
+//Create a new ThreadGroup as a member of the
+//given ThreadGroup with the given name.  The
+//parent ThreadGroup may not be null.
+public ThreadGroup(ThreadGroup parent,
+                   String name)
+</PRE>
+
+<P>The parent ThreadGroup of any Thread object can be obtained by calling
+the 
+</P>
+
+<A NAME="PAGENUM-531"><P>Page 531</P></A>
+
+
+<P>Thread.getThreadGroup() method. Thus, use this method to get the default
+ThreadGroup from within the main() method, which runs under the initial thread, as shown in
+listing 13.23.
+</P>
+
+<P>Listing 13.23 Getting the Current Thread and
+ThreadGroup in main()
+</P>
+<PRE>
+public void main(String[] args) {
+        //get the current Thread
+        Thread ct = Thread.currentThread();
+
+        //get the default ThreadGroup
+        ThreadGroup tg = ct.getThreadGroup();
+</PRE>
+
+<P>A newly created Thread object is placed in the same ThreadGroup as its creator
+unless another ThreadGroup is specified to the constructor. After specifying the ThreadGroup
+of a new Thread object, Threads cannot be moved from one ThreadGroup to another.
+Threads are automatically removed from their ThreadGroup when they die.
+</P>
+
+<B>
+Operations on ThreadGroups
+</B>
+
+<P>As the second ThreadGroup constructor implies, ThreadGroups
+can also contain other ThreadGroups as well as Threads. Operations
+on any ThreadGroup apply to all the Threads in that group, plus all
+the ThreadGroups in that group, plus all the Threads in
+those ThreadGroups, and so on. Operations continue down this
+hierarchy of Threads and groups.
+</P>
+
+<P>Reconsider the previous spreadsheet example. The application
+might be capable to support multiple documents, with each
+document containing multiple spreadsheets. It would then be useful to have
+a hierarchy of threads and groups, as shown in figure 13.5.
+</P>
+
+<P>Document1 contains one sheet and Document2 contains two
+sheets. Suspending all calculation by the Sheet threads is accomplished
+by suspending the Document's ThreadGroup. Suspending the
+processing
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+As well as allowing a name to be passed to the constructor,
+the ThreadGroup class also provides setName() and getname(), which
+are direct equivalents of the Thread methods of the same names .
+As with a Thread object's name, the name of a ThreadGroup is
+mainly useful in debugging.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<A NAME="PAGENUM-532"><P>Page 532</P></A>
+
+
+
+
+<P><a href="images\ch13fg05.jpg"><img src="images\tn_ch13fg05.jpg"></a><BR>
+Figure 13.5
+Thread and ThreadGroup hierarchies in
+a spreadsheet
+application.
+</P>
+
+<P>in Document2 is accomplished by suspending only
+Document2's ThreadGroup.
+</P>
+
+<P>The ThreadGroup class supports the operations on descendants of
+a ThreadGroup as shown in listing 13.24.
+</P>
+
+<P>Listing 13.24 java.lang.ThreadGroup Method Operating on All Threads
+and Subgroups
+</P>
+
+<PRE>
+//Call suspend() on all Threads in this group and
+//subgroups.
+public final void suspend();
+
+//Call resume() on all Threads in this group and
+//subgroups.
+public final void resume();
+
+//Stop all Threads in this group and subgroups.
+public final void stop();
+
+//Set the maximum priority for all Threads in this
+//group and all subgroups. Does not change the current
+//priority of existing Threads.
+public final void setMaxPriority(int pri);
+
+//Get the maximum priority value for this group.
+public final int getMaxPriority();
+</PRE>
+
+<P><CENTER>
+<a href="0526-0528.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0533-0536.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

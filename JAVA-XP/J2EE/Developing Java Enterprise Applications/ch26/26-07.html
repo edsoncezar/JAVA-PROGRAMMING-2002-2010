@@ -1,0 +1,222 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>MiniSessions provide a number of methods for acknowledgment, included in the following code. Remember that a client acknowledges a destination, not a particular message. This means that all of the messages that have been received by this session for the specified destination will be acknowledged. The session actually provides a version of acknowledgment that uses a name. This name is normally the client ID, but it can be different if a durable subscriber is used with the TopicSession. Ultimately, requests to acknowledge are forwarded to the server.
+</P>
+<PRE>
+    public void acknowledge(Destination d) throws JMSException
+    {
+        acknowledge(d,getClientID());
+    }
+
+    public void acknowledge(Destination d,String name)
+    throws JMSException
+    {
+        try
+        {
+            session.acknowledge(d,name);
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+    }
+</PRE>
+<P>The session manages a MessageListener. If this listener is assigned, it will be the only object to receive messages for this session. This is an advanced part of the API and is not intended for use by normal clients.
+</P>
+<PRE>
+    public MessageListener getMessageListener() throws  JMSException
+    {
+        return listener;
+    }
+
+    public void setMessageListener(MessageListener lst)
+    throws JMSException
+    {
+        this.listener = lst;
+    }
+</PRE>
+<P>The MiniSession also keeps track of all of its consumers&#146; MessageListeners. These listeners are associated with a particular destination and, in the case of a durable topic subscriber, have a unique name. When a listener is assigned to a destination, it shares all of the messages for its session and the destination, based on its name. When a consumer is assigned a listener, it registers it with the consumer&#146;s session using addMessageListenerFor.
+</P>
+<P>MiniSession keeps track of listeners in vectors that are stored in a hash table. The hash table relates destinations to listeners. The vector stores the listeners for the destination.</P>
+<P>Due to the persistent nature of messaging with JMS, a listener may be &#147;owed&#148; messages that were sent before it was registered. The MiniSession tries to assign these messages immediately on registration. The messageForNoWait method is discussed below; basically, it tries to find message that are readily available and doesn&#146;t wait for contact with the server.</P>
+<P>Synchronization is used to protect the hash table of listeners.</P>
+<PRE>
+    public void addMessageListenerFor(MessageListener lst
+                                        ,Destination dest
+                                        ,String name)
+                                         throws JMSException
+    {
+        Vector listeners;
+
+        synchronized(listenerForDest)
+        {
+            listeners = (Vector) listenerForDest.get(dest);
+
+            if(listeners == null)
+            {
+                listeners = new Vector();
+                listenerForDest.put(dest,listeners);
+            }
+
+            listeners.addElement(lst);
+
+            //update listener with outstanding messages
+            Message msg;
+
+            try
+            {
+                while((msg = messageForNoWait(dest,name))!=null)
+                {
+                    lst.onMessage(msg);
+                }
+            }
+            catch(Exception ignore)
+            {
+            }
+        }
+    }
+</PRE>
+<P>When a message listener is removed from a message consumer or the consumer is closed, the consumer object notifies the session of this change with removeMessageListenerFor. This method removes the listener from the listenerForDest hash table.
+</P>
+<PRE>
+    public void removeMessageListenerFor(MessageListener lst
+                                        ,Destination dest)
+                                         throws JMSException
+    {
+        Vector listeners;
+
+        if((dest == null)||(lst==null)) return;
+
+        synchronized(listenerForDest)
+        {
+            listeners = (Vector) listenerForDest.get(dest);
+
+            if(listeners != null)
+            {
+                listeners.removeElement(lst);
+            }
+        }
+    }
+</PRE>
+<P>Consumers provide three methods for accessing messages. In MiniJMS, these messages are forwarded to the session. The first method, messageFor, takes a name and destination. It tries to find a message for that name and destination in a local store without going to the server. In fact, none of the messageFor methods accesses the server. Messages are received asynchronously from the server using RMI. As messages arrive at the client, they are stored in a hash table. MessageFor checks this hash table with the method getMessageFor. If no message is available, it waits for one using normal thread waiting. The thread that is adding messages to the messagesForDest hash table calls notifyAll to wake up any waiting threads and give them a shot at the messages.
+</P>
+<P>Again, synchronization is used to protect the local message store.</P>
+<PRE>
+    public Message messageFor(Destination dest,String name)
+        throws Exception
+    {
+        Message msg=null;
+
+        synchronized(messagesForDest)
+        {
+            while(msg == null)
+            {
+                try
+                {
+                       <B>msg = getMessageFor(dest,name);
+
+                          if(msg != null) break;
+
+                        messagesForDest.wait();</B>
+                }
+                catch(Exception exp)
+                {
+                }
+            }
+        }
+
+        return msg;
+    }
+</PRE>
+<P>The second version of messageFor also takes a time-out and does not wait beyond the time-out for a message. We actually broke the waiting into several stages to make sure that any accidental notifications will not cause the method to return. This method returns only when the actual time passed exceeds the time-out or a message is available.
+</P>
+<PRE>
+    public Message messageFor(Destination dest,long timeout,String name)
+        throws Exception
+    {
+        Message msg=null;
+        long now,start;
+
+        start = System.currentTimeMillis();
+
+        synchronized(messagesForDest)
+        {
+            while(msg == null)
+            {
+                try
+                {
+                    <B>msg = getMessageFor(dest,name);
+
+                    if(msg != null) break;
+
+                    messagesForDest.wait(timeout/10);</B>
+                }
+                catch(Exception exp)
+                {
+                }
+
+                now = System.currentTimeMillis();
+                  <B>if((now-start)&gttimeout) break;</B>
+            }
+        }
+
+        return msg;
+    }
+</PRE>
+<P>The messageForNoWait method checks for a message and if none is available in the local store, returns null. This is a very quick check and doesn&#146;t wait on the server in any way.
+</P>
+<PRE>
+    public Message messageForNoWait(Destination dest,String name)
+        throws Exception
+    {
+        Message msg=null;
+
+        synchronized(messagesForDest)
+        {
+            msg = getMessageFor(dest,name);
+        }
+
+        return msg;
+    }
+</PRE>
+<P>Internally, a MiniSession uses the method getMessageFor to get messages from the local store. This method assumes that the caller synchronized the MessageForDest hash table to protect it. Messages in the local store are organized into two hash tables. The first stores hash-table values based on destinations as keys. These hash-table values in turn store vectors of messages based on name keys. In the simple case in which point-to-point messaging is used, there will probably be only one name registered for a destination, so the second hash table stores only one item. This is overkill, but it makes the code support both messaging styles, without alteration.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

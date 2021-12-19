@@ -1,0 +1,282 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The servlet that displays a report of the INVENTORY table uses the ShoppingCartBean&#146;s getInventory method to get the list of available items. In a larger application with more reports, you might want to use separate EJBs for the reports rather than including them in an existing one. This is included in this example to simplify the learning process.
+</P>
+<P>The getInventory method, defined as follows, connects to the database and retrieves all of the available items. Information from each row in the database is used to create a ShoppingCartItem object. These objects are temporarily stored in a vector. Once all the items are read from the database, the vector is converted to an array, and the array is returned to the caller. Finally, the database connection is closed.</P>
+<PRE>
+    public Object[] getInventory()
+     {
+        Vector items;
+        Object[] retVal=null;
+        ShoppingCartItem curItem;
+        double price;
+        int quantity;
+        int sales;
+        String desc;
+        ResultSet rs=null;
+        Statement statement=null;
+        Connection conn=null;
+        
+        items = new Vector();
+        
+        try
+        {
+            conn = connectToDB();
+            
+            statement = conn.createStatement();
+            rs = statement.executeQuery(&#147;select * from inventory&#148;);
+            
+            //Only take the first one
+            while(rs.next())
+            {
+                price = rs.getDouble(&#147;PRICE&#148;);
+                quantity = rs.getInt(&#147;QUANTITY&#148;);
+                sales = rs.getInt(&#147;SALES&#148;);
+                desc = rs.getString(&#147;ITEM_DESC&#148;);
+                
+                curItem = new ShoppingCartItem(desc,price,quantity);
+                curItem.sales = sales;
+                
+                items.addElement(curItem);
+            }
+            
+            retVal = new Object[items.size()];
+            items.copyInto(retVal);
+        }
+        catch(Exception exp)
+        {
+            logToServer(exp.toString());
+            retVal = null;
+        }
+        finally
+        {
+            try
+            {
+                if(rs!=null) rs.close();
+                if(statement != null) statement.close();
+                if(conn!=null) conn.close();
+            }
+            catch(Exception exp)
+            {
+                logToServer(exp.toString());
+            }
+        }
+        
+        return retVal;
+    }
+</PRE>
+<P>For convenience, the ShoppingCartBean has a method called connectToDB that makes the database connection and returns it. The information for the connection is based on the configuration parameters. Remember that in an Application Server, this connection process is probably loaded via an existing connection from a pool rather than by actually making a new connection to the database. The complete definition of connectToDB is included here:
+</P>
+<PRE>
+    protected Connection connectToDB()
+     {
+        Connection retVal = null;
+        
+        try
+        {
+            Class.forName(driver);
+            
+            retVal = DriverManager.getConnection(url,user,password);
+        }
+        catch(Exception exp)
+        {
+            retVal = null;
+            logToServer(exp.toString());
+        }
+        
+        return retVal;
+    }
+}
+
+</PRE>
+<P>As you can see, the ShoppingCartBean provides a great deal of functionality and integrates the JDBC interfaces with Enterprise JavaBeans.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>When using BEA WebLogic and possibly other servers, you are not able to use file system persistence for Entity beans while using JDBC calls in the same beans due to a problem with processing in the transactional models. Check the documentation on your EJB host for details.</FONT><HR>
+</BLOCKQUOTE>
+<H3><A NAME="Heading7"></A><FONT COLOR="#000077">JavaServer Pages and HTML</FONT></H3>
+<P>The online store contains two types of JavaServer Pages and one type of regular HTML page. The first type of JSP is the site&#146;s home page. The second type is the category page. All of the product pages are static HTML. The decision to use JSP or HTML is based on the resource usage. An online store might feature hundreds of products, and to have hundreds of JSP-generated servlets might take up too many server resources. Static pages do not use the same resources and don&#146;t take any server resources, beyond caches, when just sitting on disk. As a result, regular HTML is a low resource and, it turns out, a fast solution for pages, so we have maximized its usage. In a site with hundreds of categories, you might want to use static pages for the categories as well.
+</P>
+<P>The other architecture that many sites use in this situation is a single JSP, servlet, or CGI script that retrieves data from the database and dynamically creates all of the pages. In some respects, this is the most flexible mechanism, but it does require the most processing per page.</P>
+<P>The static page and completely dynamic design can also be combined by creating a program that generates pages from the database and stores them on disk. The site administrator could run this program nightly so that the site is static throughout the day but can change on a daily basis. This compromise reduces the processing per page and reduces the up-to-the-second nature of the pages, while still maintaining some of the advantages of dynamic pages.</P>
+<P>The main page for the online store is implemented in a JHTML page called index.jhtml. The majority of the page is static HTML; only the list of available categories and the advertisement are updated with each request. The advertisement is handled by the AdLinkRotatorServlet, a discussion of which follows. When displayed, the index.jhtml page looks like the Web page pictured in Figure 25.8.</P>
+<P>To find the available categories, this page looks at its current directory and assumes that all subdirectories represent categories. The name of the directory is treated as the category name. The highlighted code that follows contains the Java that reads the current directory and displays the list of categories. The list is initialized only once&#151;when the page is first loaded. The list of categories is stored in a vector called categories, defined in the &ltjava type=class&gt tag at the bottom of the JHTML file. One possible improvement to this model is to have the page recheck the directory for updates on a regular schedule.</P>
+<P><A NAME="Fig8"></A><A HREF="images\25-08.jpg"><IMG SRC="images\25-08t.jpg"></A>
+<BR><A HREF="images\25-08.jpg"><FONT COLOR="#000077"><B>Figure 25.8</B></FONT></A>&nbsp;&nbsp;Index.jhtml.</P>
+<PRE>
+&ltHTML&gt
+ &ltHEAD&gt
+&ltTITLE&gt
+Stuff 4Sale OnLine
+&lt/TITLE&gt
+&lt/HEAD&gt
+&ltBODY TEXT=&#147;#000000&#148; BGCOLOR=&#147;#FFFFFF&#148; LINK=&#147;#FF0000&#148; VLINK=&#147;#800080&#148;&gt
+&ltCENTER&gt
+&ltTABLE WIDTH=500 BORDER=0&gt
+&ltTR&gt
+&ltTD&gt
+
+&ltCENTER&gt
+&ltservlet
+    code=&#147;shopcart.servlets.AdLinkRotatorServlet&#148; 
+    imagedir=&#147;C:\\servers\\JavaWebServer1.1\\public_html\\shopcart\\ads&#148; 
+    imageroot=&#147;/shopcart/ads&#148;
+    logserver=&#147;192.168.0.172&#148;&gt
+&lt/servlet&gt
+&ltBR&gt
+&ltH3&gtWelcome to Steve and Scott&#146;s&lt/H3&gt
+&ltH1&gtStuff 4Sale OnLine&lt/H1&gt
+&ltHR&gt
+&lt/CENTER&gt
+
+&ltH3&gtPlease choose a category to find available products.&lt/H3&gt
+&ltUL&gt
+<B>&ltjava&gt
+    int i,max;
+    String uri = request.getRequestURI();
+    int ind;
+    
+    if(categories == null)
+    {
+        initCategories(request.getRealPath(uri));
+    }
+    
+    max = categories.size();
+        //Clean off the file name from the requestURI
+    
+    ind = uri.lastIndexOf(&#147;/&#148;);
+    
+    if(ind != (uri.length()-1))
+    {
+        uri = uri.substring(0,ind);
+    }
+    
+    for(i=0;i&ltmax;i++)
+    {
+&lt/java&gt
+    &ltLI&gt
+    &ltA HREF=&#147;&#145;uri+&#148;/&#147;+categories.elementAt(i)+&#148;/index.jhtml&#147;&#145;&#148;&gt
+    &ltjava type=print&gtcategories.elementAt(i)&lt/java&gt
+    &lt/A&gt
+    &ltBR&gt
+&ltjava&gt
+    }
+&lt/java&gt</B>
+&lt/UL&gt
+&lt/TD&gt
+&lt/TR&gt
+&ltTR&gt
+&ltTD&gt
+&ltH3&gt... or search for a product by key word:&lt/H3&gt
+&ltFORM METHOD=GET 
+ACTION=&#147;/servlet/HTMLSearchServlet/shopcart/home&#148;&gt
+&ltINPUT NAME=&#147;query&#148; VALUE=&#147;&#148; SIZE=25&gt
+&ltSELECT NAME=&#147;maxhits&#148; SIZE=1&gt
+&ltOPTION VALUE=&#147;25&#148;&gt25
+&ltOPTION VALUE=&#147;50&#148;&gt50
+&ltOPTION VALUE=&#147;100&#148;&gt100
+&lt/SELECT&gt
+&ltBR&gt&ltBR&gt
+&ltINPUT TYPE=&#147;Submit&#148; NAME=&#147;submit&#148; VALUE=&#147;Search&#148;&gt
+&ltINPUT TYPE=&#147;Submit&#148; NAME=&#147;submit&#148; VALUE=&#147;Help&#148;&gt
+&lt/FORM&gt
+
+&ltH3&gt... or view your existing shopping cart:&lt/H3&gt
+&ltCENTER&gt
+&ltH2&gt
+&ltFORM ACTION=&#147;/servlet/ShoppingCartServlet&#148;&gt
+&ltINPUT TYPE=&#147;HIDDEN&#148; NAME=&#147;action&#148; VALUE=&#147;view&#148;&gt
+&ltINPUT TYPE=&#147;SUBMIT&#148; VALUE=&#147;View Cart&#148;&gt
+&lt/FORM&gt
+&lt/H2&gt
+&lt/CENTER&gt
+&lt/TD&gt
+&lt/TR&gt
+&lt/TABLE&gt
+&lt/CENTER&gt
+&lt/BODY&gt
+&lt/HTML&gt
+
+<B>&ltjava type=class&gt
+    Vector categories;
+    String docRoot;
+        
+    public void initCategories(String rt)
+    {
+        File rootDir=null;
+        String[] files;
+        int i,max;
+        File curFile;
+        
+        docRoot = rt;
+        
+        categories = new Vector();
+        
+        try
+        {
+            rootDir = new File(docRoot);
+        
+            if(!rootDir.isDirectory())
+                rootDir = new File(rootDir.getParent());
+        
+            if((rootDir!=null) &amp&amp rootDir.exists())
+            {
+                files = rootDir.list();
+            
+                max = files.length;
+            
+                for(i=0;i&ltmax;i++)
+                {
+                    curFile = new File(rootDir,files[i]);
+                
+                    if(curFile.exists() 
+                                 &amp&amp curFile.isDirectory())
+                    {
+                        categories.addElement(files[i]);
+                    }
+                }
+            }
+        }
+        catch(Exception exp)
+        {
+            categories.removeAllElements();
+        }
+    }
+&lt/java&gt</B>
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

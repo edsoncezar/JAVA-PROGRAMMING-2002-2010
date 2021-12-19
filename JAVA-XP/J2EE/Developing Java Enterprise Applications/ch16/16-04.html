@@ -1,0 +1,117 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Let&#146;s take a minute to review the basic structure of a deployed bean application, as pictured in Figure 16.1. First, the client for an EJB may or may not exist in the same application as the EJB. Second, the client gains access to the EJB through an object that implements an interface called EJBHome. This object acts as a factory for the EJBs, creating them for the client and removing them when the client is done. Third, the client gains access to the EJB through a remote interface. This interface is implemented by an object that the EJB host constructs in the deployment process. Finally, the interface, or proxy, forwards messages to the EJB as appropriate. The object implementing the home interface will also work with the bean to initialize it.
+</P>
+<P>It is the container&#146;s responsibility to provide the EJBHome and EJBObject for an enterprise bean. To motivate this architecture, let&#146;s look at two of the services that the EJB host might provide. First, the host might want to support pooling for the enterprise beans. For example, if the client doesn&#146;t need to interact with the same bean for every request, the server could keep a pool of beans available to all clients, reducing the total resources used. This pooling is accomplished by the home, which creates only the necessary number of beans and the proxy that gets a bean from the pool as needed. The other service that this architecture supports is the basic persistence mechanisms. The home can provide a simple interface to a bean that has to be loaded from the database or some other persistent store. All of this persistence can be implemented in the home and container, insulating the bean programmer from it. In other words, this architecture allows the bean host to implement services transparently to the EJB programmer.</P>
+<P>Speaking of the programmer, what is his or her job? It comes down to the following steps:</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Define the remote interface.
+<DD><B>2.</B>&nbsp;&nbsp;Define the home interface.
+<DD><B>3.</B>&nbsp;&nbsp;Define the enterprise bean.
+<DD><B>4.</B>&nbsp;&nbsp;Create any additional classes you need.
+<DD><B>5.</B>&nbsp;&nbsp;Define necessary deployment information.
+<DD><B>6.</B>&nbsp;&nbsp;Compile the bean.
+<DD><B>7.</B>&nbsp;&nbsp;Package the bean for deployment.
+<DD><B>8.</B>&nbsp;&nbsp;Deploy the bean.
+</DL>
+<P>Let&#146;s take a look at each of these in detail, keeping in mind that deployment is discussed at more length in Chapter 17.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading8"></A><FONT COLOR="#000077">Define the Remote Interface</FONT></H4>
+<P>This is perhaps the easiest step for the programmer, although it is a lot of work for the application designer. The remote interface is a standard Java interface that extends Remote and EJBObject. Remote is defined in java.rmi and doesn&#146;t define any methods. It is the typing mechanism used to tell the system that the object that implements our remote interface is really a potential remote object. EJBObject, on the other hand, is defined in the javax.ejb package. The methods defined in EJBObject and listed in Table 16.2 are ultimately implemented by the proxy object created by the EJB host during deployment. These methods are one layer in the host&#146;s code that implements the EJB specification. Throughout this discussion and in other enterprise JavaBean documents, the proxy object that implements the remote interface is often referred to as the EJBObject.
+</P>
+<P>For example, the getHandle method returns a handle to the bean. This handle must be defined by the EJB host&#146;s deployment tools. Each handle uniquely identifies a bean, so the host might use some form of unique id or hash as part of the handle object. The handle&#146;s only method is getEJBObject, which returns the remote interface to the object specified by the handle. The implementation for these handles is really up to the host provider and is intended to be transparent to you, the bean programmer.</P>
+<P>Your job is to define your remote interface with the methods that you need to provide to clients. For example, in the stateless example on the CD-ROM, the following one-method interface is defined as the StatelessId bean&#146;s remote interface:</P>
+<PRE>
+package stateless;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+
+import java.rmi.Remote;
+
+public interface StatelessId extends EJBObject, Remote
+{
+    <B>public int getId() throws RemoteException;</B>
+}
+</PRE>
+<TABLE WIDTH="100%">
+<TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 16.2</B> EJBObject Methods
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="30%" VALIGN="TOP" ALIGN="LEFT">METHOD
+<TH VALIGN="TOP" ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public EJBHome getEJBHome()<BR>throws RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Returns the home object for the bean that this proxy represents.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public Object getPrimaryKey()<BR>throws RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Returns the primary key for this proxy&#146;s bean. This method is primarily used for entity beans
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void remove()<BR>throws RemoteException,<BR>RemoveException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Removes the associated bean from the server. This method may act differently in a pooling situation, but the client should think of it as destroying the bean.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public Handle getHandle()<BR>throws RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Returns a handle to the bean; this handle provides access back to this object and can be serialized by the client.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public boolean<BR>isIdentical(EJBObject obj)<BR>throws RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Tests equality between two EJBObjects. This equality is based on primary keys and handles and may say that two independent bean objects are identical.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+</TABLE>
+<P>Notice that only one application-specific method, called getId, exists and that it can throw RemoteExceptions. All of the methods in your remote interface should also be declared to throw RemoteExceptions. The EJBObject interface also uses the RemoveException type to indicate a special problem or situation. You can also define custom exceptions to use in your RemoteInterface.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>The possibility of RemoteExceptions is the primary lack of transparency behind Enterprise JavaBeans and all distributed computing in Java. Although this generic exception type does narrow and group the dangers of network computing into one concept, it is also unused in programs that don&#146;t rely on distributed programming techniques. In other words, you can&#146;t forget that EJBs are not part of your program because they can, and sometimes will, throw RemoteExceptions.</FONT><HR>
+</BLOCKQUOTE>
+<P>The easy part of this step is writing the interface. The hard part is creating a design for your distributed applications. This can be a political and tedious process, but once you have the design, you can map it onto a Java interface, and the remote interface is then done.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading9"></A><FONT COLOR="#000077">Define the Home Interface</FONT></H4>
+<P>Creating the home interface for your EJB is both simple and tricky. From one perspective, all you need to do is implement an interface that extends the EJBHome interface. This interface defines three methods, as listed in Table 16.3.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

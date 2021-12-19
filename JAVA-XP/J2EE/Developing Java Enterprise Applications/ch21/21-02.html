@@ -1,0 +1,181 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A JMS-Based Alarm System</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="21-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="http://library.cs.tuiasi.ro/programming/java/developing_java_enterprise_app/ch21/21-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The time for an alarm is saved as a string that will be parsed by the server using a java.text.DateFormat object. This flexibility helps the user define alarm settings. The limitation of this technique is that the DateFormat doesn&#146;t permit all date/time formats. A more commercial-level implementation of the configuration application than the one included here would hide these implementation details from the user. For the purpose of testing, you should use strings of the form:
+</P>
+<PRE>
+mm/dd/yy hh:mm am|pm
+</PRE>
+<P>for assigning alarm times. For example, to set an alarm for 1:00 in the afternoon on October 3, 1999, use:
+</P>
+<PRE>
+10/3/99 1:00 pm
+</PRE>
+<P>Of course, any string that is usable with DateFormat will work.
+</P>
+<H3><A NAME="Heading3"></A><FONT COLOR="#000077">Alarm Server</FONT></H3>
+<P>The server for this example is implemented in a single class called AlarmServer. This class defines all of the special strings for messages within the system, including the names of the two destinations used for messaging. The server objects also keep track of their various JMS entities, such as connections and sessions, as well as the current alarms.
+</P>
+<P>The AlarmServer is a Runnable object that checks for messages to the ADMIN_QUEUE in a background thread. The actual alarm timing is managed by a class called PTimer. PTimer is based on the PersonalJava PTimer class and uses PTimerSpec objects to represent alarm or timer requests. The PTimer uses a background thread to wait for a specified amount of time. When the time passes, a PTimerWentOffListener associated with the relevant timer spec is notified.</P>
+<P>The server associates a timer spec with each alarm. Two hash tables maintain these relationships. One, called timers, stores the timer specs as keys and the alarms as values. This is used to find an alarm when a timer fires. Another table, called alarm2timer, is used to find a spec for an alarm if it is deleted.</P>
+<P>Finally, the server keeps a DateFormat object handy for converting an alarm&#146;s time string to a java.util.Date object. The definitions for these constants and instance variables are as follows:</P>
+<PRE>
+package alarm;
+
+//imports removed to save space
+
+public class AlarmServer
+ implements PTimerWentOffListener, Runnable
+{
+    public final static String ADMIN_QUEUE
+                              =&#147;alarm_admin_queue&#148;;
+    public final static String ALARM_TOPIC
+                              =&#147;alarm_alarm_topic&#148;;
+                             
+    public final static String ACTION=&#147;action&#148;;
+    public final static String SHUTDOWN=&#147;down&#148;;
+    public final static String SET=&#147;set&#148;;
+    public final static String DELETE=&#147;delete&#148;;
+    public final static String GET_ALARMS=&#147;get&#148;;
+   
+    public final static String ALARM=&#147;alarm&#148;;
+   
+    Queue adminQueue;//the queue for receiving admin messages
+    QueueReceiver adminReceiver;
+    QueueSender qsender;
+    QueueSession session;
+    QueueConnection conn;
+   
+    Topic alarmTopic;//the topic for sending alarm messages
+    TopicPublisher alarmPublisher;
+    TopicSession tsession;
+    TopicConnection tconn;
+   
+    Hashtable timers;//holds the timer specs for each alarm
+    Hashtable alarm2timer;//maps the alarms to their timer
+    DateFormat dateFormat;//converts string to Date
+</PRE>
+<P>The AlarmServer constructor takes a single string argument that is used when registering with the JMS system. The default value for this name is assigned in the main method for the AlarmServer class.
+</P>
+<P>The constructor creates the two hash tables and the DateFormat object before initializing the messaging components it will use. The MiniJMSUtils class, discussed in Chapter 20, is used to load a properties file and generate an initial JNDI context from it. Once this context and the properties file are loaded, the server loads any persistent alarms from file. The loadAlarms method is discussed below.</P>
+<P>Finally, the server initializes a receiver for the ADMIN_QUEUE and a publisher for the ALARM_TOPIC. These destinations are created, if they do not exist already in the JMS system.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>We are relying on MiniJMS to allow the creation of destinations by a client application. Another JMS provider may require you to use administrative tools to create these destinations. You may also have to change the names of the destinations to conform to a provider-specific format.</FONT><HR>
+</BLOCKQUOTE>
+<P>All of the JMS and JNDI code is contained in a try-catch block to handle exceptions. In case of an error, the server exits because it cannot do any work without the proper JMS connections. The code for the AlarmServer constructor looks like this:
+</P>
+<PRE>
+    public AlarmServer(String user)
+    {
+        Context context;
+        TopicConnectionFactory tfactory;
+        QueueConnectionFactory factory;
+       
+        dateFormat = new SimpleDateFormat();
+        timers = new Hashtable();
+        alarm2timer = new Hashtable();
+        try
+        {
+            MiniJMSUtils.init(&#147;alarm/alarm.properties&#148;);
+            context = MiniJMSUtils.context;
+       
+            loadAlarms();
+           
+            factory
+             = (QueueConnectionFactory)
+                  context.lookup(&#147;QueueConnectionFactory&#148;);
+           
+            conn
+             = factory.createQueueConnection(user,null);
+           
+            session
+             = conn.createQueueSession(false
+                                      ,Session.AUTO_ACKNOWLEDGE);
+           
+            //Create the queues, or
+            //handle failure if they exist
+            try
+            {
+                adminQueue =session.createQueue(ADMIN_QUEUE);
+            }
+            catch(Exception exp)
+            {
+            }
+           
+            adminQueue  = (Queue)
+             MiniJMSUtils.context.lookup(ADMIN_QUEUE);
+       
+            adminReceiver = session.createReceiver(adminQueue);
+   
+            qsender = session.createSender(adminQueue);
+            qsender.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
+           
+            //Create the topic related objects
+       
+            tfactory
+             = (TopicConnectionFactory)
+                 context.lookup(&#147;TopicConnectionFactory&#148;);
+           
+            tconn
+             = tfactory.createTopicConnection(user,null);
+           
+            tsession
+             = tconn.createTopicSession(false
+                                      ,Session.AUTO_ACKNOWLEDGE);
+            try
+            {
+                alarmTopic = tsession.createTopic(ALARM_TOPIC);
+            }
+            catch(Exception exp)
+            {
+            }
+           
+            alarmTopic  = (Topic)
+             MiniJMSUtils.context.lookup(ALARM_TOPIC);
+           
+            alarmPublisher = tsession.createPublisher(alarmTopic);
+        alarmPublisher.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+    }
+</PRE>
+<P>The server stores outstanding alarms in a file when it is shut down. For example, if you set an alarm for New Year&#146;s Day in June and started and stopped the server in the meantime, this alarm would be written to disk and read from disk each time. However, once an alarm fires, it is removed from the list of pending alarms and will not be saved.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="21-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="http://library.cs.tuiasi.ro/programming/java/developing_java_enterprise_app/ch21/21-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

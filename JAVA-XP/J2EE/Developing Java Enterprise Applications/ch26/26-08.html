@@ -1,0 +1,213 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>If an appropriate message is available when getMessageFor is called, it is returned. The session also acknowledges the message if it is not in client acknowledgment mode.
+</P>
+<PRE>
+    protected Message getMessageFor(Destination dest,String name)
+        throws JMSException
+    {
+        Message msg=null;
+        Vector messages=null;
+        Hashtable msgsByName;
+
+        try
+        {
+            if(name == null) name = getClientID();
+
+            <B>msgsByName = (Hashtable) messagesForDest.get(dest);
+
+            if(msgsByName!=null)
+               messages = (Vector) msgsByName.get(name);</B>
+
+            if((messages != null)&amp&amp(messages.size()&gt0))
+            {
+                <B>msg = (Message) messages.elementAt(0);
+                messages.removeElementAt(0);
+
+                if(ackMode != Session.CLIENT_ACKNOWLEDGE)
+                {
+                    acknowledge(dest,name);
+                }</B>
+            }
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+
+        <B>return msg;</B>
+    }
+</PRE>
+<P>At the heart of a client&#146;s MiniSession is the addMessage method. This method is called by the remote session using RMI. The addMessagemethod distributes messages using these steps.
+</P>
+<P>First, if the session has a MessageListener, it receives all messages. Second, if a MessageListener is available for the message, it is notified. If multiple listeners are registered for the same destination and name, one is chosen randomly according to the JMS specification.</P>
+<P>If no listeners are available, messages are stored in the messagesForDest hash table, making them available to clients using the receive methods. Note that a client can&#146;t register a listener with the name &#147;joe&#148; on the destination &#147;tmp&#148; and try to retrieve messages for the same destination with the same name using a receive message in the Consumer. These two models are mutually exclusive on a name-destinations basis. When the messagesForDest table is used, it is told to notify threads waiting on it after the new message is added.</P>
+<P>The addMessage method synchronizes calls to message listeners, in the sense that they will receive the onMessage call only from a single thread. Like the getMessageFor method, addMessage automatically acknowledges messages, unless configured not to, when they are delivered.</P>
+<PRE>
+    public void addMessage(Message msg)
+       throws RemoteException
+    {
+        Destination dest;
+        Vector messages;
+        Vector listeners;
+        MessageListener lst=null;
+        Hashtable msgsByName;
+        String name=null;
+
+        if(msg != null)
+        {
+            try
+            {
+                lst = null;
+                name = null;
+                msgsByName = null;
+                listeners = null;
+                dest = null;
+                messages = null;
+
+                try
+                {
+                name =
+                msg.getStringProperty(MiniJMSMessageStore.REG_NAME);
+                }
+                catch(Exception e)
+                {
+                    name = null;
+                }
+
+                dest = msg.getJMSDestination();
+
+                <B>if((dest != null)&amp&amp(listener==null))</B>
+                {
+                    synchronized(listenerForDest)
+                    {
+                        <B>listeners =
+                            (Vector) listenerForDest.get(dest);</B>
+
+                        //Pick one at random.
+                        if((listeners != null)
+                              &amp&amp(listeners.size()&gt0))
+                        {
+                            int i;
+                            int size = listeners.size();
+
+                            <B>if(size&gt1)
+                                i = Math.abs(rand.nextInt())
+                                    % listeners.size();
+                            else
+                                i = 0;
+
+                            lst = (MessageListener)
+                                listeners.elementAt(i);</B>
+                        }
+                    }
+
+                    if(lst != null)
+                    {
+                        <B>lst.onMessage(msg);
+
+                        if(ackMode != Session.CLIENT_ACKNOWLEDGE)
+                        {
+                            acknowledge(dest);
+                        }</B>
+                    }
+                    else
+                    {
+                        synchronized(messagesForDest)
+                        {
+                            if(name == null) name = getClientID();
+
+                            msgsByName = (Hashtable)
+                                          messagesForDest.get(dest);
+
+                            if(msgsByName==null)
+                            {
+                                msgsByName = new Hashtable();
+                                messagesForDest.put(dest
+                                                    ,msgsByName);
+                            }
+
+                            messages = (Vector)
+                                        msgsByName.get(name);
+
+                            if(messages == null)
+                            {
+                                messages = new Vector();
+                                msgsByName.put(name,messages);
+                            }
+
+                            <B>messages.addElement(msg);
+
+                            messagesForDest.notifyAll();</B>
+                        }
+                    }
+                }
+                <B>else if(listener != null)
+                {
+                    listener.onMessage(msg);
+
+                    if(ackMode != Session.CLIENT_ACKNOWLEDGE)
+                    {
+                        acknowledge(dest);
+                    }
+                }</B>
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+    }
+</PRE>
+<P>The MiniSession provides access to the server for deleting temporary destinations. The same method, shown below, is used for temporary queues and topics.
+</P>
+<PRE>
+    public void deleteTemporary(MiniTempDestination q)
+        throws JMSException
+    {
+        try
+        {
+            session.deleteDestination(q.toString());
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>One of the design mechanisms behind MiniJMS is the concept of a client registering for messages on a particular destination with a particular name. The server code uses this registration to begin checking for messages on that destination and passes them on to the client. Registrations can be durable or transient. By default, QueueReceivers use durable registrations, as do durable TopicSubscribers. Normal TopicSubscribers are transient. The main difference between durable and transient is that the server will store up messages for a durable subscriber and will not for a transient subscriber.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

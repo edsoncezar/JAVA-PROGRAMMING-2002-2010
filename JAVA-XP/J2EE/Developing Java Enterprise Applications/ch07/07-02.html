@@ -1,0 +1,126 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>If the servlet is executing long-running operations, it may be told to destroy before all of the operations are complete. This means that as the developer, if you are using multithreaded servlets, you should plan for destroy to be called during a long-running operation. One possible mechanism for dealing with this situation is to have destroy set a flag and have the servlet check whether the flag is on at the end of each request. If the flag is true and the request is the last one, the servlet will clean up its resources. Put simply, the servlet might not clean up in the destroy method, but instead in its service method, after checking whether destroy was called.
+</P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 7.2</B> UnavailableException Methods
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP">METHOD
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>public boolean isPermanent()</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns true if the servlet requires administrative intervention before becoming available.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>public Servlet getServlet()</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The servlet in question.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>public int getUnavailableSeconds()</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The number of seconds that the servlet expects to be unavailable.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+</TABLE>
+<P>Keep in mind that most servlets should perform reasonably short operations, in order to provide user responsiveness. In those cases, it is not necessary to plan too extensively around destroy getting called too early. Servlets that do not require open resources, created in init and closed in destroy, may not even need to implement the method.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading3"></A><FONT COLOR="#000077">Handling a Request</FONT></H4>
+<P>Once a servlet is initialized, the key method used to interact with it is:
+</P>
+<PRE>
+public void service(ServletRequest request,
+    ServletResponse response) throws ServletException
+</PRE>
+<P>This service method is made up of a simple interface that takes information about the request and an object that encapsulates the response. Whenever a request arrives at the server for a particular servlet, the server wraps up information about the request, creates a response object to contain information relevant to the response, and calls service. The service method uses a ServletException, a special type of Exception object, to indicate when an exception has occurred.
+</P>
+<P>A simple example of the service method follows in the form of the classic HelloWorld program. The results of accessing this servlet are pictured in Figure 7.1. The bold code shows that the service method is sent a request object containing the details of the client request and a response object used to return values to the client. The method writes &#147;Hello World&#148; to a Web page on the client browser.</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class HelloWorldServlet extends GenericServlet
+{
+    <B>public void service(ServletRequest request,
+                                ServletResponse response)</B>
+                                throws ServletException,
+                                IOException
+    {
+        PrintWriter out;
+
+        response.setContentType(&#147;text/html&#148;);
+
+        out = response.getWriter();
+
+        out.println(&#147;&ltHTML&gt&ltHEAD&gt&ltTITLE&gt&#148;);
+        out.println(&#147;Hello World&#148;);
+        out.println(&#147;&lt/TITLE&gt&lt/HEAD&gt&ltBODY&gt&#148;);
+        out.println(&#147;&ltH1&gtHello World&lt/H1&gt&#148;);
+        out.println(&#147;&lt/BODY&gt&lt/HTML&gt&#148;);
+
+        out.close();
+    }
+
+}
+</PRE>
+<P>Other servlets may have similar versions of service or implementations that are more complex. The important point is that service is the Web server&#146;s interface to the servlet. You, as the servlet writer, can do anything you want, as long as Java supports it, inside the service method. This could include using JNDI to look up the e-mail address in an LDAP directory or finding inventory items in a database through JDBC.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading4"></A><FONT COLOR="#000077">SingleThreadModel</FONT></H4>
+<P>The next step in implementing a servlet is to decide if it will support multithreading. This is an important decision for the programmer. If you decide not to support multithreaded access to the servlet, the servlet should implement the SingleThreadModel interface. This interface defines no methods and is instead a typing mechanism. Servlets marked with SingleThreadModel are guaranteed by the server to be accessed only by a single thread. When a servlet implements SingleThreadModel, it is really saying that it doesn&#146;t want the service method called from more than one thread.
+</P>
+<P><A NAME="Fig1"></A><A HREF="images\07-01.jpg"><IMG SRC="images\07-01t.jpg"></A>
+<BR><A HREF="images\07-01.jpg"><FONT COLOR="#000077"><B>Figure 7.1</B></FONT></A>&nbsp;&nbsp;Hello World.</P>
+<P>Several issues go into the decision of servlet multithreading:
+</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Does it make sense for the action performed by the servlet to occur twice simultaneously? For example, if the servlet returns data from a cache, it is reasonable that the servlet could respond to multiple queries at the same time. However, to ensure file integrity, you may want a servlet that deletes files to delete only one file at a time.
+<DD><B>2.</B>&nbsp;&nbsp;Does the servlet alter information that may not be thread safe? Does it access a file or another object that is not thread safe? Does it use a socket to interact with another application? If so, is access to the socket synchronized? If a resource being accessed by the servlet is not itself thread safe, the servlet should be single threaded to protect that resource.
+<DD><B>3.</B>&nbsp;&nbsp;Will there be performance implications if the servlet is marked single threaded? If the requests performed by the servlet in a single-thread model are time consuming, other requests may be delayed too long. In this case, if possible, the servlet should be written to support multiple threads.
+</DL>
+<P>Keep in mind that supporting multiple threads is more flexible than marking the servlet as single threaded. Marking it single threaded is certainly easier on the program design, but it is more limiting in your program design. We will discuss multithreaded servlets in detail in the upcoming section, &#147;Multithreaded Servlets.&#148;
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading5"></A><FONT COLOR="#000077">ServletRequest</FONT></H4>
+<P>Each call to service includes an object that implements the ServletRequest interface. This object stores information about the request made by the client to the servlet. Request information comes in three forms. First, there is information about the client/server environment. Second, there is raw access to the client request. Third, there are processed versions of the client request. The difference between the last two types of information is very easy to describe in the context of a servlet that hosts an HTML form. When the form is submitted, the client sends an encoded string containing the name and value of each form element. The servlet can access this string directly (the second form), or it can access the values of each form element by their names (the third form).
+</P>
+<P>All of the methods for ServletRequest are listed in Table 7.3.</P>
+<P>Servlets that are designed to respond to HTML form requests will normally use the getParameterValue and getParameterValues methods to obtain information about the form request. Servlets that expect a string of text to be supplied should use getReader to obtain an appropriate reader; servlets that expect binary input should use getInputStream to access data from the request.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,394 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Here is the code that defines MiniMessage; some discussion has been inserted to clarify various portions of the class definition and some repetitive code has been left out, although it is included on the CD-ROM:
+</P>
+<PRE>
+package minijms;
+
+//Import statements removed to save space.
+
+public class MiniMessage
+ implements Message,Serializable
+{
+    protected String messageId;
+    protected long timeStamp;
+    protected String corrId;
+    protected Destination replyTo;
+    protected Destination destination;
+    protected String type;
+    protected int deliveryMode;
+    protected long expiration;
+    protected int priority;
+    protected boolean redelivered;
+    protected Hashtable properties;
+    transient protected MiniSession session;
+
+    public MiniMessage()
+    {
+        deliveryMode = Message.DEFAULT_DELIVERY_MODE;
+        priority = Message.DEFAULT_PRIORITY;
+        expiration = Message.DEFAULT_TIME_TO_LIVE;
+        type=&#147;Message&#148;;
+
+        properties = new Hashtable();
+    }
+
+    <B>public boolean equals(Object o)
+    {
+        boolean retVal = false;
+        String numKey;
+
+        try
+        {
+            if(o instanceof Message)
+            {
+                Message msg = (Message) o;
+
+                numKey = MiniJMSMessageStore.MSG_NUM;
+
+                if(msg.propertyExists(numKey)
+                    &amp&amp propertyExists(numKey))
+                {
+                    if(getLongProperty(numKey)
+                        == msg.getLongProperty(numKey))
+                    {
+                        retVal = true;
+                    }
+                }
+            }
+        }
+        catch(Exception exp)
+        {
+            retVal = false;
+        }
+
+        return retVal;
+    }</B>
+
+    public void setMiniSession(MiniSession s)
+    {
+        session = s;
+    }
+
+    public MiniSession getMiniSession()
+    {
+        return session;
+    }
+
+    <B>public void acknowledge() throws JMSException
+    {
+        if((session != null)
+            &amp&amp(session.getAckMode()
+                ==Session.CLIENT_ACKNOWLEDGE))
+        {
+            session.acknowledge(destination);
+        }
+        else
+        {
+            throw new JMSException();
+        }
+    }</B>
+
+    public void clearBody() throws JMSException
+    {
+        //do nothing in generic case;
+    }
+
+    public String getJMSMessageID() throws JMSException
+    {
+        return messageId;
+    }
+
+    public void setJMSMessageID(String id) throws JMSException
+
+    {
+        messageId = id;
+    }
+
+    public long getJMSTimestamp() throws JMSException
+    {
+        return timeStamp;
+    }
+
+    public void setJMSTimestamp(long timestamp) throws JMSException
+    {
+        timeStamp = timestamp;
+    }
+
+    public byte [] getJMSCorrelationIDAsBytes() throws JMSException
+    {
+        byte[] retVal = null;
+
+        if(corrId != null)
+            retVal = corrId.getBytes();
+
+        return retVal;
+    }
+
+    public void setJMSCorrelationIDAsBytes(byte[] correlationID)
+        throws JMSException
+    {
+        corrId = new String(correlationID);
+    }
+
+    public void setJMSCorrelationID(String correlationID)
+      throws JMSException
+    {
+        corrId = correlationID;
+    }
+
+    public String getJMSCorrelationID() throws JMSException
+    {
+        return corrId;
+    }
+
+    public Destination getJMSReplyTo() throws JMSException
+    {
+        return replyTo;
+    }
+
+    public void setJMSReplyTo(Destination replyTo)
+      throws JMSException
+    {
+        this.replyTo = replyTo;
+    }
+
+    public Destination getJMSDestination() throws JMSException
+    {
+        return destination;
+    }
+
+    public void setJMSDestination(Destination destination)
+      throws JMSException
+    {
+        this.destination = destination;
+    }
+
+    public int getJMSDeliveryMode() throws JMSException
+    {
+        return deliveryMode;
+    }
+
+    public void setJMSDeliveryMode(int deliveryMode)
+      throws JMSException
+    {
+        this.deliveryMode = deliveryMode;
+    }
+
+    public boolean getJMSRedelivered() throws JMSException
+    {
+        return redelivered;
+    }
+
+    public void setJMSRedelivered(boolean redelivered)
+      throws JMSException
+    {
+        this.redelivered = redelivered;
+    }
+
+    public String getJMSType() throws JMSException
+    {
+        return type;
+    }
+
+    public void setJMSType(String type) throws JMSException
+    {
+        this.type = type;
+    }
+
+    public long getJMSExpiration() throws JMSException
+    {
+        return expiration;
+    }
+
+    public void setJMSExpiration(long expiration)
+      throws JMSException
+    {
+        this.expiration = expiration;
+    }
+
+    public int getJMSPriority() throws JMSException
+    {
+        return priority;
+    }
+
+    public void setJMSPriority(int priority) throws JMSException
+    {
+        this.priority = priority;
+    }
+</PRE>
+<P>The remaining code in MiniMessage is used to manage the priorities. All the priorities are stored in a hash table called properties. A set of convenience methods are provided to convert the objects in the hash table to the appropriate types. For example, the method floatFor takes an object and, if the object is a String or Float, returns a float value. Otherwise, an exception is thrown. These methods are used by the MiniMessage subclasses such as MiniMapMessage to implement all of the data type conversions specified in the JMS documentation. The clearProperties, getPropertyNames, and propertyExists methods simply forward the request to the properties hash table. Only a sample of the properties methods is shown here; the remainder are available on the CD-ROM because the entire class has about 570 lines, too many to include here in a valuable way.
+</P>
+<PRE>
+    public void clearProperties() throws JMSException
+    {
+        properties.clear();
+    }
+
+    public boolean propertyExists(String name) throws JMSException
+    {
+        return properties.containsKey(name);
+    }
+
+    public Enumeration getPropertyNames() throws JMSException
+    {
+        return properties.keys();
+    }
+
+    public boolean getBooleanProperty(String name)
+      throws JMSException
+    {
+        return booleanFor(properties.get(name));
+    }
+
+    public byte getByteProperty(String name) throws JMSException
+    {
+        return byteFor(properties.get(name));
+    }
+
+    ... Code removed to save space ...
+
+    public String getStringProperty(String name) throws JMSException
+    {
+        return stringFor(properties.get(name));
+    }
+
+    public Object getObjectProperty(String name) throws JMSException
+    {
+        return objectFor(properties.get(name));
+    }
+
+    public void setBooleanProperty(String name, boolean value)
+            throws MessageNotWriteableException, JMSException
+    {
+        properties.put(name,new Boolean(value));
+    }
+
+    public void setByteProperty(String name, byte value)
+            throws MessageNotWriteableException, JMSException
+    {
+        properties.put(name,new Byte(value));
+    }
+
+
+    ... Code removed to save space ...
+
+    public void setStringProperty(String name, String value)
+           throws MessageNotWriteableException, JMSException
+    {
+        properties.put(name,value);
+    }
+
+    public void setObjectProperty(String name, Object value)
+           throws MessageNotWriteableException, JMSException
+    {
+        properties.put(name,value);
+    }
+
+    public boolean booleanFor(Object o) throws JMSException
+    {
+        if(o == null) throw new NullPointerException(&#147;No value.&#148;);
+
+        if(o instanceof Boolean)
+        {
+            return ((Boolean)o).booleanValue();
+        }
+        else if(o instanceof String)
+        {
+            return Boolean.valueOf((String)o).booleanValue();
+        }
+        else
+        {
+            throw new JMSException(&#147;Bad Type&#148;);
+        }
+    }
+
+    ... Code removed to save space ...
+
+    public int intFor(Object o) throws JMSException
+    {
+        if(o == null) throw new NullPointerException(&#147;No value.&#148;);
+
+        if(o instanceof Integer)
+        {
+            return ((Integer)o).intValue();
+        }
+        else if(o instanceof Short)
+        {
+            return ((Short)o).intValue();
+        }
+        else if(o instanceof Byte)
+        {
+            return ((Byte)o).intValue();
+        }
+        else if(o instanceof String)
+        {
+            return Integer.valueOf((String)o).intValue();
+        }
+        else
+        {
+            throw new JMSException(&#147;Bad Type&#148;);
+        }
+    }
+
+    public String stringFor(Object o) throws JMSException
+    {
+        if(o == null) throw new NullPointerException(&#147;No value.&#148;);
+
+        return o.toString();
+    }
+
+    public Object objectFor(Object o) throws JMSException
+    {
+        if(o == null) throw new NullPointerException(&#147;No value.&#148;);
+
+        return o;
+    }
+
+    public byte[] bytesFor(Object o) throws JMSException
+    {
+        if(o == null) throw new NullPointerException(&#147;No value.&#148;);
+
+        if(!(o instanceof byte[]))
+         throw new JMSException(&#147;Bad Type&#148;);
+
+        return ((byte[])o);
+    }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

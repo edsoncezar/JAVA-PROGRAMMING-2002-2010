@@ -1,0 +1,187 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Wrapper Implementations</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="general.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="convenience.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=bottom border=0 alt="Collections | "></a>
+</td>
+<td align=right>
+<a href="..\toc.html#implementations"><strong><em>Contents</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p>
+<h1>
+     Wrapper Implementations
+</h1>
+<p>
+<blockquote>
+
+Wrapper implementations are implementations that delegate all of their real work
+to a specified collection, but add some extra functionality on top of what
+this collection offers.  For <i>design patterns</i> fans, this is an example
+of the <i>decorator</i> pattern.  While it may seem a bit exotic, it's really
+pretty straightforward.
+<p>
+These implementations are <i>anonymous</i>: rather than providing a public
+class, the JDK provides a <i>static factory method</i>.  All of these
+implementations are found in the
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.Collections.html"><code>Collections</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.Collections.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a> API which consists solely of static methods.
+
+<h4>Synchronization Wrappers</h4>
+<blockquote>
+The synchronization wrappers add automatic synchronization (thread-safety)
+to an arbitrary collection.  There is one static factory method for each
+of the six core collection interfaces:
+<blockquote>
+<pre>    public static Collection synchronizedCollection(Collection c);
+    public static Set synchronizedSet(Set s);
+    public static List synchronizedList(List list);
+    public static Map synchronizedMap(Map m);
+    public static SortedSet synchronizedSortedSet(SortedSet s);
+    public static SortedMap synchronizedSortedMap(SortedMap m);</pre>
+</blockquote>
+Each of these methods returns a synchronized (thread-safe) Collection backed
+by the specified collection. In order to guarantee serial access, it is
+critical that <strong>all</strong> access to the backing collection is
+accomplished through the returned collection.  The easy way to guarantee this
+is to not to keep a reference to the backing collection.  Creating the 
+synchronized collection like this does the trick:
+<blockquote>
+<pre>    List list = Collections.synchronizedList(new ArrayList());</pre>
+</blockquote>
+A collection created in this fashion is every bit as thread-safe as as a
+"normally" synchronized collection like a
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.Vector.html">Vector</a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.Vector.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>.
+<p>
+In the face of concurrent access, it is imperative that the user manually
+synchronize on the returned collection when iterating over it.  This is
+because iteration is accomplished via multiple calls into the collection,
+which must be composed into a single atomic operation.  The idiom to iterate
+over a wrapper-synchronized collection is:
+<blockquote>
+<pre> Collection c = Collections.synchronizedCollection(myCollection);
+ synchronized(c) {
+     Iterator i = c.iterator(); // Must be in the synchronized block!
+     while (i.hasNext()) 
+         foo(i.next());
+ }</pre>
+</blockquote>
+Failure to follow this advice may result in non-deterministic behavior.
+<p>
+The idiom for iterating over a <code>Collection</code>-view of a 
+synchronized <code>Map</code> is similar, but with one wrinkle.
+It is imperative that the user manually synchronize on the synchronized
+<code>Map</code> when iterating over any of its <code>Collection</code>-views,
+rather than synchronizing on the <code>Collection</code>-view itself:
+<blockquote>
+<pre>    Map m = Collections.synchronizedMap(new HashMap());
+        ...
+    Set s = m.keySet();  // Needn't be in synchronized block
+        ...
+    synchronized(m) {  // Synchronizing on m, not s!
+        Iterator i = s.iterator(); // Must be in synchronized block
+        while (i.hasNext())
+            foo(i.next());
+    }</pre>
+</blockquote>
+One minor downside of the wrapper implementation approach is that you do not
+have the ability to execute any non-interface operations of a wrapped
+implementation.  So, for instance, in the <code>List</code> example above,
+one cannot call <code>ArrayList</code>'s <code>ensureCapacity</code> operation
+on the wrapped <code>ArrayList</code>.
+</blockquote>
+
+<h4>Unmodifiable Wrappers</h4>
+<blockquote>
+The unmodifiable wrappers are conceptually similar to the synchronization
+wrappers, but simpler.  Rather than adding functionality to the wrapped
+collection, they take it away.  In particular, they take away the ability to
+modify the collection, by intercepting all of the operations that would modify
+the collection, and throwing an <code>UnsupportedOperationException</code>.
+The unmodifiable wrappers have two main uses:
+<ul>
+<li>
+To make a collection immutable once it has been built.  In this case, it's
+good practice not to maintain a reference to the backing collection.  This
+absolutely guarantees immutability.
+<li>
+To allow "second-class citizens" read-only access to your data structures.
+You keep a reference to the backing collection, but hand out a reference
+to the wrapper.  In this way, the second-class citizens can look but not
+touch, while you maintain full access.
+</ul>
+Like the synchronization wrappers, there is one static factory method for each
+of the six core collection interfaces:
+<blockquote>
+<pre>    public static Collection unmodifiableCollection(Collection c);
+    public static Set unmodifiableSet(Set s);
+    public static List unmodifiableList(List list);
+    public static Map unmodifiableMap(Map m);
+    public static SortedSet unmodifiableSortedSet(SortedSet s);
+    public static SortedMap unmodifiableSortedMap(SortedMap m);</pre>
+</blockquote>
+</blockquote>
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="general.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="convenience.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=top border=0 alt="Collections | "></a>
+</td>
+<td align=right>
+<a href="..\toc.html#implementations"><strong><em>Contents</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

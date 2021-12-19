@@ -1,0 +1,178 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A JavaServer Page Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="11-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="11-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<PRE>
+&ltjava&gt
+     int i,max;
+<B>    String uri = request.getRequestURI();
+</B>    int ind;
+    
+<B>    if(categories == null)
+    {
+        initCategories(request.getRealPath(uri));
+    }
+</B>    
+    max = categories.size();
+    
+    //Clean off the file name from the requestURI
+    
+    ind = uri.lastIndexOf("/");
+    
+    if(ind != (uri.length()-1))
+    {
+        uri = uri.substring(0,ind);
+    }
+</PRE>
+<P>The code is placed in a default &ltjava&gt tag because it is executed when the page is requested. The &ltjava&gt tag isn&#146;t closed yet because a looping HTML construct needs to be used to output the category names. Notice, however, that the URI was altered to make sure that a URI exists for the directory containing the main page, not the page itself. The URI is used to create a link for each category page; it contains the name of the main page, index.jhtml. The last lines of the preceding code remove that file name, leaving any other path information intact. The lastIndexOf is used to find the / character in the URL. This ensures support for the store &#147;living&#148; in a subdirectory of the Web site&#146;s document root.
+</P>
+<P>Next, display a link to each category. The main page assumes that each category directory contains a page called index.jhtml. This page is created in the next section, &#147;Category Pages.&#148; The following code listing iterates through the list of elements and dynamically generates the list of links. Notice how the &ltjava&gt tag closes after defining the for loop, then a second &ltjava&gt tag is used to add the end brace for the loop.</P>
+<PRE>
+for(i=0;i&ltmax;i&#43;&#43;)
+     {
+&lt/java&gt
+    &ltLI&gt
+    &ltA HREF="<B>`uri&#43;</B>"<B>/</B>"<B>&#43;categories.elementAt(i)&#43;</B>"<B>/index.jhtml</B>"<B>`</B>"&gt
+    <B>&ltjava type=print&gtcategories.elementAt(i)&lt/java&gt</B>
+    &lt/A&gt
+    &ltBR&gt
+&ltjava&gt
+    }
+&lt/java&gt
+</PRE>
+<P>Backquotes are used to create the list item and link for each category.
+</P>
+<P>Finally, the code that follows is used to close the list and end the Web page.</P>
+<PRE>
+&lt/UL&gt
+&lt/TD&gt
+&lt/TR&gt
+&lt/TABLE&gt
+&lt/CENTER&gt
+&lt/BODY&gt
+&lt/HTML&gt
+</PRE>
+<P>This page shows the simplest mechanism for creating a dynamic list of categories using the file system. The next section looks at the category index pages. These are similar, but they add some complexity to this file system-based model.
+</P>
+<H3><A NAME="Heading4"></A><FONT COLOR="#000077">Category Pages</FONT></H3>
+<P>Each category&#146;s directory should contain an index.jhtml file. To minimize the amount of work required to create a new category, create a single JSP that can be placed in all of the category directories and customize itself appropriately. This means that you don&#146;t have to write a new page for each category, just copy this one into the appropriate directory. To make this generic page work, take the category name from the directory, in the same way as the main store page. The category page also loads the list of products using the file system. Each HTML file in the category directory is assumed to represent a product. The final category page for the courses directory on the CD-ROM is pictured in Figure 11.3.
+</P>
+<P>The category page adds two features to the model presented by the main page. First, the category page servlets will check whether they need to update the list of products based on adding new files, modifying files, or removing files. Second, each product file is also read to find its title, which is used as the name of the product. This makes the page look a lot nicer than just displaying HTML file names.</P>
+<P><A NAME="Fig3"></A><A HREF="images\11-03.jpg"><IMG SRC="images\11-03t.jpg"></A>
+<BR><A HREF="images\11-03.jpg"><FONT COLOR="#000077"><B>Figure 11.3</B></FONT></A>&nbsp;&nbsp;Books category page.</P>
+<P>Because the servlet is used to display category information, it is named CategoryPageServlet. The code for this class is listed as follows. This servlet extends HttpServlet so that it acts as the parent class for the JSP. A lot of instance variables are defined to support the dynamic product list, automatic updating, and using titles as product names.
+</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import WebPageFileFilter;
+
+public class CategoryPageServlet extends HttpServlet
+{
+    protected Vector products;
+    protected Vector titles;
+    protected String docRoot;
+    protected WebPageFileFilter filter;
+    protected String category;
+    protected long lastInitTime;
+    protected long updateInterval;
+</PRE>
+<P>In the preceding code, the products and titles variables hold the file names and titles of the product files. This example uses a small custom class called WebPageFileFilter, available on the CD-ROM, to ignore all non-HTML files when the directory is searched for products. This filter looks at file extensions and accepts .htm, .html, or .shtml, but no other extensions. The filter is easily updated to accept other types. Create a filter and store it in the filter variable for reuse. The name for the category is stored in the category instance variable and the directory in docRoot. Finally, define variables for the last time the products were loaded and the interval between the times the software checks if the list should be reloaded. All of these variables are marked protected to make them accessible to the JSP that extends this servlet.
+</P>
+<P>The first method that CategoryPageServlet defines is called needsInit and can be used by the JSP to determine if the page needs to reload the list of products. This method performs several checks on the category directory. First, it checks whether the list was ever initialized; if not, then it returns true. Next, the method checks whether a sufficient amount of time has passed since the last initialization to check for modified, new, or removed files. If the correct time has passed, another method called checkInitForDir is called to test that directory. The current number of products is used as a metric to determine whether files were added or removed. By default, the update time is 0, meaning that this method will always look for file modifications. In the index.jhtml file, this value is updated to 60 seconds, although you may want to make it an hour or more to improve performance. Here is the code for the needsInit method:</P>
+<PRE>
+    public boolean needsInit(String rt)
+     {
+        File dir;
+        boolean retVal = false;
+        long now = System.currentTimeMillis();
+        
+        if<B>((lastInitTime==0)
+            ||(products == null))</B> 
+        {
+            retVal = true;
+        }
+        else if<B>((now-lastInitTime)&gt(updateInterval*1000))</B>
+        {
+            dir = new File(rt);
+        
+            try
+            {
+                retVal = <B>checkInitForDir(dir,products.size());</B>
+            }
+            catch(Exception exp)
+            {
+                retVal = true;
+            }
+        }
+        
+        return retVal;
+    }
+</PRE>
+<P>The method checkInitForDir, defined next, looks for files that are modified and compares the number of HTML files with the expected number.
+</P>
+<PRE>
+    protected boolean checkInitForDir(File dir,int expected)
+     {
+        String[] list;
+        File curFile;
+        int i,max;
+        boolean retVal = false;
+        
+        list = dir.list(filter);
+        
+        max = list.length;
+        
+        //Return true if different number of files.
+        if(max != expected) return true;
+        
+        for(i=0;i&ltmax;i&#43;&#43;)
+        {
+            curFile = new File(dir,list[i]);
+            
+<B>            if(curFile.lastModified()&gtlastInitTime)
+            {
+                retVal = true;
+                break;
+            }
+</B>        }
+        
+        return retVal;
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="11-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="11-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

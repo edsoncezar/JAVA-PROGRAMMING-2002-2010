@@ -1,0 +1,698 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0389-0393.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0399-0404.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-394"><P>Page 394</P></A>
+
+
+
+
+
+
+<PRE>
+
+class CommandInputStream {
+
+    DataInputStream in;
+
+    StringTokenizer st;
+
+    KeywordTable keywordTable;
+
+    String keyword;
+
+    String standardDelimiters;
+
+
+
+    public static final int TT_EOF = -1;
+
+    public static final int TT_EOL = -2;
+
+    public static final int TT_OTHER = -3;
+
+
+
+    public CommandInputStream(InputStream input, String list[]) {
+
+    this(input, list, &quot; \t\r\n&quot;);
+
+    }
+
+
+
+    public CommandInputStream(InputStream input, String list[], String
+
+         &Acirc;delimiters) {
+
+    this(input, new KeywordTable(list), delimiters);
+
+    }
+
+
+
+    public CommandInputStream(InputStream input, KeywordTable table,
+
+         &Acirc;String delimiters) {
+
+    in = (input instanceof DataInputStream) ? (DataInputStream)input :
+
+         &Acirc;new DataInputStream(input);
+
+    standardDelimiters = delimiters;
+
+    st = new StringTokenizer(&quot;&quot;);
+
+    keywordTable = table;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Saving Keyword Tables as Static Variables
+
+</B>
+
+</P>
+
+<P>Although you can recreate the keyword table each time you create a
+
+new CommandInputStream, you might consider creating the table once and saving it as a
+
+static variable in the handler class. The createKeywordTable() method provides a
+
+convenient way to obtain this table for later reference:
+
+</P>
+
+
+<PRE>
+
+    public static KeywordTable createKeywordTable(String list[]) {
+
+    return new KeywordTable(list);
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Converting Tokens to Command Indexes
+
+</B>
+
+</P>
+
+
+
+<P>Commands generally occupy one line apiece in most TCP-based protocols. Your
+
+handler calls nextCommand() to read a new line and obtain the first token. You can obtain
+
+the actual
+
+</P>
+
+
+
+<A NAME="PAGENUM-395"><P>Page 395</P></A>
+
+
+
+
+
+
+
+<P>token text by calling getCommandString(). Convert this token into a
+
+command index by finding the token in the keyword table:
+
+</P>
+
+
+
+
+<PRE>
+
+    int nextCommand() throws IOException {
+
+    try {
+
+      String nxt = in.readLine();
+
+      st = new StringTokenizer(nxt, standardDelimiters);
+
+
+
+      keyword = st.nextToken();
+
+      int index = keywordTable.tokenFor(keyword);
+
+      if (index &gt;= 0)
+
+        return index;
+
+      return TT_OTHER;
+
+    }
+
+    catch (EOFException e) {
+
+      return TT_EOF;
+
+    }
+
+    catch (NoSuchElementException e) {
+
+      return TT_EOL;
+
+    }
+
+    }
+
+
+
+    String getCommandString() {
+
+    return keyword;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Getting Arguments of the Command
+
+</B>
+
+</P>
+
+
+
+<P>As with a StringTokenizer, calling hasMoreArgs() and nextArg() accesses
+
+additional arguments on the command line. In nextArg(), however, the system throws an exception
+
+if more arguments are not available. Because a StringTokenizer parses each command
+
+line, you can switch delimiter sets on each call to nextArg():
+
+</P>
+
+
+
+
+<PRE>
+
+    boolean hasMoreArgs() {
+
+    return st.hasMoreTokens();
+
+    }
+
+
+
+    String nextArg() {
+
+    return st.nextToken();
+
+    }
+
+
+
+    String nextArg(String delimiters) {
+
+    return st.nextToken(delimiters);
+
+    }
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-396"><P>Page 396</P></A>
+
+
+
+
+
+
+
+<B>
+
+Accessing the Input Stream
+
+</B>
+
+
+
+<P>You can provide methods to read lines directly from the encapsulated input stream and
+
+to propagate a close():
+
+</P>
+
+
+<PRE>
+
+    String readLine() throws IOException {
+
+    String nxt = in.readLine();
+
+    return nxt;
+
+    }
+
+
+
+    void close() throws IOException {
+
+    in.close();
+
+    }
+
+
+
+  }
+
+</PRE>
+
+
+
+
+<P>Although you developed them independently, you can merge the functions
+
+of CommandInputStream and TimeoutInputStream into one class by
+
+using CommandInputStream in all of your servers.
+
+</P>
+
+
+
+<H4><A NAME="ch11_ 14">
+
+Command KeywordTable
+
+</A></H4>
+
+
+
+<P>The CommandInputStream uses a helper class, KeywordTable, to search the
+
+keyword table and return the index of the word in the keyword list. For the following
+
+examples, which involve only a few keywords, use a simple linear search to perform a case-
+
+insensitive comparison:
+
+</P>
+
+
+
+
+
+
+<PRE>
+
+  class KeywordTable {
+
+    String stringTable[];
+
+
+
+    public KeywordTable(String table[]) {
+
+    stringTable = table;
+
+    }
+
+
+
+    int tokenFor(String key) {
+
+    int length = stringTable.length;
+
+    for (int i = 0; i &lt; length; i++) {
+
+      if (key.equalsIgnoreCase(stringTable[i]))
+
+        return i;
+
+      }
+
+    return -1;
+
+    }
+
+  }
+
+</PRE>
+
+
+
+
+
+
+<A NAME="PAGENUM-397"><P>Page 397</P></A>
+
+
+
+
+
+<P>For protocols with many more commands, you can replace the linear search with a
+
+hash table lookup. In this case, the hash key is the command string and the object returned
+
+from get() is an Integer object whose value is the index in the keyword list. For added
+
+performance, you can tailor the hash function and the size of the table to guarantee a fast
+
+lookup with no collisions.
+
+</P>
+
+
+
+<H3><A NAME="ch11_ 15">
+
+Server, ClientHandler, and <BR>ClientHandlerFactory
+
+</A></H3>
+
+
+
+<P>In your server framework, three abstract classes exist: a Server, which manages
+
+network sockets; a ClientHandlerFactory, which creates the correct ClientHandler object; and
+
+the ClientHandler, which actually provides the service. Although creating these three
+
+classes might appear to be overkill, several operations are common across the many types
+
+of servers. You benefit from code reuse as you build more complex servers.
+
+</P>
+
+
+
+<P>This approach of producing a class or method simply to create object instances is
+
+formally known as the factory class/method. A factory encapsulates the knowledge you need
+
+to produce a specific instance. Java uses factory classes in several different places.
+
+For example, you use a factory method to create enumeration objects.
+
+</P>
+
+
+
+<H4><A NAME="ch11_ 16">
+
+Server Class
+
+</A></H4>
+
+
+
+<P>The Server abstract class defines the functions for the concrete classes that
+
+manage ServerSockets, accept new connections from clients, and match the clients to
+
+service handlers. The Server class implements Runnable so that you can run it from either
+
+a separate thread or from the main thread. The base class maintains a static list of
+
+its instances so that status and control tasks can monitor or communicate with all
+
+servers. This list of server instances is available through the usual enumeration approach.
+
+You create the Server object with a reference to your factory object:
+
+</P>
+
+
+<PRE>
+
+  abstract class Server implements Runnable {
+
+    protected static Vector serverList = new Vector();
+
+    protected ServerSocket listener;
+
+    protected ClientHandlerFactory clientFactory;
+
+    protected boolean running;
+
+
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-398"><P>Page 398</P></A>
+
+
+
+
+
+
+
+
+<PRE>
+
+    static Enumeration elements() {
+
+    return serverList.elements();
+
+    }
+
+
+
+    protected Server(ClientHandlerFactory factory) {
+
+    clientFactory = factory;
+
+    synchronized (serverList) {
+
+      serverList.addElement(this);
+
+    }
+
+    }
+
+
+
+  }
+
+</PRE>
+
+
+
+
+<H4><A NAME="ch11_ 17">
+
+ClientHandlerFactory Class
+
+</A></H4>
+
+
+
+<P>The ClientHandlerFactory abstract class encapsulates all
+
+the knowledge and policy you need to link a new client connection to
+
+a handler. For example, you call the ClientHandlerFactory to
+
+determine the well-known TCP port and service name, and to create
+
+the actual client handlers:
+
+</P>
+
+
+<PRE>
+
+  public abstract class ClientHandlerFactory {
+
+    protected int port;
+
+    abstract String getName();
+
+    int serverPort() {
+
+    return port;
+
+    }
+
+    abstract ClientHandler createClientHandler(Socket
+
+         &Acirc;connection);
+
+    }
+
+</PRE>
+
+
+
+
+<P>The policy for the exact type of client handler is generated
+
+totally within createClientHandler(). Depending on the connection's
+
+origin, you can create one of several different handlers with
+
+different security restrictions. For example, you can create a
+
+full-featured handler to serve clients on the same network as the server, or
+
+within the same naming domain. You can create a restricted handler
+
+for general client access, or you can create a status or control
+
+handler only for clients on the same machine as the server, or for
+
+specific network management hosts&#151;simply return null for any
+
+connection you do not want to service. In addition, instead of creating a
+
+new handler for each request, you can build a factory that manages a
+
+set of precreated objects. All these differences in creating
+
+client handlers are invisible to the Server.<BR>
+
+</P>
+
+<P>
+
+
+
+<CENTER>
+
+<TABLE BGCOLOR="#FFFF99">
+
+<TR><TD><B>
+
+NOTE
+
+</B></TD></TR>
+
+<TR><TD>
+
+<BLOCKQUOTE>
+
+TCP and UDP use <I>ports</I> to determine the service that handles
+
+a packet. Two ports exist in each packet: a source port and
+
+a destination port. These ports are 16-bit numbers&#151;ports
+
+0 through 1023 apply to standard servers and are well-known
+
+ports. For example, HTTP is assigned to well-known port 80.
+
+The networking code for client sockets automatically
+
+selects an unused source port, but server code must provide the
+
+port number. Well-known port assignments (along with
+
+other assigned numbers) are defined in the &quot;Internet
+
+Assigned Numbers&quot; RFC1700. Figure 11.5 shows multiple
+
+clients communicating through the well-known ports on
+
+the server. TCP port 7 is distinct from UDP port 7; although,
+
+by convention, a given service uses the same port for both TCP
+
+and UDP if the service is available over either transport.
+
+</BLOCKQUOTE></TD></TR>
+
+</TABLE></CENTER>
+
+</P>
+
+
+
+
+
+<P><CENTER>
+
+<a href="0389-0393.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0399-0404.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

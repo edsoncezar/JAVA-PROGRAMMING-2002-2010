@@ -1,0 +1,232 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The init method loads the available images into the imageFiles Vector based on the imageDir configuration parameter. Only GIF and JPG files are supported for simplicity.
+</P>
+<PRE>
+    public void init(ServletConfig config) throws ServletException
+    {
+        String imageDirName;
+        File imageDir=null;
+        String[] files;
+        int i,max;
+        File curFile;
+
+        super.init(config);
+
+        imageFiles = new Vector();
+
+        imageDirName = getInitParameter(&#147;imagedir&#148;);
+
+        if(imageDirName != null) imageDir = new File(imageDirName);
+
+        if((imageDir!=null) &amp&amp imageDir.exists()
+                            &amp&amp imageDir.isDirectory())
+        {
+            files = imageDir.list();
+
+            max = files.length;
+
+            for(i=0;i&ltmax;i&#43;&#43;)
+            {
+                if(files[i].endsWith(&#147;jpg&#148;)||
+                    files[i].endsWith(&#147;gif&#148;))
+                {
+                    curFile = new File(imageDir,files[i]);
+                    imageFiles.addElement(curFile);
+                }
+            }
+        }
+        else
+        {
+            log(&#147;Cannot find image dir: &#148;&#43;imageDirName);
+        }
+
+    }
+</PRE>
+<P>When the servlet receives a GET request, it gets the next image file and outputs the correct content type. Then, using standard Java I/O, the content of the image is sent to the client. If no images are available, the SERVICE_UNAVAILABLE error is sent to the client. The NOT_FOUND error is used if the image file is, for some reason, in the list but not on the disk.
+</P>
+<PRE>
+    public void doGet(HttpServletRequest    request,
+                        HttpServletResponse    response)
+                        throws ServletException, IOException
+    {
+        File curFile;
+        int len = imageFiles.size();
+        String ctype;
+        String fileName;
+        FileInputStream fileIn;
+        BufferedInputStream bufIn;
+        OutputStream out;
+        ServletContext ctxt;
+        int cur;
+
+        if(len&gt0)
+        {
+            curFile = (File) imageFiles.elementAt(curIndex);
+            fileName = curFile.getName();
+            ctxt = getServletConfig().getServletContext();
+            ctype = ctxt.getMimeType(fileName);
+
+            if(ctype == null)
+            {
+                if(fileName.endsWith(&#147;.jpg&#148;))
+                {
+                    ctype = &#147;image/jpeg&#148;;
+                }
+                else
+                {
+                    ctype = &#147;image/gif&#148;;
+                }
+            }
+
+            <B>response.setContentType(ctype);</B>
+
+            try
+            {
+                fileIn = new FileInputStream(curFile);
+                bufIn = new BufferedInputStream(fileIn);
+
+                out = response.getOutputStream();
+
+                while((cur=bufIn.read())!=-1)
+                {
+                    out.write(cur);
+                }
+
+                out.close();
+                bufIn.close();
+            }
+            catch(FileNotFoundException exp)
+            {
+<B>                response.sendError(
+                  HttpServletResponse.SC_NOT_FOUND);
+</B>            }
+            catch(Exception exp)
+            {
+<B>               response.sendError(
+                  HttpServletResponse.SC_SERVICE_UNAVAILABLE);</B>
+            }
+
+            curIndex= (curIndex&#43;1)%len;
+        }
+        else
+        {
+            response.sendError(
+                  HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        }
+
+    }
+    public long getLastModified()
+    {
+        return System.currentTimeMillis();
+    }
+
+}
+</PRE>
+<P>This example also demonstrates how to use the error codes in the try/catch blocks to indicate a nonrecoverable problem in the servlet. In this case, different status codes are used to indicate that a file is no longer available or an unknown exception occurred.
+</P>
+<P>You could also implement this servlet using redirection. In this case, the servlet would use the method sendRedirect, along with the appropriate URL back to the client. Then the client would make a new request to the server for the specified resource. The servlet could also be extended to associate links with ads.</P>
+<P>The opposite version of this ad rotator that sends images is a servlet that supports file uploads. An example of this type of servlet is provided on the CD-ROM in the chapter_07 directory under the fileupload package. This example is a larger exercise in parsing the input to the servlet to determine the start and end for each file, so we have not included it in the text. However, we strongly suggest that you look at this example if you are thinking about supporting file uploading on your server. Many servers provide their own support for uploads, but it can&#146;t hurt to know the basics of what they are doing.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading13"></A><FONT COLOR="#000077">HttpSession</FONT></H4>
+<P>One of the more powerful features provided by the HTTP servlet library is the ability to track session information. A session is a single continuous interaction with a particular user. The session-tracking mechanism allows an arbitrary collection of objects to be associated with a session. The actual implementation of session tracking is server dependent. One common mechanism is to use an id to track the session and associate a hash table of some sort with this id. The hash table is stored in memory throughout the session.
+</P>
+<P><A NAME="Fig3"></A><A HREF="images\07-03.jpg"><IMG SRC="images\07-03t.jpg"></A>
+<BR><A HREF="images\07-03.jpg"><FONT COLOR="#000077"><B>Figure 7.3</B></FONT></A>&nbsp;&nbsp;AdRotator.</P>
+<P>In some servers with a large number of sessions open, the data may be stored to disk using serialization. When a session begins, the id is created. This id is passed between the client and server to identify the session. Remember that HTTP is a stateless protocol, so the client and server are not always in contact. By sending the id back and forth, the client and server are able to maintain an ongoing session. You as a programmer get access to the session via the HttpSession object and can manipulate or query it using the methods in Table 7.14.
+</P>
+<P>The current HttpSession is acquired from the HttpServletRequest using the method getSession. This method takes a single Boolean argument that indicates whether the session exists and whether it should be created if it does not. By using this flag, you can wait to create a session and simply check if one currently exists. On large Web sites, this is an important technique. To see why, imagine an online store. Thousands of people are shopping, but only those with a shopping cart need a session. Limiting sessions to those people can reduce server resource usage dramatically.</P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 7.14</B> HttpSession Methods
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP">METHOD
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>long getCreationTime() </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns the time the session was created, in milliseconds, since midnight, January 1, 1970, UTC.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>String getId() </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns the session&#146;s id.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>long getLastAccessedTime() </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns the last time the client sent a request using this session id, in milliseconds, since midnight, January 1, 1970, UTC.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>HttpSessionContext getSessionContext()</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns the session context.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>Object getValue(String) </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns the object value based on the string name.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>String[] getValueNames() </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns an array of the names of all the objects in the session.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>void invalidate() </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Causes this representation of the session to be invalidated and removed from its context.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>boolean isNew() </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns true if the session is new, false otherwise.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>void putValue(String, Object)</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Adds an object to the session with the given name.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>void removeValue(String)</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Removes the value with the specified name from the session.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+</TABLE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

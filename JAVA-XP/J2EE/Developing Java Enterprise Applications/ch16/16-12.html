@@ -1,0 +1,106 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>In order to approach uniqueness for entity beans and thereby save space on the server, it is necessary to do two things. First, beans must be identifiable. Second, beans must be findable. To make entity beans identifiable, they have a primary key. To make them findable, the EJB specification adds a pattern, like the create methods, that creates find methods.
+</P>
+<P>The primary key for an entity bean is represented by an object. For container-managed beans, this should be (and may be required to be) a class that defines an instance variable that holds the primary key. The bean should also have an instance variable with the same name that holds the primary key. When an entity bean is created, a primary key is also created and associated with it. This key can be used to determine whether two beans are identical. The primary key should also be serializable. In the next example, the following class is used to represent the primary key:</P>
+<PRE>
+package containercart;
+
+public class CartPK implements java.io.Serializable
+{
+  public String cartName;
+}
+</PRE>
+<P>Depending on your EJB host, you may be able to use non-custom classes for primary keys. Some hosts may require the use of a custom primary key class. In practice, you should always create a custom primary key class just in case it is required by the host.
+</P>
+<P>Given a primary key object, a client can find the associated bean by using the entities home&#146;s findByPrimaryKey method. This is a new method that is not available to session beans. It searches the server&#146;s memory and checks the persistent store for the associated entity bean. The argument to findByPrimaryKey is the primary key object. All entity beans&#146; home interfaces are required to define this method. For container-managed beans, the container may automatically generate the code. For bean-managed persistence, you will need to implement ejbFindByPrimaryKey in the bean class.</P>
+<P>You can also define other find methods in your home interface. These correspond to ejbFind methods in the entity bean. For example, if you define a method findByName in the home interface, the bean should define ejbFindByName with the same arguments. Finding is like performing a select on the database, except that the data store doesn&#146;t have to be an SQL database. Every find method should return a primary key or an enumeration of primary keys.</P>
+<P>This possibility of being found gives entity beans a different life cycle from session beans. Figure 16.4 shows what an entity bean&#146;s life cycle looks like and how it differs from the life cycle of a session bean.</P>
+<P><A NAME="Fig4"></A><A HREF="images\16-04.jpg"><IMG SRC="images\16-04t.jpg"></A>
+<BR><A HREF="images\16-04.jpg"><FONT COLOR="#000077"><B>Figure 16.4</B></FONT></A>&nbsp;&nbsp;Entity bean life cycle.</P>
+<P>One of the hardest concepts to come to grips with from this model is that you essentially ask a bean to find itself. For example, the EJB host might create an account bean and ask it to find account #111. The bean would then either turn into the bean for account #111 or, through a FindException, tell the server that the requested primary key is unavailable.
+</P>
+<P>Entity beans can also have create methods. In this case, the bean can provide multiple ejbCreate methods with various arguments. In the case of a bean stored in the database, a create is like an insert. Unlike session beans, an entity bean&#146;s home interface doesn&#146;t have to have these create methods. If no create methods are provided, no new entities can be created. The entity bean&#146;s version of create is also different from the session bean&#146;s in that it should return a primary key for the bean. The session bean just returns void from the same method.</P>
+<P>After an entity bean is sent ejbCreate, it is sent the method ejbPostCreate with the same arguments. This means that the bean must implement two methods for every create method defined in the home interface. This post-create method is provided because of the underlying store. When a bean gets create, it returns a primary key, but it doesn&#146;t have access to the EJBObject that represents it. PostCreate has access to the EJBObject, so the entity bean can send a reference to itself as part of a message.</P>
+<P>Removing an entity bean removes it from the underlying store.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading25"></A><FONT COLOR="#000077">Example of Container Persistence</FONT></H4>
+<P>Let&#146;s take a look at a bean that uses container-managed persistence. This example uses a simple shopping cart. This bean stores a list of items in a cart. The client can add items or get a list of available items. Our primary key is a name stored in a CartPK object. The definition for CartPK follows.
+</P>
+<PRE>
+package containercart;
+
+public class CartPK implements java.io.Serializable
+{
+  public String cartName;
+}
+</PRE>
+<P>The remote interface to the cart contains two methods. An array is used to return the current items in the cart. The Vector classes Enumeration will not serialize, so that technique could not be used. An array is the best alternative for providing a read-only version of the list.
+</P>
+<PRE>
+package containercart;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import java.rmi.Remote;
+import java.util.*;
+
+public interface <B>ShoppingCart</B> extends <B>EJBObject</B>, Remote
+{
+    <B>public void addItem(String item) throws RemoteException;
+    public Object[] getItems() throws RemoteException;</B>
+}
+</PRE>
+<P>The home interface is different from the ones for session beans because of the find method. The create method in the home interface returns the same thing that it would for a session bean, but this is not the case for the corresponding ejbCreate method in the bean class. Where session beans return null from create methods, entity beans must return their primary key objects.
+</P>
+<PRE>
+package containercart;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import containercart.*;
+
+public interface <B>ShoppingCartHome</B> extends <B>EJBHome</B>
+{
+    <B>ShoppingCart create(String name) throws CreateException,
+                                             RemoteException;
+    ShoppingCart findByPrimaryKey(CartPK key)
+         throws RemoteException,FinderException;</B>
+}
+</PRE>
+<P>This entity bean demonstrates several interesting concepts. First, the create method initializes the bean and creates a primary key for it. Second, a method called isModified indicates when the bean has changed. This method is used by the WebLogic container to check whether a bean really needs to be saved before saving it. Third, the bean doesn&#146;t have a find method because the container is providing it. When a bean that manages its own persistence is created, the find method should be implemented as part of the bean. An example of a find method implementation is included in the next example.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

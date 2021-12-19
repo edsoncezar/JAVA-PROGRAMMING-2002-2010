@@ -1,0 +1,174 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>How To use the Timer MBean</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s39.html" title="JMX Connector Description and HowTo"><link rel="next" href="ch13s58.html" title="How To use the Timer MBean and Scheduler Service on JBoss 3"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s39.html"><img src="images\prev.gif" border="0"></a><a href="ch13s58.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e10064"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e10064"></a>How To use the Timer MBean</h2></div></div><p>Author:
+      <span class="author">Andreas Schaefer</span>
+      <tt>&lt;<a href="mailto:andreas.schaefer@madplanet.com">andreas.schaefer@madplanet.com</a>&gt;</tt>  
+   </p><div class="section"><a name="d0e10078"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10078"></a>Introduction</h3></div></div><p>
+            As part of the JMX specification each JMX compliant server must provide a timer service to let
+            the users being notified at a certain time, in a certain interval and/or number of occurrences.
+            Therefore you can check for mails, check if some change on target (auto deployer) or notify the
+            client for a date.
+         </p></div><div class="section"><a name="d0e10083"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10083"></a>Preparation</h3></div></div><div class="itemizedlist"><ul><li><p><a name="d0e10087"></a>
+               First you have to add the timer service into the jboss.jcml therefore that the timer service
+               is loaded, registered at the JMX server and the initialized and started (done by JBoss's
+               Main.java class). This mbean tag looks like this:
+               <pre class="programlisting">
+  &lt;mbean code="javax.management.timer.Timer" name="DefaultDomain:service=timer"/&gt;
+               </pre>
+               Keep in mind that there will be no notification about the startup. To check use the JMX
+               HTML-Adaptor on port 8082 by default. The timer is loaded from the jmxri.jar file in /lib
+               directory.
+            </p></li><li><p><a name="d0e10093"></a>
+               If you are not using JBoss then to the following (which means that you want to use a timer
+               outside of JBoss (maybe on the client or administration side): 
+               <div class="orderedlist"><ol type="1"><li><p><a name="d0e10097"></a>
+                        Create a MBeanServer 
+                        <pre class="programlisting">
+   MBeanServer lServer = MBeanServerFactory.createMBeanServer();
+                        </pre>              
+                     </p></li><li><p><a name="d0e10103"></a>
+                        Load and register the Timer MBean 
+                        <pre class="programlisting">
+   ObjectInstance lTimer = lServer.createMBean(
+      "javax.management.timer.Timer",
+      new ObjectName( "DefaultDomain", "service", "timer" )
+   ); 
+                        </pre> 
+                     </p></li><li><p><a name="d0e10109"></a>
+                        Initialize and start the timer service 
+                        <pre class="programlisting">
+   lServer.invoke(
+      lTimer.getObjectName(), 
+      "start", 
+      new Object[] {},
+      new String[] {}
+   ); 
+                        </pre> 
+                     </p></li></ol></div> 
+            </p></li><li><p><a name="d0e10116"></a>Next step is to get the MBeanServer within your object to work with the timer.</p><p>    
+               This is quite simple if your are in a MBean registered to the same JMX server because
+               then you get it when you overwrite preRegister() method. 
+               When you are in the same JVM as the JMX server (in JBoss is any instance running
+               within JBoss like EJBs or other classes). Then you can obtain the MBeanServer through:
+            </p><pre class="programlisting">
+   MBeanServer lServer =
+      (MBeanServer) MBeanServerFactory.findMBeanServer( null ).get( 0 );
+            </pre><p>
+               For the rest it is a little bit more complicated. In a Java client you can use JBoss RMI
+               connector which will be released as separat package till mid December 2000. Then you
+               connect to a MBeanServer through the RemoteMBeanServer interface which is more or less
+               the same.
+            </p></li><li><p><a name="d0e10125"></a>
+               We are nearly there: now we need the reference to the timer service to work on it (lServer
+               can be either of type MBeanServer or RemoteMBeanServer):
+            </p><pre class="programlisting"> 
+   Set lBeans = lServer.queryMBeans(
+      new ObjectName(
+         "DefaultDomain", 
+         "service", 
+         "timer" 
+      ),
+      null
+   );
+   if( !lBeans.isEmpty() ) { // Should be the first and only element
+      ObjectInstance lTimer = (ObjectInstance) lBeans.iterator().next(); 
+            </pre></li><li><p><a name="d0e10130"></a>
+               Let's go to work with the timer. Because the timer sends a Notification Event to the
+               listeners we have to register first:
+            </p><pre class="programlisting"> 
+   lServer.addNotificationListener(
+      lTimer.getObjectName(), 
+      new Listener(),
+      // No filter
+      null,
+      // No object handback necessary
+      null
+   );
+            </pre></li><li><p><a name="d0e10135"></a>  
+               The Listener (in this case) is an inner class implementing the NotificationListener
+               interface:
+            </p><pre class="programlisting"> 
+   public class Listener
+      implements NotificationListener
+   {
+      public void handleNotification(
+         Notification pNotification,
+         Object pHandback 
+      ) {
+         // Here to whatever you want or call a method
+         // in the outer class
+         System.out.println( "You got a Notification: " + pNotification );
+      }
+   }
+            </pre></li><li><p><a name="d0e10140"></a>
+               Finally we are ready to rock and roll. We set a timer event for a particular time and at
+               this time the Listener.handleNotification() get called.
+            </p><pre class="programlisting">
+   Date lNext = new Date( new Date().getTime() + Timer.ONE_MINUTE );
+   Integer lOneMinuteTimer = (Integer) lServer.invoke(
+      lTimer.getObjectName(),
+      "addNotification",
+      new Object[] { 
+         "IDoNotKnowWhatTypeIs",
+         "I call you with this timer once",
+         // No user object
+         null,
+         // I one minute from now
+         lNext,
+      },
+      new String[] {
+         "".getClass().getName(),
+         "".getClass().getName(),
+         "java.lang.Object",
+         Date.class.getName()
+      }
+   );
+            </pre></li><li><p><a name="d0e10145"></a>
+               A timer notification after an Hour from now repeating every minute for ten times.
+            </p><pre class="programlisting">
+   Date lNext = new Date( new Date().getTime() + Timer.ONE_HOUR );
+   Integer lOneHourTimer = (Integer) lServer.invoke(
+      lTimer.getObjectName(),
+      "addNotification",
+      new Object[] { 
+         "IDoNotKnowWhatTypeIs", 
+         "I call you with this timer once",
+         // No user object
+         null,
+         // In one minute from now
+         lNext,
+         new Long( Timer.ONE_MINUTE ),
+         new Long( 10 )
+      },
+      new String[] {
+         "".getClass().getName(),
+         "".getClass().getName(),
+         "java.lang.Object",
+         Date.class.getName(),
+         Long.TYPE.getName(),
+         Long.TYPE.getName()
+      } 
+   );
+            </pre></li><li><p><a name="d0e10150"></a>If you want to get rid of the second timer then do:</p><pre class="programlisting"> 
+   lServer.invoke(
+      lTimer.getObjectName(), 
+      "removeNotification", 
+      new Object[] {
+         // You could also use the type: "IDoNotKnowWhatTypeIs"
+         lOneHourTimer
+      },
+      new String[] {
+         // If you remove by type: String.getClass().getName()
+         Integer.TYPE.getName() 
+      }
+   );
+            </pre></li></ul></div><p>  
+         Now the rest is quite simple. Have a look at the javax.management.timer.Timer class description and
+         use the MBeanServer.invoke() method style.
+      </p><p>
+         Attention: When you have basic data type in the method signature then
+         you have to use its wrapper class TYPE variable to get its class instead of using just "long" etc.
+      </p><p>
+         If anything is wrong or not correct please contact me at andreas.schaefer@madplanet.com. Also if
+         you want to know more in detail or have a request for further infos.
+      </p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s39.html"><img src="images\prev.gif" border="0"></a><a href="ch13s58.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

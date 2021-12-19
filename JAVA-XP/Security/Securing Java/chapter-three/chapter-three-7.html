@@ -1,0 +1,395 @@
+<html>
+<head>
+<title>New Security Mechanisms in Sun's Java 2 (Ch. 3, Sec. 7) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-three.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-three-6.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Beyond the Sandbox: Signed Code and Java 2
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-three-1.html">1</a> / <a href="chapter-three-3.html">2</a> / <a href="chapter-three-4.html">3</a> / <a href="chapter-three-5.html">4</a> / <a href="chapter-three-5.html">5</a> / <a href="chapter-three-7.html">6</a> / <b>7</b> / <a href="chapter-three-8.html">8</a><p>
+
+<font size="+2" color="#000000"><b>Section 7 -- New Security Mechanisms in Sun's Java 2</b></font>
+</td><td width=60 align=center>
+<a href="chapter-three-8.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+Now that we have covered the basic concepts and the underlying mechanisms of Java 2 security, we can delve into the details of the system. Essential mechanisms include many of the things we have already discussed: identity, permissions, implies, policy, protection domains, access control, and privilege. Sources for the information presented here include [Gong, et. al., 1997; Gong and Schemers, 1998].<p>
+
+This section describes Sun's version of stack inspection. Netscape and Microsoft each have their own version, but we decided to forgo a lengthy discussion of all three systems. Though the vendors claim they are very different, we think the three systems are really quite similar. Perhaps one day they will all converge, making developers' and managers' lives much easier.<p><br>
+
+
+<center><font size="+1"><b>Identity</b></font></center><p>
+
+Every piece of code needs a specific identity that serves as a basis for security decisions. In Java 2, each piece of code has two identity-defining characteristics: origin and signature. These two characteristics are represented in the class java.security.CodeSource, which allows the use of wildcard entries to denote "anywhere" for origin and "unsigned" for signature.<p>
+
+Origin boils down to the location the code came from specified as a URL. This is the same sort of identity used in separation of applets in the JDK 1.0.2 class loading scheme. In fact, Java 2 identity is really an extension of that idea.<p>
+
+Signature is a bit more complicated. Remember, public/private keys come in pairs. As we know, code can be digitally signed by a person or organization who vouches for it. The key used to actually sign the code is the signer's private key. The key used to check the signature for validity is the signer's public key. So, the public key corresponding to the private key used to sign a piece of code is the second identity characteristic. (In practice, implementations actually use an alias for the public key corresponding to the private key used to sign the code.)<p>
+
+Many people say that a signature on code tells you "who wrote the code" or "where the code came from" (we've been guilty of this faux pas ourselves in days gone by), but this is not true. All a signature tells you is who signed the code. The author, distributor, and signer of the code may all be different parties. All you know for sure is that the signer vouches for the code. And since it makes perfect sense for several people to vouch for the same piece of code, a good signature scheme ought to allow a piece of code to carry several signatures; then each recipient can decide which of the signers (if any) should be trusted.<p><br>
+
+
+<center><font size="+1"><b>Permissions</b></font></center><p>
+
+Requests to perform a particular operation (most notably a dangerous one) can be encapsulated as a permission. A policy says which permissions are granted to which principals. The abstract class java.security.Permission types and parameterizes a set of access permissions granted to classes. Permissions can be subclassed from this class (and its subclasses). Good practice dictates that a permission class should belong to the package in which it is used. Java 2 defines access methods and parameters for many of the resources controlled by the VM.<p>
+
+Permissions include:<p>
+
+<center><table width=85% border=0><tr><td>
+<font face="Courier New">java.io.FilePermission</font> for file system access<br>
+<font face="Courier New">java.net.SocketPermission</font> for network access<br>
+<font face="Courier New">java.lang.PropertyPermission</font> for Java properties<br>
+<font face="Courier New">java.lang.RuntimePermission</font> for access to runtime system resources<br>
+<font face="Courier New">java.security.NetPermission</font> for authentication<br>
+<font face="Courier New">java.awt.AWTPermission</font> for access to graphical resources such as windows
+</td></tr></table></center><p>
+
+Permissions usually include a target and an action. For file access, a target can be a file or a directory specified as file, directory, directory/file, directory/*, or directory/-. The * denotes all files in the specified directory. The - denotes all files under the associated file system subtree (meaning all by itself, - denotes all files in the entire system). Actions for file access include read, write, execute, and delete.<p>
+
+An example of a file permission is:<p>
+
+<center>
+<pre>p = new FilePermission("/applets/tmp/scratch", "read");</pre>
+</center><p>
+
+For network access, a target can be an IP address, hostname, or generalized set of hostnames and a range of port numbers. The target argument takes the form "hostname:port-range". Actions for network access include: connect, listen, and accept. An example of a socket permission is:<p>
+
+<center>
+<pre>p = new SocketPermission("bigbrother.rstcorp.com:-1023", "connect")</pre>
+</center><p>
+
+For getting and setting properties, a target is the property (where * denotes all properties). Actions are get and set. Runtime system resource targets include createClassLoader, exit, setFactory, thread, multicast, fileDescriptor.read, fileDescriptor.write, and so on. AWT permission targets include topLevelWindow, systemClipboard, and eventQueue.<p>
+
+Fully trusted Java applications can add new categories of permissions.<p><br>
+
+
+<center><font size="+1"><b>Implies</b></font></center><p>
+
+Each Permission class must include the abstract method implies. The idea is straightforward: having permission x automatically implies having permission y. We denote this x.implies(y) == true in code. A permission x implies another permission y if and only if both the target of x implies the target of y and the action of x implies the action of y.
+Consider the permission "read file /applets/tmp/scratch," which can be written as:<p>
+
+<center>
+<pre>p = new FilePermission("/applets/tmp/scratch", "read");</pre>
+</center><p>
+
+A permission allowing a read on any file in /applets/tmp; that is, a permission denoted by the pair (/applets/tmp/*, read) implies our example permission p, but not vice versa. Similarly, a given socket permission s implies another socket permission t if and only if t covers the same IP address and port numbers for the same set of actions.<p>
+
+Alert readers might have noticed something funny about the implies method: Each permission class says which other permissions it implies. This is a bit like Johnny writing himself a note saying he can drive Dad's car. It seems safer to require Dad's signature on the note. Similarly, it would be safer if permission for A to imply B had to be granted by B.<p><br>
+
+
+<center><font size="+1"><b>Policy</b></font></center><p>
+
+Security policy in Java 2 can be set by a user (which is a bad idea since, as we know, users like dancing pigs) or a system administrator (which in a Catch-22-like situation is also a bad idea since system administrators are severely overworked). The policy is represented by a policy object as instantiated from the class java.security.Policy.<p>
+
+The policy is a mapping from identity (as defined earlier) to a set of access permissions granted to the code. The policy object is a runtime representation of policy usually set up by the VM at startup time (much like the Security Manager).
+An example policy object (in plaintext form) is shown here:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>grant CodeBase "https://www.rstcorp.com/users/gem", SignedBy "*" {
+     permission java.io.FilePermission "read,write", "/applets/tmp/*";
+     permission java.net.SocketPermission "connect", "*.rstcorp.com";
+};
+</pre>
+</td></tr></table></center><p>
+
+This policy states that any applet that arrives from the Web URL "www.rstcorp.com/users/gem", whether signed or unsigned, can read and write any file in the directory /applets/tmp/* as well as make a socket connection to any host in the domain rstcorp.com. Policies are usually made of many grant clauses.<p>
+
+In practice, policy is set in a plaintext configuration file and is loaded into the VM at startup. In these policies, a public key (usually a very long string of bits) is signified by an alias. The alias is the name of a signer represented as a string. For example, a popular alias is the string "self", meaning your own private key. Primitive mechanisms are included to create and import public keys and certificates into the Java 2 system. (See <a href="..\appdx-c\index.html">Appendix C</a> for the details.)<p>
+
+By default, Sun's VM expects to find a system policy in the file &lt;java.home&gt;/lib/security/java.policy (where &lt;java.home&gt; is a configurable Java property). This policy can be extended on a per-user basis. User policy files can be found in a user's home directory in the file .java.policy. The VM loads the system policy at startup and then loads any relevant user's policy. If neither policy can be found, a built-in default is used. The built-in default policy implements the base Java sandbox model.<p>
+
+It is possible to specify a particular policy to use when invoking an application. This is carried out by using the Java-property-defining -D flag as follows (for the example, our application is the appletviewer):<p>
+
+<center>
+<pre>appletviewer -Djava.policy=/home/users/gem/policy &lt;applet&gt;</pre>
+</center><p>
+
+Note that when application policy is defined in this way, neither the system policy nor any user policy is enforced.<p><br>
+
+
+<center><font size="+1"><b>Mapping Policy</b></font></center><p>
+
+Code's identity is checked against the entries of a policy object to determine what permission(s) a piece of code should be given. At the most basic level of understanding, a match is made when both the origin and the signature match. In terms of origin, this means the URL defining the origin for a piece of code is a prefix of a policy entry's CodeBase pair. In terms of signature, this means one public key corresponding to the signature carried by the code matches the key of a signer in the policy. Verification of signatures makes use of functionality in the java.security.cert package, which is a Java implementation of X.509v3 certificates.<p>
+
+Code can be signed with multiple signatures. In case the signatures a piece of code carries have different policy entries, all entries apply in an additive fashion. That means code is given the union of all permissions in every match (see Figure 3.7).<p>
+
+<center>
+<table border=0 width=366><tr><td>
+<img src="..\images\fig03.07.gif" width=366 height=122 alt="Fig 3.7"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 3.7  The danger of additive policy.</b></center><br>
+Consider the program X shown here. In one case, X is signed by thing1. In another, code is signed by both thing1 and thing2. In the second case, the policies of both thing1 and thing2 apply to the code (meaning in this case that it has more permission to do dangerous activities). A policy administrator may forget to anticipate what happens when code is signed by multiple keys.
+</font>
+</td></tr></table>
+</center>
+<p>
+
+Consider the program X shown here. In one case, X is signed only by thing1. In another, code is signed by both thing1 and thing2. In the second case, the policies of both thing1 and thing2 apply to the code (meaning in this case that it has more permission to do dangerous activities). A policy administrator may forget to anticipate what happens when code is signed by multiple keys.<p><br>
+
+
+<center><font size="+1"><b>Protection Domains</b></font></center><p>
+
+Sun says that classes and objects in Java 2 Java belong to protection domains. In fact, protection domain is just a fancy name for a bunch of classes that should be treated alike because they came from the same place and were signed by the same people. (The fact that protection domain means something completely different to people familiar with the security literature is reason enough to avoid the term.) An object or class belongs to one and only one protection domain. This should ring a bell, since classes can have one and only one class loader (the one that loaded them). So really this is a new way of describing a somewhat familiar logical construct for grouping classes together. A class belongs to the protection domain associated with the class loader that loaded the class.<p>
+
+Permissions are granted to protection domains and not directly to classes and objects, as Figure 3.8 reflects. The class java.security.ProtectionDomain is private in its package and is used internally to implement protection domains. As we discussed earlier, a domain is made up of a set of objects belonging to a principal. In Java 2, protection domains are based on identity and can be created "on demand." The Java runtime maintains a mapping from code to protection domains to permissions (see Figure 3.8).<p>
+
+
+<center>
+<table border=0 width=259><tr><td>
+<img src="..\images\fig03.08.gif" width=259 height=110 alt="Fig 1.1"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 3.8  Grouping classes together to map them to policy.</b></center><br>
+Classes map into what Sun calls protection domains which in turn map to permissions. Policy is defined in terms of protection domains.
+</font>
+</td></tr></table>
+</center>
+<p>
+
+System security policy specifies which protection domains should be created and which protection domains should be granted what permissions.<p>
+
+There is one protection domain that is special: the system domain. The system domain includes all system code loaded with the Primordial Class Loader. This includes classes in the CLASSPATH. The system domain is given special privileges.<p><br>
+
+
+<center><font size="+1"><b>Access Control</b></font></center><p>
+
+The java.security.AccessController class implements a stack inspection algorithm similar to the one we described earlier. Any code is allowed to query this class, which performs a dynamic inspection of the relevant thread's runtime stack. The method used to implement the check is checkPermission(), which takes as its argument a Permission object. If the call returns silently, permission is granted and the potentially dangerous computation can proceed. If the call fails, an AccessControlException is thrown.<p><br>
+
+
+<b>Using the Access Controller</b><br>
+Access control under JDKs previous to Java 2 typically used the Class Loader and Security Manager to make access control decisions. For example, the following code snippet checks whether a file /tmp/junk can be read in the old-fashioned way:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>ClassLoader loader = this.getClass().getClassLoader();
+if (loader != null) {
+     SecurityManager sm = System.getSecurityManager();
+     if (sm != null) {
+           sm.checkread("/tmp/junk");
+     }
+}</pre>
+</td></tr></table></center><p>
+
+Here's how to do the same thing in Java 2 fashion (using the Access Controller):<p>
+
+
+<center><table width=85% border=0><tr><td>
+<pre>FilePermission p = new FilePermission("/tmp/junk", "read");
+AccessController.checkPermission(p);</pre>
+</td></tr></table></center><p>
+
+The Access Controller call performs the appropriate stack inspection.<p><br>
+
+
+<center><font size="+1"><b>Privilege</b></font></center><p>
+
+Up through JDK 1.2beta3, Sun's JDK used the primitives beginPrivileged and endPrivileged as versions of the stack inspection primitives enablePrivilege and disablePrivilege we described in our discussion of stack inspection. These are the calls that a piece of privileged system code (that is allowed to do things like perform file access) was supposed to use to grant temporary permission to less-trusted code. These calls were featured in a number of technical publications from Sun [Gong, et. al., 1997; Gong and Schemers, 1998].<p>
+
+The idea is to encapsulate potentially dangerous operations that require extra privilege into the smallest possible self-contained code blocks. The Java libraries make extensive use of these calls internally, but partially trusted application code written using the Java 2 model will be required to make use of them, too.<p>
+
+Correct use of the JDK primitives required using a standard try/finally block is as follows:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>&lt;normal code&gt;
+try {
+     AccessController.beginPrivileged();
+     &lt;insert dangerous code here&gt;
+} finally {
+     AccessController.endPrivileged();
+}
+&lt;more normal code&gt;</pre>
+</td></tr></table></center><p>
+
+This usage was required to address the problem of asynchronous exceptions (though there was still some possibility of an asynchronous exception being thrown in the finally clause sometime before the endPrivileged() call).<p>
+
+Wallach and Felten first explained a particularly efficient way to implement stack inspection algorithms in [Wallach and Felten, 1998]. Unfortunately, Sun decided to abandon the multiprimitive approach to stack inspection (which could benefit from Princeton's security-passing style implementation). In fact, JDK 1.2beta4 introduced a completely new API for privileged blocks. The new API removes the need for a developer to: 1) make sure to use try/finally properly, and 2) remember to call endPrivileged(). The try/finally usage was symptomatic of a problem that could only really be fixed with some changes to the VM specification and its resulting implementations.<p>
+
+In order to properly implement the early API, VMs would have been forced to keep track of the beginPrivileged() call (unless they adopted a security-passing style approach). This requires tracking a stack frame (the one where the beginPrivilege is mentioned) and matching the beginning of a privileged block to its corresponding end-every time a privileged block is used. Doing all this bookkeeping is inefficient and thwarts optimization tricks that compilers like to play. For example, just in time (JIT) compilation approaches are hard to adapt to this model. Plus it turns out that security boundaries are crossed many thousands of times a second, so even a slight delay gets magnified quickly.<p>
+
+Bookkeeping would slow the VM down, which is about the last thing Java VMs need now as they near native C speeds. A Sun document explaining the change (from which some of the material here was drawn) is on the Web at <a href="http://www.javasoft.com/products/jdk/1.2/docs/guide/security/doprivileged.html">www.javasoft .com/products/jdk/1.2/docs/guide/security/doprivileged.html</a>.<p>
+
+The new API interface wraps the complete enable-disable cycle in a single interface accessed through a new AccessController method called doPrivileged(). That means the VM can efficiently guarantee that privileges are revoked once the method has completed, even in the face of asynchronous exceptions.<p>
+
+Here's what the new usage looks like. Note the use of Java's new inner classes capability:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>somemethod() {
+	&lt;normal code&gt;
+	AccessController.doPrivileged(new PrivilegedAction() {
+          public Object run() {
+			&lt;insert dangerous code here&gt;
+			return null;
+		}
+	});
+	&lt;more normal code&gt;
+}</pre>
+</td></tr></table></center><p>
+
+Ironically, one of our developer rules for writing more secure Java code is to avoid using inner classes (see Chapter 7, "Java Security Guidelines: Developing and Using Java More Securely")! But if you want to include privileged blocks in your Java 2 code, you are encouraged to use them. In addition to the inner-class problem, verbosity is also a problem with the new API.<p>
+
+It turns out that using the new API is not always straightforward. That's because anonymous inner classes require any local variables that are accessed to be final. A small diversion can help explain why this is.<p><br>
+
+
+<b>Closures</b><br>
+The new API is doing its best to simulate what programming languages researchers call closures. The problem is, Java doesn't have closures. So what are they anyway? And why are they useful?<p>
+
+Functions in most programming language use variables. For example, the function f(x)=x+y adds the value of the formal parameter x to the value of variable y. The function f has one free variable, y. That means f may be evaluated (run) in different environments in which the variable y takes on different values. In one environment, E1, y could be bound to 2. In another environment, E2, y could be bound to 40. If we evaluate f(2) in E1, we get the answer 4. If we evaluate f(2) in E2, we get the answer 42.<p>
+
+Sometimes we want a function to retain certain bindings that its free variables had when it was created. That way we can always get the same answer from the expression. In terms of our example, we need to make sure y always takes on a certain value. What we want is a closed package that can be used independent of the environment in which it is eventually used. That is what a closure is. In order to be self-contained, a closure must contain a function body, a list of variables, and the bindings of its variables. A closure for our second example might look like this:<p>
+
+<center>
+<pre>[{y=40;} f(2)=2+y]</pre>
+</center>
+<p>
+
+Closure is particularly useful in languages with first-class functions (like Scheme and ML). In these and other related languages, functions can be passed to and returned from other functions, as well as stored in data structures. Closure makes it possible to evaluate a function in a location and external environment that may differ from where it was created. For more on this issue, see [Friedman, et al., 1992; Fellisen and Friedman, 1998].<p>
+
+As we said before, Java does not have closures. Java's anonymous inner classes come as close to being closures as Java gets. A real closure might include bindings for the variables that can be evaluated sometime in the future. In an anonymous inner class, however, all state must be made final (frozen) before it is passed in. That is, the final state is the only visible state inside the inner class. This is one reason anonymous inner classes are not true closures. The problem of making everything final turns out to have strong implications for the use of the new privileged block API.<p><br>
+
+
+<b>Local Variables</b><br>
+For example, in the following code, the variable lib must be declared final if it is to be used inside the privileged block:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>randommethod() {
+	&lt;normal code&gt;
+	final String lib = "awt";
+	AccessController.doPrivileged(new PrivilegedAction() {
+          public Object run() {
+			System.loadLibrary(lib);
+			return null;
+		}
+	});
+	&lt;more normal code&gt;
+}</pre>
+</td></tr></table></center><p>
+
+Making all local variables that are to be accessed in the block final is a pain, especially if an existing variable can't be made final. In the latter case, the trick is to create a new final variable and set it to the non-final variable just before the call to doPrivileged. We predict this will be a source of both headaches and errors. Errors may lead to security problems.<p><br>
+
+
+<b>What Comes Out</b><br>
+Another problematic issue with the new interface is the fact that the inner class always returns an Object (a return type seen throughout the Java language). That means if a call to a piece of privileged code (for example, a call to System.getProperty()) usually returns something other than an Object (for example a String), it will have to be dynamically cast to the usual type. Using a final variable to pass types out is possible, too. Unfortunately, both of these operations will incur a runtime performance hit (especially casting). The returns-only-Object problem is another source of potential errors.<p><br>
+
+
+<b>Whence the Change</b><br>
+It is good that VM vendors want their machines to be fast and efficient; however, purely in terms of security, it is unclear whether the decision to change the API was a good one. Not that the previous API was perfect, but the new one seems to introduce several places in which errors are bound to be made by developers charged with actually using VMs. The real answer to the problem is introducing closures to Java. Closures are something to look for in future JDK versions.<p><br>
+
+
+<center><font size="+1"><b>The Security Manager Revisited</b></font></center><p>
+
+As we described in <a href="..\chapter-two\index.html">Chapter 2</a>, "The Base Java Security Model: The Original Applet Sandbox," the Security Manager up until JDK 1.1 invoked a direct check() method for dangerous resource access control. This method was responsible for evaluating the request and denying or granting access. The new Security Manager in Java 2 still supports the use of check() methods, but now many of these calls are actually implemented to make use of the Access Controller and Permission objects (whenever possible).<p>
+
+It would be best to dispense entirely with the Security Manager, but history dictates that it remain available for reasons of backwards compatibility. Breaking all existing JDK 1.1 code in order to introduce a new security design is not an economically viable approach for Java.<p><br>
+
+
+<center><font size="+1"><b>The Secure Class Loader</b></font></center><p>
+
+Java 2 introduces the class java.security.SecureClassLoader, which is a concrete implementation of the abstract ClassLoader class. It tracks the code source and signatures of each class, and hence assigns classes to protection domains. All Java code is loaded by a Secure Class Loader (except for code loaded by the Primordial Class Loader) either directly or indirectly (that is, by another class loader that was itself loaded by the Secure Class Loader). For more on class loading, refer to <a href="..\chapter-two\index.html">Chapter 2</a>.<p><br>
+
+
+<center><font size="+1"><b>Sandboxing Java Applications</b></font></center><p>
+
+Now that the security enforcement mechanisms are more complex and do not rely on the distinction between applet code and built-in code (as in the early days), it is possible (and desirable!) to force Java applications, in addition to applets, to run within the (highly mutable) sandbox. This means application code can be made to cohere with locally defined security policy. Java 2 provides a mechanism for doing this with the class java.security.Main. The implementation ensures that local applications stored in the java.app.class.path are loaded with the Secure Class Loader. It is a good idea to have applications run from this location as opposed to placing them in the CLASSPATH where they will be treated as built-in code.<p><br>
+
+
+<center><font size="+1"><b>Adding Permissions</b></font></center><p>
+
+It is possible to add new permissions to Java that are tailored to your specific needs. This is done by subclassing and extending the java.security.Permission class we detailed earlier. The new permission classes that you create should be stored in the application package where they apply.<p>
+
+Next, a representation of the permission (that is, a string representing a policy entry) needs to be added to the policy file. This ensures that the permission is "automatically" configured for each domain.<p>
+
+Finally, the application code itself may include a section that manages resources. This section of code should make use of the checkPermission() method of the AccessController class (explained earlier). Use of this method obviates the need to think about Class Loaders and Security Managers.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-three-6.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-three-8.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="..\chapter-five\index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="..\chapter-five\index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+

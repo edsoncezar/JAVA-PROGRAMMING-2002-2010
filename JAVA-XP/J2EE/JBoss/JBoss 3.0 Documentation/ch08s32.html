@@ -1,0 +1,636 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>JMS as a managed resource</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch08.html" title="Chapter 8. JBoss and JMS"><link rel="previous" href="ch08s20.html" title="Message Driven Beans and JBoss"><link rel="next" href="ch09.html" title="Chapter 9. JBossSX Security Extension Framework"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch08.html"><img src="images\toc.gif" border="0"></a><a href="ch08s20.html"><img src="images\prev.gif" border="0"></a><a href="ch09.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="jms-resource"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="jms-resource"></a>JMS as a managed resource</h2></div></div><p>It has always been possible in JBoss to send JMS messages from EJB session and entity beans, either through JBossMQ or another JMS provider. This is done through normal JMS programming. But programming JMS like this is in some ways outside the EJB contract, since the JMS stuff never gets handled as a container-managed resource. This means, for example, that your JMS code is never enlisted in any transaction management and that you cannot pool your JMS sessions and therefore might run out of them.</p><p>Starting with EJB v2.0 and J2EE v1.3, there is, however, the requirement that the access to JMS connections and sessions be done as true J2EE resources, much like a DataSource. This means that a J2EE server that is compliant with the 1.3 specification must be able to handle JMS as a managed resource. JBoss version <span class="bold"><b>2.4.0</b></span> is compliant in this respect, but <span class="emphasis"><i>not</i></span> previous versions of JBoss.</p><p>[<span class="bold"><b>2.4.0</b></span>. What does this mean to you? It means that from JBoss version <span class="bold"><b>2.4.0</b></span> on, you have to define your JMS resources in the deployment descriptor, look them up as you do with other resources and use them as resources too. The container will then pool your JMS resources for you and it will enlist them with any ongoing or to be started transactions, much like using a DataSource.</p><p>The new resource management of JMS is based on a JMS resource adapter compatible with the J2EE Connector architecture (the first of its kind ;-)). The resource adapter is included in the distribution, in file <tt>deploy/lib/jms-ra.rar</tt>, but generally you don't have to worry about it because it is automatically deployed and configured in <tt>jboss.jcml</tt> for distributed transactions.</p><p>The management of JMS as a resource is available to all EJB types, session, entity and message-driven, but not (as far as I know) from the web container. The reason behind this is that the web container does not know how to handle transactions.</p><p>To use JMS as a resource, two things need to be done. One has two write resource-compatible JMS code and the resource must be added to the deployment descriptors. Let's work through all this with a simple example.]</p><div class="section"><a name="jms-resource-example"></a><div class="titlepage"><div><h3 class="title"><a name="jms-resource-example"></a>[<span class="bold"><b>2.4.0</b></span>] JMS resource example</h3></div></div><p>The example is based on a simple pattern. A session bean receives invocations containing messages. We might think that processing these messages requires too much time. Therefore, we want to handle them asynchronously: instead of letting the session bean process them, it simply passes them on to a JMS destination and it may therefore return immediately. Another reason could be that we want multiple systems to be able to act on the messages, so they get sent to a topic open up for many subscribers.</p><p>As in every case when handling resources, we need a name to look the resource up; after creation, the container will bind the resource to that name. For JMS (as opposed to a DataSource) we need access to two resources, a connection factory and a destination, so we will need two names:</p><div class="figure"><p><a name="d0e5571"></a><b>Figure 8.77. [<span class="bold">2.4.0</span>] Name giving for looking up JMS resources</b></p><pre class="programlisting">
+/**
+ * Name used to lookup TopicConnectionFactory
+ */
+private static final String CONNECTION_JNDI =
+  "java:comp/env/jms/MyTopicConnection";
+
+/**
+ * Name used to lookup topic destination
+ */
+private static final String TOPIC_JNDI = "java:comp/env/jms/TopicName";
+
+</pre></div><p>The lookup of these resources will be done during the creation of the bean, much like what happens with a DataSource. What's different in JMS from the handling of a DataSource is that the JMS connection (not the factory) is what is similar to the DataSource and the JMS session is like a JDBC connection. Therefore, we create the JMS connection also when the bean is created and we hold on to it as long as the bean is alive:</p><div class="figure"><p><a name="d0e5581"></a><b>Figure 8.78. [<span class="bold">2.4.0</span>] Looking up JMS resources (connection factory and destination)</b></p><pre class="programlisting">
+public void ejbCreate() {
+
+  try {
+
+    Context context = new InitialContext();
+
+    // Lookup the topic
+    topic = (Topic)context.lookup(TOPIC_JNDI);
+
+    // Lookup the connection factory
+    TopicConnectionFactory factory =
+      (TopicConnectionFactory)context.lookup(CONNECTION_JNDI);
+
+    topicConnection = factory.createTopicConnection();
+
+    // Keep both around
+
+  } catch (Exception ex) {
+
+    // JMSException or NamingException could be thrown
+    ex.printStackTrace();
+    throw new EJBException(ex.toString());
+
+  }
+
+}
+
+</pre></div><p>In our example bean we have a method, <tt>hello()</tt>, that takes a text message in the form of a <tt>String</tt> object. This is the method the remote clients invoke. Every time the bean receives a message, it packs it into a JMS message and sends it along on its way to the destination. This looks very much like normal JMS code indeed:</p><div class="figure"><p><a name="d0e5597"></a><b>Figure 8.79. [<span class="bold">2.4.0</span>] Publishing messages using JMS resources</b></p><pre class="programlisting">
+TopicPublisher topicPublisher = null;
+TextMessage message = null;
+
+// Create a session
+topicSession = topicConnection.createTopicSession(true,
+  Session.AUTO_ACKNOWLEDGE);
+
+// Create a publisher
+topicPublisher = topicSession.createPublisher(topic);
+
+// Create a message
+message = topicSession.createTextMessage();
+message.setText(msg);
+
+// Publish it
+System.out.println("Publishing message " + msg);
+topicPublisher.publish(message);
+
+</pre></div><p>Since we are now working in a transacted and pooled environment, we have to write the code carefully. We handle errors in our code by rolling back the transaction.</p><div class="figure"><p><a name="d0e5607"></a><b>Figure 8.80. [<span class="bold">2.4.0</span>] Marking for rollback if there are exceptions</b></p><pre class="programlisting">
+try {
+
+//... application code
+
+} catch (JMSException ex) {
+
+  ex.printStackTrace();
+  ctx.setRollbackOnly();
+  throw new EJBException(ex.toString());
+
+}
+
+</pre></div><p>We also have to be careful to close the session, in case an exception occurs, in a <tt>finally</tt> block.</p><div class="figure"><p><a name="d0e5620"></a><b>Figure 8.81. [<span class="bold">2.4.0</span>] Closing JMS resources properly</b></p><pre class="programlisting">
+} finally {
+
+  // ALWAYS close the session. It's pooled, so do not worry.
+  if (topicSession != null) {
+
+    try {
+
+      topicSession.close();
+
+    } catch (Exception e) {
+
+      e.printStackTrace();
+
+    }
+
+  }
+
+}
+
+</pre></div><p>Here it is the complete example bean:</p><div class="figure"><p><a name="d0e5630"></a><b>Figure 8.82. [<span class="bold">2.4.0</span>] Bean example of using JMS as a resource, from <tt>TopicHelloBean.java</tt> in directory <tt>org/jboss/docs/jms/ra/bean</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.ra.bean;
+
+import java.rmi.RemoteException;
+
+import javax.ejb.SessionBean;
+import javax.ejb.SessionContext;
+import javax.ejb.EJBException;
+
+import javax.naming.InitialContext;
+import javax.naming.Context;
+
+import javax.jms.TopicConnectionFactory;
+import javax.jms.TopicConnection;
+import javax.jms.TopicSession;
+import javax.jms.TopicPublisher;
+import javax.jms.Topic;
+import javax.jms.Session;
+import javax.jms.TextMessage;
+import javax.jms.JMSException;
+
+import org.jboss.docs.jms.ra.interfaces.*;
+
+/**
+ * Hello bean, send a message to the configured topic.
+ * The JMS stuff is configured via the deployment descriptor.
+ *
+ * The TopicConnection is comparable to the JDBC DataSource,
+ * and the TopicSession to the JDBC Connection.
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $
+ */
+public class TopicHelloBean implements SessionBean {
+
+  /**
+   * Name used to lookup TopicConnectionFactory
+   */
+  private static final String CONNECTION_JNDI =
+    "java:comp/env/jms/MyTopicConnection";
+
+  /**
+   * Name used to lookup topic destination
+   */
+  private static final String TOPIC_JNDI = "java:comp/env/jms/TopicName";
+
+  private SessionContext ctx = null;
+
+  private Topic topic = null;
+  private TopicConnection topicConnection = null;
+
+  public TopicHelloBean() {
+  }
+
+  public void setSessionContext(SessionContext ctx) {
+
+    this.ctx = ctx;
+
+  }
+
+  public void ejbCreate()  {
+
+    try {
+
+      Context context = new InitialContext();
+
+      // Lookup the topic
+      topic = (Topic)context.lookup(TOPIC_JNDI);
+
+      // Lookup the connection factory
+      TopicConnectionFactory factory =
+        (TopicConnectionFactory)context.lookup(CONNECTION_JNDI);
+
+      topicConnection = factory.createTopicConnection();
+
+      // Keep both around
+
+    } catch (Exception ex) {
+
+      // JMSException or NamingException could be thrown
+      ex.printStackTrace();
+      throw new EJBException(ex.toString());
+
+    }
+  }
+
+  /**
+   * Send a message with a message nr in property MESSAGE_NR
+   */
+  public void hello(String msg) {
+
+    sendMessage(msg);
+
+  }
+
+  public void ejbRemove() throws RemoteException {
+
+    if (topicConnection != null) {
+
+      try {
+
+        // Remember to close the connection when the bean is destroyed
+        topicConnection.close();
+
+      } catch (Exception e) {
+
+        e.printStackTrace();
+
+      }
+
+    }
+
+  }
+
+  public void ejbActivate() {}
+  public void ejbPassivate() {}
+
+  /**
+   * Help method to send message via JMS
+   */
+  private void sendMessage(String msg) {
+
+    TopicSession topicSession = null;
+
+    try {
+
+      TopicPublisher topicPublisher = null;
+      TextMessage message = null;
+
+      // Create a session
+      topicSession = topicConnection.createTopicSession(true,
+        Session.AUTO_ACKNOWLEDGE);
+
+      // Create a publisher
+      topicPublisher = topicSession.createPublisher(topic);
+
+      // Create a message
+      message = topicSession.createTextMessage();
+      message.setText(msg);
+
+      // Publish it
+      System.out.println("Publishing message " + msg);
+      topicPublisher.publish(message);
+
+    } catch (JMSException ex) {
+
+      ex.printStackTrace();
+      ctx.setRollbackOnly();
+      throw new EJBException(ex.toString());
+
+    } finally {
+
+      // ALWAYS close the session. It's pooled, so do not worry.
+
+      if (topicSession != null) {
+
+         try {
+
+           topicSession.close();
+
+         } catch (Exception e) {
+
+           e.printStackTrace();
+
+         }
+
+       }
+
+     }
+
+  }
+
+}
+
+</pre></div><p>Here there are also the remote and home interfaces:</p><div class="figure"><p><a name="d0e5645"></a><b>Figure 8.83. [<span class="bold">2.4.0</span>] Remote interface for JMS resource example, from <tt>Hello.java</tt> in directory <tt>org/jboss/docs/jms/ra/interfaces</tt></b></p><pre class="programlisting">
+package  org.jboss.docs.jms.ra.interfaces;
+
+import javax.ejb.EJBObject;
+import java.rmi.RemoteException;
+
+/**
+ * Remote interface for Hello bean.
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $
+ */
+
+public interface Hello extends EJBObject {
+
+  /**
+   * Send a message to the configured topic
+   * (jms/TopicName in deployment descriptor)
+   */
+  public void hello(String msg) throws RemoteException;
+
+}
+
+</pre></div><div class="figure"><p><a name="d0e5658"></a><b>Figure 8.84. [<span class="bold">2.4.0</span>] Home interface for JMS resource example, from <tt>HelloHome.java</tt> in directory <tt>org/jboss/docs/jms/ra/interfaces</tt></b></p><pre class="programlisting">
+package  org.jboss.docs.jms.ra.interfaces;
+
+import java.rmi.RemoteException;
+import javax.ejb.EJBHome;
+import javax.ejb.CreateException;
+
+/**
+ * Home interface for Hello bean.
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $
+ */
+public interface HelloHome extends EJBHome {
+
+  Hello create() throws RemoteException, CreateException;
+
+}
+
+</pre></div><p>We also need a client to send messages to the session bean, which is standard client EJB programming.</p><div class="figure"><p><a name="d0e5673"></a><b>Figure 8.85. [<span class="bold">2.4.0</span>] Client for JMS resource example, from <tt>HelloClient.java</tt> in directory <tt>org/jboss/docs/jms/ra</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.ra;
+
+import org.jboss.docs.jms.ra.interfaces.Hello;
+import org.jboss.docs.jms.ra.interfaces.HelloHome;
+
+import javax.naming.InitialContext;
+import javax.naming.Context;
+
+/**
+ * Client that send hello messages to a session bean
+ * (which does JMS through the resource adapter).
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $
+ */
+
+public class HelloClient
+{
+
+  /**
+   * The bean JNDI name
+   */
+  private String beanJNDI;
+
+  /**
+   * The Hello bean remote reference
+   */
+  private Hello hello;
+
+  /**
+   * @param beanJNDI bean where to send the message
+   */
+  public HelloClient(String beanJNDI) throws Exception {
+
+    this.beanJNDI = beanJNDI;
+    setUp();
+
+  }
+
+  /**
+   * Helper to get the remote reference to the bean
+   */
+  protected void setUp() throws Exception {
+
+    // Get Hello bean
+    Context context = new InitialContext();
+    HelloHome helloH = (HelloHome)context.lookup(beanJNDI);
+
+    hello = helloH.create();
+
+  }
+
+  /**
+   * Say hallo to the bean
+   */
+  public void hello(String msg) throws Exception {
+
+    System.out.println("Saying hello");
+    hello.hello(msg);
+
+  }
+
+  public static void main(String[] args) {
+
+    try {
+
+      HelloClient c = new HelloClient("TopicHello");
+      c.hello("Hello topic");
+
+    } catch(Exception ex) {
+
+      System.out.println("Error: " + ex);
+      ex.printStackTrace();
+
+    }
+
+  }
+
+} // HelloClient
+
+</pre></div><p>The next step is to write the deployment descriptors for the bean. In the standard <tt>ejb-jar.xml</tt> we must add stanzas for the resources. The <tt>res-ref-name</tt> element must contain the name used in the bean to lookup the resource:</p><div class="figure"><p><a name="d0e5694"></a><b>Figure 8.86. [<span class="bold">2.4.0</span>] <tt>resource-ref</tt> stanzas in <tt>ejb-jar.xml</tt> for JMS resource example</b></p><pre class="programlisting">
+&lt;resource-ref&gt;
+  &lt;description&gt;A Topic ConnectionFactory&lt;/description&gt;
+  &lt;res-ref-name&gt;jms/MyTopicConnection&lt;/res-ref-name&gt;
+  &lt;res-type&gt;javax.jms.TopicConnectionFactory&lt;/res-type&gt;
+  &lt;res-auth&gt;Container&lt;/res-auth&gt;
+&lt;/resource-ref&gt;
+&lt;resource-ref&gt;
+  &lt;description&gt;A Topic &lt;/description&gt;
+  &lt;res-ref-name&gt;jms/TopicName&lt;/res-ref-name&gt;
+  &lt;res-type&gt;javax.jms.Topic&lt;/res-type&gt;
+  &lt;res-auth&gt;Container&lt;/res-auth&gt;
+&lt;/resource-ref&gt;
+
+</pre></div><p>In <tt>jboss.xml</tt> we must also add <tt>resource-manager</tt> stanzas to point out the real resources:</p><div class="figure"><p><a name="d0e5716"></a><b>Figure 8.87. [<span class="bold">2.4.0</span>] <tt>resource-managers</tt> stanza in <tt>jboss.xml</tt> for JMS resource example</b></p><pre class="programlisting">
+&lt;resource-managers&gt;
+  &lt;resource-manager&gt;
+    &lt;res-name&gt;topicfactoryref&lt;/res-name&gt;
+    &lt;res-jndi-name&gt;java:/JmsXA&lt;/res-jndi-name&gt;
+  &lt;/resource-manager&gt;
+  &lt;resource-manager&gt;
+    &lt;res-name&gt;topicref&lt;/res-name&gt;
+    &lt;res-jndi-name&gt;topic/testTopic&lt;/res-jndi-name&gt;
+  &lt;/resource-manager&gt;
+&lt;/resource-managers&gt;
+
+</pre></div><p>The most magical line here is the <tt>java:/JmsXA</tt> contents of the <tt>res-jndi-name</tt> element, which points to the J2EE Connector-compliant JMS resource adapter. Also in <tt>jboss.xml</tt>, we must add the definition of the session EJB, as always:</p><div class="figure"><p><a name="d0e5741"></a><b>Figure 8.88. [<span class="bold">2.4.0</span>] Bean configuration in <tt>jboss.xml</tt> for JMS resource example</b></p><pre class="programlisting">
+&lt;session&gt;
+  &lt;ejb-name&gt;TopicHello&lt;/ejb-name&gt;
+  &lt;jndi-name&gt;TopicHello&lt;/jndi-name&gt;
+  &lt;configuration-name&gt;Standard Stateless SessionBean&lt;/configuration-name&gt;
+  &lt;resource-ref&gt;
+    &lt;res-ref-name&gt;jms/MyTopicConnection&lt;/res-ref-name&gt;
+    &lt;resource-name&gt;topicfactoryref&lt;/resource-name&gt;
+  &lt;/resource-ref&gt;
+  &lt;resource-ref&gt;
+    &lt;res-ref-name&gt;jms/TopicName&lt;/res-ref-name&gt;
+    &lt;resource-name&gt;topicref&lt;/resource-name&gt;
+  &lt;/resource-ref&gt;
+&lt;/session&gt;
+
+</pre></div><p>Here there are the complete listings for the deployment descriptors:</p><div class="figure"><p><a name="d0e5754"></a><b>Figure 8.89. [<span class="bold">2.4.0</span>] JMS resource example <tt>ejb-jar.xml</tt>, from <tt>TopicHello-ejb-jar.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+
+&lt;ejb-jar&gt;
+  &lt;description&gt;Topic Hello&lt;/description&gt;
+  &lt;display-name&gt;TopicHelloBean&lt;/display-name&gt;
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;display-name&gt;TopicHello&lt;/display-name&gt;
+      &lt;ejb-name&gt;TopicHello&lt;/ejb-name&gt;
+      &lt;home&gt;org.jboss.docs.jms.ra.interfaces.HelloHome&lt;/home&gt;
+      &lt;remote&gt;org.jboss.docs.jms.ra.interfaces.Hello&lt;/remote&gt;
+      &lt;ejb-class&gt;org.jboss.docs.jms.ra.bean.TopicHelloBean&lt;/ejb-class&gt;
+      &lt;session-type&gt;Stateless&lt;/session-type&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;resource-ref&gt;
+        &lt;description&gt;A Topic ConnectionFactory&lt;/description&gt;
+        &lt;res-ref-name&gt;jms/MyTopicConnection&lt;/res-ref-name&gt;
+        &lt;res-type&gt;javax.jms.TopicConnectionFactory&lt;/res-type&gt;
+        &lt;res-auth&gt;Container&lt;/res-auth&gt;
+      &lt;/resource-ref&gt;
+      &lt;resource-ref&gt;
+        &lt;description&gt;A Topic &lt;/description&gt;
+        &lt;res-ref-name&gt;jms/TopicName&lt;/res-ref-name&gt;
+        &lt;res-type&gt;javax.jms.Topic&lt;/res-type&gt;
+        &lt;res-auth&gt;Container&lt;/res-auth&gt;
+      &lt;/resource-ref&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;assembly-descriptor/&gt;
+&lt;/ejb-jar&gt;
+
+</pre></div><div class="figure"><p><a name="d0e5770"></a><b>Figure 8.90. [<span class="bold">2.4.0</span>] JMS resource example <tt>jboss.xml</tt>, from <tt>TopicHello24-jboss.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+
+&lt;jboss&gt;
+  &lt;secure&gt;false&lt;/secure&gt;
+  &lt;resource-managers&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;topicfactoryref&lt;/res-name&gt;
+      &lt;res-jndi-name&gt;java:/JmsXA&lt;/res-jndi-name&gt;
+    &lt;/resource-manager&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;topicref&lt;/res-name&gt;
+      &lt;res-jndi-name&gt;topic/testTopic&lt;/res-jndi-name&gt;
+    &lt;/resource-manager&gt;
+  &lt;/resource-managers&gt;
+
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;ejb-name&gt;TopicHello&lt;/ejb-name&gt;
+      &lt;jndi-name&gt;TopicHello&lt;/jndi-name&gt;
+      &lt;configuration-name&gt;Standard Stateless SessionBean&lt;/configuration-name&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;jms/MyTopicConnection&lt;/res-ref-name&gt;
+        &lt;resource-name&gt;topicfactoryref&lt;/resource-name&gt;
+      &lt;/resource-ref&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;jms/TopicName&lt;/res-ref-name&gt;
+        &lt;resource-name&gt;topicref&lt;/resource-name&gt;
+      &lt;/resource-ref&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+
+</pre></div><p>It is possible to run the example with the Ant target:</p><div class="figure"><p><a name="d0e5788"></a><b>Figure 8.91. [<span class="bold">2.4.0</span>] Running the JMS resource example</b></p><pre class="programlisting">
+ant jms-topic-hello24
+
+</pre></div></div><div class="section"><a name="jms-resource-example-remote"></a><div class="titlepage"><div><h3 class="title"><a name="jms-resource-example-remote"></a>[<span class="bold"><b>2.4.0</b></span>] JMS remote resource</h3></div></div><p>A nice twist to the example above is how easy it is to reconfigure it to send messages to a remote JBoss server. You basically have to do two things.</p><p>First, you need to add two things to <tt>jboss.xml</tt>: The remote JMS provider and a JMS resource adapter that uses the remote JMS provider. When defining the remote JMS provider you should fill in the <tt>ProviderUrl</tt> property. For JBoss version <span class="bold"><b>2.4.0</b></span> and for the URL <tt>linutv1.annons.dn.se:1099</tt>, it might look like this:</p><div class="figure"><p><a name="d0e5819"></a><b>Figure 8.92. [<span class="bold">2.4.0</span>] Defining a remote JMSProviderLoader in <tt>jboss.jcml</tt>, from <tt>TopicHello24-Remote-snippet-jboss.jcml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.jms.jndi.JMSProviderLoader"
+  name=":service=JMSProviderLoader,name=MyRemoteLoader"&gt;
+  &lt;attribute name="ProviderName"&gt;MyRemoteProvider&lt;/attribute&gt;
+  &lt;attribute name="ProviderUrl"&gt;linutv1.annons.dn.se:1099&lt;/attribute&gt;
+  &lt;attribute name="QueueFactoryRef"&gt;XAQueueConnectionFactory&lt;/attribute&gt;
+  &lt;attribute name="TopicFactoryRef"&gt;XATopicConnectionFactory&lt;/attribute&gt;
+  &lt;attribute name="ProviderAdapterClass"&gt;org.jboss.jms.jndi.JBossMQProvider&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. In this version it looks slightly different.]</p><div class="figure"><p><a name="d0e5840"></a><b>Figure 8.93. [<span class="bold">2.4.1</span>] Defining a remote JMSProviderLoader in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;!-- This must go into jboss.jcml --&gt;
+&lt;!-- to get remote version to work --&gt;
+&lt;mbean code="org.jboss.jms.jndi.JMSProviderLoader"
+  name=":service=JMSProviderLoader,name=MyRemoteLoader"&gt;
+  &lt;attribute name="ProviderName"&gt;MyRemoteProvider&lt;/attribute&gt;
+  &lt;attribute name="ProviderUrl"&gt;linutv1.annons.dn.se:1099&lt;/attribute&gt;
+  &lt;attribute name="QueueFactoryRef"&gt;XAConnectionFactory&lt;/attribute&gt;
+  &lt;attribute name="TopicFactoryRef"&gt;XAConnectionFactory&lt;/attribute&gt;
+  &lt;attribute name="ProviderAdapterClass"&gt;org.jboss.jms.jndi.JBossMQProvider&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>You then need to add a JMS resource adapter that uses the remote provider. We give it a name, in this case <tt>RemoteJmsXA</tt>, and we configure the adapter property <tt>JmsProviderAdapterJNDI</tt> to point to our newly-defined remote provider <tt>java:MyRemoteProvider</tt>.</p><div class="figure"><p><a name="d0e5861"></a><b>Figure 8.94. [<span class="bold">2.4.0</span>] Defining a remote JMS Resource Adapter in <tt>jboss.jcml</tt>, from <tt>TopicHello24-Remote-snippet-jboss.jcml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;!-- JMS XA Resource adapter, --&gt;
+&lt;!-- use this to get transacted JMS in beans --&gt;
+&lt;mbean code="org.jboss.resource.ConnectionFactoryLoader"
+  name="JCA:service=ConnectionFactoryLoader,name=RemoteJmsXA"&gt;
+  &lt;attribute name="FactoryName"&gt;RemoteJmsXA&lt;/attribute&gt;
+  &lt;attribute name="RARDeployerName"&gt;JCA:service=RARDeployer&lt;/attribute&gt;
+  &lt;attribute name="ResourceAdapterName"&gt;JMS Adapter&lt;/attribute&gt;
+  &lt;attribute name="ConnectionManagerFactoryName"&gt;MinervaXACMFactory&lt;/attribute&gt;
+  &lt;!-- See the documentation for the specific connection manager
+    implementation you are using for the properties you can set --&gt;
+  &lt;attribute name="ConnectionManagerProperties"&gt;
+  &lt;attribute name="Properties"&gt;
+    JmsProviderAdapterJNDI=java:MyRemoteProvider
+    # Pool type - uncomment to force, otherwise it is the default
+    #PoolConfiguration=per-factory
+
+    # Connection pooling properties - see
+    # org.opentools.minerva.pool.PoolParameters
+    MinSize=0
+    MaxSize=10
+    Blocking=true
+    GCEnabled=false
+    IdleTimeoutEnabled=false
+    InvalidateOnError=false
+    TrackLastUsed=false
+    GCIntervalMillis=120000
+    GCMinIdleMillis=1200000
+    IdleTimeoutMillis=1800000
+    MaxIdleTimeoutPercent=1.0
+  &lt;/attribute&gt;
+
+  &lt;!-- Principal mapping configuration --&gt;
+  &lt;attribute name="PrincipalMappingClass"&gt;org.jboss.resource.security.ManyToOnePrincipalMapping&lt;/attribute&gt;
+  &lt;attribute name="PrincipalMappingProperties"&gt;
+  &lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>The second thing to do is to rewrite the <tt>jboss.xml</tt> deployment descriptor. We now let the <tt>res-jndi-name</tt> property for the <tt>topicfactoryref</tt> resource point to our defined resource adapter <tt>java:/RemoteJmsXA</tt>, and we point the destination resource to the JNDI namespace of our remote server, <tt>jnp://linutv1.annons.dn.se:1099/topic/testTopic</tt>. Here it is the complete descriptor file:</p><div class="figure"><p><a name="d0e5894"></a><b>Figure 8.95. [<span class="bold">2.4.0</span>] <tt>jboss.xml</tt> for remote version of JMS resource example, from <tt>TopicHello24-Remote-jboss.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+
+&lt;jboss&gt;
+  &lt;secure&gt;false&lt;/secure&gt;
+  &lt;resource-managers&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;topicfactoryref&lt;/res-name&gt;
+      &lt;res-jndi-name&gt;java:/RemoteJmsXA&lt;/res-jndi-name&gt;
+    &lt;/resource-manager&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;topicref&lt;/res-name&gt;
+      &lt;res-jndi-name&gt;jnp://linutv1.annons.dn.se:1099/topic/testTopic&lt;/res-jndi-name&gt;
+    &lt;/resource-manager&gt;
+  &lt;/resource-managers&gt;
+
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;ejb-name&gt;TopicHello&lt;/ejb-name&gt;
+      &lt;jndi-name&gt;TxTopicHello&lt;/jndi-name&gt;
+      &lt;configuration-name&gt;Standard Stateless SessionBean&lt;/configuration-name&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;jms/MyTopicConnection&lt;/res-ref-name&gt;
+        &lt;resource-name&gt;topicfactoryref&lt;/resource-name&gt;
+      &lt;/resource-ref&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;jms/TopicName&lt;/res-ref-name&gt;
+        &lt;resource-name&gt;topicref&lt;/resource-name&gt;
+      &lt;/resource-ref&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+
+</pre></div></div><div class="section"><a name="jms-resource-22"></a><div class="titlepage"><div><h3 class="title"><a name="jms-resource-22"></a>JBoss emulated resource</h3></div></div><p>Is there no way of getting JMS to work as a resource in JBoss <span class="bold"><b>2.2.x</b></span> then? Well, it depends. Probably, it is possible to deploy the resource adapter for JMS in JBoss version <span class="bold"><b>2.2.x</b></span>, but that is an advanced and untried subject. Go ahead and test it and report whether it works. However, there is at least one more thing you can do to a least ease the transition from JBoss release <span class="bold"><b>2.2.x</b></span> to later ones. You may actually code your beans <span class="emphasis"><i>as if</i></span> they are using JMS as a resource.</p><p>It is very important to understand that even if you do this you will <span class="emphasis"><i>not</i></span> see the correct behavior of getting the transactions enlisted. The only benefit for you is that you will get it all when upgrading to at least version <span class="bold"><b>2.4.0</b></span> and without a lot of code or descriptor file rewriting.</p><p>So, how is it done? The first thing you need to do, in comparison to the example compatible with version <span class="bold"><b>2.4.0</b></span>, is to make a small change in the code where the JMS session is created. You need to mark the session as not transacted:</p><div class="figure"><p><a name="d0e5941"></a><b>Figure 8.96. Creating a session for JMS resource emulation, from <tt>TopicHelloBean22.java</tt> in directory <tt>org/jboss/docs/jms/ra/bean</tt></b></p><pre class="programlisting">
+topicSession = topicConnection.createTopicSession(
+  // NOT transacted
+  false,
+  Session.AUTO_ACKNOWLEDGE);
+
+</pre></div><p>To be completely honest, it is actually possible to use this code with the JMS resource adapter in version <span class="bold"><b>2.4.0</b></span> too, since the topic connection will not care whether you mark your JMS session as transacted or not when running with XA transactions. By writing your code like this it will work in version <span class="bold"><b>2.2.x</b></span> and later.</p><p>However, you are forced to change the deployment descriptor file. In version <span class="bold"><b>2.4.0</b></span> we pointed the connection factory resource to the JMS resource adapter. In <span class="bold"><b>2.2.x</b></span> you must point it directly to a ConnectionFactory. It is not possible to use the <tt>res-jndi-name</tt> element, either; use the <tt>res-url</tt> element, instead. This is how it might look:</p><div class="figure"><p><a name="d0e5973"></a><b>Figure 8.97. JMS resource emulation in <tt>jboss.xml</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+
+&lt;jboss&gt;
+  &lt;secure&gt;false&lt;/secure&gt;
+  &lt;resource-managers&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;topicfactoryref&lt;/res-name&gt;
+      &lt;res-url&gt;TopicConnectionFactory&lt;/res-url&gt;
+    &lt;/resource-manager&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;topicref&lt;/res-name&gt;
+      &lt;res-url&gt;topic/testTopic&lt;/res-url&gt;
+    &lt;/resource-manager&gt;
+  &lt;/resource-managers&gt;
+
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;ejb-name&gt;TopicHello&lt;/ejb-name&gt;
+      &lt;jndi-name&gt;TopicHello&lt;/jndi-name&gt;
+      &lt;configuration-name&gt;Standard Stateless SessionBean&lt;/configuration-name&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;jms/MyTopicConnection&lt;/res-ref-name&gt;
+        &lt;resource-name&gt;topicfactoryref&lt;/resource-name&gt;
+      &lt;/resource-ref&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;jms/TopicName&lt;/res-ref-name&gt;
+        &lt;resource-name&gt;topicref&lt;/resource-name&gt;
+      &lt;/resource-ref&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+
+</pre></div><p>You may test the example through Ant:</p><div class="figure"><p><a name="d0e5982"></a><b>Figure 8.98. Running the emulated JMS resource example</b></p><pre class="programlisting">
+ant jms-topic-hello22
+
+</pre></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch08.html"><img src="images\toc.gif" border="0"></a><a href="ch08s20.html"><img src="images\prev.gif" border="0"></a><a href="ch09.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

@@ -1,0 +1,39 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Using SSL with JBoss</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch14.html" title="Chapter 14. Third Party Examples"><link rel="previous" href="ch14s07.html" title="Deploying Cocoon 2 in JBoss"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch14.html"><img src="images\toc.gif" border="0"></a><a href="ch14s07.html"><img src="images\prev.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="howtossl"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="howtossl"></a>Using SSL with JBoss</h2></div></div><p>Author:<span class="author">Tom Coleman</span>
+		<tt>&lt;<a href="mailto:tcoleman@autowares.com">tcoleman@autowares.com</a>&gt;</tt>  
+	</p><div class="section"><a name="d0e12493"></a><div class="titlepage"><div><h3 class="title"><a name="d0e12493"></a>Introduction</h3></div></div><p>Adding SSL (Secure Socket Layer) support is simple using JBoss 2.4 with either Tomcat or Jetty Web containers. The specific releases used were JBoss 2.4 BETA Rel_2_4_0_23 with Tomcat 3.2.2, and JBoss-2.4.0_Jetty-3.1.RC8-1.</p><p>The target system was a RH Linux 6.2 system using the Sun 1.3 JDK and Sun's Secure Socket Extension, JSSE 1.0.2.</p></div><div class="section"><a name="d0e12500"></a><div class="titlepage"><div><h3 class="title"><a name="d0e12500"></a>Outstanding Deployment Issues</h3></div></div><p><b>Multiple site certificates.&nbsp;</b>Support of certificates for multiple sites is currently under discussion.  Please post your requirements to the forums or the jboss-user mailing list.</p></div><div class="section"><a name="d0e12508"></a><div class="titlepage"><div><h3 class="title"><a name="d0e12508"></a>Contributors:</h3></div></div><div class="itemizedlist"><ul><li><p><a name="d0e12512"></a>Scott Stark</p></li></ul></div></div><div class="section"><a name="d0e12515"></a><div class="titlepage"><div><h3 class="title"><a name="d0e12515"></a>Installation &amp; Configuration</h3></div></div><div class="orderedlist"><ol type="1"><li><p><a name="d0e12519"></a>Download JSSE</p><p>If you are using JDK 1.3 or 1.2, JSSE is optional.  Download it from <a href="http://java.sun.com/products/jsse" target="_top">Sun's JSSE Page</a>.  Jump through the hoops as required.</p><p>If you are using JDK 1.4, JSSE is included.  But then, JDK 1.4 is another story.</p></li><li><p><a name="d0e12529"></a>Install JSSE</p><p>Follow steps 1 through 5 of the <a href="http://java.sun.com/products/jsse/install.html" target="_top">JSSE installation instructions</a>.</p><p>If you need to run 'keytool' on your system to create and/or import certificates, copy the JSSE jars to $JAVA_HOME/jre/lib/ext.</p></li><li><p><a name="d0e12539"></a>Generate a Server Key and Certificate</p><p>The following shell script can be used to create a "self-signed" server certificate for testing:</p><p>The keystore file will be generated in the directory from which you run keytool.  Copy the keystore file to an appropriate directory.</p><pre class="programlisting"> 
+keytool -genkey -alias tomcat -keyalg RSA \
+   -dname 'CN=your.domain.com, OU=Skunk Works Unit, O=Your Organization, L=Your Location, S=Your State, C=US' \
+   -keypass changeit \
+   -storepass changeit \
+   -keystore server.keystore
+	
+</pre><p>It should be possible to import existing certificates generated with OpenSSL using keytool.  See the section <a href="http://jakarta.apache.org/tomcat/tomcat-3.2-doc/tomcat-ssl-howto.html#s6" target="_top">Importing SSL certificates</a> in the Tomcat documentation.</p></li><li><p><a name="d0e12553"></a>Configure Web Container</p><p>If using Tomcat - Find the section in the Tomcat server.xml configuration file that starts with, "Uncomment this for SSL support".  Uncomment the following section, and insert the location of your server key.</p><pre class="programlisting"> 
+&lt;Connector className="org.apache.tomcat.service.PoolTcpConnector"&gt;
+    &lt;Parameter name="handler" 
+        value="org.apache.tomcat.service.http.HttpConnectionHandler"/&gt;
+    &lt;Parameter name="port" 
+        value="8443"/&gt;
+    &lt;Parameter name="socketFactory" 
+        value="org.apache.tomcat.net.SSLSocketFactory" /&gt;
+    &lt;Parameter name="keystore" value="/usr/java/jakarta-tomcat-3.2.2/server.keystore" /&gt; 
+    &lt;Parameter name="keypass" value="changeit" /&gt; 
+&lt;/Connector&gt;
+	
+       </pre><p>Copy the JSSE jars to your $TOMCAT_HOME/lib directory.</p><p>If using Jetty - Find the section in the $JBOSS_JETTY_HOME/conf/jetty/jetty.xml configuration file that starts with, "Uncomment this to add an SSL listener".  Uncomment the following section, and insert the location of your server key.</p><pre class="programlisting"> 
+&lt;Call name="addListener"&gt;
+  &lt;Arg&gt;
+    &lt;New class="com.mortbay.HTTP.SunJsseListener"&gt;
+      &lt;Set name="Port"&gt;8443&lt;/Set&gt;
+      &lt;Set name="MinThreads"&gt;5&lt;/Set&gt;
+      &lt;Set name="MaxThreads"&gt;255&lt;/Set&gt;
+      &lt;Set name="MaxIdleTimeMs"&gt;50000&lt;/Set&gt;
+      &lt;Set name="Keystore"&gt;&lt;SystemProperty name="jetty.home" default="."/&gt;/etc/server.keystore&lt;/Set&gt;
+	   &lt;Set name="Password"&gt;changeit&lt;/Set&gt;
+	   &lt;Set name="KeyPassword"&gt;changeit&lt;/Set&gt;
+    &lt;/New&gt;
+  &lt;/Arg&gt;
+&lt;/Call&gt;
+	
+       </pre></li><li><p><a name="d0e12566"></a>Start JBoss</p><p>Start JBoss and point your browser to https://your-server-name.your-domain:8443 to test your SSL implementation. </p><p>If using "self-signed" certificates, you may have to import your test certificate into your browser.</p></li></ol></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch14.html"><img src="images\toc.gif" border="0"></a><a href="ch14s07.html"><img src="images\prev.gif" border="0"></a></td></tr><tr></tr></table></body></html>

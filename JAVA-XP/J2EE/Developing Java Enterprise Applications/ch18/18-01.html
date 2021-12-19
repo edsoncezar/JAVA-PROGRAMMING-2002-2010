@@ -1,0 +1,117 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Enterprise JavaBean Business Rules Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch17\17-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 18<BR>Enterprise JavaBean Business Rules Engine
+</FONT></H2>
+<P>This chapter focuses on one of the more powerful applications of Enterprise JavaBeans (EJB): implementing business rules. EJBs are a great platform for implementing business processes and rules because EJBs can be shared by numerous client applications. One example of such an application, discussed later in this chapter, is a check request application that an employee could use to request payment for a business expense. The rules for allowing or not allowing the payment are encapsulated into an EJB. This allows the company to alter the check request rules in a central location and also separates the rules from the client application that handles the request and/or database engine that might store the request. This check request rules architecture is pictured in Figure 18.1.
+</P>
+<P>Because business rules&#151;especially check request rules that depend on projects, budgets, and other factors&#151;can change, a generic rules engine is implemented for this example. This generic engine provides a simple scripting language for defining rules in terms of Rule objects. The library also supports Action objects that perform business processes such as requesting a check or ordering replacement inventory. By placing the definition of the rules in a separate script file, it is possible to edit the rules without altering the code. This means that an enterprise application can use the rules, change the rules, and change process without having to be taken down or redeployed. The syntax for the rules scripts is tag-based and is similar to both XML and HTML.</P>
+<P>This chapter is broken into two sections. The rules engine is discussed first, including the simple parser that is provided to read rules files, and two example rules. (There are other rules on the CD-ROM.) After discussing the engine, this chapter explores the check request example, which uses a custom rule and custom action as well as existing rules and actions.</P>
+<P><A NAME="Fig1"></A><A HREF="images\18-01.jpg"><IMG SRC="images\18-01t.jpg"></A>
+<BR><A HREF="images\18-01.jpg"><FONT COLOR="#000077"><B>Figure 18.1</B></FONT></A>&nbsp;&nbsp;Architecture for check request rules example.</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">The Rules Engine</FONT></H3>
+<P>The rules engine, as implemented in the busrules package, defines two types of objects; rules and actions. Rules are objects that check the validity of data in a hash table. For example, a login rule might take a hash table with a user name and password in it and return true if the user name and password are valid. Actions are objects that act on the data in a hash table. For example, a connect action might take the data in a hash table as connection information for a database and use it to create a database connection. Essentially, rules represent business decisions, and actions represent business processes.
+</P>
+<P>All of the rules used by this engine implement the Rules interface defined below.</P>
+<PRE>
+package busrules;
+
+import busrules.*;
+import java.util.Hashtable;
+
+public interface Rule
+{
+    public boolean isValidFor(Hashtable data);
+    public double validityFor(Hashtable data);
+}
+</PRE>
+<P>Rule defines two methods: one for Boolean validity and one for a sliding validity. The concept of partial validity is provided to check whether the majority of rules in a group are true and to execute an action if the majority are true, but it does not require complete validity. For example, your company might require that more than 50 percent of its stockholders ratify a large purchase. You would use Rules objects to represent each stockholder&#146;s vote, possibly based on an e-mail response. A rules group could average the results of these rules to determine if the purchase can move forward. You might even add a rule that both this voting rule and a minimum number of voters rule must be true to execute the purchase. You can combine and extend this simple concept of a rule to cover a wide range of decision-making situations.
+</P>
+<P>Processes in the rules engine are represented by objects that implement the Action interface. This interface only defines a single method called executeOn.</P>
+<PRE>
+package busrules;
+
+import busrules.*;
+import java.util.Hashtable;
+
+public interface Action
+{
+    public void executeOn(Hashtable data);
+}
+</PRE>
+<P>The executeOn method should perform an operation such as accessing a database or altering data in the hash table. The busrules package includes a kind of action called a <I>task</I> that invokes a set of actions in the order in which they were added to the task in the script file. There is also a decision tree that holds pairs of rules and actions. The first pair in the tree with a valid rule has its action executed when the tree is executed. This tree object shows the potential complex processes that can be modeled with this simple rule-action combination.</P>
+<P>Hash tables are used in this example as the generic data transport for all actions and rules because they can easily store any type of object, including key-value pairs. In a sense, the hash table is a generic object with arbitrarily named attributes. Specific rules will expect specific values to be available in the hash tables passed to them. These expected values should be documented in the Rule&#146;s source code and javadoc file.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading3"></A><FONT COLOR="#000077">An Example Rule</FONT></H4>
+<P>Let&#146;s take a look at an example rule. This one, called AlwaysRule, looks at a single value in the hash table and is valid if that value is true. If the value is any other string or is not a string at all, the rule will return false.
+</P>
+<PRE>
+public class AlwaysRule implements Rule
+{
+    protected String key;
+
+    <B>public boolean isValidFor(Hashtable data)</B>
+    {
+	Boolean tf = Boolean.FALSE;
+	String value = null;
+	
+	try
+	{
+	    if(key != null)
+		value = (String) data.get(key);
+	    if(value != null)
+<B>                tf = Boolean.valueOf(value);</B>
+        }
+	catch(Exception exp)
+	{
+	    tf = Boolean.FALSE;
+	}
+	
+<B>        return tf.booleanValue();</B>
+    }
+
+<B>    public double validityFor(Hashtable data)</B>
+    {
+<B>        return (isValidFor(data)) ? 1.0 : 0.0;</B>
+    }
+
+    public void setKey(String s)
+    {
+	key = s;
+    }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch17\17-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

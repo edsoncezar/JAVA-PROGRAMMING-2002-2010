@@ -1,0 +1,260 @@
+<html>
+<head>
+<title>Signing Code with Sun's JDK 1.1.x (Appdx. C, Sec. 4) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\appdx-c.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="appdx-c-3.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>How to Sign Java Code
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="appdx-c-1.html">1</a> / <a href="appdx-c-2.html">2</a> / <a href="appdx-c-3.html">3</a> / 4 / <a href="appdx-c-5.html">5</a> / <a href="appdx-c-6.html">6</a> / <a href="appdx-c-7.html">7</a> / <a href="appdx-c-8.html">8</a><p>
+
+<font size="+2" color="#000000"><b>Section 4 -- Signing Code with Sun's JDK 1.1.x</b></font>
+</td><td width=60 align=center>
+<a href="appdx-c-5.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+Sun makes its own set of signing tools. The tools have evolved along with the JDK. We'll briefly cover both the JDK 1.1 tools and the Java 2 tools.<p>
+
+The JDK ships with a command-line tool called javakey. Its job is to manage a database of entities (people, companies, etc.) and their public/private keys and certificates. It is also supposed to generate and verify signatures for archive files; however, verification is not implemented as of JDK 1.1.7.<p>
+
+As Chapter 3 describes, an applet contained within a digitally signed JAR file is allowed to leave the bounds of the Java sandbox under certain circumstances. In JDK 1.1, if a JAR is signed and the user who has browsed to the Web site containing the applet has a policy stating that he or she trusts the person who signed the JAR, the applet can do anything at all that Java code is capable of. For example, it can read and write from the file system, start another process running on the computer (outside of the browser), open a network connection to an arbitrary machine, or myriad other tasks that applets are not normally allowed to do. In other words, trusted signed code under JDK 1.1 is as powerful as Java application code from the JDK 1.0.2 days. Remember, under JDK 1.1, we're operating under a black-and-white security model.<p>
+
+To get going with code signing in JDK 1.1, there are few things to gather. On the development side, an applet that tries to perform actions that aren't normally allowed by the Java sandbox is needed (or at least one that can be augmented to attempt such an action). The most rudimentary operation that a signed applet can do that an unsigned applet can't do is read the user.name System property. An example applet follows:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>public class UserApplet extends java.applet.Applet {
+ public void init() {
+ String username = "user: ";
+ try {
+ username += System.getProperty("user.name");
+ } catch (SecurityException se) {
+ username += "cannot read";
+ }
+ showStatus(username);
+ }
+}</pre>
+</td></tr></table></center><p>
+
+A signed applet containing the preceding code (running in a browser of a user who trusts the entity that signed the applet) will be able retrieve the name of the user running the applet and display it in the status bar of the browser.<p>
+
+Once the applet to be signed and its containing Web page have been created, the class files that contain the applet must be put into a JAR file. Even if the applet in question is only one class, it must be placed inside a JAR file. It is not possible to sign standalone class files.<p>
+
+In order to sign Java code with javakey, a signing certificate needs to be created. Once this certificate is created, it can be used to sign the JAR file and distributed to users who wish to allow the signer's applet full access to their system.<p><br>
+
+
+<center><font size="+1"><b>Creating a Signing Certificate</b></font></center><p>
+
+A file called identitydb.obj stores all certificate information and lives in the directory specified by the Java System Property value user.home. For Unix Java users, this value evaluates to $HOME. For Win32 users, user.home can take a number of values. Different VMs assign the value of user.home either to the USERPROFILE directory, to the HOMEDRIVE\HOMEPATH directory, or when all else fails, to the value of the java.home System Property. To clear up any ambiguity, write and run a simple Java containing the line:<p>
+
+<center><pre>System.out.println("user.home= " + System.getProperty("user.home"));</pre></center><p>
+
+Regardless of user.home, the location of identitydb.obj can be set explicitly by adding an identity.database entry to the java.security file that lives in the lib subdirectory of the java installation, wherever that may be on the system.<p>
+
+First, the signer's identity must be created in the database. To create an identity, signername, that will be able to sign objects, run the following command on the command line:<p>
+
+<center><pre><center><pre>javakey cs signername true</pre></center><p></pre></center><p>
+
+Now that a signer has been created, that signer's public and private keys must be initialized. Keys can be between 512- and 1024-bits long. To initialize public and private keys for a signer, run the following command (where # is a number between 512 and 1024):<p>
+
+<center><pre>javakey gk signername DSA #</pre></center><p>
+
+Higher numbers mean more security. We recommend always using 1024-bit keys. The parameter DSA signifies the algorithm used to generate the keys. The JDK  only comes with the DSA algorithm by default.<p>
+
+To verify that all has gone well so far, run:<p>
+
+<center><pre>javakey ld</pre></center><p>
+
+This command will list all the information in the current identity database. The entry for signername should identify it as a trusted signer as well as noting that the public and private keys have been initialized. The next step generates a certificate that will be valid for signing JAR files. This is different from Netscape Object Signing in that there is no Certificate Authority involved.<p>
+
+First, a directives file must be created. The directives file is a Java Properties file that provides values used during certificate generation. Here are the contents of an example directives file:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre> issuer.name=signername
+ subject.name=signername
+ subject.real.name=Sol S. Signer
+ subject.country=US
+ subject.org=Signing Corp
+ subject.org.unit=Development
+ start.date=22 Jul 1998
+ end.date=16 Aug 1999
+ serial.number=41</pre>
+</td></tr></table></center><p>
+
+To generate the certificate once the directives file exists, run:<p>
+
+<center><pre>javakey gc directivesfile</pre></center><p>
+
+To verify that the certificate was generated properly, run:<p>
+
+<center><pre>javakey ld</pre></center><p>
+
+Look for the signername entry to have the subject.* information from the directives file listed.<p>
+
+Everything is now finally set for signing. The command actually used to sign a JAR file also requires a directives file. This is a different directives file than the one used to generate the signing certificate. The first directives file used to generate the certificate will no longer be needed, unless a different certificate needs to be generated. The second kind of directives file is used whenever a JAR gets signed, and should be kept handy. An example directives file for signing a JAR looks like this:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre> signer=signername
+ # look at javakey ld for certificate numbers, should be 1
+ cert=1
+ # chain unsupported, must have as value=0
+ chain=0 
+ # must be 8 characters or less and not conflict with any other
+ # digital signatures that could be inserted into the JAR
+ signature.file=anything
+ out.file=Signed.jar</pre>
+</td></tr></table></center><p>
+
+Once the signingdirective file has been created, run the command:<p>
+
+<center><pre>javakey gs signingdirective UnsignedApplet.jar</pre></center><p>
+
+Running this command will generate Signed.jar, which will be a signed version of UnsignedApplet.jar. Putting Signed.jar in the ARCHIVE field of the APPLET tag in an HTML page will cause a Java-enabled browser to bring the JAR file over the network and execute the signed code contained within. For more information on javakey, the official Sun documentation for Solaris can be found at <a href="http://java.sun.com/products/jdk/1.1/docs/tooldocs/solaris/javakey.html">java.sun.com/products/jdk/1.1/docs/tooldocs/solaris/javakey.html</a>.<p>
+
+The Win32 specific version can be found at <a href="http://java.sun.com/products/jdk/1.1/docs/tooldocs/win32/javakey.html">java.sun.com/products/jdk/1.1/docs/tooldocs/win32/javakey.html</a>.<p><br>
+
+
+<center><font size="+1"><b>Testing the Signed Applet</b></font></center><p>
+
+Now that a signed applet exists, and it is embedded within a Web page, it's ready for testing before release. Testing requires either appletviewer or a Web browser that knows how to validate JARs signed by javakey and allows signed JARs to leave the sandbox. Unfortunately, neither of the two major browsers (Netscape Communicator and Microsoft Internet Explorer) support javakey-signed JARs.<p>
+
+HotJava and the appletviewer program that comes with the JDK can validate JARs signed by javakey. They will allow signed applets out of the sandbox if the signature is valid and the policy states that the user whose signature appears is trusted. Both of these programs search for the identitydb.obj in the same manner that javakey does.<p>
+
+The problem is that no one should be surfing the Net with HotJava (too dangerous), and the appletviewer cannot be used to browse the Internet. Since the VMs in Communicator and Internet Explorer do not support javakey signing, in order run javakey-signed applets with those browsers, users must download and install Sun's Java Plug-In.<p><br>
+
+
+<center><font size="+1"><b>Java Plug-In for Communicator and Internet Explorer</b></font></center><p>
+
+Java Plug-In can be used to run applets instead of the browser's default VM. The Java Plug-In can be configured to use the most recent version of the Java Runtime Environment available from Sun. When an applet is run through the Java Plug-In instead of the browser's default VM, javakey-signed JARs can be verified and can step outside of the sandbox (if policy allows).<p>
+
+Users must download the Plug-In from Sun and install it on their system. The download page for the Plug-In is <a href="http://java.sun.com/products/plugin/index.html">java.sun.com/products/plugin/index.html</a>.<p>
+
+Applet developers also need to modify the HTML pages that contain their applets and modify the &lt;APPLET&gt; tag. Applets that are in Web pages using the standard &lt;APPLET&gt; tag will still be run by the browser's default page. The Plug-In will run applets only when it detects a different set of HTML tags that specify an applet. Sun provides an application called HTMLConverter, which can convert pages with the &lt;APPLET&gt; tag into pages containing tags that will launch applets using the Plug-in. The HTMLConverter homepage is <a href="http://java.sun.com/products/plugin/converter.html">java.sun.com/products/plugin/converter.html</a>.<p>
+
+Two things to note about using the Plug-In. On Solaris, JavaScript must be enabled for the Plug-In to work properly. With JavaScript disabled, applets did not load or run when we tested the Plug-In with Communicator 4.02 and 4.06.<p>
+
+On Win32, the Java Plug-In did not find the identitydb.obj file in the same place that javakey did. This has to do with different versions of the VM setting different values of the user.home Property. If you run into trouble, try moving the identitydb.obj file to a different location. Places to try are mentioned in the section, Creating A Signing Certificate (see page 298).<p><br>
+
+
+<center><font size="+1"><b>Distributing Public Keys and Certificates</b></font></center><p>
+
+In order for someone to verify who signed a signed JAR, he or she needs the public key of the entity who signed the JAR in the first place. Until the public key is distributed to people other than its owner, no one but the owner can verify that an applet is signed and by whom. Once the signed applet has been tested and has proven to be functional, it can be placed on a Web site for use by others.<p>
+
+In order for the applet to escape the sandbox imposed by other people's browsers, users must have the public key or certificate of the entity that signed the applet. Also, the user must tell the identity database that he or she trusts the entity that signed the applet. Trusting the entity that signed the applet allows the applet complete access to the host. Here's how to create a trusted entry:<p>
+
+<center><pre>javakey c signername true</pre></center><p>
+
+To import the signer's public key contained in keyfile, run:<p>
+
+<center><pre>javakey ik signername keyfile</pre></center><p>
+
+To import the signer's certificate (which contains the signer's public key) from certfile, run:<p>
+
+<center><pre>javakey ic signername certfile</pre></center><p>
+
+The identity must be created in the database before trying to import either the public key or certificate. In order to verify the signature on a signed JAR, you need only the public key of the signer. Certificates include the public key.<p>
+
+The signer of the applet must make his or her public key (or certificate) available to users of the applet in some way. It could be linked from a Web site, phoned in, or delivered through email. Whichever way it is done, the identity must first be extracted from the identity database. To extract a public key from the database to a file keyfile, use the command:<p>
+
+<center><pre>javakey ek signername keyfile</pre></center><p>
+
+To extract signername's certificate number 1 to a file certfile, use the command:<p>
+
+<center><pre>javakey ec signername 1 certfile</pre></center><p>
+
+The information in the keyfile or certfile should be given to those who want to create a policy that allows applets signed with the identity to leave the sandbox.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="appdx-c-3.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="appdx-c-5.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="..\chapter-five\index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="..\chapter-five\index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+

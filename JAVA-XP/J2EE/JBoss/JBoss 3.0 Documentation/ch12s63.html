@@ -1,0 +1,76 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title> Transaction support </title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch12.html" title="Chapter 12. Container architecture - design notes"><link rel="previous" href="ch12s31.html" title="Container"><link rel="next" href="ch12s68.html" title="Security"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s31.html"><img src="images\prev.gif" border="0"></a><a href="ch12s68.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e8614"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e8614"></a> Transaction support </h2></div></div><div class="section"><a name="d0e8617"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8617"></a>Background</h3></div></div><p>In the world of distributed transaction processing (DTP) a series of
+specifications developed by OpenGroup
+	(www.opengroup.org) represent the most widely adopted DTP model. </p><p>Opengroup specifications define major components participating in the 
+DTP
+model as well as a set of APIs
+that define communication between these components. Components
+participating in the DTP model are:
+application programs, resource managers, and a transaction manager.  The 
+interface
+defined between application
+programs wishing to participate in global trasactions and the transaction
+manager is called the TX
+interface, while the interface between transaction managers and the resource
+managers is called the XA interface.</p><p>Sun Microsystems Inc followed this DTP model and as part of J2EE
+introduced the Java Transaction Service (JTS)
+and the Java Transaction API (JTA) specifications.</p></div><div class="section"><a name="d0e8626"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8626"></a>JTS and JTA</h3></div></div><p>The difference between JTS and JTA is often a source of confusion. 
+Simply
+put JTS defines above mentioned components
+participating in the DTP model, while JTA captures interfaces between 
+them.</p><p>JTS defines five major players in the DTP model of Java Enterprise
+middleware:</p><p>Transaction Manager as a core component which provides services of
+transaction resource management ( i.e resource
+enlistment, delistment), transaction demarcation, synchronization notification
+callbacks, trasaction context
+propagation and two-phase commit initiation and recovery coordination with
+resource managers.</p><p>The application server provides infrastructure required to support the
+application run-time environment.</p><p>A resource manager is a component that manages access to a persistent
+stable storage system. Each resource manager cooperates with a
+Transaction Manager in two-phase commit intiation and failure recovery.  An
+example of resource manager would be
+database driver.</p><p>EJB's can either use declarative transaction management specified in
+the ejb-jar.jar xml descriptor, or programmatic transaction manager
+using the <tt>UserTransaction</tt> interface.  Either way, the
+transaction services are provided by the application server.</p><p>A communication resource manager supports transactional context
+propagation.  Simply put this component allows
+the transaction manager to participate in transactions initiated by other
+transaction managers. JTS does not
+specify a protocol for this component.</p></div><div class="section"><a name="d0e8646"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8646"></a>Core implementation</h3></div></div><p>Jboss includes it's support of JTS and JTA specifications in the
+jboss.tm package. This package include implementation of
+TransactionManager , Transaction, Xid and Synchronization from JTA
+specification. </p><p>However, the key class is TxCapsule.  TxCapsule is has a very
+abstract notion but it closely matches the idea of
+transaction context.  Transaction context in turn is best thought of as a
+state of all transactional operations on the
+participating resources that make up one global transaction .  Therefore
+transactional context, or in Jboss's case
+TxCapsule, captures all participating XaResources and their states, all
+particiating threads as well as a global Xid
+identifying global transaction.</p><p>TxCapsule provides the real meat.  It enables enlisting and delisting
+of transactional resources, importing of
+transactions into capsule, provides creational point and access to Xid of the
+current global transaction, calls
+Synchronization callback but most importantly it initiates the two-phase commit
+protocol as well as rollback mechanisms
+defined by the two-phase commit protocol.</p><p>TransactionImpl implements Transaction interface from JTA. Each
+transaction is a part of TxCapsule which in turn can
+"host" transactions representing the TxCapsule. All of TransactionImpl methods
+are basically indirection calls to the hosting
+TxCapsule. </p><p>TxManager implements TransactionManager interface defined in JTA. As
+you might have guessed by now, it controls the lifecycle of all
+TxCapsules.  Since TxCapsule is a relatively heavyweight object, capsules
+are recycled in a soft reference queue.</p></div><div class="section"><a name="d0e8659"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8659"></a>TxInterceptor</h3></div></div><p>Following the previously introduced interceptor framework JBoss
+introduces two transactional interceptors TXIntereceptorBMT
+and TXIntereceptorCMT.  Both interceptors closely interact with TxManager in
+order to achieve proper transactional semantics.</p><p>TXIntereceptorBMT provides an instance of UserTransaction to the right
+transactional context. TxInterceptorBMT is used
+in the case of user demarcated, i.e explicit transactional management.  For
+more information on details of semantics
+refer to p174 of EJB1.1 spec.</p><p>TxInterceptorCMT moves all transactional management work to the
+container.  Depending on the transaction attributes specified in th 
+ejb-jar.xml file
+(i.e TX_REQUIRED, TX_SUPPORTS, TX_REQUIRES_NEW etc) the container decides how 
+to manage
+the transactional context of the invoked call.</p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s31.html"><img src="images\prev.gif" border="0"></a><a href="ch12s68.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

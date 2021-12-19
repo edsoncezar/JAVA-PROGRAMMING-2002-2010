@@ -1,0 +1,268 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Interfacing C/C++ and Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0639-0641.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0646-0651.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-642"><P>Page 642</P></A>
+
+
+<P>Listing 14.38 Definition of the javaString2unicode() Function
+</P>
+
+<PRE>
+municode *javaString2unicode(Hjava_lang_String *string, unicode
+&Acirc;*buffer,int amountToCopy);
+</PRE>
+
+<P>The javaString2unicode() function is used to extend Java's unicode capability to native
+C because there are times when the unicode character set is used in C functions. This is
+true of applications whose functions already use unicode for language internalization
+reasons. By using javaString2unicode(), the language-specific characters can be passed from
+Java into C and C++ functions.
+</P>
+
+<H3><A NAME="ch14_ 30">
+Thread Synchronization
+</A></H3>
+
+<P>It is sometimes necessary either to execute native code in its own thread or to ensure
+that native code blocks other threads from running. The native environment includes
+several callable functions that interface with the Java thread environment, as shown in table 14.5.
+</P>
+
+<P>Table 14.5<BR>
+Thread Synchronization Functions
+</P>
+
+<TABLE>
+
+<TR><TD>
+Function
+</TD><TD>
+Purpose
+</TD></TR><TR><TD>
+monitorWait()
+</TD><TD>
+Native code will block until another
+thread calls notify on the current thread or a notifyAll().
+</TD></TR><TR><TD>
+monitorNotify()
+</TD><TD>
+Notifies threads that have called wait().
+</TD></TR><TR><TD>
+monitorNotifyAll()
+</TD><TD>
+All Java threads that have called wait()
+and native code that has called monitorWait() are notified.
+</TD></TR></TABLE>
+
+<P>Each function is covered in more detail below.
+</P>
+
+<H4><A NAME="ch14_ 31">
+monitorWait()
+</A></H4>
+
+<P>The monitorWait() function is used the same way that wait() is used in Java. The
+execution of the native code will block until another thread calls notify on the current thread or
+a notifyAll() occurs.
+</P>
+
+<H4><A NAME="ch14_ 32">
+monitorNotify()
+</A></H4>
+
+<P>The monitorNotify() function notifies threads that have called wait() that the caller
+has completed its task. This function is the same as the Java's notify() method.
+</P>
+
+
+<A NAME="PAGENUM-643"><P>Page 643</P></A>
+
+
+
+<H4><A NAME="ch14_ 33">
+monitorNotifyAll()
+</A></H4>
+
+<P>The monitorNotifyAll() function is similar to monitorNotify() except that all Java
+threads that have called wait() and native code that has called monitorWait() are notified.
+Like notifyAll() in Java threads, monitorNotifyAll() only can be called from within a
+synchronized method.
+</P>
+
+<H3><A NAME="ch14_ 34">
+Native Code and Garbage <BR>
+Collection
+</A></H3>
+
+<P>One of the deadlier problems affecting native code is the Java Garbage Collector (gc).
+The gc can delete (or worse, move) objects that may be referenced by native methods.
+The only way to stop the gc from deleting or moving a referenced object is to store
+the reference of the object on the C stack.
+</P>
+
+<P>The easiest way to avoid gc problems is to never store object references between
+calls. The following sections discuss a few techniques that enable native methods to access
+Java objects.
+</P>
+
+<H4><A NAME="ch14_ 35">
+Passing Objects
+</A></H4>
+
+<P>Keep objects that would normally be global at the C level in the Java environment.
+Pass the objects into the native environment each time they are needed.
+</P>
+
+<P>If an object is often required from the Java environment, such as a vector of values
+for example, an incorrect assumption is that by copying a reference to the native C code,
+you would save time because the vector remains accessible on the native side. The reference
+to the vector becomes invalid the moment the original subroutine terminates. The
+vector must be passed each time it is used; otherwise, the vector may be moved in memory by
+the garbage collector. If moved, the cashed vector reference will no longer point to the
+correct memory location, causing unpredictable results.
+</P>
+
+<H4><A NAME="ch14_ 36">
+Reference Data and Methods and Other Ob-<BR>
+jects from the Native Object Pointer
+</A></H4>
+
+<P>By using the object that is passed with every native function call, accessing methods
+and fields is safe until the function returns because the object is passed on the C stack. The
+gc
+</P>
+
+<A NAME="PAGENUM-644"><P>Page 644</P></A>
+
+
+<P>will not destroy the object while it remains there. If the function does not return
+(because it is a thread), the objects can be copied to a global reference for use by all functions.
+</P>
+
+<H4><A NAME="ch14_ 37">
+Build Your Own Objects
+</A></H4>
+
+<P>Note that objects built in C must be allocated on the stack! Do not use the heap (beware
+of calloc(), alloc(), malloc(), and the C++ new operator). After an object is built, it remains
+in effect until the handle to the object is cleared.
+</P>
+
+<H3><A NAME="ch14_ 38">
+Using Native Methods: A Serial <BR>Port Library
+</A></H3>
+
+<P>To demonstrate how peer classes are used, the following sections describe how to
+implement a package that can be used to access serial ports on the PC (Windows 95 or
+Windows NT). The example shows how to isolate machine-dependent native code from
+machine-independent Java code by using the Peer pattern.
+</P>
+
+<P>The SerialDevice package is not a part of any of the Java libraries or a
+commercial-quality API. It is useful enough to use for simple serial I/O and can be extended by the user
+for more complex tasks.
+</P>
+
+<H4><A NAME="ch14_ 39">
+Isolating Native Functions: The Peer Pattern
+</A></H4>
+
+<P>Software patterns are guides that act as software cookbooks that map a particular
+problem or task to established implementation techniques and guidelines. Software patterns
+are similar to reusable components, but they are only concerned with reusing the steps to
+get from problems to solutions. An example of a pattern that may seem familiar is
+&quot;Model View,&quot; which is used to isolate a program's function and state (the model) and the
+GUI that represents the model (the View). In Java, the Model View pattern is
+accomplished with the Observer and Observable, as discussed in Chapter 3.
+</P>
+
+<P>Another pattern, Peer, is discussed in this section. The Peer pattern solves the problem
+of mixing nongeneric parts with generic ones. An example of how the Peer pattern works
+is demonstrated by the Java AWT.
+</P>
+
+<P>The AWT uses the Peer pattern to hide implementation details of specific platforms
+(non-generic) from cross-platform behavior (generic). This method of nongeneric
+hiding provides a reasonably stable way to increase the number of platforms without
+changing
+</P>
+<A NAME="PAGENUM-645"><P>Page 645</P></A>
+
+
+<P>the multiplatform characteristics of a library. This hiding is accomplished by having
+a class that represents the multiplatform access, a class that implements
+platform-specific details, and an interface that is used by the multiplatform class to access the
+platform-specific code. In this way, by simply changing the instance of the platform-specific
+class, the multiplatform class can access multiple platforms.
+</P>
+
+<P>The SerialDevice package implements the Peer pattern. The problem the Peer pattern
+tries to solve is to isolate machine-dependent features in Microsoft Windows 95 and NT
+serial device drivers. The isolation is required so that any Java program can use the
+SerialDevice API on any machine that implements the machine-dependent functions hidden below
+the public interface.
+</P>
+
+<P>The state diagram in figure 14.3 shows how the Peer pattern is put together. The inter-<BR>
+face SerialPeer is used to represent functions that generic to serial devices. The
+class SerialDevice is the class that users will instantiate and use as an object that controls
+the serial port. The class Win32sSerial is a class with the native method calls to Windows
+95 and to Windows NT. The SerialDevice class is assigned an Object of type
+Win32sSerial that has been cast to the SerialPeer interface type. The SerialDevice can now control
+serial ports by calling SerialPeer methods, which are now redirected to the
+Win32sSerial implementation. The Win32sSerial class can be replaced with another implementation
+for another machine without affecting the operation of the SerialDevice class.
+</P>
+
+<H4><A NAME="ch14_ 40">
+Overview of the Serial Port Library
+</A></H4>
+
+<P>The implementation of this program is broken into eight classes and one interface inside
+a package named SerialDevice. NativeSerial is an example application that uses
+the SerialDevice package to read and write to a serial port.
+</P>
+
+<P>The SerialDevices package holds all the classes that are required to access the native
+code and includes utility functions that aid in writing serial access programs. The following
+list shows the breakdown of the SerialDevices package used by NativeSerial.
+</P>
+
+<UL>
+<LI>     SerialPeer. This interface class isolates specific implementations of the
+serial device access. It is used by the SerialDevice class to access the peer for the
+specific platform.
+<LI>     Win32sSerialPeer. This class is the specific implementation for NT and
+Windows 95. Use this class as a model for implementing SerialPeer on other
+operating systems.
+<LI>     SerialDevice. This is the class that enables client classes to access the main
+serial functions.
+<LI>     WaitForTokens. This utility class is called by the serial port monitor when
+the serial 
+</UL>
+
+<P><CENTER>
+<a href="0639-0641.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0646-0651.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

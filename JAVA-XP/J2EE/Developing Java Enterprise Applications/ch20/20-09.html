@@ -1,0 +1,173 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming with the Java Messaging Service</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Expressions use operators to combine literals and identifiers. These expressions can be grouped using parentheses and combined using the key words AND, OR, and NOT. The supported comparison operators for numbers are:
+</P>
+<PRE>
+=, &gt;, &gt;=, &lt;, &lt;=, &lt;&gt; (not equal)
+</PRE>
+<P>For example, you might write:
+</P>
+<PRE>
+JMSPriority &gt;= 5
+</PRE>
+<P>to test if the priority for a message is greater than or equal to 5. You can also use arithmetic operations, including:
+</P>
+<PRE>
+&#43;,-
+</PRE>
+<P>the unary operators for saying a value is positive or negative, and the operators
+</P>
+<PRE>
+&#43;,-,*,/
+</PRE>
+<P>for adding, subtracting, multiplying, and dividing. If you want to test whether a number is in a given range, you can use the BETWEEN and NOT BETWEEN key words. These are the same as combining other operators but may be interpreted more quickly. For example:
+</P>
+<PRE>
+price BETWEEN 10 and 100
+</PRE>
+<P>and
+</P>
+<PRE>
+price &gt;= 10 AND price &lt;= 100
+</PRE>
+<P>are equivalent.
+</P>
+<P>Strings can be compared using = or &lt;&gt; and with the LIKE operator. For example, you might say:</P>
+<PRE>
+JMSType == &#145;carrier&#146;
+</PRE>
+<P>LIKE takes a pattern and compares it to an identifier. This pattern is made up of characters, numbers, and the _ or % characters, indicating wildcards. The _ character indicates a single wild character. The % wildcard indicates a sequence of characters, including the empty sequence. For example, you might use:
+</P>
+<PRE>
+phone LIKE &#145;12%3&#146;
+</PRE>
+<P>to match 123 or 124453, but not 1234, because it ends in 4, not 3. You can also negate the LIKE operator by saying NOTLIKE. To include the _ or % character in a LIKE comparison, use the ESCAPE keyword to define an escape character. For example:
+</P>
+<PRE>
+name LIKE &#145;JMS\_%&#146; ESCAPE &#145;\&#146;
+</PRE>
+<P>will test the name for strings like JMS_one but fail for JMStwo. To test whether a string is one of a group of possibilities, use the IN key word. IN takes an array of strings and compares the provided value with the array. For example:
+</P>
+<PRE>
+name IN (&#145;stephen&#146;,&#145;scott&#146;)
+</PRE>
+<P>matches stephen or scott and no other value. You can negate the IN operator by using NOT IN.
+</P>
+<P>Selectors can also use the key words IS NOT NULL or IS NULL to check the existence of an identifier. For example:</P>
+<PRE>
+JMSType IS NOT NULL
+</PRE>
+<P>will be true if the message has its JMSType header field set.
+</P>
+<P>Regardless of the selector, all comparisons must be made between like types, numbers to numbers, strings to strings, or Booleans to Booleans.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>MiniJMS provides no support for message selectors.</FONT><HR>
+</BLOCKQUOTE>
+<P>Although selectors are used to identify and filter messages, they are not part of the message and are assigned when a client creates a MessageConsumer to receive messages.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading14"></A><FONT COLOR="#000077">Basic Steps for Programming JMS</FONT></H4>
+<P>Given these concepts and interfaces, the basic steps for creating a JMS program are as follows:
+</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Retrieve a ConnectionFactory from JNDI.
+<DD><B>2.</B>&nbsp;&nbsp;Retrieve the Destinations of interest from JNDI.
+<DD><B>3.</B>&nbsp;&nbsp;Use the ConnectionFactory to create a Connection to the JMS provider, probably to the server.
+<DD><B>4.</B>&nbsp;&nbsp;Use the Connection to create a Session.
+<DD><B>5.</B>&nbsp;&nbsp;Use the Session and Destination objects to create MessageConsumers, MessageProducers, or both.
+<DD><B>6.</B>&nbsp;&nbsp;Assign any MessageListeners.
+<DD><B>7.</B>&nbsp;&nbsp;Send messages with the producer, receive messages with the consumer.
+</DL>
+<P>The next two sections discuss how these steps are implemented for the two messaging styles: point-to-point and publish-subscribe messaging.
+</P>
+<H3><A NAME="Heading15"></A><FONT COLOR="#000077">Point-to-Point Messaging</FONT></H3>
+<P>Point-to-point messaging, as defined by JMS, uses the concept of a queue to represent a destination. A queue is a sequence of messages that may or may not be persistent, depending on their delivery mode. Queues are created by an administrator and registered with a JNDI context. Clients can send messages to or receive messages from a queue. However, the implied relationship between client and queue is that a single client will receive messages from a single queue, and possibly multiple clients will send messages to the queue. As discussed in the next section, the publish-subscribe model is intended for situations in which multiple clients share the same queue.
+</P>
+<P>Queues are represented by objects that implement the Queue interface. This interface defines a single method:</P>
+<PRE>
+public String getQueueName() throws JMSException
+</PRE>
+<P>that returns the name of the queue. The provider is also expected to override the toString method and return a &#147;pretty&#148; version of the name. Queue is a subinterface of Destination, so a Queue is a full-fledged destination for sending and receiving messages.
+</P>
+<P>The server serializes messages sent to a queue into a single sequence. This ensures that the client checking the queue will receive each message only once and that the messages will be received in the order in which they were sent. The JMS provider is expected to keep messages for a queue available as long as it is running. Persistent messages should be maintained even if the server is shut down and restarted.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading16"></A><FONT COLOR="#000077">Queue Connection Factory</FONT></H4>
+<P>Clients that want to use Queues and the point-to-point messaging model need to retrieve a queue connection factory from JNDI. This factory implements the QueueConnectionFactory interface, which extends the ConnectionFactory interface described previously. The QueueConnectionFactory provides two methods for creating connections:
+</P>
+<PRE>
+public QueueConnection createQueueConnection() throws JMSException
+public QueueConnection createQueueConnection(String userName
+                                             , String password)
+                                               throws JMSException
+</PRE>
+<P>Both of these methods return an object that implements the QueueConnection interface. The first method uses the default user identification; the second takes a user name and password. These values may or may not be used by the JMS provider.
+</P>
+<P>MiniJMS registers a QueueConnectionFactory in JNDI using the name QueueConnectionFactory, so given a context, you can look it up using code such as:</P>
+<PRE>
+factory = (QueueConnectionFactory)
+            context.lookup(&#147;QueueConnectionFactory&#148;);
+</PRE>
+<P>This code simply looks up an object in the JNDI context and casts it appropriately.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading17"></A><FONT COLOR="#000077">Queue Connections</FONT></H4>
+<P>The QueueConnection is a special kind of Connection designed for point-to-point messaging and inherits the methods from that interface, as listed in Table 20.1. QueueConnection also defines two new methods. The first:
+</P>
+<PRE>
+public QueueSession createQueueSession(boolean transacted,
+                                       int acknowledgeMode)
+                                       throws JMSException
+</PRE>
+<P>is used to create a session for your point-to-point messaging. This method takes a Boolean that indicates whether the returned session will use transactions and an integer that indicates the acknowledgment mode.
+</P>
+<P>The second method defined in QueueConnection is:</P>
+<PRE>
+public ConnectionConsumer createConnectionConsumer(Queue queue
+                                , String messageSelector
+                                , ServerSessionPool sessionPool
+                                , int maxMessages)
+                                 throws JMSException
+</PRE>
+<P>for use in an application server. It is not really part of the client API.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading18"></A><FONT COLOR="#000077">Queue Sessions</FONT></H4>
+<P>The session created by a QueueConnection implements the QueueSession interface. This interface extends the Session interface described previously and adds methods specific to point-to-point messages.
+</P>
+<P>The first thing that a QueueSession can do is create a special type of MessageProducer called a QueueSender. Use the method:</P>
+<PRE>
+public QueueSender createSender(Queue queue) throws JMSException
+</PRE>
+<P>to create this object for a specific queue.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

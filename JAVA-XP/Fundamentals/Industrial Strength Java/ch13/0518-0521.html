@@ -1,0 +1,242 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0513-0517.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0522-0525.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-518"><P>Page 518</P></A>
+
+
+
+<P>A Thread object merely represents a thread and provides methods to control that
+thread; Runnable objects actually perform the work in parallel. Each Thread calls run() for
+one and only one Runnable object, and although it's possible to have the run() method of
+a single Runnable object being executed by several Threads at once, a single
+Runnable object is usually associated with a only a single Thread object.
+</P>
+
+<H3><A NAME="ch13_ 14">
+The Thread Lifecycle
+</A></H3>
+
+<P>A Thread object, after initial creation, must be started. Starting the Thread object
+causes the new, separate thread of control to call a run() method. The Thread object stays in
+this &quot;running&quot; state until it's stopped, although it may be suspended and then restarted for
+a number of reasons (refer to the later sections about Mutual Exclusion, Wait, and
+Notify). A Thread object can be in one of the following states (these state names are not part of
+the Java API; they're used only for explanation):
+</P>
+
+<UL>
+<LI>     Created. A Thread object is in this state when it is first created. The only
+methods that can be called while a thread is in this state are start(), which changes
+the Thread object to the Running state, or stop(), which changes it to Dead. Any
+other methods called throw a java.lang.IllegalThreadStateException.
+<LI>     Running. A Thread object in this state is available for execution along with
+all other Running Threads. The Java VM Scheduler decides which threads are
+actually executing at any one time, following rules explained later in the section
+about scheduling and priority. While in this state, the Thread can be suspended
+by suspend() or killed (state becomes dead) by stop(). Exiting the run() method
+(either by design or because of an uncaught exception) also changes the Thread state
+to dead.
+<LI>     Suspended. A suspended Thread object is not executed by the scheduler
+and remains suspended until either the resume() method is called, which changes
+the Thread object back to the Running state, or the stop() method is called. A
+thread can suspend itself for a period of time by calling the sleep() method,
+although resume() cannot be used to waken a sleeping Thread object. Calling sleep(),
+which is a class method, always affects the current
+thread.
+<P>
+          Threads may also be suspended when performing I/O, or they may be
+suspended through the use of synchronization primitives.
+</P>
+
+<LI>          Dead. A dead Thread cannot be restarted and is eligible for garbage
+collection under the same conditions as any other object.
+</UL>
+
+
+<A NAME="PAGENUM-519"><P>Page 519</P></A>
+
+
+
+
+<H4><A NAME="ch13_ 15">
+Methods that Change Thread State
+</A></H4>
+
+<P>The methods that change or test the Thread object state are shown in listing 13.11.
+Figure 13.4 shows the methods for each Thread state that may be called to change that state
+and what effect they have.
+</P>
+
+<P>Listing 13.11 java.lang.Thread Methods Affecting a Thread's State
+</P>
+<PRE>
+//Make a newly created Thread eligible for execution.
+public synchronized void start();
+
+//Stop thread by throwing ThreadDeath
+public final void stop();
+
+//Stop thread by throwing an Exception or Error.
+//Normal code should just use stop().
+public final synchronized void stop(Throwable o);
+
+//Returns true if the Thread is in the Running or Suspended
+//states.
+public final boolean isAlive();
+
+//Put the current Thread to sleep for the specified
+//time. Note that this is a static method and always
+//operates on the current Thread.
+public static void sleep(long millis)
+        throws InterruptedException;
+
+//As sleep(long millis), but allows more precise
+//specification of time.
+public static void sleep(long millis,
+                           int nanos)
+        throws InterruptedException;
+
+//Suspend a Thread. The Thread will become eligible for
+//execution again when resume() is called.
+public final void suspend();
+
+//Resume a Thread that has been suspended by a call to
+//suspend(). If the Thread has not been suspended this
+//way resume() will have no effect.
+public final void resume();
+</PRE>
+
+<A NAME="PAGENUM-520"><P>Page 520</P></A>
+
+
+
+
+<P><a href="images\ch13fg04.jpg"><img src="images\tn_ch13fg04.jpg"></a><BR>
+Figure 13.4
+A thread lifecycle state diagram.
+</P>
+
+<B>
+Thread Lifecycle
+</B>
+
+<P>For many applications of threading, it's not necessary to change the thread state other
+than to call start() to start the new thread running. Because a thread exits on return from
+the run() method of the target Runnable, calling stop() is usually unnecessary.
+</P>
+
+<P>The sleep() calls might be used in a thread that starts and monitors some potentially
+time-consuming operation, such as sending data over a network link, to cause the thread
+to sleep for a period of time and then wake up to check the progress of the operation.
+</P>
+
+<P>Suspending and resuming threads can be useful where one thread controls the operation
+of one or more other threads. In a real implementation of the Worker/Supervisor
+classes given earlier in the section on Threads in Design, for example, the Supervisor
+might suspend some Worker threads to allow others more processor time.
+</P>
+
+<H4><A NAME="ch13_ 16">
+Testing Thread States
+</A></H4>
+
+<P>The Thread class provides a single method for testing the Thread object state.
+The isAlive() method returns true if the Thread object has been started but not yet stopped
+(that is, the Thread object is in either the Running or Suspended state). A return of
+false indicates that the Thread has either not yet been started or has completed and is now Dead.
+</P>
+
+<P>Signaling a thread to stop running by setting a flag is a common requirement, and
+the Java API defines three methods to support this. The Thread.interrupt() method can be
+called, for any thread, to set a Thread internal Boolean flag to true. Two other
+methods, Thread.isInterrupted() and Thread.interrupted(), return the state of this flag&#151;true
+if
+</P>
+<A NAME="PAGENUM-521"><P>Page 521</P></A>
+
+
+
+<P>
+interrupt() has been called for the Thread, false if not. Thread.interrupted() is a
+static
+method that always checks the flag for the current thread.
+The other difference between the two is that interrupted() resets the interrupt flag to false after checking;
+isInterrupted() does not.
+</P>
+
+<P>With these methods it's easy for a loop in a run() method to be stopped in a
+controlled fashion by interrupting the Thread object running it, as shown in listing 13.12, which
+also defines the methods that handle Thread interrupts.
+</P>
+
+<P>Listing 13.12 A run() Method that Checks for Interrupts
+</P>
+<PRE>
+//Send an interrupt to a Thread.
+
+public void run() {
+
+    //loop until this thread is interrupted
+    do {
+        //do some operation
+        doSomeWork();
+    while(!interrupted());
+}
+</PRE>
+
+<P>The run() method continues to loop until interrupt() is called for the Thread object
+which is running it. The next time that interrupted() is called, it returns true to indicate that
+an interrupt has been requested, and the loop will terminate.
+</P>
+
+<H4><A NAME="ch13_ 17">
+Stopping Threads
+</A></H4>
+
+<P>There are three events that can stop a running thread:
+</P>
+
+<UL>
+<LI>          An exception is thrown and not caught
+<LI>          The thread returns from the run() method of the Runnable object
+<LI>          The Thread object is destroyed
+</UL>
+<P>
+<B>
+Throwing an Exception
+</B>
+</P>
+
+<P>Any uncaught exception stops a thread. The run() method cannot throw exceptions
+(none are listed in its definition in the java.lang.Runnable interface), so any uncaught
+exceptions that occur within a thread can't be caught by any other thread. An uncaught exception
+in run() causes that thread to stop running after all clauses have been executed and
+the uncaughtException() method has been invoked for the ThreadGroup, of which the
+Thread
+</P>
+
+<P><CENTER>
+<a href="0513-0517.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0522-0525.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

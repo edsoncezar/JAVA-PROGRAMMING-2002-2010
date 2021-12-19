@@ -1,0 +1,252 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Servlet-Based Search Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P><FONT SIZE="+1"><B><I>Managing a Large Number of Hits</I></B></FONT></P>
+<P>The navigation bar for moving around in large result sets is displayed by the method outputHitsNavigator. This method first determines if a navigation bar is needed by comparing the number of results to be displayed to the maximum number of hits allowed to be displayed. For example, if there are 100 results to a query and maxhits is 20, the first 20 result hits are displayed and a navigation bar is used to allow access to the last 80 hits. If the bar is not required, the method returns without sending any HTML to the client. If a bar is required, the method determines if the Previous and Next buttons are needed. If the display is the first block of the result set, the Previous button is not needed; if it is the last block, the Next button is not needed. The navigation buttons are displayed as gray text when deactivated or links when active. The bar is always centered. The following code defines the outputHitsNavigator method.
+</P>
+<PRE>
+protected void outputHitsNavigator(int maxHits,int current
+                                  ,int curMax,String query
+                                  ,String url,PrintWriter w)
+{
+    boolean needPrev,needNext;
+    int prev,next;
+ 
+    if(curMax&gtmaxHits)
+    {
+     /*
+        Only need a previous button if we are not displaying
+        the first set of results
+     */
+     needPrev = (current != 0);
+     /*
+        Only need a next button if we are not displaying
+        the last set of results
+     */
+     needNext = ((current&#43;maxHits)&ltcurMax);
+     
+     w.println("&ltCENTER&gt");
+     if(needPrev)
+     {
+         w.print("&ltA HREF=\"");
+         w.print(url);
+         w.print("?");
+         w.print(QUERY_FIELD_NAME);
+         w.print("=");
+         w.print(URLEncoder.encode(query));
+         w.print("&amp");
+         w.print(MAX_FIELD_NAME);
+         w.print("=");
+         w.print(maxHits);
+         w.print("&amp");
+         w.print(CURRENT_FIELD_NAME);
+         w.print("=");
+         prev = (current-maxHits);
+         w.print(prev);
+         w.println("\"&gt&amplt;prev&lt/A&gt ");
+     }
+     else
+     {
+         w.print("&ltFONT COLOR=\"#777777\"&gt");
+         w.print("&amplt;prev ");
+         w.println("&lt/FONT&gt");
+     }
+     
+     if(needNext)
+     {
+         w.print("&ltA HREF=\"");
+         w.print(url);
+         w.print("?");
+         w.print(QUERY_FIELD_NAME);
+         w.print("=");
+         w.print(URLEncoder.encode(query));
+         w.print("&amp");
+         w.print(MAX_FIELD_NAME);
+         w.print("=");
+         w.print(maxHits);
+         w.print("&amp");
+         w.print(CURRENT_FIELD_NAME);
+         w.print("=");
+         next = (current&#43;maxHits);
+         w.print(next);
+         w.println("\"&gtnext&ampgt;&lt/A&gt");
+     }
+     else
+     {
+         w.print("&ltFONT COLOR=\"#777777\"&gt");
+         w.print("next&ampgt;");
+         w.println("&lt/FONT&gt");
+     }
+     
+     w.println("&lt/CENTER&gt");
+    }
+}
+</PRE>
+<P>The navigation links use query strings to tell the servlet the query, the maximum number of hits to display as defined in the initial request, and the start for the result block to display, if the link is selected. The Next button moves up maxHits items, and the Previous button moves back maxHits. The URL for the servlet itself was determined in handleQuery, and the query is encoded to make this a proper URL. Using the example HTML file SearchTester.html listed at the end of the chapter, this navigation bar will contain HTML such as the following:
+</P>
+<PRE>
+&ltCENTER&gt
+
+&ltA HREF="http://192.168.0.173:8080/servlet/htmlsearch/
+?query=java&ampmaxhits=25&amphitstart=0"&gt&amplt;prev&lt/A&gt
+
+&ltA HREF="http://192.168.0.173:8080/servlet/htmlsearch/
+?query=java&ampmaxhits=25&amphitstart=50"&gtnext&ampgt;&lt/A&gt
+
+&lt/CENTER&gt
+</PRE>
+<P>That completes the HTMLSearchServlet class. The results from a search with this servlet look like Figure 8.2.
+</P>
+<P>Next let&#146;s look at the IndexManager to see how to use synchronization to protect the indices.</P>
+<H3><A NAME="Heading6"></A><FONT COLOR="#000077">IndexManager</FONT></H3>
+<P>IndexManager uses a hash table to associate directories and indices. When the servlet or any other object requests an index, IndexManager checks whether the index is already loaded. If the index is available, it is returned. The index is thread safe and uses minimal synchronization because it is basically read-only once it is loaded. The trick is to protect the index during loading and to load only one index per directory.
+</P>
+<P><A NAME="Fig2"></A><A HREF="images\08-02.jpg"><IMG SRC="images\08-02t.jpg"></A>
+<BR><A HREF="images\08-02.jpg"><FONT COLOR="#000077"><B>Figure 8.2</B></FONT></A>&nbsp;&nbsp;HTMLSearchServlet results.</P>
+<P>To manage the loading process for each index, IndexManager uses subclasses of thread called IndexLoader. These loaders and the manager itself avoid loading indices multiple times by synchronizing on the manager&#146;s hash table whenever a decision is made to load an index. The loader locks the hash table to add a new index to the available pool. When a request comes in for an unloaded index, the manager puts the indexloader in the hash table with the requested directory. If another thread requests that index, the manager knows to return null, without creating a new loader.
+</P>
+<P>An updateInterval is defined to tell the manager when to recheck a directory for changes. The default is to check only the first time the index is loaded. You can set this to any time, in seconds, using the updateinterval configuration parameter on the HTMLSearchServlet. To help manage updates, the manager uses a hash table containing the last index load time. The following code defines IndexManager.java.</P>
+<PRE>
+package index;
+
+import index.*;
+import java.util.*;
+import java.io.*;
+import DebugLog;
+public class IndexManager
+{
+    protected static Hashtable indices;
+    protected static Hashtable loadtimes;
+ 
+    public static long updateInterval = 0;//seconds
+    // Cache once and then reuse.
+    static
+    {
+     indices = new Hashtable();
+     loadtimes = new Hashtable();
+    }
+ 
+    public static HTMLIndex indexForDirectory(String dir
+                                ,String rel)
+    {
+     HTMLIndex retVal = null;
+     Object test = null;
+     IndexLoader loader=null;
+     
+     if(dir == null) return null;
+     
+     // Support multithreaded access.
+     synchronized(indices)
+     {
+         // Does the directory exist in the hash table?
+         test = indices.get(dir);
+     
+         if(test == null)
+         {
+          // No, then load it.
+          loader = new IndexLoader(dir,rel,indices);
+          
+          indices.put(dir,loader);
+          // Keep track of how long it took to load.
+          loadtimes.put(dir,new Date());
+         }
+         else if(test instanceof HTMLIndex)
+         {
+          retVal = (HTMLIndex) test;
+          
+          if(updateInterval&gt0)
+          {
+              try
+              {
+                 Date now = new Date();
+                 Dateload;
+                 long nw,ld;
+          
+                 load = (Date) loadtimes.get(dir);
+          
+                 nw = now.getTime();
+                 ld = load.getTime();
+             
+                 if(nw &gt (ld&#43;(updateInterval*1000)))
+                 {
+                     if(retVal.indexNeedsRebuilding())
+                     {
+                      //reload
+                    loader =
+                       new IndexLoader(dir,rel,indices);
+          
+                    indices.put(dir,loader);
+                    loadtimes.put(dir,new Date());
+                    
+                      retVal = null;
+                     }
+                     else
+                     {
+                      //Update load time.
+                      loadtimes.put(dir,new Date());
+                     }
+                 }
+                }
+                catch(Exception exp)
+                {
+                 retVal = (HTMLIndex) test;
+                 indices.put(dir,retVal);//just in case
+                 loadtimes.put(dir,new Date());
+                }
+          }
+         }
+           //else it is the index loader working...
+     }
+          
+     if(loader != null)
+     {
+         if(loader.needsBuild())
+         {
+          loader.start();
+         }
+         else
+         {
+          loader.load();
+            retVal = (HTMLIndex) indices.get(dir);
+         }
+     } 
+     
+     return retVal;
+    }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

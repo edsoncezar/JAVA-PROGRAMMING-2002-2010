@@ -1,0 +1,137 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A JavaServer Page Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch10\10-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="11-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 11<BR>A JavaServer Page Online Store
+</FONT></H2>
+<P>One large and growing sector of Web applications is the online store&#151;a Web site for electronic commerce, also called <I>e-commerce.</I> This chapter sets up a simple online store created with JavaServer Pages. This example also uses the AdLinkRotatorServlet example from Chapter 7, &#147;Programming Servlets,&#148; and Chapter 10, &#147;Creating JavaServer Pages.&#148; This example should not be considered a complete commercial product, but instead the beginning of one. Some of the decisions made when creating this example were for educational reasons. For example, the HTML pages describing products are based on images and HTML pages that were easily available. Some pages have added features that are not provided on others, so the discussion focuses on a particular concept. That said, this is a nice, simple online store, with the restriction: You can&#146;t really buy anything.</P>
+<P>This chapter is organized into three parts. The first part looks at how the site is organized and what the requirements are. The second part looks at the two main JSP used to create the site. The final part looks at the shopping cart servlet created for the site. As with all of the examples in this book, the HTML and code for this example are available on the CD-ROM.</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">How the Store Works</FONT></H3>
+<P>The online store needs to be dynamic and have the ability to easily add items for sale. At the same time, it would be useful to categorize the items so that the customer doesn&#146;t have to look through long lists. Finally, the store should provide a shopping cart for keeping track of the customer&#146;s selected items.
+</P>
+<P>To make this example work, an index.jhtml or home page is created for the site, which dynamically displays a list of categories based on the directories contained in the site&#146;s main directory on the Web server. For example, on the CD-ROM is a directory containing the main page and two subdirectories, one called Books and the other called Courses. The main page displays two links, one to Books/index.jhtml and one to Courses/index.jhtml.</P>
+<P>Another category is planned for inside each JSP. This category page performs a similar function as the main page by dynamically listing the files in the directory. When a category index page is accessed, it looks at the available HTML pages in its directory and creates them as a list of links. Each of these pages should represent a single product for sale in that category. This organization is illustrated in Figure 11.1.</P>
+<P>The pages for each product on the site are simple HTML pages rather than servlets. This improves performance; the site might have thousands of products, and you don&#146;t want to have thousands of servlets sitting in memory. Instead, JSPs are used only for the main page and categories.</P>
+<P>The shopping cart is a servlet instead of a JSP because it will output a variety of messages based on the user&#146;s actions. (The example in Chapter 25, &#147;A Four-Tier Online Store,&#148; extends this servlet to access an Enterprise JavaBean.) The servlet outputs a fair amount of HTML and could certainly be changed to a JSP instead. The shopping cart uses parameters to tell it what you want to do, including adding and removing items as well as simply displaying the cart. A mechanism for e-commerce is not implemented in this example, because this capability can be very site dependent and is outside the scope of the current discussion. On a real site, you might access a database, create an e-mail invoice, or use some other mechanism for placing the order.</P>
+<P><A NAME="Fig1"></A><A HREF="images\11-01.jpg"><IMG SRC="images\11-01t.jpg"></A>
+<BR><A HREF="images\11-01.jpg"><FONT COLOR="#000077"><B>Figure 11.1</B></FONT></A>&nbsp;&nbsp;Example online store organization.</P>
+<H3><A NAME="Heading3"></A><FONT COLOR="#000077">The Main Page</FONT></H3>
+<P>The goal of the main page is to display a list of the available categories, as pictured in Figure 11.2. The categories are determined by looking at the subdirectories in the main pages directory. Figure 11.2 shows how these directories are organized on the CD-ROM.
+</P>
+<P>The first step in creating the main page is to define some instance variables and a method for loading the list of categories. For simplicity, this example stores the categories in a vector, where each element in the vector is the string name for the category and corresponding directory. To load the vector, a method called initCategories is called that takes a directory path and loads the categories for that path. The JSP creates the path from the request URL using the HTTPRequest object&#146;s getRealPath method. Because the initCategories method is outside the generated servlet&#146;s service method, the definition for it is placed between &ltjava&gt tags with a type=class.</P>
+<P><A NAME="Fig2"></A><A HREF="images\11-02.jpg"><IMG SRC="images\11-02t.jpg"></A>
+<BR><A HREF="images\11-02.jpg"><FONT COLOR="#000077"><B>Figure 11.2</B></FONT></A>&nbsp;&nbsp;The main page.</P>
+<PRE>
+<B>&ltjava type=class&gt
+    Vector categories;</B>
+    String docRoot;
+        
+    public void initCategories(String rt)
+    {
+        File rootDir=null;
+        String[] files;
+        int i,max;
+        File curFile;
+        
+        docRoot = rt;
+        
+<B>        categories = new Vector();
+</B>        
+        try
+        {
+            rootDir = new File(docRoot);
+        
+            if(!rootDir.isDirectory())
+                rootDir = new File(rootDir.getParent());
+        
+            if((rootDir!=null) &amp&amp rootDir.exists())
+            {
+                files = rootDir.list();
+            
+                max = files.length;
+            
+                for(i=0;i&ltmax;i&#43;&#43;)
+                {
+                    curFile = new File(rootDir,files[i]);
+                
+                    if(curFile.exists() 
+                               &amp&amp curFile.isDirectory())
+                    {
+<B>                        categories.addElement(files[i]);
+</B>                    }
+                }
+            }
+        }
+        catch(Exception exp)
+        {
+            categories.removeAllElements();
+        }
+    }
+<B>&lt/java&gt</B>
+</PRE>
+<P>The next step is to define the HTML for the page header and the point where the categories should be output. Notice in the HTML code that follows, the servlet AdLinkRotatorServlet is reused, as defined in Chapter 10. This servlet dynamically rotates through advertisements displayed on this Web page. The image directory is hard coded to the directory where the ads are located. You should change this to reflect the directory in which your ads are stored on your Web server. Otherwise, this is straight HTML.
+</P>
+<PRE>
+&ltHTML&gt
+&ltHEAD&gt
+&ltTITLE&gt
+Stuff 4Sale OnLine
+&lt/TITLE&gt
+&lt/HEAD&gt
+&ltBODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#FF0000" VLINK="#800080"&gt
+&ltCENTER&gt
+&ltTABLE WIDTH=500 BORDER=0&gt
+&ltTR&gt
+&ltTD&gt
+&ltCENTER&gt
+<B>&ltservlet name=</B>"<B>AdLinkRotator</B>"<B> 
+    code=</B>"<B>AdLinkRotatorServlet</B>"<B> 
+
+    imagedir=</B>"<B>d:\\java\\jws1.1\\public_html\\ads</B>"<B> 
+    imageroot=</B>"<B>/ads</B>"<B>&gt
+&lt/servlet&gt
+</B>&ltBR&gt
+&ltH3&gtWelcome to Steve and Scott's&ltH3&gt
+&ltH1&gtStuff 4Sale OnLine&lt/H1&gt
+&ltHR&gt
+&lt/CENTER&gt
+
+Please choose a category to find available products.
+&ltUL&gt
+</PRE>
+<P>The last line of this HTML starts an unordered list. This list displays each of the categories and closes in the HTML page&#146;s footer.
+</P>
+<P>The next step is to make sure the category list is initialized with the correct directories. Use the requestURI to get the directory that the main page is in. Then, using the initCategories method, load the categories. Notice that this is done only once. In case the directories change, a reload time can be set in the category index page described later in this chapter.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch10\10-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="11-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,166 @@
+<HTML>
+<HEAD>
+
+<TITLE>Java 1.2 In Record Time:More Graphics Animation Power</TITLE>
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="458-461.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="467-470.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>You can run the applet now, as shown below. The boxes appear to grow steadily from the upper left, and then they disappear and start out small again, repeating the process over and over. The code for this applet appears in <TT>doublebuffer.java</TT>.</P>
+<P><A NAME="Fig3"></A><A HREF="images\15-03.jpg"><IMG SRC="images\15-03t.jpg"></A></P>
+<P><B>doublebuffer.java</B></P>
+<PRE>
+ import java.awt.*;
+ import java.applet.Applet;
+
+ public class doublebuffer extends Applet implements Runnable&#123;
+
+     Image memoryimage;
+     Graphics memorygraphics;
+     Thread doublebufferthread;
+     boolean animateFlag = true;
+     int loop_index = 0;
+
+     public void init() &#123;
+          memoryimage = createImage(100, 100);
+          memorygraphics = memoryimage.getGraphics();
+     &#125;
+
+     public void start() &#123;
+          doublebufferthread = new Thread(this);
+          doublebufferthread.start();
+     &#125;
+
+     public void stop() &#123;
+          animateFlag = false;
+     &#125;
+
+     public void run() &#123;
+
+          while(animateFlag)&#123;
+               repaint();
+               try &#123;Thread.sleep(200);&#125;
+               catch(InterruptedException e) &#123; &#125;
+          &#125;
+     &#125;
+
+     public void paint (Graphics g) &#123;
+
+          loop_index &#43;= 5;
+          if(loop_index &gt;= 100) loop_index = 5;
+
+          memorygraphics.setColor(new Color(255, 255, 255));
+          memorygraphics.fillRect(0, 0, 100, 100);
+          memorygraphics.setColor(new Color(0, 0, 0));
+          memorygraphics.drawRect(0, 0, loop_index, loop_index);
+          g.drawImage(memoryimage, 10, 10, this);
+     &#125;
+ &#125;
+</PRE>
+<P>Using double-buffering techniques, then, you can prepare graphics &#147;off screen&#148; and pop them up on the screen as needed. This is very useful if you want to support and draw complex images.
+</P>
+<H3><A NAME="Heading5"></A><FONT COLOR="#000077">Updating the Dauber Applet</FONT></H3>
+<P>Another method of animation involves dynamically stretching images on the screen in reaction to the user&#146;s mouse movements. This method doesn&#146;t use the <TT>start()</TT>, <TT>stop()</TT>, and <TT>run()</TT> methods, but nonetheless, it gives the impression of movement, this time in response to the user&#146;s direction. This technique involves several new drawing methods, and we&#146;ll look into that now as you update your dauber painting applet to allow the user to stretch images as they draw them.</P>
+<P>When the user draws using your dauber applet, they press the mouse at one location, move the mouse to another location, and release the mouse button. When they do, the image appears. But in between those two actions, there is nothing to be seen on the screen. However, popular paint programs animate this process by displaying an image that the user can stretch as they like with the mouse. You can incorporate this feature in the dauber applet. This feature is an example of user-driven animation&#151;the process will be the same in essence as the animation techniques we have explored so far: drawing a figure, erasing it, and drawing a new figure, but this time, the user directs the action. This technique involves a new drawing technique, <I>XOR</I> drawing, which you&#146;ll learn now. When you&#146;re done, the user will be able to draw a line like the one shown in Figure 15.3. As the user draws, the line will stretch to match the mouse movements, as shown in Figure 15.4.</P>
+<P><A NAME="Fig4"></A><A HREF="images\15-04.jpg"><IMG SRC="images\15-04t.jpg"></A>
+<BR><A HREF="images\15-04.jpg"><FONT COLOR="#000077"><B>FIGURE 15.3</B></FONT></A>&nbsp;&nbsp;The user can draw a line.</P>
+<P><A NAME="Fig5"></A><A HREF="images\15-05.jpg"><IMG SRC="images\15-05t.jpg"></A>
+<BR><A HREF="images\15-05.jpg"><FONT COLOR="#000077"><B>FIGURE 15.4</B></FONT></A>&nbsp;&nbsp;The line stretches as the user draws.</P>
+<P>Let&#146;s put this idea to work now. Here&#146;s how it works: the user starts by pressing the mouse to establish the anchor point, and then moves the mouse to a new point, the drawto point, as shown below:
+</P>
+<P><A NAME="Fig6"></A><A HREF="images\15-06.jpg"><IMG SRC="images\15-06t.jpg"></A></P>
+<P>Next, the user moves on as they drag the mouse, stretching the figure to a new drawto point, past the old drawto point, as shown below:
+</P>
+<P><A NAME="Fig7"></A><A HREF="images\15-07.jpg"><IMG SRC="images\15-07t.jpg"></A></P>
+<P>To give the impression that the user has stretched the graphics figure, erase the old graphics figure:
+</P>
+<P><A NAME="Fig8"></A><A HREF="images\15-08.jpg"><IMG SRC="images\15-08t.jpg"></A></P>
+<P>Then, draw the new graphics figure, stretching from the anchor point to the new drawto point:
+</P>
+<P><A NAME="Fig9"></A><A HREF="images\15-09.jpg"><IMG SRC="images\15-09t.jpg"></A></P>
+<P>And the process continues in this manner&#151;drawing to a new drawto point, then a new one, and a new one, and so on. Each time, you have to erase the old figure and draw a new one.
+</P>
+<P>Let&#146;s start writing code now. First, you have to keep track of the old drawto point, and you can do that by adding a new point, <TT>ptOldDrawTo</TT>, to the dauber applet:</P>
+<PRE>
+ import java.awt.Graphics;
+ import java.awt.*;
+ import java.awt.event.*;
+ import java.lang.Math;
+ import java.applet.Applet;
+
+ public class dauber extends Applet implements ActionListener,
+ MouseListener, MouseMotionListener &#123;
+
+     Button buttonDraw, buttonLine, buttonOval, buttonRect, button3DRect;
+     Button buttonRounded;
+
+     Point pts[] = new Point[1000];
+&#8594;    Point ptAnchor, ptDrawTo, ptOldDrawTo;
+     int ptindex = 0;
+
+     boolean bMouseDownFlag = false;
+     boolean bMouseUpFlag = false;
+     boolean bDrawFlag = false;
+     boolean bLineFlag = false;
+     boolean bOvalFlag = false;
+     boolean bRectFlag = false;
+     boolean b3DRectFlag = false;
+     boolean bRoundedFlag = false;
+               .
+               .
+               .
+</PRE>
+<P>Next, set the old drawto point when the user presses the mouse in the <TT>mousePressed()</TT> method:</P>
+<PRE>
+     public void mousePressed(MouseEvent e)&#123;
+          bMouseDownFlag = true;
+          bMouseUpFlag = false;
+&#8594;         ptOldDrawTo = new Point(e.getX(), e.getY());
+          ptDrawTo = new Point(e.getX(), e.getY());
+          ptAnchor = new Point(e.getX(), e.getY());
+     &#125;
+</PRE>
+<P>In addition, when the user drags the mouse, you need to update the drawto point. You will copy the old drawto point to the <TT>ptOldDrawTo</TT> point and update the new <TT>ptDrawTo</TT> point. Then, in the <TT>paint()</TT> method, you can erase the old figure, drawn from the anchor point to the old drawto point, and draw the new figure, from the anchor point to the new drawto point. Start in the <TT>mouseDragged()</TT> method by making the current drawto point the old drawto point (so the current graphics figure can be drawn over):</P>
+<PRE>
+     public void mouseDragged(MouseEvent e)&#123;
+          if(bDrawFlag)&#123;
+               pts[ptindex] = new Point(e.getX(), e.getY());
+               ptindex&#43;&#43;;
+          &#125;
+&#8594;          else&#123;
+&#8594;               ptOldDrawTo = ptDrawTo;
+                    .
+                    .
+                    .
+&#8594;          &#125;
+          repaint();
+     &#125;
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="458-461.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="467-470.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

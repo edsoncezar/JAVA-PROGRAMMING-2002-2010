@@ -1,0 +1,342 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0579-0584.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0591-0592.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-585"><P>Page 585</P></A>
+
+<PRE>
+
+        //Start the thread;
+        t.start();
+
+        //Yield to let the task start
+        Thread.yield();
+}
+
+public void run() {
+        do {
+                //Handle one request.  If busy is false
+                //then the wait() must have been
+                //interrupted, so just repeat the loop.
+                if(busy)
+                        doRequest();
+
+                //Mark ourselves as free and
+                //wait for some work
+                synchronized(this) {
+                        //Notify any interested objects
+                        //that we're now free.
+                        if(flag != null) {
+                                synchronized(flag) {
+                                     flag.notify();
+                                }
+                        }
+                        this.busy = false;
+                        try {
+                                this.wait();
+                                this.busy = true;
+                        }
+                        catch(InterruptedException e) {}
+                }
+        } while(true);
+}
+
+//Given a socket s, service a client's request on that
+//socket.  This isn't the most efficient way to handle
+//socket IO or file IO; it's kept simple because this
+//is just an example.
+private void doRequest() {
+FileInputStream         fis = null;
+DataInputStream         dis = null;
+DataOutputStream        dos = null;
+
+</PRE>
+<PRE>
+                                                                        continues
+</PRE>
+
+<A NAME="PAGENUM-586"><P>Page 586</P></A>
+
+<P>Listing 13.63 Continued
+</P>
+
+<PRE>
+        try {
+                //get streams to listen to and talk to
+                //the client.
+                InputStream ins = s.getInputStream();
+                dis = new DataInputStream(ins);
+                OutputStream os = s.getOutputStream();
+                dos = new DataOutputStream(os);
+
+                //read a filename from the client.
+                String fName = dis.readUTF();
+
+                //read that file and send it back.
+                File f = new File(fName);
+                fis = new FileInputStream(f);
+
+                //read the file and send it.
+                //First, allocate a byte array the size
+                //of the file.
+                int len = (int)f.length();
+                byte[] b = new byte[len];
+
+                //now read the file into the array.
+                len = fis.read(b, 0, len);
+
+                //send the length to the client as a
+                //single int
+                System.out.println(fName+&quot;: sending &quot;+len
+                        +&quot; bytes&quot;);
+                dos.writeInt(len);
+
+                //send those bytes to the client in
+                //chunks of up to 256 bytes at a time.
+                int offset=0;
+                do {
+                        int lenToSend
+                                = (len &lt; 256) ? len : 256;
+                        dos.write(b, offset, lenToSend);
+                        len -= lenToSend;
+                        Thread.currentThread().yield();
+                }
+                while(len &gt; 0);
+
+                dos.flush();
+
+</PRE>
+
+<A NAME="PAGENUM-587"><P>Page 587</P></A>
+
+
+<PRE>
+
+                //wait for a confirmation from the client.
+                System.out.println(fName+&quot;: delivered&quot;);
+                String status = dis.readUTF();
+                System.out.println(status);
+        }
+
+        catch(IOException e) {
+                e.printStackTrace();
+        }
+
+        //This may be thrown by FileInputStream(File) in some
+        //versions of the JDK.
+/*
+        catch(FileNotFoundException e) {
+        }
+*/
+
+        finally {
+                //finished.
+                try {
+                        s.close();
+                        s = null;
+                        if(dis != null)        dis.close();
+
+
+
+                        if(fis != null)        fis.close();
+                        if(dos != null)        dos.close();
+                }
+                catch(IOException e) {
+                        e.printStackTrace();
+                }
+        }
+}
+}
+</PRE>
+
+<P>ServerTask objects are created to service a client and pass a Socket and an Object
+(flag) that is used as a condition variable. When a ServerTask is done servicing a
+particular request, it clears its busy status, performs a notify() on &quot;flag,&quot; and calls wait() on
+itself. The serviceRequest() method can then be called with another Socket to wake
+the ServerTask and service another client request. In other words, a ServerTask, once
+created, can be reused to service new client requests.
+</P>
+
+<P>The main() method and associated code for the server application are defined in
+the ThreadedServer2 class (see listing 13.64).
+</P>
+<PRE>
+                                                                       continues
+</PRE>
+
+<A NAME="PAGENUM-588"><P>Page 588</P></A>
+
+<P>Listing 13.64 Continued </P>
+
+<P>Listing 13.64 The ThreadedServer2 Class </P>
+
+<PRE>
+package industrial;
+
+import java.io.*;
+import java.net.*;
+
+//The threaded server rewritten to service multiple clients
+//at once by creating or re-using existing Servers up to
+//a limit).
+public class ThreadedServer2 {
+//class constants
+public static final int        SERVER_PORT=6543,
+        THREAD_MAX=4;
+
+//class variables
+//Pool of servers available to serve requests.
+private static ServerTask pool[];
+
+//Condition variable used to wait for a free server
+private static Object flag;
+
+static {
+
+        pool = new ServerTask[THREAD_MAX];
+        flag = new Object();
+}
+
+private static void serviceClient(Socket s) {
+        boolean served = false;
+
+        //The loop is synchronized on the flag condition
+        //variable to avoid race conditions.
+        synchronized(flag) {
+                do {
+
+                        //Try to find an available server
+                        //from the pool.
+                        int i;
+                        for(i = 0; i&lt;THREAD_MAX; i++) {
+                                //A null entry in the array
+                                //means there are no more
+                                //entries.
+                                if(pool[i] == null)
+                                        break;
+</PRE>
+
+
+<A NAME="PAGENUM-589"><P>Page 589</P></A>
+
+
+<PRE>
+
+                            try {
+                                    flag.wait();
+                            }
+                            catch(InterruptedException e) {
+                            }
+                        }
+                } while(!served);
+        }       //end of synchronized block on flag.
+}
+
+//main
+public static void main(String[] args) {
+boolean                         looping = true;
+ServerSocket        sock;
+
+        try {
+                //create our socket
+                sock = new ServerSocket(SERVER_PORT);
+        }
+        catch(IOException e) {
+                e.printStackTrace();
+                return;
+        }
+
+        System.out.println(&quot;Accepting requests...&quot;);
+
+        //loop accepting requests.
+        do {
+                try {
+                        //accept a connection from a client.
+                        Socket s = sock.accept();
+
+                        //service that request
+                        serviceClient(s);
+                }
+
+                catch(Exception e) {
+                        e.printStackTrace();
+                        looping = false;
+                }
+        }
+        while(looping);
+}
+}
+</PRE>
+
+
+
+<A NAME="PAGENUM-590"><P>Page 590</P></A>
+
+
+
+<P>The serviceClient() method has been changed to use a pool of ServerTasks in the
+pool array. When a client request is received, the main thread calls serviceClient(),
+which checks the pool for a free ServerTask. If a free ServerTask is found, serviceRequest()
+is called to pass the client socket, and serviceClient() returns.
+</P>
+
+<P>If no free ServerTask is available, and there's room in the pool for a new
+one, serviceClient() creates one and returns.
+</P>
+
+<P>If all the possible ServerTasks are busy, serviceClient() waits for one to become free.
+To do this, the flag Object is used as a simple condition variable. The thread
+calling serviceClient() waits on the flag (see fig. 13.8).
+</P>
+
+<P>The entire do loop is nested within a block synchronized on &quot;flag.&quot; This helps to avoid
+a possible race condition that could occur in the following situations:
+</P>
+
+<UL>
+<LI>          The main thread checks the &quot;busy&quot; status of the ServerTasks and finds them
+all busy. No free slots in the &quot;pool&quot; array exist, so no new ServerTasks can be created.
+<LI>          The main thread is descheduled in favor of one of the ServerTasks threads.
+This ServerTask finishes a request, calls notify() on flag, and calls wait() on
+this, consequently suspending its thread until a new client request is available.
+<LI>          The other busy ServerTasks are scheduled next and all complete in the same way.
+<LI>          The main thread is rescheduled and proceeds to wait() on flag. Because all the
+free ServerTasks are now in wait(), the main thread has missed its notify() call
+and won't be notified.
+</UL>
+
+<P>Any ServerTasks that finish servicing their clients while the main thread is executing
+in serviceClient() must wait until the thread running main() has called wait() before
+calling notify(). This wait is required because both the do loop in
+ThreadedServer2.serviceClient() and the notify() in ServerTask.run() are synchronized on the same flag Object.
+</P>
+
+<P>The ThreadedServer2 class limits the number of threads to 4, so that it's easy to
+observe the behavior of the application during testing. Most systems should comfortably
+handle hundreds of threads before exhibiting problems.
+</P>
+
+<P><CENTER>
+<a href="0579-0584.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0591-0592.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

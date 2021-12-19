@@ -1,0 +1,299 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H3><A NAME="Heading16"></A><FONT COLOR="#000077">Servlets and Applets</FONT></H3>
+<P>Servlets are a powerful mechanism for serving dynamic Web pages. They have begun to fill an important role in Java client/server programming. Many developers are creating applet/servlet pairs that cooperate to form a complete application. Applications are often split for reasons that include improving performance, minimizing network traffic, and centralizing business logic. The decision to use servlets and applets is often one of portability and accessibility. Applets run on most browsers, making them a portable client choice. Servlets run as part of the Web server, making them accessible via HTTP through most corporate firewall configurations. By splitting a program into this type of pair, the programmer is basically guaranteed that anyone can run an application.
+</P>
+<P>Connecting an applet to a servlet is really more of an applet programming problem than a servlet one. The applet can use standard HTTP to communicate with the servlet, so the servlet doesn&#146;t need to do anything special. However, for servlets that are designed to talk to an applet, the servlet can optimize its communication by return text or binary data instead of HTML. The following example implements the classic Eliza computer psychologist as an applet/servlet pair. The applet displays a user interface, and the servlet performs all of Eliza&#146;s processing. The engine for Eliza is provided in a special package, augmented slightly from the public domain package written by Charles Hayden. (Thanks, Charles!)</P>
+<P>As you can see from the servlet code that follows, both GET and POST requests are handled, and the Eliza engine is used to handle the incoming message. Plain text is returned to minimize the applet&#146;s job in interpreting it. The DebugLog object, discussed in the section &#147;Debugging Servlets,&#148; is also used. This servlet has two init parameters for debugging and one for defining the script file Eliza uses. This script file is provided on the CD-ROM with the other files in the Eliza package and can be edited to respond differently.</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import Eliza.*;
+
+public class ElizaServlet extends HttpServlet
+implements SingleThreadModel
+{
+    ElizaMain eliza;
+
+    DebugLog logger;
+</PRE>
+<P>The initialization for this servlet prepares the DebugLog (discussed later) and loads the Eliza engine based on the configured script file.
+</P>
+<PRE>
+    public void init(ServletConfig conf) throws ServletException
+    {
+        super.init(conf);
+                String logFile,logServer,scriptFile;
+        int res;
+
+        logFile = getInitParameter(&#147;logfile&#148;);
+        logServer = getInitParameter(&#147;logserver&#148;);
+        scriptFile = getInitParameter(&#147;scriptfile&#148;);
+
+        eliza = new ElizaMain();
+
+        if((logFile != null)||(logServer != null))
+        {
+            logger = DebugLog.getSharedLog();
+
+            synchronized(logger)
+            {
+                if(!logger.initialized())
+                {
+                    if(logServer != null)
+                    {
+                        logger.logTo(logServer);
+                    }
+                    else
+                    {
+                        logger.logTo(new File(logFile));
+                    }
+                }
+            }
+        }
+
+        try
+        {
+            res = eliza.readScript(scriptFile);
+            eliza.setLog(logger);
+        }
+        catch(Exception exp)
+        {
+            res = -1;
+            logger.log(exp);
+        }
+
+        if(res != 0) logger.log(&#147;Couldn&#146;t create eliza main.&#148;);
+
+    }
+</PRE>
+<P>When a GET or POST request is received, the servlet calls its internal respondToMessage method to handle the request.
+</P>
+<PRE>
+    public void doGet(HttpServletRequest request,
+                      HttpServletResponse response)
+    {
+        String message;
+
+        message = request.getParameter(&#147;message&#148;);
+        respondToMessage(message,response);
+       }
+
+    public void doPost(HttpServletRequest request,
+                      HttpServletResponse response)
+    {
+        String message;
+
+        message = request.getParameter(&#147;message&#148;);
+
+        respondToMessage(message,response);
+
+    }
+</PRE>
+<P>The respondToMessage method checks if a message was entered. If no message was sent then a welcome reply is returned. If a message was sent, Eliza is queried. If Eliza is unavailable, an apology is returned to the user. All responses are simply text messages.
+</P>
+<PRE>
+    protected void respondToMessage(String message
+                                   ,HttpServletResponse response)
+    {
+        PrintWriter    out=null;
+        String reply;
+
+           try
+           {
+           if(message==null)
+            {
+                reply = &#147;Please enter a message to Eliza.&#148;;
+            }
+            else if(eliza != null)
+            {
+                reply = eliza.processInput(message);
+            }
+            else
+            {
+                reply = &#147;Sorry, Eliza is not available.&#148;;
+            }
+        }
+        catch(Exception exp)
+        {
+            reply = &#147;I am having trouble hearing, &#148;
+                    &#43;&#147;please repeat.&#148;;
+            logger.log(exp);
+        }
+
+        try
+        {
+            response.setContentType(&#147;text/plain&#148;);
+
+            out = response.getWriter();
+
+            out.println(reply);
+        }
+        catch(Exception exp)
+        {
+        }
+        finally
+        {
+            if(out != null) out.close();
+        }
+    }
+
+    public void destroy()
+    {
+        logger.closeLog();
+    }
+
+}
+</PRE>
+<P>The applet for Eliza creates a simple user interface and responds to action events from the text field. This applet is pictured in Figure 7.7. It is certainly not pretty, but it provides the necessary code to demonstrate applet servlet messaging. Standard JDK 1.0 event handling is used to maximize portability, although the applet has been tested only on Netscape Navigator 3.0 and 4.0.
+</P>
+<P>The majority of the applet/servlet code is in the action method. In the following code, the applet checks whether the parameters say to use GET or POST to talk to the servlet. If POST is used, the applet creates a URLConnection; otherwise, a URL with a query string is used to connect to the servlet. POST messages require the connection to support output, in this case a URL-encoded key-value pair containing the user&#146;s message to Eliza. Notice the one piece of code changing the content type. This is required to get the applet to work in Netscape. Once the message is posted to the servlet, the applet reads the response as plain text and displays it in a label.</P>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+import java.net.*;
+import java.io.*;
+
+public class ElizaApplet extends Applet
+{
+    Label response;
+    TextField request;
+    String server;
+
+    public void init()
+  {
+        Font f = new Font(&#147;Times-Roman&#148;,Font.PLAIN,16);
+        Label message;
+
+        response = new Label(&#147;Eliza will see you know.&#148;);
+        response.setFont(f);
+
+        request = new TextField(24);
+        request.setFont(f);
+
+        setLayout(new GridLayout(2,1,5,5));
+
+        add(response);
+        add(request);
+
+        try
+        {
+            server = getParameter(&#147;server&#148;);
+        }
+        catch(Exception exp)
+        {
+            server = null;
+        }
+    }
+
+    public boolean action(Event evt,
+                       Object what)
+    {
+        if(evt.target == request)
+        {
+            String reply;
+            String message;
+            DataInputStream reader;
+            InputStream in=null;
+            URL url;
+
+            try
+            {
+                message = &#147;message=&#148;;
+                message &#43;= URLEncoder.encode(request.getText());
+
+                if(&#147;POST&#148;.equals(getParameter(&#147;method&#148;)))
+                {
+                    URLConnection connection;
+                    PrintStream printOut;
+
+                    url = new URL(server);
+<B>                    connection = url.openConnection();
+                    connection.setDoOutput(true);
+                    connection.setDoInput(true);
+
+</B><B>                    connection.setUseCaches(false);
+                    //Work around for netscape settings for
+                    //post requests.
+                    connection.setRequestProperty(&#147;Content-Type&#148;
+                            , &#147;application/x-www-form-urlencoded&#148;);
+
+
+                    printOut=new
+                        PrintStream(connection.getOutputStream());
+
+                    printOut.print(message);
+                    printOut.flush();
+                    printOut.close();
+</B>
+                    in = connection.getInputStream();
+                }
+                else
+                {
+<B>                    url = new URL(server&#43;&#147;?&#148;&#43;message);
+
+                    in = url.openStream();
+</B>                }
+
+<B>                reader = new DataInputStream(in);
+
+                reply = reader.readLine();
+
+                reader.close();
+</B>                in.close();
+            }
+            catch(Exception exp)
+            {
+                reply = &#147;Error, network may be down.&#148;;            }
+
+            response.setText(reply);
+            request.selectAll();
+        }
+
+        return true;
+    }
+
+}
+</PRE>
+<P><A NAME="Fig7"></A><A HREF="images\07-07.jpg"><IMG SRC="images\07-07t.jpg"></A>
+<BR><A HREF="images\07-07.jpg"><FONT COLOR="#000077"><B>Figure 7.7</B></FONT></A>&nbsp;&nbsp;The Eliza applet.</P>
+<P>Notice that the applet uses regular HTTP requests to talk to the server and simply reads the results in the expected format. In this case, the results are a text string, but the servlet could return an image, file, or other resource&#151;even a serialized object. In other words, although the applet/servlet relationship is affected by the performance of HTTP and intervening firewalls, it is a very flexible mechanism for distributed computing. Even this technique&#146;s reliance on HTTP makes it portable across most installations.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

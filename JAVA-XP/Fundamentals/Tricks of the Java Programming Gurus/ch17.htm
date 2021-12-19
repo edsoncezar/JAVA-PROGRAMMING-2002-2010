@@ -1,0 +1,891 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 17 -- Network-Extensible Applications
+with Factory Objects</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 17</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Network-Extensible Applications
+with Factory Objects</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+<UL>
+<LI><A HREF="#HowFactoriesWork" >How Factories Work</A>
+<LI><A HREF="#FactorySupportintheJavaLibrary" >Factory Support in the Java Library</A>
+<LI><A HREF="#FactoryObjectImplementationConsiderat" >Factory Object Implementation Considerations</A>
+<LI><A HREF="#SupportingaNewKindofFactory" >Supporting a New Kind of Factory</A>
+<LI><A HREF="#SecurityConsiderations" >Security Considerations</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+One of the most important extensibility features of the Java library
+is its use of factory objects. <I>Factory objects</I> permit the
+actual type of new objects to be determined at runtime, based
+on data or circumstances of the moment. Java did not originate
+the concept-other languages have factory objects or similar mechanisms.
+However, the Java library makes effective use of factories to
+make some of the core facilities flexible and extensible. Factory
+objects are crucial building blocks for making applications which
+can be extended dynamically using code from the network.
+<P>
+This chapter explains factory objects and how they work. You learn
+about the existing factories in the Java library and how to extend
+them. Because factories and the kinds of objects they create are
+often closely related, you learn about those objects and how to
+write new, specialized versions that the factories can use for
+special situations. You also learn how to build support for new
+factory objects into your own class libraries and applications,
+and how to recognize situations where it would be a good idea
+to use factories.
+<H2><A NAME="HowFactoriesWork"><FONT SIZE=5 COLOR=#FF0000>How
+Factories Work</FONT></A></H2>
+<P>
+While an application is running, it is constantly creating new
+objects of various types in order to accomplish its function.
+The number and size of the objects are often determined at runtime-in
+response to changing conditions and input data-but the <I>type</I>
+of each object is usually fixed when the program is written. When
+you write code to allocate a new object with a <TT>new</TT>
+operation, you choose a particular type for the object. A <TT>new</TT>
+operation does what it's told; it does not allocate whatever subclass
+seems most appropriate in a particular situation.
+<P>
+Sometimes, though, that's exactly what you need. Your program
+needs to adapt not only to the size and number of data items it's
+asked to deal with; it needs to adapt to the <I>kind</I> of data.
+For example, when asked to open a file, a URL, or a mail message,
+the program might need to vary its behavior depending on the particular
+type of data found in each of those entities. It's no fun to have
+to write a big multiway switch to choose what sort of object to
+allocate, and it's not a particularly good idea, either. It would
+be better if that knowledge were located in one place so that
+applications could share it. It would also be good if knowledge
+about new types and data formats could be added without having
+to rebuild all the applications that need the new support.
+<P>
+Fortunately, factory objects provide just the mechanism needed
+to handle such situations. In some situations, instead of allocating
+a particular type of object explicitly with <TT>new</TT>,
+you request that another object allocate the object for you. That
+other object, the factory object, looks at the current situation
+and decides on a specific class of object that fits the bill.
+The factory allocates the new object (after loading the class,
+if necessary) and returns it to you.
+<P>
+Of course, each kind of object that the factory can return must
+be a valid subtype of the nominal type that the factory object
+returns (that is, they must all have a common superclass or implement
+a common interface). Somewhere in the code for the factory object,
+there probably <I>will</I>  be a large multiway switch that chooses
+the appropriate class for each situation. The factory might also
+read a configuration file or fetch configuration information from
+a URL so that the initial list of classes can be extended without
+modifying any of the factory's code. The knowledge and messiness
+is encapsulated in one place, however, and the benefits (flexibility
+and extensibility) are enjoyed by all the code that uses the factory.
+<H3>An Example from the Java Library</H3>
+<P>
+There are a few other complications, though. To get a clearer
+idea of how a factory object really works, let's take a look at
+how a factory object is used in a common Java operation: creating
+a URL object.
+<P>
+You start by allocating a URL object pointing to a particular
+Web page:
+<BLOCKQUOTE>
+<TT>URL doc = new URL(&quot;http://www.utdallas.edu/~glv/&quot;);</TT>
+</BLOCKQUOTE>
+<P>
+The first thing to notice is that you really <I>do</I> just allocate
+the object with a new expression. The application code doesn't
+call the factory object directly; usually that's done in a library
+class. The URL class actually calls the factory for you. This
+helps keep the library interface simple: It's best if application
+programmers can always use <TT>new</TT>
+to allocate objects, rather than having to remember the cases
+where factory objects need to be involved. Keeping the interface
+simple also helps promote consistency. If application programmers
+have to call the factory object themselves when they need a URL
+object, some will surely forget, and their applications won't
+have the easy extensibility that most Java applications should.
+<P>
+The URL constructor takes the URL you give it and parses it into
+its various parts: protocol, host, and so on. At that point, there's
+little more that it can do. All the processing that is common
+to most different kinds of URLs has been done, and the rest depends
+on the protocol involved. This is where the factory comes in.
+The URL class contains the following instance variable:
+<BLOCKQUOTE>
+<TT>URLStreamHandler handler;</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>handler</TT> variable refers
+to the object that does most of the real work involved with the
+URL, and that's the one that gets allocated by the factory. The
+URL constructor initializes it this way:
+<BLOCKQUOTE>
+<TT>if ((handler = getURLStreamHandler(protocol))
+== null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throw new MalformedURLException(&quot;unknown
+protocol: &quot; + protocol);<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>getURLStreamHandler</TT> method
+is a static method in the URL class, and it contains the call
+to the factory object:
+<BLOCKQUOTE>
+<TT>URLStreamHandler handler;<BR>
+if (factory != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;handler = factory.createURLStreamHandler(protocol);
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The factory is stored in a class variable, <TT>factory</TT>,
+which is set by the application. The factory decides what kind
+of handler is needed for the protocol, allocates the appropriate
+object, and returns it. What does <TT>getURLStreamHandler</TT>
+do if <TT>factory</TT> is <TT>null</TT>?
+Here's what happens next:
+<BLOCKQUOTE>
+<TT>// Try java protocol handler<BR>
+if (handler == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String clname
+= &quot;sun.net.www.protocol.&quot; + protocol + &quot;.Handler&quot;;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handler = (URLStreamHandler)
+Class.forName(clname).newInstance();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;} catch (Exception e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Notice that <TT>getURLStreamHandler</TT>
+does a part of the factory object's job itself. In fact, it implements
+a sort of fallback factory: If the application has not supplied
+a factory for <TT>URLStreamHandler</TT>
+objects, or if the factory cannot supply an appropriate object,
+this method within the URL class can do a minimal job. It looks
+for a library class with a conventional name, and if it finds
+one that matches, that class is assumed to be the handler. This
+might fail, but it should fail in a reasonable way. If the class
+doesn't exist, the <TT>Class.forname(clname)</TT>
+call throws an exception. If the class isn't a valid subtype of
+<TT>URLStreamHandler</TT>, the cast
+will fail.
+<P>
+The URL class does this because it's intended as a general-purpose
+library class. Policies about how to discover and locate protocol
+handlers are left to the factory, which is a part of an individual
+application, so that the application authors can make the important
+decisions about how to configure and extend the application's
+capabilities. Probably a few good <TT>URLStreamHandlerFactory</TT>
+implementations will appear and will be shared by most applications,
+but a full-fledged, configurable factory implementation really
+isn't appropriate for the standard Java library. On the other
+hand, some minimal level of functionality is essential for the
+library, and the <TT>getURLStreamHandler</TT>
+fallback code provides it. (The fallback could have been implemented
+as a default factory object that could be replaced by the application,
+but the security model gets in the way. See the section &quot;Security
+Considerations&quot; later in this chapter for more information.)
+<P>
+There's one other complication that should be mentioned now. Because
+the type of handler is entirely dependent on the protocol, the
+URL class maintains a cache of handlers for different protocols
+and reuses them to avoid having to call the factory for each new
+URL. The <TT>URLStreamHandler</TT>
+class-as well as the interface between the handlers and the URL
+class-has been carefully designed so that a single handler <I>instance</I>
+can handle multiple URLs simultaneously. Alternative strategies
+might have involved calling the <TT>clone</TT>
+method (or <TT>getClass().newInstance()</TT>)
+on an existing handler of the appropriate type or simply calling
+the factory again for a new instance.
+<P>
+Here's the complete code for the <TT>getURLStreamHandler</TT>
+method, so you can see the entire picture:
+<BLOCKQUOTE>
+<TT>/**<BR>
+* A table of protocol handlers.<BR>
+*/<BR>
+static Hashtable handlers = new Hashtable();<BR>
+<BR>
+/**<BR>
+&nbsp;* Gets the Stream Handler.<BR>
+&nbsp;* @param protocol the protocol to use<BR>
+&nbsp;*/<BR>
+static synchronized URLStreamHandler<BR>
+getURLStreamHandler(String protocol) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;URLStreamHandler handler = (URLStreamHandler)
+handlers.get(protocol);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (handler == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Use the factory
+(if any)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (factory !=
+null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handler
+= factory.createURLStreamHandler(protocol);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Try java protocol
+handler<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (handler ==
+null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+clname = &quot;sun.net.www.protocol.&quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+protocol + &quot;.Handler&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handler
+= (URLStreamHandler)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Class.forName(clname).newInstance();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+catch (Exception e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (handler !=
+null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handlers.put(protocol,
+handler);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return handler;<BR>
+}</TT>
+</BLOCKQUOTE>
+<H2><A NAME="FactorySupportintheJavaLibrary"><FONT SIZE=5 COLOR=#FF0000>Factory
+Support in the Java Library</FONT></A></H2>
+<P>
+The example of the <TT>URLStreamHandler</TT>
+is typical of the support for other types of factories in the
+Java library: The support is there to <I>use</I> the factories
+if they are supplied by the application, and a simple fallback
+is implemented within the library code; but no real factory objects
+are supplied. Java supports extensibility wherever it can, but
+it leaves specific policies (such as where to search for extensions
+and how to find the right one) up to the applications. This section
+explains the details of the factory support found in the Java
+library and how to implement specialized factories that the library
+can use. As you will see, factories and the objects they return
+(handlers or implementations) are closely related, so this section
+provides insight into how to write both the factories and the
+handler objects. Each factory and handler combination works a
+little differently.
+<P>
+The Java library knows about three kinds of factories:
+<UL>
+<LI><TT>SocketImplFactory</TT>
+<LI><TT>URLStreamHandlerFactory</TT>
+<LI><TT>ContentHandlerFactory</TT>
+</UL>
+<H3>The Socket Implementation Factory</H3>
+<P>
+Socket implementations are used internally to the <TT>Socket</TT>
+class to provide the basic socket functionality. In general, instances
+of <TT>Socket</TT> and <TT>ServerSocket</TT>
+just pass operations on to their internal <TT>SocketImpl</TT>
+object, which does all the work. There is only one supplied socket
+implementation, <TT>PlainSocketImpl</TT>,
+that does conventional socket handling. Additional socket implementations
+can be written to handle firewalls and other situations in which
+sockets must use a proxy server to access certain machines.
+<P>
+There are hooks for two separate <TT>SocketImplFactory</TT>
+objects: One is in the <TT>Socket</TT>
+class (set with the <TT>setSocketImplFactory</TT>
+method), and the other is in <TT>ServerSocket</TT>
+(set with <TT>setSocketFactory</TT>).
+Typically, both factories are instances of the same class, or
+even the same object, but they don't have to be. Both <TT>Socket</TT>
+and <TT>ServerSocket</TT> call their
+factory's <TT>createSocketImpl</TT>
+method in their constructors. That method doesn't contain any
+parameters, so it doesn't return different types of socket implementation
+objects based on the parameters of the socket. It returns the
+same kind for every socket, based on application configuration
+information. In keeping with this, the fallback code (for the
+case where no factory has been created) is also simple: It always
+creates a new <TT>PlainSocketImpl</TT>.
+<P>
+When writing a <TT>SocketImplFactory</TT>
+object, you don't need to build a lot of intelligence into the
+factory. It is probably best simply to allow users to provide
+configuration information that specifies what kind of socket implementation
+should be used. You can supply a couple of socket implementations
+to handle common cases and provide a configuration dialog or some
+other mechanism for selecting one of those. Because all users
+within a particular site will probably require the same configuration,
+this also is a good case for permitting site administrators to
+supply a global configuration. That way, individual users don't
+have to be bothered with knowing what kind of firewall they have,
+and you don't have to be bothered with configuring your application
+on an individual basis. Finally, don't restrict users to just
+the socket implementations you supply. Allow them to specify an
+arbitrary class. That way, sites with unusual firewall policies
+(or vendors of new firewall software) will be able to write their
+own <TT>SocketImpl</TT> classes, and
+they won't be excluded from using your application.
+<H3>The URL Stream Handler Factory</H3>
+<P>
+The first part of a URL, up to the colon, is called the URL's
+<I>scheme</I> or <I>protocol</I>. Common URL protocols include
+HTTP, FTP, and news. Each protocol is implemented by a subclass
+of <TT>URLStreamHandler</TT>. The
+URL class chooses which handler to use for each URL by calling
+the URL stream handler factory.
+<P>
+There is a close relationship between URL stream handlers and
+several other classes. Internally, a URL stream handler uses a
+specialized version of the <TT>URLConnection</TT>
+class, usually implemented to accompany a particular implementation
+of <TT>URLStreamHandler</TT>. The
+<TT>URLConnection</TT> class, in turn,
+contains the third factory object supported by the library: the
+content handler factory. <TT>URLConnection</TT>
+objects are responsible for determining the type of the URL's
+data and passing that content type to the content handler factory.
+<P>
+The division of responsibility between all these classes seems
+complicated at first, but it is really quite easy to grasp. The
+URL object provides a handle and an abstract representation of
+the URL so that an application doesn't have to keep track of all
+of the various pieces all the time. Internally, it uses a subclass
+of <TT>URLStreamHandler</TT> to hold
+the protocol-specific information about the URL. The stream handler
+knows how to parse the rest of the URL-many URL schemes use the
+same syntax for the part after the colon, but some have specialized
+syntaxes, and the stream handler is responsible for understanding
+that part of the URL syntax. Beyond the URL syntax, however, the
+URL stream handler doesn't actually know much. It knows about
+a companion class (a subclass of <TT>URLConnection</TT>),
+which is responsible for implementing the protocol. The associated
+<TT>URLConnection</TT> object knows
+how to open a connection based on the URL information, handle
+the actual protocol operations to retrieve or deliver a document
+(or several), and close the connection.
+<P>
+After that is done, the <TT>URLConnection</TT>
+object has gained access to two things: the document of interest
+and some information <I>about</I> that document. After learning
+what <I>kind</I> of document it has (the media type), the <TT>URLConnection</TT>
+can either provide an I/O stream to the raw document data or create
+a <TT>ContentHandler</TT> object to
+convert the document into an object representation.
+<P>
+This seems complicated, but there are a lot of separate issues
+to deal with, and the Java library designers were right not to
+get them confused. Each separate concept is represented by one
+class or family of classes:<BR>
+
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=60%>
+<TR><TD WIDTH=50%>Basic URL abstraction</TD><TD WIDTH=50%><TT>URL</TT>
+</TD></TR>
+<TR><TD WIDTH=50%>Protocol-specific URL syntax</TD><TD WIDTH=50%><TT>URLStreamHandler</TT>
+</TD></TR>
+<TR><TD WIDTH=50%>Protocol handling</TD><TD WIDTH=50%><TT>URLConnection</TT>
+</TD></TR>
+<TR><TD WIDTH=50%>Data format handling</TD><TD WIDTH=50%><TT>ContentHandler</TT>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The first of these four concepts is independent of protocol or
+data format, and so it is represented by one class. The second
+and third are both tied to particular protocols, so appropriate
+classes are chosen by a factory object (the factory chooses the
+<TT>URLStreamHandler</TT>, which chooses
+the matching <TT>URLConnection</TT>).
+The last is tied to specific data formats, but is independent
+of protocol, so classes to fit data formats are chosen by a different
+factory object.
+<P>
+What this means for writers of specialized <TT>URLStreamHandler</TT>
+subclasses is that, in general, each <TT>URLStreamHandler</TT>
+needs to have a companion <TT>URLConnection</TT>
+class. For example, Sun's classes, which are used to implement
+the applet viewer, include the following two classes:
+<UL>
+<LI><TT>sun.net.www.protocol.http.Handler</TT>
+<LI><TT>sun.net.www.protocol.http.HttpURLConnection</TT>
+</UL>
+<P>
+Make sure your stream handler and connection classes maintain
+the correct division of responsibility. The stream handler should
+understand the URL syntax and choose the connection class, with
+the mechanics of the protocol being left to the connection class.
+<P>
+Besides the workings of the protocol, the connection class has
+one other important responsibility: calling the content handler
+factory when necessary. To do that, the connection object must
+first determine the type of the document being retrieved. That's
+a protocol-specific matter, but some protocols, such as FTP, don't
+really provide that information, so the connection object must
+guess. Fortunately, the abstract <TT>URLConnection</TT>
+class provides two utility methods that can be useful for guessing
+a file's type from its name or content. The <TT>guessContentTypeFromName</TT>
+method takes the file's name as a parameter and attempts to intuit
+the type from the file's extension using a built-in table. Given
+a file with the extension &quot;jpg,&quot; for example, it would
+assume that the file was a JPEG image file. The other method,
+<TT>guessContentTypeFromStream</TT>,
+takes the data input stream as a parameter and inspects the first
+few bytes for characteristic patterns that identify different
+file types.
+<P>
+All this might be useful information for writing URL stream handlers
+and connection classes, but what about the factory object itself?
+That might be one of the easiest parts. You certainly want to
+give it built-in knowledge of the stream handlers you supply with
+your application and the URL scheme identifiers that match them.
+Permitting users to configure the factory and add new handlers
+is also a good idea. Finally, it might be a good idea to write
+your <TT>URLStreamHandlerFactory</TT>
+to consult a network-based registry and load stream handlers from
+the network under certain conditions. Most of these issues aren't
+peculiar to URL stream handlers and are discussed in the section
+&quot;Factory Object Implementation Considerations,&quot; later
+in this chapter.
+<P>
+Once you have written your factory, install it in the URL class
+using the <TT>URL.setURLStreamHandlerFactory</TT>
+method.
+<H3>The Content Handler Factory</H3>
+<P>
+Content handlers are associated with URL connections, and they
+are responsible for interpreting different data formats. Data
+formats are identified by MIME media type names. Common formats
+include the following:<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=60%>
+<TR><TD WIDTH=45%>text/plain</TD><TD WIDTH=55%>A plain text document
+</TD></TR>
+<TR><TD WIDTH=45%>text/html</TD><TD WIDTH=55%>An HTML document
+</TD></TR>
+<TR><TD WIDTH=45%>image/gif</TD><TD WIDTH=55%>A GIF image</TD>
+</TR>
+<TR><TD WIDTH=45%>image/jpeg</TD><TD WIDTH=55%>A JPEG image</TD>
+</TR>
+<TR><TD WIDTH=45%>audio/basic</TD><TD WIDTH=55%>A &#181;-law (.au) format audio file
+</TD></TR>
+<TR><TD WIDTH=45%>audio/wav</TD><TD WIDTH=55%>A WAV audio file
+</TD></TR>
+<TR><TD WIDTH=45%>video/quicktime</TD><TD WIDTH=55%>A QuickTime video clip
+</TD></TR>
+<TR><TD WIDTH=45%>video/mpeg</TD><TD WIDTH=55%>An MPEG video clip
+</TD></TR>
+<TR><TD WIDTH=45%>multipart/mixed</TD><TD WIDTH=55%>A container with multiple subparts
+</TD></TR>
+<TR><TD WIDTH=45%>application/pdf</TD><TD WIDTH=55%>An Adobe PDF file
+</TD></TR>
+<TR><TD WIDTH=45%>application/postscript</TD><TD WIDTH=55%>A PostScript document
+</TD></TR>
+<TR><TD WIDTH=45%>application/vrml</TD><TD WIDTH=55%>A VRML scene description
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+A content handler must be able to understand its format and generate
+an appropriate Java object representing that format. For example,
+a content handler designed for image/gif might build an instance
+of the <TT>java.awt.image</TT> class.
+<TT>ContentHandler</TT> is an abstract
+class, with one method: <TT>getContent</TT>.
+With a <TT>URLConnection</TT> object
+as a parameter, the method reads the data from the connection,
+builds the appropriate object representation, and returns it.
+When writing a content handler, it might be helpful to read Chapter
+5, &quot;Building Special-Purpose I/O Classes.&quot; It contains
+a discussion about building classes that provide an object representation
+of structured data.
+<P>
+The content handler factory is found within the <TT>URLConnection</TT>
+class and can be set using the <TT>URLConnection.setContentHandlerFactory</TT>
+method. <TT>URLConnection</TT> has
+its own <TT>getContent</TT> method,
+just like <TT>ContentHandler</TT>.
+When <TT>URLConnection.getContent()</TT>
+is called, the <TT>URLConnection</TT>
+object queries the content handler factory for the right handler
+and calls the handler's <TT>getContent</TT>
+method, with <TT>this</TT> as the
+parameter. In case there is not a content handler factory, the
+fallback code looks for a built-in handler class using the content
+type. For example, if the content type is <TT>text/html</TT>,
+the default <TT>URLConnection</TT>
+implementation looks for the class <TT>sun.net.www.content.text.html</TT>.
+If it doesn't find a class with that name, it will simply return
+<TT>null</TT>. The JDK doesn't come
+with such a class, but the HotJava application does, and any application
+is free to provide content handler classes of its own. 
+<H2><A NAME="FactoryObjectImplementationConsiderat"><FONT SIZE=5 COLOR=#FF0000>Factory
+Object Implementation Considerations</FONT></A></H2>
+<P>
+Unlike the handler or implementation objects that they generate,
+factory objects have a lot in common. They may be very simple,
+like <TT>SocketImplFactory</TT>, or
+more complex, like <TT>ContentHandlerFactory</TT>,
+but they are all essentially the same: Based on the current data
+or circumstances, factory objects figure out which specialized
+type of object is best equipped to deal with the situation. Factories
+either have a built-in knowledge of the alternatives or know where
+to go to find out about them. The only difficult issues involved
+in writing a factory object are the strategies used to discover
+the right answer and how much trouble the factory goes to before
+it gives up.
+<P>
+The simplest strategy for building a factory object is to hard-code
+knowledge of several classes into the factory. At runtime, a simple
+table lookup will suffice to determine whether the situation is
+one that the application understands. If it is, the factory can
+allocate and return an instance of the appropriate class. Only
+slightly more complex is the strategy used by the built-in fallback
+code in the Java library: searching for a class with a conventional
+name via the <TT>CLASSPATH</TT>. The
+first approach might suffice in some very simple situations, but
+if there is no possibility of extending or configuring the factory's
+knowledge, it's hardly worth having a factory at all. The second
+approach at least enables users and site administrators to configure
+and extend the system in useful ways. It's still a very limited
+approach, however, because it requires all the handlers to be
+in the same package.
+<P>
+Another approach, which is easier and more flexible for users,
+is to provide a configuration file-or better yet a configuration
+dialog-so that new handlers or implementations can be used without
+having to be placed in the same package as the built-in handlers.
+They still have to conform to the appropriate Java type rules
+and so on, so this won't violate any language assumptions. It
+just makes things flexible for the people using the application.
+<P>
+The problem with all of those approaches is that they assume that
+the users or site administrators will be looking for new handlers,
+fetching them, and taking the trouble to install them correctly.
+It would be much better to take advantage of Java's networking
+and security capabilities to do all that work within the factory
+object. One way of doing that would be to rely on a central online
+registry that could be queried over the network, returning a URL
+which could be used to retrieve the appropriate class. Your company
+could maintain such a registry, collecting information about appropriate
+handlers as they became available. In the case of handlers written
+by you or others in your organization, your customers can access
+the extra functionality immediately, without having to install
+any additional software. If users or other vendors write handlers
+to support formats or protocols that they are interested in, you
+can make sure that other users also get the advantage of those
+classes. You and your users can save a lot of trouble and expense.
+<P>
+I anticipate that public, general-use registries will appear for
+classes such as <TT>URLStreamHandler</TT>
+and <TT>ContentHandler</TT>. Your
+applications can simply make use of those, and you will need only
+to maintain registries for classes that are tied closely to your
+own application.
+<P>
+There's one more approach to finding applicable classes. It's
+a little trickier than the others, but it can yield huge benefits
+in flexibility and usefulness. If your application is one that
+works with data from the network (as Web browsers do, for example),
+you can allow data providers to supply handlers themselves. You
+simply need to document where to put classes in relation to the
+data and how to name them, and then look for them according to
+those rules when other strategies fail.
+<P>
+Two examples might help to illustrate this idea. First, imagine
+an application fetching a document via an HTTP URL and finding
+that it has content type <TT>image/spiffy</TT>.
+After trying other strategies to find a handler, the content handler
+factory might return to the site from which the unrecognized document
+was fetched to try to find a handler there. It might look for
+a class called <TT>ContentHandler_image_spiffy</TT>,
+first in the same directory where the document was found, and
+then perhaps in another directory at that site with a conventional
+name-perhaps <TT>classes/content_handlers</TT>.
+<P>
+As a second example, imagine a Web browser that has just fetched
+an HTML document from <TT>www.foo.com</TT>.
+One section of that HTML document contains the following link:
+<BLOCKQUOTE>
+<TT>&lt;a href=&quot;mirror://www.bar.com/foomobile.gif&quot;&gt;A
+terrific <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;picture of a Foomobile!&lt;/a&gt;</TT>
+</BLOCKQUOTE>
+<P>
+It sounds good, but what about this &quot;<TT>mirror</TT>&quot;
+protocol? As humans, we might guess from the name that it's a
+new protocol designed to enable a document to be mirrored at several
+places around the Internet, but that doesn't help the program
+to know what to do with it (and we might be wrong, in any case).
+The URL stream handler factory could pursue a strategy similar
+to the one in the previous example to find a handler for the <TT>mirror</TT>
+protocol, looking first in the same directory where the document
+containing the link was found and then in a special directory
+at the same site.
+<P>
+If you write a factory object that fetches new classes from the
+network, it's important to bear two things in mind. It is helpful
+to cache those downloaded classes locally so that they don't have
+to be fetched anew for each use. You can then treat the cache
+as a private, local registry of the type described previously.
+The other thing to remember is that, for such features to be useful
+to your users and the people who provide useful data on the network,
+they have to be well- documented and reasonably well-known.
+<P>
+There are also security considerations involved when writing factory
+objects and handlers, no matter what strategy you implement for
+finding applicable handlers. They are addressed in the section
+&quot;Security Considerations,&quot; later in this chapter.
+<H2><A NAME="SupportingaNewKindofFactory"><FONT SIZE=5 COLOR=#FF0000>Supporting
+a New Kind of Factory</FONT></A></H2>
+<P>
+The classes that use factory objects are, in some ways, more interesting
+and important than factory objects themselves. The Java library
+includes four such classes (<TT>Socket</TT>,
+<TT>ServerSocket</TT>, <TT>URL</TT>,
+and <TT>URLConnection</TT>), but that
+doesn't mean you won't find a reason to build another, whether
+you are building a complete application or a reusable library.
+How do you know when a new kind of factory is what you want-and
+how do you add the support for it?
+<H3>When Are Factories Useful?</H3>
+<P>
+In general, you need a factory object when you want to provide
+an <I>implementation abstraction</I>: an abstract interface to
+some functionality that hides the details of shifting implementations
+that might be required.
+<P>
+More specifically, you should use a factory object when three
+conditions apply:
+<UL>
+<LI>You want to provide a uniform, high-level interface to a concept,
+which can have multiple underlying implementations.
+<LI>The choice of a particular implementation depends on data,
+environment, or other runtime circumstances.
+<LI><FONT COLOR=#000000>You cannot know in advance the entire
+set of implementations and the circumstances that might call for
+them.</FONT>
+</UL>
+<P>
+There are many concepts that might be good candidates for implementation
+abstractions. Here are just a few examples:
+<UL>
+<LI>Data types in a spreadsheet or database
+<LI>Specialized notations (for example, mathematical equations
+or chemical diagrams) in a technical word processor
+<LI>Alert handlers in a network management system
+<LI>Graphical user interface widgets, such as the elements used
+to provide fill-out forms in HTML documents
+<LI>Special-effect &quot;plug-ins&quot; in an image processing
+program
+<LI><FONT COLOR=#000000>Reusable tool components, such as spelling
+checkers, searching engines, printer drivers, and toolbars</FONT>
+</UL>
+<P>
+There are probably many other situations that could be added.
+<P>
+Each of the three kinds of factory objects supported by the Java
+library meets these three conditions. There are high-level classes
+that let application code ignore the details of multiple underlying
+implementations. The choice of implementation depends on the runtime
+situation-either data (in the case of URL stream handlers and
+content handlers) or environment (in the case of socket implementations).
+There is no way to predict what new kinds of protocols, data types,
+and firewall proxy interfaces might be developed.
+<H3>Tips for Building Implementation Abstractions</H3>
+<P>
+There are a few rules of thumb you should follow when building
+implementation abstractions and the factory objects and handlers
+that make them work:
+<UL>
+<LI>Hide the use of the factory in a library class
+<LI>Don't try to force the handlers to be completely uniform
+<LI>Supply an example factory, but put fallback code in the library
+class, in case there's no factory at all
+<LI>Keep a cache of handlers
+<LI><FONT COLOR=#000000>Remember security issues</FONT>
+</UL>
+<P>
+Make sure that the application-level class (the class that provides
+the implementation abstraction itself) takes care of the factory
+behind the scenes. Don't leave it to the application to call the
+factory when necessary-make the abstraction cleaner by hiding
+that detail.
+<P>
+On the other hand, don't take the abstraction too far. Sometimes
+it's not possible to hide every detail. In the Java library, socket
+implementations represent one extreme where the abstraction is
+nearly perfect, and the application using the code doesn't really
+have to know anything about underlying mechanisms. URL stream
+handlers also can hide nearly every detail. Content handlers,
+however, can hide things only up to a point. Then, they must return
+an object that provides a runtime representation of the document
+they were asked to interpret. That object might be a <TT>String</TT>
+containing a plain text document, an <TT>Image</TT>,
+an <TT>AudioClip</TT>, or an instance
+of a class that can format and display a structured document (such
+as an HTML). The application must know what to do with those objects,
+and a new content handler might return a type of object that the
+application can't handle. In spite of those complications, it's
+still a worthwhile abstraction and hides a lot of messy details.
+<P>
+(Perhaps you think that, with a little care, the content handler
+abstraction could have been more thorough, to the point of providing
+a unified interface to data objects so that an application could
+handle them all in a uniform way. If so, that's terrific! I can't
+wait to see the result.)
+<P>
+If you have a fairly good idea of how to go about finding the
+appropriate handler class for the situation, go ahead and supply
+a sample implementation of the factory so that applications can
+use it if possible. Follow the example of the Java library implementors,
+however, and provide some fallback behavior in the primary class,
+which is used if no factory is installed. It can be very simple,
+but it helps to make your classes robust. It will work for the
+most common cases in the event that the application writers forget
+to install a factory, or in circumstances where the factory cannot
+do its job.
+<P>
+Keep a cache of handlers. If you're loading handlers from the
+network, this is vitally important, but it's useful even if all
+the handlers are available locally. If you implement your abstraction
+so that the same handler <I>instance</I> can handle multiple cases
+of the abstraction, you can cache not only the handler classes,
+but the handler instances themselves. The Java library does this
+for URL stream handlers and content handlers. Given the simple
+fallback strategy that the library classes use in the absence
+of real factory objects, the efficiency benefits of the approach
+might not be obvious to you at first, but a real factory object
+might have to do a lot of work to find the right handler, including
+several disk and network accesses. A simple cache of previously
+used handler instances can avoid all that work in most cases.
+Implementing the cache in the abstraction class also means that
+it only has to be done once, and all factory object implementations
+gain the benefit automatically. The source code for the <TT>URL.getURLStreamHandler</TT>
+method listed near the beginning of this chapter is a good example
+of how to implement a simple and effective handler cache.
+<P>
+Most importantly, pay attention to the security issues surrounding
+your factory. There are security implications even if you only
+load handlers from trusted sources.
+<H2><A NAME="SecurityConsiderations"><FONT SIZE=5 COLOR=#FF0000>Security
+Considerations</FONT></A></H2>
+<P>
+When writing a factory object or an implementation abstraction
+that uses a factory, you need to be aware of the security implications.
+<P>
+First, you need to protect the factory itself. If untrusted code
+(possibly an applet in an unrelated part of an application) can
+install an untrusted class as a factory object, it can garble
+data, transparently substitute data from a completely different
+source, or even steal outgoing data. The user of the application
+will never be the wiser. The way you protect against this is by
+consulting the application security manager when installing a
+factory object. The primary object of your implementation abstraction
+will probably provide a method for installing a factory, much
+as the URL class provides <TT>setURLStreamHandlerFactory</TT>.
+To protect against sabotage, that method includes this code:
+<BLOCKQUOTE>
+<TT>if (factory != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throw new Error(&quot;factory already
+defined&quot;);<BR>
+}<BR>
+SecurityManager security = System.getSecurityManager();<BR>
+if (security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;security.checkSetFactory();<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The first part provides a little additional security by permitting
+the factory to be set only once. You may choose to forgo that
+precaution, but you really should only need one factory object
+anyway (at least after you've finished debugging the factory).
+ The second part is the important part. If a security manager
+is installed, the call to <TT>security.checkSetFactory</TT>
+gives the security manager the chance to see whether the new factory
+object is being supplied by trusted code. If not, the security
+manager will throw a <TT>SecurityException</TT>,
+and the next line of code (which actually installs the factory
+object) will never be reached.
+<P>
+Additionally, you need to ensure that the factory cannot be set
+directly, bypassing the method that performs the security checks.
+The variable that holds the factory object and the method used
+to set it should be static so that there is only one factory and
+so that the method cannot be overridden in a subclass. The variable
+should also be private so that a subclass cannot access it directly.
+Depending on the circumstances, you may also wish to make the
+class final so that there can be no subclasses (that will not
+always be practical, however).
+<P>
+If the abstraction you are providing is a means for accessing
+resources that could be abused by malicious code, you need to
+ensure that those resources are protected. You have a choice:
+Should the security checks be done in the high-level class or
+in the handlers?
+<P>
+One thing to consider is that you might, at some point, be loading
+handlers from untrustworthy sources. It's actually rather unlikely
+in this case, because code that provides access to security-sensitive
+resources usually requires using native methods, which you shouldn't
+be loading from the network. Even if all your handlers will be
+trusted, it's still a good idea to put the security checks in
+the high-level class. Security issues are complicated, and it's
+best to think the issues through once, carefully, and build the
+necessary checks in from the start. Otherwise, it would be too
+easy for a new handler to open a security hole accidentally because
+the programmer forgot an important security check. If every programmer
+writing a handler has to think about all those issues, such a
+security hole is actually pretty likely. If security is dealt
+with once, from the start, in the high-level class, the handlers
+don't have to worry about it, and the chance of an accidental
+security hole is much smaller.
+<P>
+Even if you build all the necessary security checks into the high-level
+class, there's still one security issue that the handlers need
+to deal with: Untrusted code might be able to bypass the class
+with the security checks and go straight to the handler. To avoid
+this, you need to use the Java language protection mechanisms.
+For example, consider the <TT>Socket</TT>
+and <TT>SocketImpl</TT> classes. Sockets
+need to be protected from abuse, so the <TT>Socket</TT>
+class makes several calls to the security manager to ensure that
+operations are permitted. <I>All </I>the real functionality of
+sockets is handled by some subclass of <TT>SocketImpl</TT>;
+however, if untrusted code could create an instance of an appropriate
+subclass of <TT>SocketImpl</TT>, no
+security checks would be made. The Java library designers avoid
+this danger by not making the handler class they supply, <TT>PlainSocketImpl</TT>,
+a public class. The class can be used only by other classes within
+the same java.net package. Combined with a security policy which
+prohibits untrusted code from defining new classes in that package,
+the socket abstraction is secure. Everyone who needs to build
+a new <TT>SocketImpl</TT> class must
+be careful not to make it a public class and to put it into a
+package that is protected by the application security manager.
+<P>
+The final security issue that must be addressed by factory objects
+is the most obvious: what to do about handlers that cannot be
+trusted. Fortunately, there aren't many decisions to make about
+that, at least from the point of view of the author 

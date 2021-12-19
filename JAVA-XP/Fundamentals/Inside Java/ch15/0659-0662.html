@@ -1,0 +1,243 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Java Beans: Java's Component Architecture:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+<P><CENTER>
+<a href="0654-0658.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0663-0666.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-659"><P>Page 659</P></A>
+
+
+
+<H4><A NAME="ch15_ 8">
+Events in Java Beans
+</A></H4>
+
+<P>Java Beans use the Delegation Event Model covered in Chapter 14 to communicate
+with each other. In fact, this model was introduced into Java mainly to support Java Beans.
+</P>
+
+<P>When designing a Bean, you must decide which events it will emit to registered
+listeners external to the Bean. Two possibilities are:
+</P>
+
+<UL>
+<LI>          Your Bean can emit native Java events, which are covered in Chapter 14.
+<LI>          You can create your own event classes and listeners.
+</UL>
+
+<P>The next section explores these possibilities.
+</P>
+
+<P><B>Emitting Native Java Events from a Bean
+</B></P>
+
+<P>By default, a Bean can emit any events supported by its parent class. Because the
+Scope Bean in listing 15.1 is derived from the Canvas class (which is derived from the
+Component class), it can emit a ComponentEvent, FocusEvent, KeyEvent, and MouseEvent
+to the appropriate registered listeners.
+</P>
+
+<P>Let's consider, however, what happens in a Bean that has subcomponents if an
+event occurs on one of its subcomponents. The Calendar1 Bean, for example, which follows,
+is derived from the Panel class and contains a Button instance for each day of the
+month. When the user clicks one of these buttons, the event source is the button, not
+the Calendar1 Bean. Thus, the Calendar1 Bean follows this set of steps to solve the problem:
+</P>
+
+<OL>
+<LI>          Intercept the event that occured on the subcomponent.
+<LI>          Create a new event. In the Calendar1 Bean, for demonstration purposes, the
+newly created event is not the same type of event as the one that was intercepted.
+<LI>          Post the new event to the system-event queue in such a manner that any of
+the Bean's registered listeners (of that event type) will receive it.
+</OL>
+	
+<P>Let's examine the Calendar1 Bean to see how this solution is implemented.
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+JDK 1.1 beta 1 did not support the notion of events automatically sent up
+the containment hierarchy if not handled by a subcomponent. (For example, if a
+button doesn't handle an event, the containing frame receives the event.) JavaSoft has
+stated that this must be supported, but the details were not available at the time this
+was written. These specifics could provide an additional solution to the scenario
+described above.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<A NAME="PAGENUM-660"><P>Page 660</P></A>
+
+
+
+<P><B>
+The Calendar1 Bean
+</B></P>
+
+<P>Listing 15.3 depicts a Java Bean named Calendar1, which enables the user to navigate
+to any month and year, and then select a date within that month. This Bean performs
+the following actions:
+</P>
+
+<UL>
+<LI>          Serves as an example of the event solution just described.
+<LI>          Offers an example of a more sophisticated and useful Bean than Scope.
+<LI>          Demonstrates some methods in the new Calendar and GregorianCalendar classes.
+<LI>          Illustrates the use of the synchronized modifier to make the Bean thread-safe.
+</UL>
+
+<P>Listing 15.4 depicts a very simple Bean named Listener1 that listens for the
+fabricated mouse events emitted by Calendar1. The Bean uses accessor methods to obtain the
+date and then display the date. Listing 15.5 depicts the CalendarFrame1 application,
+which displays these Beans and registers the Listener1 Bean with the Calendar1 Bean.
+</P>
+
+<P>Listing 15.3
+</P>
+<PRE>
+Line==================Java Source=================
+001   //////////
+002   // Calendar1.java  An example Java Bean that demonstrates
+003   // one approach to emitting events.
+004   //
+005   // Author: James L. Weaver  JDK 1.1 beta1
+006   //////////
+007   package chapter15.code.calendar1;
+008
+009   import java.awt.*;
+010   import java.awt.event.*;
+011   import java.beans.*;
+012   import java.io.Serializable;
+013   import java.util.*;
+014
+015   public class Calendar1 extends Panel
+016                implements Serializable, ActionListener
+017   {
+018       protected Date date;
+019       protected GregorianCalendar calendar;
+020       protected Panel header = null;
+021       protected Panel body = null;
+</PRE>
+
+<A NAME="PAGENUM-661"><P>Page 661</P></A>
+
+<PRE>
+022       protected Button prevMonth, nextMonth;
+023       protected Label monthLabel;
+024
+025       protected String days = new String(&quot;SunMonTueWedThuFriSat&quot;);
+026       protected String months =
+027                 new String(&quot;JanFebMarAprMayJunJulAugSepOctNovDec&quot;);
+028
+029       public Calendar1() {
+030           // Get current date and time info
+031           calendar = new GregorianCalendar();
+032
+033           setSize(200, 200);
+034           setLayout(new BorderLayout());
+035
+036           // Put month and year at top of applet,
+037           // as well as next and previous buttons.
+038           header = new Panel();
+039           prevMonth = new Button(&quot;&lt;&lt;&quot;);
+040           prevMonth.addActionListener(this);
+041           nextMonth = new Button(&quot;&gt;&gt;&quot;);
+042           nextMonth.addActionListener(this);
+043           header.add(prevMonth);
+044           monthLabel = new Label(null, Label.CENTER);
+045           header.add(monthLabel);
+046           header.add(nextMonth);
+047           add(&quot;North&quot;, header);
+048
+049           // Create a Panel with a GridLayout for putting
+050           // the days and dates of the month in.
+051           body = new Panel();
+052           body.setLayout(new GridLayout(0, 7));
+053
+054           // Put the day of the week headers at the top
+055           for (int i=0; i&lt;21; i+=3) {
+056               body.add(new Label(days.substring(i, i+3), Label.CENTER));
+057           }
+058           add(&quot;Center&quot;, body);
+059
+060           // Create and display the date buttons
+</PRE>
+<PRE>
+                                                       <I>continues</I>
+</PRE>
+
+<A NAME="PAGENUM-662"><P>Page 662</P></A>
+
+
+<P>
+Listing 15.3, Continued
+</P>
+<PRE>
+061           displayCalendar();
+062       }
+063
+064       // The &quot;date&quot; property accessor methods
+065       public synchronized Date getDate() {
+066           return calendar.getTime();
+067       }
+068
+069       public synchronized void setDate(Date date) {
+070           calendar.setTime(date);
+071           displayCalendar();
+072       }
+073
+074       protected synchronized void displayCalendar() {
+075           // Save the current values
+076           int yearNum = calendar.get(Calendar.YEAR);
+077           int monthNum = calendar.get(Calendar.MONTH);
+078           int dayNum = calendar.get(Calendar.DATE);
+079
+080           // Build a string containing month and year
+081           // to display at the top between the buttons
+082           String monthStr = months.substring(monthNum * 3,
+083                                              monthNum * 3 + 3);
+084           monthLabel.setText(monthStr + &quot; &quot; + yearNum);
+085           monthLabel.repaint();
+086
+087           // Remove all the grid cells except day names
+088           while (body.getComponentCount() &gt; 7)
+089               body.remove(7);
+090
+091           // Calendar day of week method is not working in
+092           // JDK 1.1 beta 1 so use date method to find
+093           // out which day the 1st of the month falls on
+094           calendar.set(Calendar.DATE, 1);
+095           date = calendar.getTime();
+096           int day = date.getDay();
+097
+098           // Make blank cells until 1st of month
+</PRE>
+
+<P><CENTER>
+<a href="0654-0658.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0663-0666.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

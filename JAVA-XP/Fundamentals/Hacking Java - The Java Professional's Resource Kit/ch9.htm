@@ -1,0 +1,1726 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 9 -- Creating Reusable Graphics Components</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;9</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Creating Reusable Graphics Components</FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka </B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#ReusableComponents">
+Reusable Components</A>
+<LI><A HREF="#TheCommandPattern">
+The Command Pattern</A>
+<UL>
+<LI><A HREF="#InvokingCommandsfromaMenu">
+Invoking Commands from a Menu</A>
+</UL>
+<LI><A HREF="#CreatingaReusableImageButton">
+Creating a Reusable Image Button</A>
+<UL>
+<LI><A HREF="#SettingtheSizeofaCanvas">
+Setting the Size of a Canvas</A>
+<LI><A HREF="#HandlingInputEvents">
+Handling Input Events</A>
+<LI><A HREF="#PaintingtheCanvas">
+Painting the Canvas</A>
+<LI><A HREF="#WatchingforImageUpdates">
+Watching for Image Updates</A>
+<LI><A HREF="#CreatingaFONTSIZEFACECBIHelveticaCondensedBoldOblCommandImageButtonFONT">
+Creating a CommandImageButton
+</A>
+</UL>
+<LI><A HREF="#UsingtheObserverInterface">
+Using the Observer Interface</A>
+<UL>
+<LI><A HREF="#TheModelViewControllerParadigm">
+The Model-View-Controller Paradigm</A>
+<LI><A HREF="#ObservablesandtheModelViewControllerParadigm">
+Observables and the Model-View-Controller Paradigm</A>
+</UL>
+<LI><A HREF="#UsingObservablesforOtherClasses">
+Using Observables for Other Classes</A>
+</UL>
+
+<HR>
+<H2><A NAME="ReusableComponents"><FONT SIZE=5 COLOR=#FF0000>
+Reusable Components</FONT></A></H2>
+<P>
+Amid all the excitement and debate over Java's crossplatform abilities,
+Java's features as an object-oriented programming language tend
+to get lost. Java falls somewhere between C++ and Smalltalk on
+the object-oriented scale. The general structure of Java's classes
+are similar to C++, but it adds a few more capabilities that are
+closer to Smalltalk. For example, the interface mechanism allows
+you to invoke methods in an object without knowing the object's
+class hierarchy. In C++, you must have a reference to the object's
+class or one of its superclasses to invoke a method. Smalltalk,
+of course, allows you the ultimate freedom of invoking any method
+in any object. This gives Smalltalk GUI designers a huge advantage
+in creating reusable components.
+<P>
+In Smalltalk, when you add a button to your application, you can
+tell the button to invoke a specific method in a specific object
+whenever the button is pressed. If you were allowed to do this
+in Java, it would look something like this:
+<BLOCKQUOTE>
+<PRE>
+public class MyClass extends Applet
+{
+     public void handleButtonPress()
+     {
+          // code to handle a button being pressed
+     }
+
+     public void init()
+     {
+          Button myButton = new Button(&quot;Press Me&quot;, this,
+               handleButtonPress);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Unfortunately, you can't do this in Java because it doesn't support
+pointers or references to functions. You can't even do it effectively
+in C++, and it supports function pointers. This problem is solved
+in C++ by something called a functor, also known as the Command
+pattern in design pattern lingo.
+<H2><A NAME="TheCommandPattern"><FONT SIZE=5 COLOR=#FF0000>
+The Command Pattern</FONT></A></H2>
+<P>
+The Command pattern addresses the problem of invoking arbitrary
+methods in an object. The basic mechanism of the Command pattern
+is that you create small objects that implement a specific interface-each
+object is responsible for invoking a different method.
+<P>
+Suppose you want to create buttons for your applet and have each
+button invoke a different method in your applet. You could create
+your own <TT>action</TT> method in
+the applet and handle the <TT>action</TT>
+events for the buttons, but that would turn out to be too much
+work in a larger applet. Instead, you define an interface like
+the one shown in Listing 9.1:
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.1&nbsp;&nbsp;Source Code for Command.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public interface Command
+{
+     public void doCommand();
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now, to be able to use this interface with a button, you need
+a subclass of <TT>Button</TT> that
+invokes <TT>doCommand</TT> whenever
+the button is pressed. Listing 9.2 shows an implementation of
+a CommandButton object that does this.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.2&nbsp;&nbsp;Source Code for CommandButton.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.Button;
+import java.awt.Event;
+
+// This class implements a Button that supports the
+// Command interface. When the button is pressed, it
+// invokes the doCommand method in the Command interface.
+
+public class CommandButton extends Button
+{
+
+// The interface where we will invoke doCommand
+
+     protected Command buttonCommand;
+
+// It's always polite to implement the empty constructor if
+// you can get away with it.
+
+     public CommandButton()
+     {
+     }
+
+// Allow a CommandButton with a command but no label
+
+     public CommandButton(Command command)
+     {
+          buttonCommand = command;
+     }
+
+// Allow a CommandButton to use the typical Button constructor
+
+     public CommandButton(String label)
+     {
+          super(label);
+     }
+
+// The most useful constructor allows a label and a command
+
+     public CommandButton(String label, Command command)
+     {
+          super(label);
+
+          buttonCommand = command;
+     }
+
+// When we get an action event, invoke doCommand in buttonCommand
+
+     public boolean action(Event evt, Object which)
+     {
+
+// Make sure the action event is for this object
+          if (evt.target != this) return false;
+
+// Make sure we have a buttonCommand defined!
+          if (buttonCommand == null) return false;
+
+          buttonCommand.doCommand();
+
+          return true;
+     }
+
+// Since you can create a CommandButton without passing it a
+// Command interface, you need to be able to set the command later.
+
+     public void setCommand(Command command)
+     {
+          buttonCommand = command;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now, suppose you want to pass parameters when the command is invoked.
+For example, suppose you want to assign numbers to buttons and
+pass the number as part of the command. You do not need to change
+the <TT>Command</TT> interface or
+the <TT>CommandButton</TT> class for
+this. The key to the Command pattern is the creation of small
+command objects that invoke the real methods. Listing 9.3 shows
+a small command object implementation whose <TT>doCommand</TT>
+method turns around and invokes <TT>changeNumber</TT>
+in a <TT>NumberApplet</TT> object.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.3&nbsp;&nbsp;Source Code for ChangeNumberCommand.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This class implements a simple command object
+// that invokes a method called changeNumber in a
+// NumberApplet object whenever doCommand is called
+
+public class ChangeNumberCommand extends Object implements Command
+{
+     protected NumberApplet applet;
+     protected int number;
+
+     public ChangeNumberCommand(NumberApplet applet, int number)
+     {
+          this.applet = applet;
+          this.number = number;
+     }
+
+     public void doCommand()
+     {
+          applet.changeNumber(number);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>ChangeNumberCommand</TT> object
+illustrates the key feature of the Command pattern.It acts as
+an intermediary between the <TT>CommandButton</TT>
+and the <TT>NumberApplet</TT>. The
+<TT>CommandButton</TT> says <TT>doCommand()</TT>,
+the <TT>NumberApplet</TT> wants to
+hear <TT>changeNumber(5)</TT>, the
+<TT>ChangeNumberCommand</TT> object
+performs the translation. Listing 9.4 shows the implementation
+of the <TT>NumberApplet</TT> class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.4&nbsp;&nbsp;Source Code for NumberApplet.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.Applet;
+import java.awt.Label;
+
+// This applet displays a label containing a number,
+// followed by three buttons which change the number.
+// It uses the ChangeNumberCommand to translate the
+// doCommand method in the CommandButton to the
+// changeNumber method in this object.
+
+public class NumberApplet extends Applet
+{
+     Label number;
+
+     public void init()
+     {
+// Start the label out at 0
+          number = new Label(&quot;0&quot;);
+
+          add(number);
+
+// Create the object to change the label to 1
+          add(new CommandButton(&quot;1&quot;,
+               new ChangeNumberCommand(this, 1)));
+
+// Create the object to change the label to 2
+          add(new CommandButton(&quot;2&quot;,
+               new ChangeNumberCommand(this, 2)));
+// Create the object to change the label to 3
+          add(new CommandButton(&quot;3&quot;,
+               new ChangeNumberCommand(this, 3)));
+     }
+
+// changeNumber actually performs the change
+
+     public void changeNumber(int newNumber)
+     {
+          number.setText(&quot;&quot;+newNumber);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 9.1 shows the <TT>NumberApplet</TT>
+applet in action.
+<P>
+<A HREF="f9-1.gif"><B>Figure 9.1 : </B><I>The Command pattern makes it easy to use
+components without subclassing them</I>.</A>
+<P>
+You can also cascade commands, creating command objects that translate
+from one command into another. For example, the <TT>ChangeNumberCommand</TT>
+object invokes a <TT>changeNumber</TT>
+method in a NumberApplet that takes a number. It is a shame that
+the object is restricted to <TT>NumberApplets</TT>.
+You will probably have many situations where you want to do a
+numeric command-a command that takes a number. You should go ahead
+and define a <TT>NumberCommand</TT>
+interface to handle such situations, as shown in Listing 9.5:
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.5&nbsp;&nbsp;Source Code for NumberCommand.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public interface NumberCommand
+{
+     public void doCommand(int number);
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now, because you have already seen an example where you want to
+take an object that invokes a regular <TT>Command</TT>
+and turn that into a <TT>NumberCommand</TT>,
+you can feel pretty confident that an object that converts from
+one to the other will get a lot of use. Listing 9.6 shows the
+class to do this.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.6&nbsp;&nbsp;Source Code for CommandToNumberCommand.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This class translates a Command.doCommand() method into
+// a NumberCommand.doCommand(int) method.
+
+public class CommandToNumberCommand extends Object implements Command
+{
+     protected NumberCommand numberCommand;
+     protected int number;
+
+     public CommandToNumberCommand(NumberCommand command, int number)
+     {
+          this.numberCommand = command;
+          this.number = number;
+     }
+
+     public void doCommand()
+     {
+          numberCommand.doCommand(number);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+You will soon end up with a library of commands and command conversions,
+such as <TT>StringCommand</TT>, <TT>StringCommandToNumberCommand</TT>,
+<TT>BooleanCommandToStringCommand</TT>,
+etc. You'll also have new components that invoke these commands,
+like <TT>CommandTextField</TT>, which
+would invoke a <TT>doCommand</TT>
+method in a <TT>StringCommand</TT>
+object. These objects take only minutes to write, but they can
+save you hours of coding. Figure 9.2 illustrates how some of these
+objects might be connected.
+<P>
+<A HREF="f9-2.gif"><B>Figure 9.2 : </B><I>Different command objects can be linked
+together like building blocks</I>.</A>
+<H3><A NAME="InvokingCommandsfromaMenu">
+Invoking Commands from a Menu</A></H3>
+<P>
+Buttons and menu items are very similar in their usage. In fact,
+you can think of a menu as a hierarchy of buttons. Both of the
+components represent an action without any parameters. Components
+like a choice or an option button have an additional parameter
+associated with them. For example, with a choice, the parameter
+is the new item chosen. For an option button, the parameter is
+whether the button is now selected or deselected. Because of the
+similarity between Buttons and MenuItems, you can use the same
+<TT>Command</TT> interface for both
+menu items and buttons. This means that you can create buttons
+that are shortcuts for menu items, both sharing the same instance
+of a <TT>Command</TT> object. Listing
+9.7 shows an implementation of a <TT>CommandMenuItem</TT>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.7&nbsp;&nbsp;Source Code for CommandMenuItem.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+
+// This is a menu item that supports the command
+// interface. Whenever an ACTION_EVENT is posted
+// to it, it invokes the doCommand method.
+
+public class CommandMenuItem extends MenuItem
+{
+// The Command interface to invoke
+
+     protected Command whichCommand;
+
+     public CommandMenuItem(String label, Command whichCommand)
+     {
+          super(label);
+          this.whichCommand = whichCommand;
+     }
+
+     public boolean postEvent(Event evt)
+     {
+
+// If we get an ACTION_EVENT event, call doCommand
+          if (evt.id == Event.ACTION_EVENT)
+          {
+               whichCommand.doCommand();
+               return true;
+          }
+
+// Otherwise, let the super class handle the postEvent
+          return super.postEvent(evt);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="CreatingaReusableImageButton"><FONT SIZE=5 COLOR=#FF0000>
+Creating a Reusable Image Button</FONT></A></H2>
+<P>
+The AWT <TT>Button</TT> class does
+not allow you to display an image in the button, only text. This
+is really annoying for people who would like to make toolbars
+and other useful GUI components. You can implement an image button
+pretty easily by creating a subclass of <TT>Canvas</TT>.
+<P>
+When creating a custom component using the <TT>Canvas</TT>
+class, there are basically two things you have to do-draw the
+component and handle input events. For an image button, you also
+have the added burden of waiting for the image to be downloaded.
+<H3><A NAME="SettingtheSizeofaCanvas">
+Setting the Size of a Canvas</A></H3>
+<P>
+The <TT>ImageButton</TT> class, included
+on the CD with this book, implements an image button as a subclass
+of <TT>Canvas</TT>. It does not require
+that the image be completely downloaded before the button can
+be displayed. Because you don't always know what size a component
+needs to be, thanks to the wonder of layout managers, your image
+button class needs to be flexible enough to fit into any layout.
+You have a choice of keeping the image the same size all the time
+and putting some kind of border around the image, or of resizing
+the image itself to match the new button size.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Whenever you create your own subclass of <TT>Canvas</TT>, you must set the canvas size either by calling the <TT>resize</TT> method or by implementing your own <TT>minimumSize</TT> and <TT>preferredSize</TT> methods.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The <TT>ImageButton</TT> class computes
+its preferred size from the size of the image. The minimum size
+is the size of the button when there is no image (4x4, which leaves
+room for the shadowing effects). The <TT>ImageButtonClass</TT>
+also implements its own <TT>size</TT>
+method. The <TT>size</TT> method is
+used when the button size is fixed. In other words, you can specify
+a fixed size for the button that will never be changed by the
+layout manager. Listing 9.8 shows the sizing methods for the <TT>ImageButton</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.8&nbsp;&nbsp;Image Sizing Methods from ImageButton.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// The minimum size is the amount of space for the shading around the
+// edges, plus one pixel for the image itself.
+
+     public Dimension minimumSize()
+     {
+          return new Dimension(4, 4);
+     }
+
+// We'd prefer to have just enough space for the shading (shading takes
+// 3 pixels in each direction) plus the size of the image.
+
+     public Dimension preferredSize()
+     {
+          return new Dimension(buttonImage.getWidth(this)+3,
+               buttonImage.getHeight(this)+3);
+     }
+
+     public Dimension size()
+     {
+
+// If the sized isn't fixed, just say super-size it! (har har)
+
+          if (!fixedSize) return super.size();
+          return preferredSize();
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If an image hasn't been downloaded yet, the <TT>getWidth</TT> and <TT>getHeight</TT> methods will return -1. This can cause unpleasant exceptions if you use these values to set the width or height of a canvas. The <TT>ImageButton</TT> class does not have 
+that problem because it leaves space on either size of the image. If the image hasn't been downloaded, the <TT>preferredSize</TT> method will return a dimension of 2<FONT FACE="Symbol">&#165;</FONT>2. If it hadn't added 3 to both width and height, it would 
+
+be returning a dimension of -1<FONT FACE="Symbol">&#165;</FONT>-1, which would surely cause an error.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="HandlingInputEvents">
+Handling Input Events</A></H3>
+<P>
+The <TT>ImageButton</TT> class is
+concerned only with mouse movements. It needs to know when someone
+selects the button. You might think that you would only need to
+look for a <TT>MOUSE_DOWN</TT> event,
+but it is not that simple. On most systems, if you hold the mouse
+down and then move the mouse away from the button before releasing
+the mouse, the button pops up as if you had never clicked it.
+You often use this functionality if you start to click the wrong
+button. The <TT>ImageButton</TT> class
+needs to handle that case.
+<P>
+In order to allow you to move the mouse away from the button while
+it is down, you can't trigger the button's action on a mouse click.
+Instead, you must trigger it when the mouse is released. That
+way, you need to have the mouse pointer on the button, click the
+mouse, and release it before you actually perform the button's
+action.
+<P>
+If you were to only implement the <TT>mouseDown</TT>
+and <TT>mouseUp</TT> events, you'd
+still have one problem. You need to make the button pop back up
+when the mouse leaves the button area. This means that the <TT>ImageButton</TT>
+class must also implement the <TT>mouseExit</TT>
+method. If it did not implement this method, whenever you moved
+the mouse away from the button, the button would appear to be
+stuck in the down position.
+<P>
+It would be really nice if you could watch for the mouse entering
+the button's area and have the button notice whether the mouse
+was up or down and adjust accordingly. Unfortunately, the <TT>MOUSE_ENTER</TT>
+and <TT>MOUSE_EXIT</TT> events do
+not give any indication of whether the mouse is up or down. The
+reason this is nice is that most buttons will automatically pop
+down if you move the mouse over them while you are holding the
+mouse button down. If you try this with the image button, you'll
+see that it does not do this.
+<P>
+Listing 9.9 shows the mouse event handlers for the image button
+class. The mouse event handlers manipulate a <TT>Boolean</TT>
+variable called <TT>isDown</TT>, which
+keeps track of whether the button is currently up or down. This
+value is then used by the <TT>paint</TT>
+method to determine whether the button should be drawn up or down.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.9&nbsp;&nbsp;Mouse Handling Methods from ImageButton.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+ // If we get a mouse click, make a note it and push the button down
+
+     public boolean mouseDown(Event evt, int x, int y)
+     {
+          isDown = true;
+          repaint();
+          return true;
+     }
+
+// If we get mouseUp, see if we thought the mouse was down. If so,
+// the button has been clicked. Generate an action event so this button
+// behaves just like a real button. 
+
+     public boolean mouseUp(Event evt, int x, int y)
+     {
+          if (isDown) {
+               Event newEvt = new Event(this, evt.when,
+                    Event.ACTION_EVENT, x, y, 0, 0, buttonImage);
+               this.postEvent(newEvt);
+          }
+          isDown = false;
+          repaint();
+          return true;
+     }
+
+// If the mouse leaves the area, move the button up.
+
+     public boolean mouseExit(Event evt, int x, int y)
+     {
+          if (isDown) {
+               isDown = false;
+               repaint();
+          }
+          return true;
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="PaintingtheCanvas">
+Painting the Canvas</A></H3>
+<P>
+The <TT>paint</TT> method is the one
+method that you should always see in a subclass of <TT>Canvas</TT>.
+You may not handle mouse events or anything else, but you need
+to paint the canvas. Otherwise, you'll just get a blank space.
+For the image button, the painting is interesting.
+<P>
+Most window systems use the same basic effect for creating 3-D
+effects. You imagine that there's a light shining from the upper-left
+corner of the screen. Anything on the screen that is raised (coming
+off the screen towards you) would catch the light on its upper
+left side, and the lower left side would be in shadow. Anything
+that is lowered (going inside the screen, away from you) would
+catch light on the lower-right corner, and the upper-left would
+be in shade. Also, when a button is lowered, the image or text
+in the image is usually shifted a small amount to the right and
+down.
+<P>
+Figure 9.3 shows the image button in the raised position. Notice
+that the top and left edges are lighter, while the bottom and
+right edges are darker.
+<P>
+<A HREF="f9-3.gif"><B>Figure 9.3 : </B><I>By lightening the upper-left side of an
+image, and darkening the lower-right, you create a raised effect</I>.</A>
+<P>
+Figure 9.4 shows the image button in the lowered position. Notice
+that the top and left edges are now darker and the bottom and
+right edges are lighter.
+<P>
+<A HREF="f9-4.gif"><B>Figure 9.4 : </B><I>By darkening the upper-left side of an image,
+and lightening the lower-right, you create a lowered effect</I>.</A>
+<P>
+Listing 9.10 shows the <TT>paint</TT>
+method for the <TT>ImageButton</TT>
+class. It draws the shading for the upper-left part of the button,
+then draws the image before adding the shading for the lower-right.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.10&nbsp;&nbsp;paint Method from ImageButton.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// paint displays the shading and the image
+
+     public void paint(Graphics g)
+     {
+          Dimension currSize = size();
+          int width = currSize.width;
+          int height = currSize.height;
+
+          int imgHeight = buttonImage.getHeight(this);
+          int imgWidth = buttonImage.getWidth(this);
+
+// Display the shading in the upper left. If the button is up, the
+// upperleft shading is white, otherwise it's black
+
+          if (isDown) {
+               g.setColor(Color.black);
+          } else {
+               g.setColor(Color.white);
+          }
+          g.drawLine(0, 0, width-1, 0);
+          g.drawLine(0, 0, 0, height-1);
+
+// If the button is up, we draw the image starting at 1,1
+
+          int imgX = 1;
+          int imgY = 1;
+
+// If the button is down, move the image right and down one pixel and
+// draw gray shading at 1,1
+
+          if (isDown) {
+               g.setColor(Color.gray);
+               g.drawLine(1, 1, width-2, 1);
+               g.drawLine(1, 1, 1, height-2);
+               imgX++;
+               imgY++;
+
+// If the button is up, draw gray shading just inside the bottom right shading
+          } else {
+               g.setColor(Color.gray);
+               g.drawLine(1, height-2, width-1, height-2);
+               g.drawLine(width-2, 1, width-2, height-2);
+          }
+
+// Compare the width of the button to the width of the image, if
+// the button is wider, move the image over to make sure it's centered.
+
+          int xDiff = (width - 3 - imgWidth) / 2;
+          if (xDiff &gt; 0) imgX += xDiff;
+
+// Compare the height of the button to the height of the image, if
+// the button is taller, move the image down to make sure it's centered.
+
+          int yDiff = (height - 3 - imgHeight) / 2;
+          if (yDiff &gt; 0) imgY += yDiff;
+               
+          g.drawImage(buttonImage, imgX, imgY, this);
+
+// Draw the bottom right shading. If the button is up, the shading is
+// black, otherwise it's white.
+
+          if (isDown) {
+               g.setColor(Color.white);
+          } else {
+               g.setColor(Color.black);
+          }
+          g.drawLine(1, height-1, width-1, height-1);
+          g.drawLine(width-1, 1, width-1, height-1);
+
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="WatchingforImageUpdates">
+Watching for Image Updates</A></H3>
+<P>
+Rather than requiring that images be completely loaded, the <TT>ImageButton</TT>
+class redraws itself when an image finishes loading. To do this,
+it implements the <TT>ImageObserver</TT>
+interface. If you only need to know that an image has finished
+downloading, you only need to examine the <TT>flags</TT>
+parameter to see if the <TT>ImageObserver.ALLBITS</TT>
+flag has been set.
+<P>
+When the <TT>ImageButton</TT> class
+learns that the image has finished downloading, it resizes itself
+and calls <TT>repaint</TT> to redraw
+itself with the completed image. Listing 9.11 shows the <TT>imageUpdate</TT>
+method for the <TT>ImageButton</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.11&nbsp;&nbsp;imageUpdate Method from ImageButton.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public boolean imageUpdate(Image img, int flags, int x, int y,
+          int width, int height)
+     {
+
+// If we have a complete image, resize the button and ask the parent
+// to recompute all the component positions. Good thing this only
+// gets called once!
+
+          if ((flags &amp; ImageObserver.ALLBITS) != 0) {
+               resize(img.getWidth(this)+3, img.getHeight(this)+3);
+               getParent().validate();
+          }
+
+// Let the canvas class handle any other information it was looking for
+          return super.imageUpdate(img, flags, x, y, width, height);
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Any time a component resizes itself, it should call the <TT>validate</TT> method in the <TT>parent</TT> container. This causes the container to reposition its components based on the updated size.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="CreatingaFONTSIZEFACECBIHelveticaCondensedBoldOblCommandImageButtonFONT">
+Creating a <FONT SIZE=4 FACE="CBI Helvetica Condensed BoldObl">CommandImageButton</FONT>
+</A></H3>
+<P>
+Now that you have created your own custom component, you can see
+how easily you can fit it into the Command interface scheme. You
+only need to create a subclass of <TT>ImageButton</TT>
+called <TT>CommandImageButton</TT>.
+Listing 9.12 shows you how to do this.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.12&nbsp;&nbsp;Source Code for CommandImageButton.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.Event;
+import java.awt.Image;
+
+// This class implements a ImageButton that supports the
+// Command interface. When the button is pressed, it
+// invokes the doCommand method in the Command interface.
+
+public class CommandImageButton extends ImageButton
+{
+
+// The interface where we will invoke doCommand
+
+     protected Command buttonCommand;
+
+// Allow a CommandButton to use the typical ImageButton constructor
+
+     public CommandImageButton(Image image)
+     {
+          super(image);
+     }
+
+// Allow a CommandButton to use the typical ImageButton constructor
+
+     public CommandImageButton(Image image, boolean fixedSize)
+     {
+          super(image, fixedSize);
+     }
+
+// The most useful constructor allows an Image and a command
+
+     public CommandImageButton(Image image, Command command)
+     {
+          super(image);
+
+          buttonCommand = command;
+     }
+
+// The most useful constructor allows an Image and a command
+
+     public CommandImageButton(Image image, boolean fixedSize,
+          Command command)
+     {
+          super(image, fixedSize);
+
+          buttonCommand = command;
+     }
+
+// When we get an action event, invoke doCommand in buttonCommand
+
+     public boolean action(Event evt, Object which)
+     {
+
+// Make sure the action event is for this object
+          if (evt.target != this) return false;
+
+// Make sure we have a buttonCommand defined!
+          if (buttonCommand == null) return false;
+
+          buttonCommand.doCommand();
+
+          return true;
+     }
+
+// Since you can create a CommandImageButton without passing it a
+// Command interface, you need to be able to set the command later.
+
+     public void setCommand(Command command)
+     {
+          buttonCommand = command;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now you can use the <TT>CommandImageButton</TT>
+in all your applications where you were using the CommandButton.
+The number button application earlier in this chapter needs only
+a few changes. Listing 9.13 shows a version of the number applet
+that uses image buttons instead of regular buttons and also uses
+the <TT>CommandToNumberCommand</TT>
+object to convert from a <TT>Command</TT>
+to a <TT>NumberCommand</TT> interface.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.13&nbsp;&nbsp;Source Code for NumberApplet2.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.Applet;
+import java.awt.Label;
+import java.awt.Color;
+
+// This applet displays a label containing a number,
+// followed by three buttons which change the number.
+// It uses the ChangeNumberCommand to translate the
+// doCommand method in the CommandButton to the
+// changeNumber method in this object.
+
+public class NumberApplet2 extends Applet implements NumberCommand
+{
+     Label number;
+
+     public void init()
+     {
+          setBackground(Color.gray);
+
+// Start the label out at 0
+          number = new Label(&quot;0&quot;);
+
+          add(number);
+
+// Create the object to change the label to 1
+          add(new CommandImageButton(
+               getImage(getDocumentBase(), &quot;one.gif&quot;),
+               new CommandToNumberCommand(this, 1)));
+
+// Create the object to change the label to 2
+          add(new CommandImageButton(
+               getImage(getDocumentBase(), &quot;two.gif&quot;),
+               new CommandToNumberCommand(this, 2)));
+
+// Create the object to change the label to 3
+          add(new CommandImageButton(
+               getImage(getDocumentBase(), &quot;three.gif&quot;),
+               new CommandToNumberCommand(this, 3)));
+     }
+
+// changeNumber actually performs the change
+
+     public void doCommand(int newNumber)
+     {
+          number.setText(&quot;&quot;+newNumber);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 9.5 shows the <TT>NumberApplet2</TT>
+applet in action.
+<P>
+<A HREF="f9-5.gif"><B>Figure 9.5 : </B><I>It is much easier to integrate new components
+when you use the Command pattern</I>.</A>
+<H2><A NAME="UsingtheObserverInterface"><FONT SIZE=5 COLOR=#FF0000>
+Using the Observer Interface</FONT></A></H2>
+<P>
+The <TT>Observer</TT> interface and
+<TT>Observable</TT> class implement
+another design pattern called the <TT>Observer</TT>
+pattern. While you may not have used these two classes yet, you
+have seen a similar system in the form of the <TT>ImageObserver</TT>
+interface used when dealing with images. The idea behind the <TT>Observer</TT>
+interface is that you may have an object that wants to know when
+another object changes. For instance, you may be displaying a
+car's speed and need to know when the speed changes. Rather than
+creating a loop that constantly asks the car how fast it's going,
+you simply ask the car to tell you when its speed changes. It's
+a simple mechanism, but it can have a huge impact on your design.
+<H3><A NAME="TheModelViewControllerParadigm">
+The Model-View-Controller Paradigm</A></H3>
+<P>
+The reason the <TT>Observer</TT> interface
+is so effective is that it uses the Model-View-Controller (MVC)
+paradigm. The idea behind MVC is that an application really consists
+of three things-a model, some views of the model, and some controllers.
+<P>
+The model is the part of the application that contains the actual
+application logic. It does the database access, it computes numbers,
+it manipulates data structures. It is really the heart of your
+application. When we talk about separating the user interface
+from the application, the model is the application.
+<P>
+If the model represents the application, then the view and controller
+represent the user interface. The user interface is conceptually
+split into input components and output components. A controller
+is an input component. It supplies information to the model. A
+view is an output component-it displays information from the model.
+MVC is not some brand new, untested theory-it is the way Smalltalk
+applications have been written for many years.
+<P>
+Pay close attention to the interfaces between the model and your
+views and controllers. It is very easy to let a model perform
+things that should rightly be part of a view or a controller.
+For example, suppose you are doing an aircraft tracking system
+and you are getting flight positions from the FAA over a modem.
+These positions are in the form of a text message that contains
+the aircraft identification and current information about it.
+You would have some code reading these messages from the modem
+and passing them to another routine that parses the information
+out of the message. It is very easy to think of the code that
+reads the messages as the controller, and put the parsing mechanism
+in the model. It is also wrong. The parsing routine is also part
+of the controller. The model should have absolutely no dependence
+on the external representation of information. This is an extremely
+important point, because it greatly affects the reusability of
+your code. You should be able to change input sources and change
+output formats without touching the model. In other words, the
+model deals with pure information that has no external meaning
+attached to it.
+<P>
+Figure 9.6 shows the conceptual relationship between the model,
+the view, and the controller. It also shows how the aircraft tracking
+system fits into this model.
+<P>
+<A HREF="f9-6.gif"><B>Figure 9.6 : </B><I>The model-view-controller paradigm is a
+good, object-oriented way of designing applications</I>.</A>
+<H3><A NAME="ObservablesandtheModelViewControllerParadigm">
+Observables and the Model-View-Controller Paradigm</A></H3>
+<P>
+The <TT>Observer</TT> interface and
+the <TT>Observable</TT> class make
+it easier for you to create views of data in the model by creating
+a notification system to let your view know when data in the model
+has changed. The mechanism is very simple. You create some object
+in your model that is a subclass of <TT>Observable</TT>.
+Anytime this class changes, it calls <TT>setChanged</TT>
+to flag itself as having changed, and then calls <TT>notifyObservers</TT>.
+The reason for the separation is that you may run through a series
+of checks in your model, any one of which might change the data.
+When you have finished, you call <TT>notifyObservers</TT>
+one time, rather than notifying the observers after every check.
+Whether to notify every time or periodically is a design decision.
+<P>
+Listing 9.14 shows an example <TT>ObservableInt</TT>
+class which is an <TT>Observable</TT>
+version of an integer.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.14&nbsp;&nbsp;Source Code for ObservableInt.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.util.*;
+
+//
+// ObservableInt - an integer Observable
+//
+// This class implements the Observable mechanism for
+// a simple int variable.
+// You can set the value with setValue(int)
+// and int getValue() returns the current value.
+
+public class ObservableInt extends Observable
+{
+     int value;     // The value everyone wants to observe
+
+     public ObservableInt()
+     {
+          value = 0;     // By default, let value be 0
+     }
+
+     public ObservableInt(int newValue)
+     {
+          value = newValue;     // Allow value to be set when created
+     }
+
+     public synchronized void setValue(int newValue)
+     {
+//
+// Check to see that this call is REALLY changing the value
+//
+          if (newValue != value)
+          {
+               value = newValue;
+
+// Mark this class as &quot;changed&quot;
+               setChanged();
+
+// Tell the observers about it, pass the new value as an Integer object
+// This saves the observers time because they don't have to ask what
+// the new value is.
+               notifyObservers(new Integer(value));
+          }
+     }
+
+     public synchronized int getValue()
+     {
+          return value;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+On the <TT>Observer</TT> side of things,
+you can create components that redisplay themselves when the <TT>Observable</TT>
+changes. Listing 9.15 shows an <TT>IntLabel</TT>
+class that observes an <TT>ObservableInt</TT>
+and displays its current value.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.15&nbsp;&nbsp;Source Code for IntLabel.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.util.*;
+
+// IntLabel - a Label that displays the value of
+// an ObservableInt.
+
+public class IntLabel extends Label implements Observer
+{
+     private ObservableInt intValue;     // The value we're observing
+
+     public IntLabel(ObservableInt theInt)
+     {
+          intValue = theInt;
+
+// Tell intValue we're interested in it
+
+          intValue.addObserver(this);
+
+// Initialize the label to the current value of intValue
+
+          setText(&quot;&quot;+intValue.getValue());
+     }
+
+// Update will be called whenever intValue is changed, so just update
+// the label text.
+
+     public void update(Observable obs, Object arg)
+     {
+          setText(((Integer) arg).toString());
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 9.16 shows an <TT>IntTextField</TT>
+that allows you to change the value of an <TT>ObservableInt</TT>.
+It will also act as an <TT>Observer</TT>
+in case another object changes the value.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.16&nbsp;&nbsp;Source Code for IntTextField.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.util.*;
+
+// IntTextField - a TextField that reads in integer values and
+// updates an Observable int with the new value.  This class
+// is both a &quot;view&quot; of the Observable int, since it displays
+// its current value, and a &quot;controller&quot; since it updates the
+// value.
+
+public class IntTextField extends TextField implements Observer
+{
+     private ObservableInt intValue;
+
+     public IntTextField(ObservableInt theInt)
+     {
+// Initialize the field to the current value, allow 3 input columns
+
+          super(&quot;&quot;+theInt.getValue(), 3);
+          intValue = theInt;
+          intValue.addObserver(this);     // Express interest in value
+     }
+
+// The action for the text field is called whenever someone presses &quot;return&quot;
+// We'll try to convert the string in the field to an integer, and if
+// successful, update the observable int.
+
+     public boolean action(Event evt, Object whatAction)
+     {
+          Integer intStr;          // to be converted from a string
+
+          try {     // The conversion can throw an exception
+               intStr = new Integer(getText());
+
+// If we get here, there was no exception, update the observable
+
+               intValue.setValue(intStr.intValue());
+          } catch (Exception oops) {
+// We just ignore the exception
+          }
+          return true;
+     }
+
+// The update action is called whenever the observable int's value changes.
+// We just update the text in the field with the new int value
+
+     public void update(Observable obs, Object arg)
+     {
+          setText(((Integer)arg).toString());
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Putting these objects together in a working applet is trivial.
+Listing 9.17 shows an applet that demonstrates these objects.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.17&nbsp;&nbsp;Source Code for ObservableApplet.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+
+// This class demonstrates the ObservableInt, IntTextField
+// and IntLabel classes.
+
+public class ObservableApplet extends Applet
+{
+     public void init()
+     {
+          ObservableInt intValue = new ObservableInt(0);
+
+          add(new IntTextField(intValue));
+          add(new IntLabel(intValue));
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="UsingObservablesforOtherClasses"><FONT SIZE=5 COLOR=#FF0000>
+Using Observables for Other Classes</FONT></A></H2>
+<P>
+The <TT>Observer</TT> interface is
+useful in non-graphical applications, too. It allows you to<BR>
+create more modular software by reducing the direct interconnection
+of components. The <TT>Observer</TT>
+interface is sort of a one-way interaction. The <TT>Observer</TT>s
+usually know<BR>
+what kind of object they're watching, but the <TT>Observable</TT>s
+usually just know that there are <TT>Observer</TT>s
+watching.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+When you use the <TT>Observer</TT> interface, you gain a lot of flexibility, because objects no longer have to know what objects are watching them. An observed object just sends out a notification that it has changed. You now have a lot of objects that are 
+
+acting completely on their own, responding to updates and performing their own tasks. You must pay close attention to your object model here. Make sure each object is only performing the tasks it is responsible for. Try to make each object's roles and 
+responsibilities as clear as possible. Otherwise, debugging a system like this will be a nightmare.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Listing 9.18 shows an example <TT>Observable</TT>
+class that represents an aircraft for a flight tracking system.
+Notice that none of its instance variables are public. You need
+to be able to notice when a variable changes value. If your instance
+variables are all public, any object can come along and change
+the value without you being notified. By restricting all the variable
+manipulation to accessor functions (<TT>get</TT>/<TT>set</TT>
+functions), you maintain the ability to notice when a variable
+changes.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+When you call <TT>notifyObservers</TT>, you may pass it an object that will be passed to the <TT>update</TT> method in all observers. You can use this object to pass specific information about the update. If you plan to handle multiple types of updates, 
+you should create an event class, similar to the AWT's <TT>Event</TT> class, which tells the <TT>update</TT> method what kind of update it is and which objects are involved.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.18&nbsp;&nbsp;Source Code for Aircraft.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.util.*;
+
+// This class demonstrates an observable object with multiple
+// values that can change. If an individual value is changed,
+// it calls notifyObservers. You can also change the values in
+// bulk using setAll.
+//
+// When you create observable classes like this, you can't have
+// public variables if you need to know when those varables change.
+// Otherwise, if altitude was public, anyone could say:
+// aircraft.altitude = 10000;
+// and no observers would be notified.
+
+public class Aircraft extends Observable
+{
+     protected String id;
+
+     protected double latitude;
+     protected double longitude;
+     protected double altitude;
+     protected double speed;
+     
+     public Aircraft(String id)
+     {
+          this.id = id;
+     }
+
+     public Aircraft(String id, double lat, double lon, double alt,
+          double speed)
+     {
+          this.id = id;
+          this.latitude = lat;
+          this.longitude = lon;
+          this.altitude = alt;
+          this.speed = speed;
+     }
+
+     public String getID() { return id; }
+
+     public double getAltitude() { return altitude; }
+
+     public void setAltitude(double newAlt)
+     {
+          altitude = newAlt;
+          setChanged();
+          notifyObservers(this);
+     }
+
+     public double getLatitude() { return latitude; }
+
+     public void setLatitude(double newLat)
+     {
+          latitude = newLat;
+          setChanged();
+          notifyObservers(this);
+     }
+
+     public double getLongitude() { return longitude; }
+
+     public void setLongitude(double newLon)
+     {
+          longitude = newLon;
+          setChanged();
+          notifyObservers(this);
+     }
+
+     public double getSpeed() { return speed; }
+
+     public void setSpeed(double newSpeed)
+     {
+          speed = newSpeed;
+          setChanged();
+          notifyObservers(this);
+     }
+
+     public void setAll(double lat, double lon, double alt, double speed)
+     {
+          this.latitude = lat;
+          this.longitude = lon;
+          this.altitude = alt;
+          this.speed = speed;
+
+          setChanged();
+          notifyObservers(this);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 9.19 shows an example module that watches an <TT>Aircraft</TT>
+for changes and prints a warning when the altitude is too high.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.19&nbsp;&nbsp;Source Code for AltitudeMonitor.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.util.*;
+
+// This class demonstrates how you can add new features to an
+// application without rewriting a lot of code. In this case,
+// this is a module that monitors aircraft altitudes and prints
+// out a warning if one gets too high. The aircraft class doesn't
+// know anything about this class, their only interaction is
+// through the Observer-Observable interface.
+
+public class AltitudeMonitor extends Object implements Observer
+{
+     double maxAltitude;
+
+     public AltitudeMonitor(double maxAlt)
+     {
+          this.maxAltitude = maxAlt;
+     }
+
+// Somewhere in your application you will have to add code
+// to tell this object about new aircraft.
+
+     public void addAircraft(Aircraft newAircraft)
+     {
+          newAircraft.addObserver(this);
+     }
+
+     public void update(Observable obs, Object arg)
+     {
+
+// Make sure this update is for an aircraft
+          if (!(obs instanceof Aircraft)) return;
+
+          Aircraft ac = (Aircraft) obs;
+
+          if (ac.getAltitude() &gt; maxAltitude) {
+               System.out.println(&quot;Warning! Aircraft too high!&quot;);
+               return;
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 9.7 shows the relationship between an altitude monitor
+and an aircraft.
+<P>
+<A HREF="f9-7.gif"><B>Figure 9.7 : </B><I>The altitude monitor registers itself as
+an observer of an aircraft and then watches the aircraft's altitude</I>.</A>
+<P>
+One of the advantages of designing things this way is that <TT>AltitudeMonitor</TT>
+could be an add-on feature to your tracking system. You could
+create whole sets of monitors similar to this that your customer
+could pick from. Notice, however, there's still one little flaw
+here. When you add a new aircraft, you have to call <TT>addAircraft</TT>
+in the <TT>AircraftMonitor</TT> object.
+If you wanted to add new types of monitors, you'd have to call
+a similar method in the new monitor. This is not good. You want
+to be able to add a new monitor without adding even one line of
+code. You can do it, too!
+<P>
+You can create an <TT>AircraftRegistry</TT>
+class that is an <TT>Observable</TT>.
+Its job in life is to notify its observers whenever a new aircraft
+is added. Instead of calling <TT>addAircraft</TT>
+for each different monitor you have in your system, you just call
+<TT>addAircraft</TT> in the registry,
+and it notifies its observers of the new aircraft. Listing 9.20
+shows an implementation of an <TT>AircraftRegistry</TT>
+class. It is implemented as a <TT>singleton</TT>
+class, which means there is only one in the entire system. A <TT>singleton</TT>
+class is implemented by keeping a protected static pointer to
+the lone instance of the class. You also hide the constructor
+so no one can create their own instance. Then, you create a <TT>static</TT>
+method that returns the lone instance of the class, creating a
+new one if there wasn't one already.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.20&nbsp;&nbsp;Source Code for AircraftRegistry.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.util.*;
+
+
+// This class provides a way for aircraft monitors to find out
+// about new aircraft. It is implemented as a singleton class, which
+// means there is only one. Its constructor is protected, so you
+// can't create a new AircraftRegistry manually. Any time you need
+// the registry, you access it through: AircraftRegistry.instance()
+
+public class AircraftRegistry extends Observable
+{
+
+// reference to the single instance of AircraftRegistry in the system
+
+     protected static AircraftRegistry registry;
+
+     protected AircraftRegistry()
+     {
+     }
+
+// Return the lone instance of this class. If there isn't one, create it.
+
+     public synchronized static AircraftRegistry instance()
+     {
+          if (registry == null) {
+               registry = new AircraftRegistry();
+          }
+
+          return registry;
+     }
+
+// When an aircraft is added to the system, notify all the interested parties
+
+     public void addAircraft(Aircraft aircraft)
+     {
+          setChanged();
+
+// Pass the new aircraft to the interested parties
+          notifyObservers(aircraft);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now, the <TT>AltitudeMonitor</TT>
+class no longer needs the <TT>AddAircraft</TT>
+method. Instead, its <TT>update</TT>
+method has to be smart enough to know whether the update came
+from an <TT>Aircraft</TT> or from
+the <TT>AircraftRegistry</TT>. Listing
+9.21 shows the updated <TT>AltitudeMonitor</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.21&nbsp;&nbsp;Source Code for AltitudeMonitor2.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.util.*;
+
+// This class demonstrates how you can add new features to an
+// application without rewriting a lot of code. In this case,
+// this is a module that monitors aircraft altitudes and prints
+// out a warning if one gets too high. The aircraft class doesn't
+// know anything about this class, their only interaction is
+// through the Observer-Observable interface.
+//
+// This class uses the AircraftRegistry to learn about new aircraft.
+
+public class AltitudeMonitor2 extends Object implements Observer
+{
+     double maxAltitude;
+
+     public AltitudeMonitor2()
+     {
+          maxAltitude = 40000.0;
+          AircraftRegistry.instance().addObserver(this);
+     }
+
+     public AltitudeMonitor2(double maxAlt)
+     {
+          this.maxAltitude = maxAlt;
+          AircraftRegistry.instance().addObserver(this);
+     }
+
+     public void update(Observable obs, Object arg)
+     {
+
+// See if this update is for an aircraft
+
+          if (obs instanceof Aircraft) {
+
+               Aircraft ac = (Aircraft) obs;
+
+               if (ac.getAltitude() &gt; maxAltitude) {
+                    System.out.println(
+                         &quot;Warning! Aircraft too high!&quot;);
+                    return;
+               }
+
+// If this update is from the registry, it is telling us about
+// a new aircraft, so start observing the new aircraft
+
+          } else if (obs instanceof AircraftRegistry) {
+               Aircraft ac = (Aircraft) arg;
+               ac.addObserver(this);
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+This may seem like a lot of fuss to you, but it makes your software
+much more modular. The <TT>AircraftRegistry</TT>
+class provides just the extra level of abstraction to really make
+this system modular. Now you can add new monitors without changing
+a line of code anywhere in the program. You can dynamically load
+new monitors on-the-fly, thanks to Java's class loading interface.
+<P>
+Figure 9.8 shows the relationship between an aircraft, the aircraft
+registry, and the altitude monitor.
+<P>
+<A HREF="f9-8.gif"><B>Figure 9.8 : </B><I>The aircraft registry sends out updates
+when a new aircraft is created</I>.</A>
+<P>
+Listing 9.22 shows a simple program that tests the interaction
+between an <TT>Aircraft</TT>, the
+<TT>AircraftRegistry,</TT> and the
+<TT>AltitudeMonitor</TT> classes.
+The <TT>monitors</TT> array contains
+a list of the aircraft monitors to be loaded, currently just the
+<TT>AltitudeMonitor2</TT> class. This
+list could be read in from a file just as easily, so you wouldn't
+have to recompile even the test program to add new monitors; however,
+for this demonstration, a static array is sufficient.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.22&nbsp;&nbsp;Source Code for TestMonitor.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This class demonstrates the highly dynamic nature of the
+// Aircraft, AircraftRegistry, and AltitudeMonitor classes.
+
+public class TestMonitor extends Object
+{
+
+// The list of monitors to dynamically load.
+     static String monitors[] = { &quot;AltitudeMonitor2&quot; };
+
+// Load the monitors dynamically
+
+     public static void createMonitors()
+     {
+          for (int i=0; i &lt; monitors.length; i++) {
+               try {
+
+// Use the class loader. If the load fails, print an error message, but
+// keep running.
+                    Class monClass = Class.forName(monitors[i]);
+                    monClass.newInstance();
+               } catch (Exception e) {
+                    System.err.println(&quot;Got error creating class &quot;+
+                         monitors[i]);
+                    System.err.println(e);
+               }
+          }
+     }
+
+     public static void main(String[] args)
+     {
+
+// Dynamically load the aircraft monitors
+          createMonitors();
+
+// Create a dummy aircraft
+          Aircraft ac = new Aircraft(&quot;MW1234NA&quot;,
+               0.0, 0.0, 10000.0, 400.0);
+
+// Add the dummy aircraft to the system
+          AircraftRegistry.instance().addAircraft(ac);
+
+// Play with the altitudes and see if the monitor catches it.
+
+          System.out.println(&quot;Setting to 12000&quot;);
+          ac.setAltitude(12000.0);
+
+          System.out.println(&quot;Setting to 48000&quot;);
+          ac.setAltitude(48000.0);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The only disadvantage of this program dynamically loading the
+monitors is that the dynamic loading process can only call the
+empty constructor for the monitor. You would have to find alternate
+means of the monitors getting their configuration. Although these
+examples are fairly specific to a particular application, the
+concepts apply to a wide range of applications. Use the <TT>Observer-Observable</TT>
+interface to separate components as much as possible. You will
+find that it is much easier to plug in new components.
+<HR>
+
+<CENTER><P><A HREF="ch8.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch10.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

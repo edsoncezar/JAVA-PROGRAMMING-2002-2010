@@ -1,0 +1,121 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Network File-Locking Server</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch13\13-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="14-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 14<BR>A Network File-Locking Server
+</FONT></H2>
+<P>To demonstrate how RMI can be used in the real world, a remote file-locking utility is created in this chapter. The file-locking utility enables you to lock resources on a remote machine.
+</P>
+<P>Our motivation is three-fold. First, file locking involves some interesting issues when used in an environment in which files are shared between computers, such as on a network file server. Second, this example can be broken into two pieces: local file locking for files shared by another application running on the same computer as your application and global file locking for remote files shared by applications on multiple computers, allowing for the addition of new ideas to the example as the discussion proceeds. These two versions of the same idea are also best implemented with differing levels of RMI, making them good, complementary examples.</P>
+<P>Finally, file locking is an important mechanism for enterprise computing. Enterprise JavaBeans, servlets, and other network programming tools support multithreaded programs and can often be scaled to multiple computers. These computers and programs may share the same files, and file locking is necessary to protect shared files from corruption. Providing both a local and remote implementation of file locking gives you a starting point for protecting important data in your enterprise applications.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Keep in mind that these and all examples in this book are designed for educational purposes. We hope to provide robust code that acts as a starting point for your own applications, but we have not implemented every corner case and test.</FONT><HR>
+</BLOCKQUOTE>
+<P>In both the local and global implementations for file locking, temporary files are used to represent the lock on a file. This temporary file is visible to the user, so if there is a problem with a stale lock, it can be deleted manually. Using a temporary file is also useful in the global-locking situation in which different machines may get to the same file via different paths. Regardless of the path, the lock appears in the same directory as the file being locked, so either client can see it.
+</P>
+<P>Both implementations are advisory locking schemes. This means that if a program doesn&#146;t use them, it can still execute corrupting actions on a file. In other words, for this locking to work, you as the programmer have to use it; any program that doesn&#146;t breaks the entire locking scheme. Although it would be nice to create a mandatory locking scheme, this is not possible at the application level without complete control of the file I/O libraries.</P>
+<P>Both RMI and locking come at some cost. Once set up, the RMI connections in these examples don&#146;t require much network bandwidth, but the locking may take time as threads are synchronized and the server handles multiple requests. As a result, the best way to protect files, as with any data, is to not share them. If you do share files, these examples provide a good framework for protecting them.</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">Local Shared Locks</FONT></H3>
+<P>First, let&#146;s look at an RMI-based server for managing file locks on the local system. This server, called the <I>network lock server</I>, or NLS, provides access to objects that manage the lock for a single file path. This lock is represented by a SharedFileLock object and is unique for the machine. When a client wants to lock a file on his system, he contacts the lock server and asks for a lock based on an absolute path. The lock is returned as a remote object and can be used to lock and unlock the file. The server also provides a method for testing whether a file currently has a shared lock on it. This relationship between the client and server is pictured in Figure 14.1.</P>
+<P>The same server is used for the global lock implementation, but it relies on a different client mechanism. The actual interaction between the client and server for the shared locks is defined in two interfaces, NetworkLockServer and FileLock. Let&#146;s look at each of these in detail.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading3"></A><FONT COLOR="#000077">FileLock Interface</FONT></H4>
+<P>The file lock interface is pretty simple. It defines three methods: one to test if the file is locked, one to lock it, and one to unlock it.
+</P>
+<PRE>
+import java.rmi.*;
+ 
+public interface FileLock extends Remote
+{
+    public boolean isLocked() 
+        throws RemoteException;
+        
+    public void lock() 
+
+       throws RemoteException,FileLockingException;
+     
+    public void unlock() 
+        throws RemoteException,FileLockingException;
+}
+</PRE>
+<P><A NAME="Fig1"></A><A HREF="images\14-01.jpg"><IMG SRC="images\14-01t.jpg"></A>
+<BR><A HREF="images\14-01.jpg"><FONT COLOR="#000077"><B>Figure 14.1</B></FONT></A>&nbsp;&nbsp;Shared lock architecture.</P>
+<P>Because this is an interface for an RMI object, it extends Remote. The methods also throw RemoteExceptions for the same reason.
+</P>
+<P><FONT SIZE="+1"><B><I>FileLockingException</I></B></FONT></P>
+<P>Both the lock and unlock methods in FileLock can throw a custom exception type called FileLockingException. This happens when a problem occurs in the underlying locking machinery. This exception class is very simple and is provided only for data typing. The following code defines the FileLockingException class that extends the Exception class.
+</P>
+<PRE>
+public class FileLockingException 
+  extends Exception
+{
+    public FileLockingException(String msg)
+    {
+        super(msg);
+    }
+    
+    public FileLockingException()
+    {
+    }
+}
+</PRE>
+<P>When an exception occurs in the locking machinery, FileLocking exceptions are used to distinguish them from normal RMI or run-time exceptions.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading4"></A><FONT COLOR="#000077">NetworkLockServer Interface</FONT></H4>
+<P>The NetworkLockServer interface provides two sets of methods. One set is used for the local, shared locks discussed in this example, and the other set is used for the global locking discussed in the next section. The following code declares the NetworkLockServer interface. The interface provides methods for getting a lock on a file, checking whether a file is locked already, and unlocking a file. As always, all remote methods must throw RemoteException.
+</P>
+<PRE>
+import java.rmi.*;
+ 
+public interface NetworkLockServer extends Remote
+{
+    // Default registry name for bound to the server
+    public static String NLS_NAME=<B>&#147;</B>server.nls&#148;;
+    
+    public FileLock getSharedLockFor(String absPath) 
+        throws RemoteException;
+        
+    public boolean isFileLocked(String absPath) 
+        throws RemoteException;
+   
+    public void lock()
+        throws RemoteException;
+    
+    public void unlock()
+        throws RemoteException;
+}
+</PRE>
+<P>In particular, the lock and unlock methods are used by global locks and will not be used by the shared lock implementation. NetworkLockServer defines the name that the server registers, as in the RMI registry. This static variable helps prevent typing errors in client applications. In general, try to use static variables for all &#147;magic&#148; strings in your applications. This reduces the danger of typing errors and improves readability, in most cases.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch13\13-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="14-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

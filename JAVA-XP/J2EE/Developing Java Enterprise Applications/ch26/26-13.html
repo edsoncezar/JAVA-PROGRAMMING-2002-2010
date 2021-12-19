@@ -1,0 +1,204 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<TABLE WIDTH="100%">
+<TD CAPTION COLSPAN="2" ALIGN="LEFT"><B>Table 26.6</B> Ack Table
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="25%" ALIGN="LEFT">COLUMN
+<TH ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>MSG_NUM</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The number for the last message acknowledged.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>DESTINATION</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The destination to which this entry corresponds.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>NAME</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The name with which the consumer registered.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P>The MiniJMSMessageStore&#146;s instance variables hold the current messages, the context and properties files used to configure the store, a connection to a database, a statement for that connection, the directory name for the directory that stores the serialized messages, and a counter used to determine the unique numbers for messages. There are also static variables that define the names for two MiniJMS-defined message properties. These properties, JMS_MSG_NUM and JMS_REG_NAME, store the message number and registered name associated with a message. The message number is used in the database; the registered name associates a message with a particular MiniConsumer on the client.
+</P>
+<P>The code for MiniJMSMessageStore follows, with embedded discussions that highlight the major features of the class.</P>
+<PRE>
+package minijmsserver;
+
+//Imports removed to save space.
+
+public class MiniJMSMessageStore
+{
+    protected Hashtable destinations;
+    protected Hashtable messages;
+    protected Properties props;
+    protected java.sql.Connection conn;
+    protected java.sql.Statement statement;
+    protected Context context;
+    protected String objDir;
+    protected long curId;
+
+    public final static String MSG_NUM=&#147;JMS_MSG_NUM&#148;;
+    public final static String REG_NAME=&#147;JMS_REG_NAME&#148;;
+</PRE>
+<P>The constructor for MiniJMSMessage store is a great example of how multiple technologies can be combined. Configuration information is stored in a properties file. This information is used to create a JNDI context. A JDBC database connection is created using the same properties file, and the contents of the DESTINATION table from the database are used to load MiniDestination objects into the JNDI context. The constructor even registers the MiniDestinationFactory with the JNDI context so that the destinations can be bound appropriately and autonomously. In just 30 or so lines of code properties, JNDI and JDBC are combined to create a unified whole.
+</P>
+<P>The JMS specification says that a JMS provider should provide tools for administrating queues and topics. Although no specific tools are provided by JNDI, they can easily be created using the RemoteMiniSession interface or by simply inserting destinations into the message store&#146;s database and restarting the server.</P>
+<P>The objDir variable initialized in the constructor, as defined here, refers to the directory that contains the serialized message objects referenced in the database.</P>
+<PRE>
+    public MiniJMSMessageStore(String propsFile)
+        throws JMSException
+    {
+        String url = null;
+        String user=null;
+        String password=null;
+        String driver=null;
+        java.sql.ResultSet rs;
+        boolean isQ;
+        String name;
+        MiniDestination dest;
+
+        curId = System.currentTimeMillis();
+
+        destinations = new Hashtable();
+        messages = new Hashtable();
+
+        try
+        {
+            MiniJMSUtils.init(propsFile);
+            context = MiniJMSUtils.context;
+            props = MiniJMSUtils.properties;
+
+            context.addToEnvironment(Context.OBJECT_FACTORIES,
+                                 &#147;minijms.MiniDestinationFactory&#148;);
+
+
+            url = props.getProperty(&#147;db_url&#148;);
+            user = props.getProperty(&#147;db_user&#148;);
+            password = props.getProperty(&#147;db_password&#148;);
+            driver = props.getProperty(&#147;db_driver&#148;);
+            objDir = props.getProperty(&#147;object_directory&#148;);
+
+            if((context == null)
+                ||(url == null)||(driver == null)
+                ||(objDir==null))
+            {
+                throw
+                new JMSException(&#147;Unable to connect to store.&#148;);
+            }
+
+            File dir = new File(objDir);
+            if(!dir.exists()) dir.mkdirs();
+
+            Class.forName(driver);
+
+            conn = DriverManager.getConnection(url,user,password);
+            conn.setAutoCommit(false);
+
+            statement = conn.createStatement();
+
+            rs =
+            statement.executeQuery(&#147;select * from destinations&#148;);
+
+            while(rs.next())
+            {
+                name = rs.getString(&#147;name&#148;);
+                isQ =
+            Boolean.valueOf(rs.getString(&#147;isqueue&#148;)).booleanValue();
+
+                dest = new MiniDestination(name,isQ);
+
+                Vector sessions = new Vector();
+
+                destinations.put(name,sessions);
+                context.rebind(name,dest);
+            }
+
+            rs.close();
+        }
+        catch(JMSException ex)
+        {
+            throw ex;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>Closing the message store frees up its JNDI context and JDBC connection. To ensure that close is called, the finalize method is implemented to call it.
+</P>
+<PRE>
+    public void close()
+    {
+        try
+        {
+            <B>context.close();
+            statement.close();
+            conn.close();</B>
+        }
+        catch(Exception exp)
+        {
+        }
+    }
+
+    public Context getJNDIContext()
+    {
+        return context;
+    }
+
+    <B>public void finalize()
+    {
+        close();
+    }</B>
+</PRE>
+<P>The nextId method returns the next message number based on the order it is called and the creation time of the message store, as initialized in the constructor.
+</P>
+<PRE>
+    protected long nextId()
+    {
+        return curId&#43;&#43;;
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

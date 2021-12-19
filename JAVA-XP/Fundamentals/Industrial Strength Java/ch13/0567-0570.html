@@ -1,0 +1,245 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0562-0566.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0571-0573.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-567"><P>Page 567</P></A>
+
+
+<PRE>
+public synchronized void waitForTick() {
+        do {
+                try {
+                        wait();
+                        //A normal (non-interrupted)
+                        //return from wait() will break
+                        //from the loop.
+                        //InterruptedException will cause
+                        //the loop to iterate again (and
+                        //re-enter the wait()).
+                        break;
+                }
+                catch(InterruptedException e) {}
+        } while(true);
+}
+}
+</PRE>
+
+<P>The Ticker thread avoids lag partly because it doesn't do any work itself; it just
+notifies other threads that wait on the Ticker object. The other part of the solution is the way
+the duration of the sleep() call is calculated. Once during each iteration, the value of next
+is set to the system time at which the next tick should occur. The duration passed to sleep()
+is always the number of milliseconds to wait until the next tick, regardless of how long
+the notifyAll() call takes to operate. Actually, the calculation of period is designed to
+cope with the extreme situation when the time required to notify waiting threads is longer
+than the cycle time; in this case the call to sleep() isn't made, and lag might occur.
+</P>
+
+<P>The class shown in listing 13.51 uses the Ticker class to call tick() every 1,000 milliseconds.
+</P>
+
+<P>Listing 13.51 Code that Uses a Ticker
+</P>
+<PRE>//Create a Ticker to fire every 1000mS
+Ticker t = new Ticker(1000);
+
+//loop that calls doWork() every tick
+while(true) {
+        t.waitForTick();
+        tick();
+}
+</PRE>
+
+<P>In this example, if doWork() takes an excessive amount of time (more than 1,000
+milliseconds, for example), this code might miss a tick (if the thread isn't waiting when
+Ticker calls notifyAll(), it won't be woken), but the next tick will come at the right time interval.
+</P>
+
+<P>The Ticker thread sets its priority to MAX_PRIORITY to try to preempt any
+thread executing when sleep() is done. This is acceptable because the Ticker does so little
+work
+</P>
+
+<A NAME="PAGENUM-568"><P>Page 568</P></A>
+
+<P>
+between periods of sleep, and so it won't take unreasonable amounts of CPU time.
+</P>
+
+<H3><A NAME="ch13_ 38">
+Deadlock and Starvation
+</A></H3>
+
+<P>Although the problem with lag that the Ticker class solves might happen in both
+multi- and single-threaded programs, some programming problems are unique to
+concurrent programming. As well as the race conditions that were discussed earlier, starvation
+and deadlock may also occur in multithreaded systems.
+</P>
+
+<P>Starvation occurs whenever a thread in an application can't proceed because it cannot
+gain access to a particular resource. For example, if most threads in an application spend
+most of their time waiting to write to a shared log file that's protected by synchronized
+methods, it's true to say that the system is starved.
+</P>
+
+<P>Semaphores can be used to help identify starvation. Because a semaphore can record
+the number of waiting threads, a version of the Semaphore class can be written that tracks
+the maximum number of threads waiting. When a semaphore is used to protect access to
+a resource (as in the LogFile class shown earlier), the sWait() and sSignal() methods can
+be modified to measure the maximum amount of time for which the resource is allocated.
+</P>
+
+<P>Starvation can also occur when eligible threads can't run because other threads don't
+call yield() at appropriate points, or when a waiting thread could logically continue,
+but program design doesn't allow for it to be notified yet. Both of these are examples
+of processor-time starvation.
+</P>
+
+<P>Deadlock occurs when two or more threads all wait for some condition that is
+never satisfied. The classic example of this occurs when all the threads wait for each
+other. Because all are suspended, none can ever call notify(), and they all remain
+suspended indefinitely. Deadlock can be seen as an extreme (infinite) case of starvation. Consider
+the class in listing 13.52 which provides synchronized protection for access to an
+Object (which might, for example, be an Integer or String).
+</P>
+
+<P>Listing 13.52 A Class that may Deadlock
+</P>
+<PRE>
+public class ProtectedValue {
+
+private Object theValue;
+
+//Get the current value
+
+public synchronized Object getValue() {
+        return theValue;
+}
+
+</PRE>
+
+<A NAME="PAGENUM-569"><P>Page 569</P></A>
+
+
+<PRE>
+//Set the current value to an object
+public synchronized void setValue(Object newValue) {
+        theValue = newValue;
+</PRE>
+
+<P><a href="images\ch13fg07.jpg"><img src="images\tn_ch13fg07.jpg"></a><BR>
+Figure 13.7 Two threads in mutual deadlock.
+</P>
+
+
+<PRE>
+}
+
+//Compare this ProtectedValue to another
+public synchronized boolean equalTo(ProtectedValue p) {
+        return theValue.equals(p.getValue());
+}
+
+//Assigns one ProtectedValue to another
+public synchronized void assign(ProtectedValue p) {
+        setValue(p.getValue());
+}
+}
+</PRE>
+
+<P>Consider two threads, A and B. Thread A has a ProtectedValue X and B has another,
+Y. Thread A calls X.assign(Y) to copy the value of Y at the same time that B
+calls Y.equalTo(X) to compare X and Y. Thread A, entering assign(), gains a lock on X.
+Thread B, entering equalTo(), gains a lock on Y. A then calls getValue() for Y and is
+suspended because B has Y locked. B calls getValue() for X and is suspended because A has
+X locked. The two threads are deadlocked, each waiting for the other. This is shown in
+figure 13.7.
+</P>
+
+<P>This problem of nested synchronization usually occurs when methods synchronize
+on objects other than &quot;this.&quot; This synchronization might not be explicit, but can be implied
+by the calling of a synchronized method (as in the previous example). It's important to
+be aware of class methods that are synchronized so that potential problems like
+those
+</P>
+
+<A NAME="PAGENUM-570"><P>Page 570</P></A>
+
+<P>discussed in the preceding example can be identified. It's also important to
+consider synchronization as early as possible in class design so that appropriate methods
+are synchronized from version 1. Introducing synchronization to methods of a new version
+of a class already in use might create deadlock problems where there were previously none.
+</P>
+
+<P>Another potential source of problems occurs when a subclass overrides a
+synchronized method with an unsynchronized one (or vice versa). This was illustrated earlier in
+the section on synchronization and overriding methods.
+</P>
+
+<P>Synchronization should always be explicit in the class API. For example, consider
+a subclass of java.util.HashTable that overrides the existing synchronized put() method,
+as shown in listing 13.53.
+</P>
+
+
+
+
+<P>Listing 13.53 Hidden Synchronization
+</P>
+<PRE>
+public Object put(Object key, Object value) {
+        //so some extra stuff that
+        //doesn't need to be synchronized.
+        extraStuff(key, value);
+        return super.put(key, value);
+}
+</PRE>
+
+<P>The call to super.put() will be synchronized, but this subclass method declaration
+shows put() as unsynchronized. Any synchronization in a method should be considered as a
+side-effect of that method and should be at least clearly noted in the documentation. In
+this example, put() would probably have been better left synchronized.
+</P>
+
+<H4><A NAME="ch13_ 39">
+Recovering from Deadlock
+</A></H4>
+
+<P>Prevention is far better than a cure when deadlock is concerned, but it's always
+possible that, for example, a thread may generate an exception and die, thus leaving other
+threads waiting potentially forever. In this situation, the wait() methods that take parameters
+are useful.
+</P>
+
+<P>Wait() can be called with a maximum time value, specified either as milliseconds, or
+as milliseconds and nanoseconds. The call will then return from wait()when notify() has
+been called or when the specified time has expired (whichever occurs first).
+</P>
+
+<P>Techniques for performing a detailed analysis of multithreaded program behavior to
+avoid
+</P>
+
+<P><CENTER>
+<a href="0562-0566.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0571-0573.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

@@ -1,0 +1,180 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Network File-Locking Server</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="14-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch15\15-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>If there is a server, try to lock it by calling the server&#146;s lock method. Once the server is locked, double-check that the lock file is not already in place by calling isLocked. This check is required for global locks because a client might have locked the file between the time we checked for the lock file and the time the server was locked. Again, all changes to the lock file occur within the confines of a locked NetworkLockServer. If the file is locked, an exception is thrown. This is different from the shared lock that waits for the lock to be available. Here, we try and fail quickly. If a program wants to wait, it can sleep and try again, shown by the test program in the following section. The code for the reallyLock method that follows implements this behavior.
+</P>
+<PRE>
+    private synchronized boolean reallyLock(NetworkLockServer serv)
+         throws FileLockingException
+    {
+        boolean retVal = false;
+        FileOutputStream fileOut;
+        
+        //Create the lock file on disk.
+        try
+        {
+<B>            serv.lock();
+            
+            if(!isLocked())
+            {
+                fileOut = new FileOutputStream(lockFile);
+                fileOut.close();
+                retVal = true;
+            }
+            //else return false
+            
+            serv.unlock();
+</B>        }
+        catch(Exception exp)
+        {
+            throw new FileLockingException(<B>&#147;</B>File error.<B>&#148;</B>);
+        }
+        
+        return retVal;
+    }
+</PRE>
+<P>To unlock a file, call the unlock method. The unlock method gets the lock server, locks it, removes the lock file, and unlocks the server. If no server is available or the locking fails, an exception is thrown.
+</P>
+<PRE>
+    //Notifies threads waiting for lock.
+     public synchronized void unlock()
+        throws FileLockingException
+    {
+        NetworkLockServer serv = getLockServer();
+        
+        if(serv == null)
+            throw new FileLockingException(<B>&#147;</B>No Server Available<B>&#148;</B>);
+            
+        try
+        {
+<B>            serv.lock();
+            lockFile.delete();
+            serv.unlock();
+</B>        }
+        catch(Exception exp)
+        {
+            throw new FileLockingException(<B>&#147;</B>File error.<B>&#148;</B>);
+        }
+    }
+}
+</PRE>
+<P>As you can see, these global locks are different from the shared ones because you cannot assume in a global locking system that the absolute file paths are sufficient keys for identifying the file. Even though there is a difference between the lock schemes, they rely on the same principles. Use files to represent locks, and use synchronization to ensure that only one client changes the lock file at a time.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading11"></A><FONT COLOR="#000077">A Test Program</FONT></H4>
+<P>A program to test the GlobalFileLock class follows; it is also available on the CD-ROM. This program uses command-line arguments to determine the lock server and file path. This program continues to try to acquire the lock every five seconds until it succeeds. In a real program, you might ask the user what to do if the lock fails.
+</P>
+<PRE>
+import java.io.*;
+ import java.util.*;
+import java.rmi.*;
+
+/*
+  Example use: 
+  java GlobalLockTester \dir\myfile myLockServerHost
+*/
+public class GlobalLockTester
+{
+    public static void main(String args[])
+    {
+        if(args.length &lt 1)
+        {
+            System.out.println(<B>&#147;</B>usage GlobalLockTester<B>&#148;</B>
+                               +<B>&#147;</B> file [lockserver]<B>&#148;</B>);
+            System.exit(0);
+        }
+
+        try
+        {
+            FileLock lock;
+            
+            System.out.println(<B>&#147;</B>Setting LockServer.<B>&#148;</B>);
+            
+<B>            if(args.length&gt1)
+                GlobalFileLock.setLockServer(args[1]);
+</B>                
+            System.out.println(<B>&#147;</B>Creating lock object.<B>&#148;</B>);
+            
+<B>            lock = GlobalFileLock.getLockFor(args[0]);
+</B>            
+            System.out.println(<B>&#147;</B>Got lock object.<B>&#148;</B>);
+            
+            while(true)
+            {
+                try
+                {
+                    System.out.println(<B>&#147;</B>Trying to acquire lock.<B>&#148;</B>);
+<B>                    lock.lock();
+</B>                    System.out.println(<B>&#147;</B>Got lock<B>&#148;</B>);
+             
+                    //Hold the lock for 30 seconds.
+                    Thread.sleep(30000);
+                    break;
+                }
+                catch(FileLockingException ex)
+                {
+                    System.out.println(<B>&#147;</B>Lock is unavailable.<B>&#148;</B>);
+                    System.out.println(<B>&#147;</B>Sleeping 5 seconds.<B>&#148;</B>);
+                    
+                    try
+                    {
+                        Thread.sleep(5000);
+                    }
+                    catch(InterruptedException exp)
+                    {
+                    }
+                }
+            }
+            
+            System.out.println(<B>&#147;</B>Unlocking.<B>&#148;</B>);
+<B>            lock.unlock();
+</B>            System.out.println(<B>&#147;</B>Unlocked.<B>&#148;</B>);
+        }
+        catch (Exception e)
+        {
+            System.out.println(<B>&#147;</B>GlobalLockTester Error: <B>&#148;</B> 
+                                 + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+</PRE>
+<P>This test program is best demonstrated in the situation in which two machines share a file with different paths for accessing the file.
+</P>
+<H3><A NAME="Heading12"></A><FONT COLOR="#000077">Summary</FONT></H3>
+<P>The first thing to note about these two examples is that <I>they don&#146;t mix.</I> If you use SharedFileLocks, don&#146;t use GlobalFileLocks for the same files, because the two mechanisms have different protection schemes.</P>
+<P>The second thing to notice is that network programming has a lot of issues that non-distributed programming does not. In this case, we had to deal with different file paths and the possibility of multiple programs accessing resources, as well as multiple threads sharing resources. In a non-distributed program, you can use synchronization to protect shared resources; distributed programs require some form of rendezvous point, such as a file or server. In some cases, an operating system provides this rendezvous point in the form of a system call. For example, many systems support a call such as flock that will lock a file. However, this mechanism is OS dependent and will not work in a network situation. Some network file systems, like NFS, provide their own locking schemes. Our design is loosely based on some of these network schemes.</P>
+<P>Using RMI in this example made the network communication issues for the application virtually transparent. This is why RMI is such an important technology for enterprise developers; it helps simplify a common requirement: object communication over the network. The next few chapters begin to explore Enterprise JavaBeans. This API provides an architecture for a server-based component model for building robust, extensible enterprise applications.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="14-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch15\15-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

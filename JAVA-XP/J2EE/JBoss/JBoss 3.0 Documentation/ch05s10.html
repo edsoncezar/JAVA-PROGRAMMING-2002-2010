@@ -1,0 +1,92 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Creating a test client </title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch05.html" title="Chapter 5. Using container-managed persistence"><link rel="previous" href="ch05s09.html" title="Packaging and deploying the Beans"><link rel="next" href="ch05s11.html" title="Discussion: container-managed persistence"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch05.html"><img src="images\toc.gif" border="0"></a><a href="ch05s09.html"><img src="images\prev.gif" border="0"></a><a href="ch05s11.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e1918"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e1918"></a>Creating a test client </h2></div></div><p>Client for EJBs may be any Java program or applet; in this simple example I 
+will describe
+a very simple client program that can be run from the command line. It simply 
+dumps the 
+attributes of all the CD Beans to standard output. The source code also 
+provides clients
+for searching and uploading to the database, all operating at the command line.</p><p>The client does not interact directly with CD instances, it uses the 
+CDCollection bean 
+as a mediator. CDCollection is a stateless session bean. In this example, the 
+client 
+calls the "findAll" method to get references to all the CD objects currently 
+in the 
+system. To run this client, you will first need to get some CD objects 
+created. You 
+can use the "Upload" client for this, to create CD instances from a text file.</p><p>To avoid the necessity to specify the URL of the Bean server in the client 
+source code, 
+this client reads the required information from a properties file called 
+"jndi.properties".  This file can be found under "documentation-example/resources"
+The file should contain the URL and driver for the naming service, like this:</p><p><pre class="programlisting">java.naming.factory.initial=org.jnp.interfaces.NamingContextFactory
+java.naming.provider.url=localhost
+java.naming.factory.url.pkgs=org.jboss.naming:org.jnp.interfaces</pre></p><p>Of course, if your server and client are on different computers, you will need 
+to 
+change "localhost" to the real location of the server.  The JNDI protocol prefix used by JBoss is "jnp:".  
+The URL can also take these values:</p><p><pre class="programlisting">localhost
+localhost:1099
+jnp://localhost:1099</pre></p><p>Here is the full listing of the "List" client.</p><pre class="programlisting">
+package org.jboss.docs.cmp.cd;
+
+import org.jboss.docs.cmp.cd.interfaces.CD;
+import org.jboss.docs.cmp.cd.interfaces.CDHome;
+import org.jboss.docs.cmp.cd.interfaces.CDCollectionHome;
+import org.jboss.docs.cmp.cd.interfaces.CDCollection;
+import javax.rmi.PortableRemoteObject;
+import javax.naming.InitialContext;
+import java.util.Hashtable;
+import java.util.Properties;
+import java.io.FileInputStream;
+
+/**
+ * This is a simple client for the "CD" EJB; it lists (to standard output) all
+ * the "CD" instances in the system. The "main" method allows this class to be
+ * run from the command line.
+ */
+public class List
+{
+
+   public static void main(String[] args)
+   {
+      // Enclosing the whole process in a single "try" block is not an ideal way
+      // to do exception handling, but I don't want to clutter the program up
+      // with catch blocks
+      try
+      {
+         // Get a naming context
+         InitialContext jndiContext = new InitialContext();
+
+         // Get a reference to a CD Bean
+         Object ref  = jndiContext.lookup("cd/CDCollection");
+
+         // Get a reference from this to the Bean's Home interface
+         CDCollectionHome home = (CDCollectionHome)
+            PortableRemoteObject.narrow (ref, CDCollectionHome.class);
+
+         CDCollection cdCollection = home.create();
+
+         CD[] cds = cdCollection.findAll();
+         for (int i = 0; i &lt; cds.length; i++)
+         {
+            System.out.println (cds[i].getId() + "\t" + cds[i].getTitle() + "\t" +
+               cds[i].getArtist() + "\t" + cds[i].getType());
+         }
+      }
+      catch(Exception e)
+      {
+         System.out.println(e.toString());
+      }
+   }
+
+}
+ </pre><p>To run this client run "ant cmp-cd-list".  Before you have to run "ant cmp-cd-upload"
+to load some data (from "cds.txt") into the database.  To delete all records, run "ant cmp-cd-remove".
+These programs can be found under "documentation-example/org/jboss/docs/cmp/cd".</p><p>You'll agree, that it isn't that much more complicated than 
+creating a session EJB. The additional steps required are: </p><p>The ejb-jar.xml file needs to indicate that the object is persistent, and list 
+the persistent fields. 
+It also needs to specify the name and class of the primary key field. </p><p>If the default column names and types aren't what you need, create a file 
+jaws.xml to specify them.</p><p>You should know have a lot of questions : Which database JBoss used to store the 
+data and how can I specify another one?  How can I change the definition of the table that JBoss
+created?  Which control does I have on finder methods?</p><p>All these questions will be answered in the next chapter that will introduce the
+specific CMP deployment descriptor "jaws.xml" and its default "standardjaws.xml".  Note that this
+default has has been used under the cover by JBoss for this example.</p></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch05.html"><img src="images\toc.gif" border="0"></a><a href="ch05s09.html"><img src="images\prev.gif" border="0"></a><a href="ch05s11.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

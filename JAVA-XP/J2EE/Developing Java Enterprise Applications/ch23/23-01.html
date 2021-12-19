@@ -1,0 +1,100 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using Transactions with Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch22\22-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 23<BR>Using Transactions with Enterprise JavaBeans
+</FONT></H2>
+<P>Java Transaction Service (JTS) and Java Transaction API (JTA) define a complete transactional framework for enterprise applications, but they are really designed for use by transaction processor writers and resource authors. For example, a JDBC driver vendor might use the interfaces in JTA to include distributed transactions in its JDBC driver. At the level of an Enterprise JavaBean (EJB) author, there is really just one object with which to deal. This object, called UserTransaction, implements the javax.transaction.UserTransaction interface. Aside from this interface and the associated exceptions, EJB programmers rely on their EJB host and container for all transaction management.
+</P>
+<P>Despite the simple interface provided to EJB programmers, when deploying beans that rely on transactions, a number of issues arise. First, a set of options are available to beans in their deployment descriptors. These options define how isolated a bean&#146;s transactions are and how the bean interacts with transactions.</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">Transaction Options</FONT></H3>
+<P>Most EJBs will not have to do anything to be transaction enabled. Instead, the developer assigns a transaction option to the bean at deployment time. The transaction option indicates how the bean or its individual methods should be treated during a transacted operation. Only when the bean programmer wants to take charge of the transaction does the programmer need to implement any code. This simplification of transaction management is another reason that EJBs are a powerful tool for enterprise programming.
+</P>
+<P>A bean&#146;s transactional behavior is defined relative to the object that is messaging it. This caller is called the <I>client</I>. This client code could be a client application or even another EJB. The purpose of the transaction option is to decide in what transaction context the bean&#146;s method should execute. For example, does the bean expect the client to manage the transaction for it, or does the bean perform in the same manner with or without a transaction? In cases in which the bean uses a transaction, it will try to pass that transaction&#146;s scope to the resources that it uses. For example, if a transacted bean uses a database connection, both the bean and the connection will share their transaction scope, committing or rolling back as one. If this same bean relies on the client to provide a transaction, the client obtains the transaction, then passes it to the bean, which uses it on the database. You can see how, in a complex application, a transaction could be used to manage a very tricky network of message calls.</P>
+<P>Each method in a bean&#146;s remote interface can be assigned one of the six transaction options described in Table 23.1. These options range from complete ignorance toward transactions, TX_NOT_SUPPORTED, to demanding a transaction, TX_MANDATORY, to programmer controlled transactions, TX_BEAN_MANAGED.</P>
+<P>Beans also have a default transaction option assigned to them for all of the methods that don&#146;t specifically define one of these options.</P>
+<P>The only restriction between the default&#150; and method&#150;level options is that if one method is TX_BEAN_MANAGED, all of the methods must be TX_BEAN_MANAGED. Otherwise, the options can be mixed freely, although you should check the documentation for your EJB host to be sure.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Early implementations of EJB do not support the TX_SUPPORTS correctly, so that option should not be used until EJB 1.1 or greater is released.</FONT><HR>
+</BLOCKQUOTE>
+<TABLE WIDTH="100%">
+<TR>
+<TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 23.1</B> Transaction Options
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="20%" VALIGN="TOP" ALIGN="LEFT">OPTION
+<TH VALIGN="TOP" ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>TX_NOT_SUPPORTED</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The bean doesn&#146;t use transactions, and any active transactions are suspended during the method call.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>TX_SUPPORTS</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">If the client has a transaction scope, the bean uses it; otherwise, none is used.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>TX_REQUIRED</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The bean requires a transaction scope; if one is not provided, it is created.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>TX_REQUIRES_NEW</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The bean requires that the container create a new transaction for it.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>TX_MANDATORY</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The bean requires the client to have a transaction scope.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>TX_BEAN_MANAGED</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The bean will manage its scope, creating one if necessary.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<H4 ALIGN="LEFT"><A NAME="Heading3"></A><FONT COLOR="#000077">Isolation Levels</FONT></H4>
+<P>On top of the transaction options, beans and their methods can have an isolation level associated with them. Isolation levels indicate how strong the transactions restrict the shared reading of data. For example, an isolation level can indicate whether a bean can read the data added to the database by another bean that hasn&#146;t committed its transaction yet. In the safest isolation level, called TRANSACTION_SERIALIZABLE, a transaction locks the data it is changing until it commits. Until the commit happens, no other transaction can see the changes. In the loosest isolation level, called TRANSACTION_READ_UNCOMMITED, changes made by a transaction are immediately available, even though they may become invalid if the transaction rolls back. These two levels bracket two other, less obvious, isolation levels.
+</P>
+<P>The third isolation level, called TRANSACTION_REPEATABLE_READ, prohibits what are called dirty and non&repeatable reads but allows so&called phantom reads to occur. A <I>dirty read</I> occurs when one transaction reads data that is not committed by another transaction. A <I>non-repeatable read</I> occurs when one transaction scope tries to read data from a row that another transaction has changed since the last read. For example, if T1 and T2 are transacting, a non&repeatable read occurs when T1 reads the row, T2 changes the row, and T1 rereads the row and gets different data. The TRANSACTION_REPEATABLE_READ isolation level will not allow either of these types of &#147;weird&#148; reads to occur. However, it does allow phantom reads. A <I>phantom read</I> occurs when one transaction rereads a row that satisfies a where clause after another transaction has added a row that satisfies the clause. For example, T1 reads and selects all authors named &#147;joe,&#148; T2 inserts &#147;joe green,&#148; T1 rereads and gets the new &#147;phantom&#148; row for &#147;joe green.&#148;</P>
+<P>The final isolation level is called TRANSACTION _READ_COMMITED. This level prevents dirty reads but allows both non&#150;repeatable and phantom reads to occur.</P>
+<P>The isolation levels for EJBs are modeled on the JDBC isolation levels. In fact, when a bean makes JDBC calls, it expects the JDBC driver to be set to the correct isolation level defined by the bean. It is up to the container to make sure that the bean&#146;s database connections adhere to this rule. Remember that in many cases, the bean&#146;s host is providing database connections from a pool. When a method requests one of these connections, it should update the connection&#146;s isolation level appropriately.</P>
+<P>TRANSACTION_SERIALIZABLE is the safest level to use, because it prevents any strange reads. However, it is also the most costly in terms of locking data, because the transaction must lock all of the data it may change until it is committed. This means that the data is not available to other transactions and those transactions must wait for the data to become available before accessing it.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch22\22-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

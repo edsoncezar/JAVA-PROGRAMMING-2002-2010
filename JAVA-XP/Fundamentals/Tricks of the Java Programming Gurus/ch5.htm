@@ -1,0 +1,1258 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 5 -- Building Special-Purpose I/O Classes</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 5</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Building Special-Purpose I/O Classes</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#StreamClasses" >Stream Classes</A>
+<LI><A HREF="#NonStreamIOClasses" >Non-Stream I/O Classes</A>
+<LI><A HREF="#HighlyStructuredFiles" >Highly Structured Files</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+The Java I/O library is designed so that you can extend it to
+work well with the kind of data you are using. You can extend
+the Java I/O system in several different ways. You can implement
+a file-like interface to an object that is not a file (for example,
+an in-memory array of bytes). You can create a filter stream,
+which is a special kind of I/O stream class that can transform
+or perform other special handling on the input or output of an
+existing data stream. You also can implement a class that reads
+and interprets a structured file, permitting an application to
+treat the file as a data structure, rather than having to interpret
+the format itself. This chapter explores the Java I/O system and
+the ways that you can enhance it to meet your own needs.
+<H2><A NAME="StreamClasses"><FONT SIZE=5 COLOR=#FF0000>Stream
+Classes</FONT></A></H2>
+<P>
+Java I/O is based largely on I/O streams, which provide a mostly
+sequential view of file-like objects. The two basic stream classes
+are <TT>java.io.InputStream</TT> and
+<TT>java.io.OutputStream</TT>. They
+are fairly simple classes that permit reading or writing data
+as bytes. The majority of the classes in the java.io package extend
+one of those two classes.
+<P>
+<TT>InputStream</TT> and <TT>OutputStream</TT>
+are abstract classes, and the interface they provide is rather
+simple and abstract. They permit reading and writing single bytes
+or arrays of bytes-no other data types are permitted. Readers
+can query how many bytes are available for reading without blocking.
+<P>
+In addition, the <TT>InputStream</TT>
+class provides the interface (but not the implementation) for
+the mark mechanism-a simple, yet versatile, lookahead interface.
+Subclasses aren't required to support marks. If subclasses do
+not support marks, they must simply return <TT>false</TT>
+when their <TT>markSupported</TT>
+method is called. If they do support marks, the caller can invoke
+the <TT>mark(readlimit)</TT> method,
+which tells the input stream to save the current position and
+prepare to save the next bytes that are read. The parameter, <TT>readlimit</TT>,
+is an integer which specifies the maximum number of bytes that
+the stream will need to save. If the <TT>reset</TT>
+method is called before <TT>readlimit</TT>
+bytes have been read (and before the <TT>mark</TT>
+method is called again), the stream must back up to the marked
+position in the stream.
+<H3>Sources and Sinks</H3>
+<P>
+It was mentioned previously that the basic I/O stream classes
+are abstract classes that need to be extended before they're useful.
+The first thing that you might notice about them is that they
+don't provide any mechanism for attaching the streams to any real
+data objects, such as files or network connections. That's the
+job of several extended stream classes, which I call source and
+sink classes. <I>Source classes</I> provide access to data sources,
+and <I>sink classes </I>provide destinations for output operations.
+The sources and sinks that are included as a part of the Java
+library, and the kinds of data objects to which they connect,
+are listed in Table 5.1.<BR>
+<P>
+<CENTER><B>Table 5.1. Java Source and Sink I/O Streams.</B></CENTER>
+<CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 80%>
+<TR><TD WIDTH=286>Class Names </TD><TD WIDTH=243>Type of Data Object
+</TD></TR>
+<TR><TD WIDTH=286><TT>FileInputStream</TT><BR>
+<TT>FileOutputStream </TT>
+</TD><TD WIDTH=243>Disk file</TD></TR>
+<TR><TD WIDTH=286><TT>ByteArrayInputStream</TT><BR>
+<TT>ByteArrayOutputStream </TT>
+</TD><TD WIDTH=243>In-memory arrays of bytes</TD></TR>
+<TR><TD WIDTH=286><TT>PipedInputStream</TT><BR>
+<TT>PipedOutputStream </TT>
+</TD><TD WIDTH=243>These two classes connect to each other</TD></TR>
+<TR><TD WIDTH=286><TT>SequenceInputStream </TT>
+</TD><TD WIDTH=243>Several other streams, in sequence</TD></TR>
+<TR><TD WIDTH=286><TT>StringBufferInputStream</TT> 
+</TD><TD WIDTH=243>A <TT>StringBuffer</TT> instance
+</TD></TR>
+<TR><TD WIDTH=286><TT>java.net.SocketInputStream</TT><BR>
+<TT>java.net.SocketOutputStream</TT>
+</TD><TD WIDTH=243>Network sockets</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The <TT>PipedInputStream</TT> and
+<TT>PipedOutputStream</TT> classes
+are interesting because they connect to each other, enabling one
+part of your Java program to read output produced by another part.
+Usually the two parts that use the piped streams (called the <I>producer</I>
+and the <I>consumer</I>) are in different threads, to minimize
+the possibility of causing a deadlock. However, even in different
+threads, it's possible to have a deadlock. For example, the consumer
+might be blocked while waiting on the producer to write more data,
+while at the same time the producer can't finish computing the
+data until the consumer takes some additional action. Use the
+piped streams with care. (<A HREF="ch6.htm" >See Chapter 6</A>,
+&quot;Effective Use of Threads,&quot; for more information about
+using Java threads.)
+<P>
+As an example of how one of these classes would typically be used,
+here is a code fragment that opens a file and reads the first
+four bytes (ignoring the possibility of exceptions):
+<BLOCKQUOTE>
+<TT>InputStream f = new FileInputStream(&quot;Applet.class&quot;);
+<BR>
+byte sig[] = new byte[4];<BR>
+f.read(sig);</TT>
+</BLOCKQUOTE>
+<P>
+Figure 5.1 depicts the relationships between the stream classes
+listed previously and their data objects.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f5-1.gif" ><B>Figure 5.1 : </B><I>Relationship between streams and data objects.</I></A>
+<H3>Filter Streams</H3>
+<P>
+In the table of source and sink streams, two very important ones
+are omitted. Strictly speaking, they belong in that table, because
+they do provide another way to connect an I/O stream to a data
+object. However, they are so useful that they also can be thought
+of as something much more.
+<P>
+<TT>InputFilterStream</TT> and <TT>OutputFilterStream</TT>
+are source and sink classes that use other streams as their data
+objects. Filter streams can extend the interface of an existing
+stream object, transform the data as it is read or written, or
+transparently provide some useful service such as buffering. Because
+they are themselves streams, they can use other filter streams
+as data objects. This means that you can compose the functions
+provided by filter streams by chaining several of them together
+into a new, composite filter. Figure 5.2 illustrates the idea.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f5-2.gif" ><B>Figure 5.2 : </B><I>Input and output filter streams</I></A><I>.</I>
+<P>
+Like the basic <TT>InputStream</TT>
+and <TT>OutputStream</TT> classes,
+<TT>FilterInputStream</TT> and <TT>FilterOutputStream</TT>
+are abstract classes, so subclasses are required if they are to
+do anything useful. There are several useful filter streams supplied
+with the Java library, however. The functions of the filter streams
+differ more strongly than the sources and sinks do, so it makes
+more sense to explain them than to list them in a table.
+<P>
+The <TT>BufferedInputStream</TT> and
+<TT>BufferedOutputStream</TT> classes
+provide I/O buffering. The basic source and sink streams of the
+Java I/O system don't provide any buffering; when they are asked
+to read or write some data, they immediately pass the request
+on to the underlying data object. When the object is a file or
+network connection, that strategy can result in poor performance.
+An instance of one of the buffered stream classes maintains an
+internal buffer and uses the buffer to satisfy I/O requests whenever
+possible. Only when the buffer is empty (in the case of an input
+stream) or full (in the case of an output stream) is the underlying
+source or sink invoked again.
+<P>
+Typically, when you create a filter stream, you pass the next
+stream in the chain to the new filter stream when it is initialized:
+<BLOCKQUOTE>
+<TT>InputStream f = new BufferedInputStream(new
+FileInputStream(&quot;Applet.class&quot;));</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>DataInputStream</TT> and <TT>DataOutputStream</TT>
+classes provide a more structured interface to data. Unlike the
+other streams mentioned so far, the data streams don't restrict
+input and output to units of bytes. They provide interfaces for
+reading and writing the primitive Java datatypes, such as <TT>int</TT>,
+<TT>double</TT>, and <TT>boolean</TT>,
+in addition to a few other useful constructs, such as text lines
+and UTF (byte-encoded Unicode) strings. The data streams read
+and write these objects in a binary format, but they do it in
+a portable way, so a file written using <TT>DataOutputStream</TT>
+on one machine can be read later using <TT>DataInputStream</TT>
+on another machine with a different architecture.
+<P>
+<TT>LineNumberInputStream</TT> extends
+the basic stream functionality by keeping track of the line number
+from which text is currently being read. This can be very useful
+when writing a parser that needs to report line numbers along
+with error messages to help users find the source of problems.
+<P>
+The <TT>PrintStream</TT> class extends
+the <TT>OutputStream</TT> interface
+by providing several methods for producing formatted textual output,
+including <TT>print</TT> and <TT>println</TT>
+methods for all the basic Java datatypes. <TT>PrintStream</TT>
+even provides a method for printing arbitrary objects (it calls
+<TT>String.valueOf(obj)</TT> to produce
+a printable representation of the object).
+<P>
+The intent of the <TT>PushbackInputStream</TT>
+class is to provide lookahead interface that is slightly simpler
+(and less costly) than the full-fledged mark/reset mechanism described
+previously. When using the <TT>PushbackInputStream</TT>
+class, you are allowed to look ahead by only one byte. Instead
+of the <TT>mark</TT> and <TT>reset</TT>
+methods, a simpler <TT>unread</TT>
+method is available, which takes a single byte as an argument.
+Calling <TT>unread</TT> more than
+once between calls to <TT>read</TT>
+results in an <TT>IOException</TT>
+being thrown.
+<H3>Editing, Transformation, and Selection with Streams</H3>
+<P>
+Most of the streams included in the Java library are simple utility
+streams. It's possible to build much more sophisticated streams,
+however. You can build streams that edit raw data to cast it into
+a new form; one example would be a source code pretty-printing
+class. Other streams might translate data into an entirely different
+format. It's also possible to build filter streams that perform
+a more conventional type of filtering, letting only lines, words,
+or records that meet certain criteria pass through.
+<P>
+The really useful thing about all these various stream classes
+is that each of them inherits from one of the base classes <TT>InputStream</TT>
+and <TT>OutputStream</TT>, so they
+can be treated as instances of those types when desired. If you
+need to call a method that takes one of those two base classes
+as a parameter, and you don't want to give that method the raw
+data stream, you can simply tack a filter stream (or a whole chain
+of them) onto the original stream and pass the last filter stream
+into the method.
+<H3>An Example <TT><FONT SIZE=4 FACE="Courier">FilterStream</FONT></TT>
+</H3>
+<P>
+To demonstrate how to build a filter stream, let's look at a class
+that decodes a stream that is encoded in &quot;base64&quot; format.
+Base64 is an encoding format designed for the Multipurpose Internet
+Mail Extensions (MIME) standard to permit binary data to be sent
+through electronic mail without being garbled. It is similar to
+the UNIX &quot;uuencode&quot; format, but base64 is better defined,
+and its designers were careful to use only characters that would
+not be changed or dropped by existing mail gateways. I've chosen
+Base64 for an example because it's an extremely simple format,
+so the details of the format conversion won't obscure the basic
+techniques for building a stream class.
+<H4>An Internal Filter</H4>
+<P>
+The <TT>Base64InputStream</TT> class
+illustrates one handy but atypical use of filter streams. Commonly,
+application code is in control of all the filters in the chain
+of streams. It's useful in this case, though, for the decoding
+stream to slip another stream into the chain, to partition the
+task. The base64 specification recommends that whitespace characters
+(space, tab, carriage return, linefeed, and formfeed) be ignored
+in base64-encoded files. If there's another stream class ahead
+of the decoder, which strips out all whitespace, we can avoid
+having to worry about that in the center of our decoding routine.
+Listing 5.1 contains the <TT>WSStripInputStream</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.1. WSStripInputStream.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+&nbsp;* WSStripInputStream.java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+1.0 96/01/25 Glenn Vanderburg<BR>
+&nbsp;*/<BR>
+&nbsp;<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.io.*;<BR>
+<BR>
+/**<BR>
+&nbsp;* An input stream which strips out all whitespace characters.
+<BR>
+&nbsp;*<BR>
+&nbsp;* @version&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0, 25 Jan 1996
+<BR>
+&nbsp;* @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn Vanderburg
+<BR>
+&nbsp;*/<BR>
+<BR>
+class WSStripInputStream extends FilterInputStream {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Constructs a new WSStripInputStream
+initialized with the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* specified input stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param in the input stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public WSStripInputStream(InputStream
+in) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(in);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Reads a byte of data.&nbsp;&nbsp;The
+method will block if no input is available.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return&nbsp;&nbsp;the byte read,
+or -1 if the end of the stream is reached.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @exception IOException If an I/O
+error has occurred.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int read() throws IOException {
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// This is the
+routine that really implements the special<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// functionality
+of this class; the others just call this<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// one to get
+the data that they need.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int c;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c
+= in.read();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} while ((c ==
+' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&amp;&amp; c != -1);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return c;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Reads into an array of bytes.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Blocks until some input is available.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param b the buffer into which
+the data is read<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param off the start offset of
+the data<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param len the maximum number
+of bytes read<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return&nbsp;&nbsp;the actual
+number of bytes read, -1 is<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;returned
+when the end of the stream is reached.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @exception IOException If an I/O
+error has occurred.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int read(byte b[], int off, int
+len) throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=off;
+i&lt;len; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+c = read();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(c == -1) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+i - off;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[i]
+= (byte) c;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return len;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Skips bytes of input.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bytes
+to be skipped<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return&nbsp;&nbsp;actual number
+of bytes skipped<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @exception IOException If an I/O
+error has occurred.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public long skip(long n) throws IOException
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Can't just
+read n bytes from 'in' and throw them<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// away, because
+n bytes from 'in' doesn't necessarily<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// correspond
+to n bytes from 'this'.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=1;
+i &lt;= n; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+c = read();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(c == -1) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+i - 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return n;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Returns the number of bytes that
+can be read without blocking.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return the number of available
+bytes<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int available() throws IOException
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// We don't really
+know.&nbsp;&nbsp;We can ask 'in', but some of those bytes<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// are probably
+whitespace, and it's possible that all of them are.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// So we have
+to be conservative and return zero.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H4>The Base64 Decoding Filter</H4>
+<P>
+Once the <TT>WSStripInputStream</TT>
+class is done, it's relatively easy to build the <TT>Base64InputStream</TT>
+class. This implementation sacrifices efficiency for simplicity.
+As a result, the only thing moderately complicated is the <TT>fill_buffer</TT>
+method, which does some error checking and then, if all is well,
+performs the actual decoding. Listing 5.2 contains the <TT>Base64InputStream</TT>
+class. It makes use of a special exception, <TT>BadFormatException</TT>;
+the code for the exception is available on the CD-ROM that comes
+with this book. (Following the code listing is a short discussion
+of some design decisions that could have been made differently.)
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.2. Base64InputStream.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+&nbsp;* Base64InputStream.java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0
+96/01/17 Glenn Vanderburg<BR>
+&nbsp;*/<BR>
+<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.io.*;<BR>
+&nbsp;<BR>
+/**<BR>
+&nbsp;* An input stream which decodes a base64-encoded file.&nbsp;&nbsp;
+<BR>
+&nbsp;*<BR>
+&nbsp;* @version&nbsp;&nbsp;&nbsp;&nbsp; 1.0, 17 Jan 1996<BR>
+&nbsp;* @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn Vanderburg
+<BR>
+&nbsp;*/<BR>
+<BR>
+public <BR>
+class Base64InputStream extends FilterInputStream {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/* Base64 padding character */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static private byte pad = '=';<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static private int BADchAR = -1;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/* Base64 decoding table.&nbsp;&nbsp;*/
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static private int c[] = new int[256];
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=0;
+i&lt;256; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c[i]
+= BADchAR;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['A'] = 0;&nbsp;&nbsp;c['B']
+= 1;&nbsp;&nbsp;c['C'] = 2;&nbsp;&nbsp;c['D'] = 3;&nbsp;&nbsp;c['E']
+= 4;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['F'] = 5;&nbsp;&nbsp;c['G']
+= 6;&nbsp;&nbsp;c['H'] = 7;&nbsp;&nbsp;c['I'] = 8;&nbsp;&nbsp;c['J']
+= 9;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['K'] = 10; c['L']
+= 11; c['M'] = 12; c['N'] = 13; c['O'] = 14;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['P'] = 15; c['Q']
+= 16; c['R'] = 17; c['S'] = 18; c['T'] = 19;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['U'] = 20; c['V']
+= 21; c['W'] = 22; c['X'] = 23; c['Y'] = 24;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['Z'] = 25; c['a']
+= 26; c['b'] = 27; c['c'] = 28; c['d'] = 29;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['e'] = 30; c['f']
+= 31; c['g'] = 32; c['h'] = 33; c['i'] = 34;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['j'] = 35; c['k']
+= 36; c['l'] = 37; c['m'] = 38; c['n'] = 39;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['o'] = 40; c['p']
+= 41; c['q'] = 42; c['r'] = 43; c['s'] = 44;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['t'] = 45; c['u']
+= 46; c['v'] = 47; c['w'] = 48; c['x'] = 49;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['y'] = 50; c['z']
+= 51; c['0'] = 52; c['1'] = 53; c['2'] = 54;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['3'] = 55; c['4']
+= 56; c['5'] = 57; c['6'] = 58; c['7'] = 59;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c['8'] = 60; c['9']
+= 61; c['+'] = 62; c['/'] = 63;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// The pad character
+doesn't have an encoding mapping, but<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// it's not an
+automatic error.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c[pad] = -2;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/* Buffer for decoded characters that
+haven't been read */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int buf[] = new int[3];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int buffered = 0;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/* Buffer for clusters of encoded characters
+*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;byte ebuf[] = new byte[4];<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;boolean textfile;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Constructs a new Base64InputStream
+initialized with the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* specified input stream.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param in the input stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public Base64InputStream(InputStream in)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this(in, false);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Constructs a new Base64InputStream
+initialized with the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* specified input stream, for a
+text file.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param in the input stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param textfile true if the file
+is a text file<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public Base64InputStream(InputStream in,
+boolean textfile) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// To make life
+easier, we slip a WSStripInputStream in just ahead<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// of us, so that
+we don't have to worry about whitespace characters.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(new WSStripInputStream(in));
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.textfile
+= textfile;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Reads a byte of data.&nbsp;&nbsp;The
+method will block if no input is available.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @return&nbsp;&nbsp;the byte read, or
+-1 if the end of the stream is reached.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @exception IOException If an I/O error
+has occurred.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int read() throws IOException,
+BadFormatException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (buffered ==
+0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fill_buffer();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int b = buf[--buffered];
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (textfile &amp;&amp;
+b == '\r' &amp;&amp; peek() == '\n') {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+read();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+b;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Returns the next byte which will be
+read.&nbsp;&nbsp;The method will<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* block if no input is available.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return&nbsp;&nbsp;the next byte
+to be read, or -1 if the end of the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stream
+is reached.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @exception IOException If an I/O
+error has occurred.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int peek() throws IOException,
+BadFormatException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (buffered ==
+0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fill_buffer();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return buf[buffered
+- 1];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Reads into an array of bytes.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Blocks until some input is available.&nbsp;&nbsp;This
+method should be overridden<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* in a subclass for efficiency (the
+default implementation reads 1 byte<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* at a time).<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param b the buffer into which
+the data is read<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param off the start offset of
+the data<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param len the maximum number
+of bytes read<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return&nbsp;&nbsp;the actual
+number of bytes read, -1 is<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;returned
+when the end of the stream is reached.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @exception IOException If an I/O error
+has occurred.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int read(byte b[], int off, int
+len)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=off;
+i&lt;len; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+c = read();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(c == -1) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+i - off;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[i]
+= (byte) c;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return len;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Skips bytes of input.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bytes
+to be skipped<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return&nbsp;&nbsp;actual number
+of bytes skipped<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @exception IOException If an I/O
+error has occurred.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public long skip(long n) throws IOException
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Can't just
+read n bytes from 'in' and throw them away, because<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// n bytes from
+'in' will result in roughly (4n/3) bytes from 'this',<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// and we can't
+even calculate the exact number easily, because of<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// the potential
+of running into the padding at the end of the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// encoding.&nbsp;&nbsp;It's&nbsp;&nbsp;easier
+to just read from 'this' and throw those<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// bytes away,
+even though it's less efficient.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=1;
+i &lt;= n; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+c = read();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(c == -1) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+i - 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return n;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Fills buf with a new chunk of
+decoded data.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;protected void fill_buffer()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throws IOException, BadFormatException
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (buffered !=
+0) {&nbsp;&nbsp;// Just for safety ...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int l = in.read(ebuf);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int numbytes =
+3;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (l == 0) {&nbsp;&nbsp;//
+Must've reached EOF last time ...<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Fill buffer with EOF indicators for read() to return.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int i=0; i&lt;buf.length; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buf[i]
+= -1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buffered++;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (l &lt; ebuf.length)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new EOFException();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Check for bad
+characters<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=0;
+i &lt; ebuf.length; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(c[ebuf[i]] == BADchAR) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new BadFormatException(&quot;Base64: invalid character &quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+p;&nbsp;&nbsp;+
+(char) ebuf[i]);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+While we're at it, take notice of padding<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(c[ebuf[i]] == pad) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(i &lt; 2) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new BadFormatException(&quot;Base64: padding starts &quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+p;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
++ &quot;too soon&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numbytes
+= i - 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Now do the
+decoding<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (&nbsp;&nbsp;&nbsp;&nbsp;int
+i=0, j=4,&nbsp;&nbsp;&nbsp;&nbsp;k=2;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i
+&lt; numbytes; <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i++,&nbsp;&nbsp;&nbsp;&nbsp;
+j -= 2, k += 2) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buf[(numbytes
+- 1) - i] = (c[ebuf[i+1]] &gt;&gt; j)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+((c[ebuf[i]] &lt;&lt; k) &amp; 0xff);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buffered++;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H4>Design Alternatives</H4>
+<P>
+As mentioned earlier, the design of the base64 decoding filter
+emphasizes simplicity. There are several things that might have
+been done differently if the class had been designed for production
+use.
+<P>
+The previous implementation takes a byte-by-byte approach, no
+matter how many bytes have been requested by the caller. The multibyte
+<TT>read</TT> methods and the <TT>skip</TT>
+method all call the single-byte <TT>read</TT>
+method repeatedly. Obviously, that's not the most efficient mechanism.
+<P>
+A better strategy would be to create larger internal buffers and
+process larger chunks of data at a time when the caller asks for
+more than one byte. Most of the extra complexity would be in the
+inner loop of <TT>fill_buffer</TT>,
+but it wouldn't be too bad. It's easy to calculate how many bytes
+of encoded input will be required to produce a given number of
+decoded bytes, so in most cases only one <TT>read</TT>
+call would need to be made upstream.
+<P>
+It would probably be a mistake, however, to attempt to provide
+even greater efficiency by reading more bytes than required and
+decoding them in advance. Suppose, for example, that the calling
+code wishes to provide helpful diagnostic messages in the event
+of an error. To help with this, there may be a <TT>LineNumberInputStream</TT>
+ahead of you. If your class were to read ahead, the calling code
+would not be able to determine reliably the line number where
+an error occurred. There is a general <TT>BufferedInputStream</TT>,
+and it's usually best to permit the application code to insert
+it at an appropriate place in the chain of input streams if needed.
+I/O libraries, in which buffering happens automatically without
+application control, are handy most of the time, but on the rare
+occasions when buffering is not desired, the lack of control is
+a big problem. (The error-reporting scenario just described is
+probably pretty implausible with base64 input, but the design
+principle is still a good one.)
+<P>
+If you are familiar with some of the more advanced features of
+C++, you might be thinking that the <TT>WSStripInputStream</TT>
+would be a good application for a nested class, because not many
+applications require stripping all whitespace out of a file. If
+it were a nested class, it wouldn't be available to any other
+classes besides <TT>Base64InputStream</TT>.
+<P>
+Java, however, doesn't have nested classes. One of the important
+differences between Java and C++ is that Java uses packages, rather
+than classes, as the primary unit of protection. Therefore, in
+the example, although <TT>WSStripInputStream</TT>
+couldn't be nested inside the class that uses it, it was placed
+within the same package and is not a public class. The result
+is that, although the class is accessible to <TT>Base64InputStream</TT>
+and the other classes in package COM.MCP.Samsnet.tjg, it is not
+visible or accessible outside that package.
+<P>
+The use of packages as the primary protection mechanism has an
+important implication: whole packages, and not merely classes,
+should be designed. It's not really a good idea to use a package
+as a catchall for loosely related classes. You don't need to understand
+every detail of all of the classes in a package before you start
+coding, but it's best to have a clear vision of the purpose of
+the package and write all the classes to contribute to that purpose.
+That rule is not followed in the COM.MCP.Samsnet.tjg package,
+obviously. Because the classes in this book are written to illustrate
+different programming tips and tricks, the package is used just
+as a namespace. In production systems, however, a little care
+in the design of your packages will pay dividends.
+<H4>Reversing Streams</H4>
+<P>
+You may have also wondered about the decision to implement base64
+decoding as a stream in the first place. What if you have some
+data already in memory in base64 format, and you need to decode
+it as you write it somewhere? Again, pretty unlikely with the
+specific example of base64, but it's still a valid question. (In
+fact, the JDK comes with undocumented base64 encoding and decoding
+classes that are not implemented as streams.)
+<P>
+It's a good idea to provide this kind of decoding functionality
+as an input stream, and the inverse operation as an output stream,
+because that matches the most common way the functions will be
+used. It is possible, though, that you may need to use an input
+stream in a chain of output streams, or vice versa. Fortunately,
+there's a way to do that.
+<P>
+Figure 5.3 is an illustration of two special filter streams that
+I call reverse streams. The <TT>ReverseInputStream</TT>
+class uses piped output and input streams to encapsulate an output
+filter stream so that it can be used in a chain of input streams,
+and the <TT>ReverseOutputStream</TT>
+class performs the inverse function.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f5-3.gif" ><B>Figure 5.3 : </B><I>Reverse input and output streams.</I></A>
+<P>
+Constructing the output chain in the illustration might be done
+this way:
+<BLOCKQUOTE>
+<TT>ReverseOutputStream s <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;= new ReverseOutputStream(new FileOutputStream(&quot;readme.txt&quot;));
+<BR>
+s.setInputStream(new Base64InputStream(s.attachPoint()));</TT>
+</BLOCKQUOTE>
+<P>
+The reverse output stream creates the two piped streams itself.
+The <TT>setInputStream</TT> method
+gives the reverse stream access to the end of the input stream,
+and the <TT>attachPoint</TT> method
+returns the piped input stream to make the other end of the connection.
+<P>
+These example implementations of the reverse stream classes do
+buffer data, breaking the rule of thumb presented earlier, because
+efficiency will be a problem here. Without the buffering, these
+classes would cause a lot of switches between threads, and thread
+switching is costly. If the buffering causes a problem, a subclass
+could be written, overriding the <TT>run</TT>
+method to disable the buffering.
+<P>
+Of course, because the encapsulated stream can actually be a chain
+of streams, a <TT>BufferedInputStream</TT>T></TT>
+could be added to the encapsulated stream by the application,
+permitting the <TT>ReverseOutputStream</TT>
+to serve both needs. However, the performance savings are large
+enough that it seemed better to include the buffering in the reverse
+streams from the start. Listing 5.3 shows the implementation of
+the <TT>ReverseOutputStream</TT> class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 5.3. ReverseOutputStream.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+&nbsp;* ReverseOutputStream.java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+1.0 96/01/27 Glenn Vanderburg<BR>
+&nbsp;*/<BR>
+<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.io.*;<BR>
+&nbsp;<BR>
+/**<BR>
+&nbsp;* An output stream which encapsulates an input stream.&nbsp;&nbsp;
+<BR>
+&nbsp;*<BR>
+&nbsp;* @version&nbsp;&nbsp;&nbsp;&nbsp; 1.0, 27 Jan 1996<BR>
+&nbsp;* @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn Vanderburg
+<BR>
+&nbsp;*/<BR>
+<BR>
+public <BR>
+class ReverseOutputStream extends FilterOutputStream implements
+Runnable {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The 'out' variable, in our superclass,
+is used for the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// PipedOutputStream which is our entrance
+to the input stream chain.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;PipedInputStream head;&nbsp;&nbsp;// head
+of the encapsulated stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;InputStream tail;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// Last in the input stream chain<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;OutputStream sink;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Our real output stream<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread readSide;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;IOException savedException = null;&nbsp;&nbsp;//
+placed here by readSide;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Constructs a new ReverseOutputStream
+initialized with the<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* specified output stream.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param in the output stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public ReverseOutputStream(OutputStream
+out) throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(new PipedOutputStream());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;head = new PipedInputStream();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PipedOutputStream
+pout = (PipedOutputStream) this.out;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pout.connect(head);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sink = out;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Returns the head of the input
+stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @return the head of our encapsulated
+input stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public InputStream attachPoint() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return head;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Sets the encapsulated InputStream.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param in the input stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void setInputStream(InputStream
+in) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tail = in;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readSide = new
+Thread(this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readSide.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Loops reading from 'tail' and
+writing to 'sink' until<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* the stream is closed.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int l;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;byte b[] = new
+byte[1024];<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+((l = tail.read(b)) &gt; 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sink.write(b,
+0, l);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sink.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (IOException
+e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Hand the exception over to the other thread,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+so it can be rethrown there.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;savedException
+= e;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/*<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * This class would be a lot shorter if
+it weren't for having<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* to rethrow exceptions in the main
+thread ...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Comments are omitted for the following
+methods, to save<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* space.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void write(int b) throws IOException
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (savedException
+!= null) throw savedException;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super.write(b);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void write(byte b[]) throws IOException
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (savedException
+!= null) throw savedException;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super.write(b);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void write(byte b[], int off, int
+len)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (savedException
+!= null) throw savedException;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super.write(b,
+off, len);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void flush() throws IOException
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (savedException
+!= null) throw savedException;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super.flush();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void close() throws IOException
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (savedException
+!= null) throw savedException;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="NonStreamIOClasses"><FONT SIZE=5 COLOR=#FF0000>Non-Stream
+I/O Classes</FONT></A></H2>
+<P>
+Although streams make up the majority of the classes in the <TT>java.io</TT>
+package, there are a couple of other classes that handle input
+and output that should be mentioned.
+<P>
+The <TT>RandomAccessFile</TT> class
+provides a view of a file that is not stream-oriented. Unlike
+the various stream classes, each of which is either an <TT>InputStream</TT>
+or an <TT>OutputStream</TT> (but not
+both), <TT>RandomAccessFile</TT> can
+be used to both read from and write to a single file. It provides
+methods for moving around in the file and for finding out the
+current location. There are methods for reading and writing data
+in units of bytes, just as in the stream classes, and there are
+also methods that support reading and writing all the fundamental
+Java datatypes (the same methods that are present in <TT>DataInputStream</TT>
+and <TT>DataOutputStream</TT>).
+<P>
+Another I/O Class that does not extend one of the stream classes
+is <TT>StreamTokenizer</TT>. In one
+sense, <TT>StreamTokenizer</TT> does
+provide a stream-like view of the data, but only tokens, not the
+actual data, can be read. This class is meant for parsing programming
+languages or other text-based data formats that obey grammatical
+rules. When you call the <TT>nextToken</TT>
+method, the return value is an integer that indicates the type
+of token that was encountered in the data: end-of-line, end-of-file,
+number, or word. Whitespace and comments are ignored, so the calling
+code never sees them. If the token is a word or a number, it's
+possible to find out the value of the word or the number, but
+the caller ultimately has no access to the real data stream. <TT>StreamTokenizer</TT>
+is configurable and has several methods that enable you to set
+the characters that are to be treated as word characters, whitespace
+characters, or comment delimiters. The class supports quoted words,
+so that characters that would not normally be included in a word
+(such as tab characters) can be included where necessary, and
+there is a method for setting the quotation marks (which default
+to <TT>'</TT> and <TT>&quot;</TT>).
+<H2><A NAME="HighlyStructuredFiles"><FONT SIZE=5 COLOR=#FF0000>Highly
+Structured Files</FONT></A></H2>
+<P>
+If your program needs to understand a highly structured binary
+file format, a special-purpose I/O class is a good place to start.
+The class should parse and understand the file format and present
+a specialized view of the file to the rest of the program.
+<P>
+Structured binary files are rarely read as streams; usually, the
+file formats are designed with internal pointers to permit programs
+to find and access specific parts of the file quickly, without
+having to read all of the file first. Depending on your needs,
+your binary file class may not be an extension of the <TT>RandomAccessFile</TT>
+class, but you will probably find yourself using that class somehow
+in your design.
+<P>
+Classes for reading structured files can be designed to work almost
+like an in-memory data structure, providing methods that return
+objects representing small, coherent segments of the data. Programs
+can use such classes as though they were data structures. This
+approach has the advantage that the messy details of the file
+format and I/O tasks are wrapped up nicely in the I/O class, and
+they don't complicate the rest of the program.
+<P>
+Furthermore, with such a design, it's easier to take full advantage
+of the random-access design of most binary file formats, reading
+and loading the file lazily; that is, portions of the file are
+read and parsed only when they are required by the program.
+<P>
+Here's an example. The Java class file format is a binary format.
+The overall structure of the file conforms to this C-like structure
+definition:
+<BLOCKQUOTE>
+<TT>/*<BR>
+&nbsp;* WARNING: The Java class file format is specified using
+a C-like<BR>
+&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;syntax,
+but it is not C!&nbsp;&nbsp;Not only is the syntax not<BR>
+&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;legal,
+but the file format obeys different rules than<BR>
+&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C
+structure definitions, and this fragment has been<BR>
+&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;further
+simplified for the example.<BR>
+&nbsp;*<BR>
+&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Don't
+attempt to use this to actually read a Java<BR>
+&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class
+file.<BR>
+&nbsp;*/<BR>
+<BR>
+struct ClassFile {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned int magic;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+/* should be 0xCAFEBABE */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned int version;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+/* currently 45 */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short constant_pool_count;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;struct cp_info constant_pool[constant_pool_count
+- 1];<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short access_flags;&nbsp;&nbsp;&nbsp;&nbsp;/*
+public, private, native,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*
+abstract, static, etc.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short this_class;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*
+index into constant_pool */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short super_class;&nbsp;&nbsp;&nbsp;&nbsp;
+/* index into constant_pool */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short interfaces_count;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short interfaces[interfaces_count];
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short fields_count;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;struct field_info fields[fields_count];
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short methods_count;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;struct method_info methods[methods_count];
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short attributes_count;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;struct attribute_info attributes[attribute_count];
+<BR>
+};<BR>
+<BR>
+struct method_info {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short access_flags;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short name_index;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short signature_index;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unsigned short attributes_count;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;struct attribute_info attributes[attribute_count];
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+It's possible to write an I/O class (or collection of classes)
+that can make such a file look like a data structure. Here's one
+example of how such a class could be used, based on a hypothetical
+class definition:
+<BLOCKQUOTE>
+<TT>JavaClass aClass = new JavaClass(&quot;Neato.class&quot;);
+<BR>
+<BR>
+/*<BR>
+&nbsp;* Try to process a particular method specially<BR>
+&nbsp;*/<BR>
+<BR>
+try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Prepare a representation of the method
+signature:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String methSig[] = { &quot;Component&quot;,
+&quot;Image&quot; };<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Now loo

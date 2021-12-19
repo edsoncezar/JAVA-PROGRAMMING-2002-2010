@@ -1,0 +1,271 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Java Beans: Java's Component Architecture:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+<P><CENTER>
+<a href="0678-0683.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0688-0693.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-684"><P>Page 684</P></A>
+
+<OL START="5">
+
+achieved by making the processDateMethod() synchronized, but that would
+have unnecessarily locked the listener registry methods during event delivery. In
+cases where a large number of listeners are present, that action could cause
+performance problems. Instead, the lock is placed only during the Vector copy by using
+the synchronized keyword in line 172.<BR>
+<BR>
+          Lines 175 _177 iterate through the copy of the Vector, calling the
+dateChanged() method in each of the registered listeners. Recall that &quot;date changed&quot; is the only event
+type associated with the DateEvent class. If DateEvent had more than one event type,
+it would have been necessary to ask the DateEvent for the type and then call
+the correct listener method based upon the response.
+
+
+<LI>     Call the event processor method (fire the event), where appropriate.<BR>
+<BR>          In the Calendar2 Bean, the
+processDateEvent() method is called any time the
+selected date is changed. In listing 15.6, the method is called in both line 76 at the end of
+the setDate() accessor method, and in line 150 after a day of month button is clicked.
+<BR>
+
+<PRE>
+076          processDateEvent(new DateEvent(this, calendar.getTime()));
+</PRE>
+<PRE>
+150          processDateEvent(new DateEvent(this, calendar.getTime()));
+</PRE>
+
+
+<LI>          Create one or more listeners for your new event.<BR>
+<BR>          Each listener must implement the event listener interface created in step 2 above.
+In listing 15.9, the Listener2 Bean implements the DateListener interface.
+<BR>
+
+<PRE>
+015   public class Listener2 extends TextField
+016                          implements Serializable, DateListener
+</PRE>
+
+<BR>
+Lines 23_29 contain the
+dateChanged() method, which receives the DateEvent
+instance as a parameter.
+<BR>
+
+<PRE>
+023       public synchronized void dateChanged(DateEvent evt) {
+024           // Get the Date value from the DateEvent
+025           // and display it in the text field.
+026           Date date = evt.getDate();
+027           SimpleDateFormat df = new SimpleDateFormat(&quot;MM/dd/yyyy&quot;);
+028           setText(df.format(date));
+029       }
+</PRE>
+
+<BR>
+By calling the getDate() method of the DateEvent class in line 26, the listener
+can obtain the Date value represented by this event.
+
+<LI>          Register the event listeners with the Bean.
+</OL>
+
+<A NAME="PAGENUM-685"><P>Page 685</P></A>
+
+<OL>
+
+          In the CalendarFrame2 application (listing 15.10), this occurs in line 35:
+<BR>
+
+<PRE>
+035           cal.addDateListener(listener);
+</PRE>
+
+
+          This completes the steps for creating and implementing a new event in a Bean.
+This is the same event processing model that you learned in Chapter
+14&#151;the only difference is that you have to implement it yourself instead of enabling the
+AWT classes to do the work for you.
+
+</OL>
+
+<P>To summarize what's been covered so far,  three scenarios have been explored
+for emitting events from a Bean:
+</P>
+
+<UL>
+<LI>          The Bean emits native JDK 1.1 events as a result of genuine AWT events
+being fired. The Scope Bean is an example of this. When the user moves the mouse
+over the Bean, mouse events are emitted.
+<LI>          The Bean emits native JDK 1.1 events that are created from within the Bean
+and posted to the system event queue. The Calendar1 Bean is an example of
+this. When the user clicks a &quot;day of the month&quot; button, the program fabricates
+a MouseEvent and posts it to the system event queue. The superclass of
+the Calendar1 Bean is Canvas, so it knows how to process mouse events.
+<LI>          The Bean emits a non-JDK 1.1 event. The Calendar2 Bean is an example of
+this. Several items had to be created to achieve this, including a special event class,
+an event type, an event listener interface, event listener registry methods, and
+an event processing method.
+</UL>
+
+<P>The last scenario presented is the case in which the Bean emits a native JDK 1.1
+event but the event is not supported by the particular class chosen from which to derive
+the Bean.
+</P>
+
+<P><B>Implementing AWT Event Processing Methods
+</B></P>
+
+<P>As shown previously, the Calendar1 Bean is derived from the Panel class,
+which contains all the methods necessary to register mouse event listeners and to
+deliver mouse events. But what if you want the Calendar1 Bean to emit an AWT event, such
+as the semantic ActionEvent, not supported by the Panel class?
+</P>
+
+<P>
+In this case, you must implement a few other things yourself, including
+the addActionListener() method, the removeActionListener()method, and the
+processActionEvent() method. The steps involved are a subset of the steps used previously to create and
+implement your own event class:
+</P>
+
+<OL>
+<LI>          Design the new event.
+</OL>
+
+<A NAME="PAGENUM-686"><P>Page 686</P></A>
+
+<OL START="2">
+
+          This step is not necessary, because the ActionEvent class already exists.
+
+<LI>          Design a listener interface for the event.<BR>
+<BR>          This step is not necessary, either, because the ActionListener interface
+already exists as well.
+<LI>          Create the event listener registry and associated methods in the Bean.<BR>
+<BR>          In this case, the listener is the ActionListener. Because a Canvas doesn't have
+the addActionListener() or removeActionListener methods, you must create them:
+<BR>
+<PRE>
+public synchronized void addActionListener(ActionListener dl) {
+    actionListeners.addElement(dl);
+}
+</PRE>
+<PRE>
+public synchronized void removeActionListener(ActionListener dl) {
+    actionListeners.removeElement(dl);
+}
+</PRE>
+<PRE>
+protected Vector actionListeners = new Vector();
+</PRE>
+
+
+<LI>          Create an event processor method for the new event listener type.<BR>
+<BR>          The event processing method that corresponds to ActionListener is
+the processActionEvent() method, which should be created in the Bean:
+
+<PRE>
+protected void processActionEvent(ActionEvent evt) {
+        Vector list;
+        // Make a copy of the listeners vector, in case listeners are
+        // added or removed while events are being delivered.
+        synchronized(this) {
+            list = (Vector)actionListeners.clone();
+        }
+        for (int i=0; i&lt;list.size(); i++) {
+            ((ActionListener)list.elementAt(i)).actionPerformed(evt);
+        }
+    }
+</PRE>
+
+<LI>          Call the event processor method (fire the event), where appropriate:
+
+<PRE>
+processActionEvent(new ActionEvent(this, ActionEvent.ACTION_PERFORMED,
+</PRE>
+</OL>
+
+
+<A NAME="PAGENUM-687"><P>Page 687</P></A>
+
+
+<OL START="6">
+
+
+<PRE>
+ &quot;DateChange&quot;));
+</PRE>
+          The &quot;DateChange&quot; string is the command name given to this action event.
+The listener can decide which action to take, based upon the command name.
+
+<LI>     Create one or more listeners for your new event.<BR>
+<BR>          The listener must implement ActionListener and have an
+actionPerformed() method. This was covered previously.
+<LI>          Register the event listeners with the Bean.
+</OL>
+
+<P>This step is accomplished by calling the
+addActionListener() method with a reference to the desired listener. This was covered previously.
+</P>
+
+<P>As you can see, this process is quite similar to the process of implementing your
+own events.
+</P>
+
+<P>You now know how to make your Bean emit any kind of event, whether supported by
+the Bean's parent class or not. Before leaving this chapter, some advanced features of
+Beans will be discussed.
+</P>
+
+<H3><A NAME="ch15_ 9">
+Using Advanced Features of Beans
+</A></H3>
+
+<P>You can develop Java Beans with the information already covered in this chapter.
+The following topics must be covered, however, to give your Java Beans more flexibility
+and functionality:
+</P>
+
+<UL>
+<LI>          Bound and constrained properties
+<LI>          Introspection
+<LI>          Property editors
+</UL>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+You should also be aware of another topic related to property editors:
+customizers, which enable you to create a wizard with which the user of a builder tool can edit
+the properties of your Bean. This concept is beyond the scope of this book, however.
+For more information on customizers, consult the documentation in the BDK.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<P><CENTER>
+<a href="0678-0683.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0688-0693.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

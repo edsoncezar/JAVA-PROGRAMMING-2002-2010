@@ -1,0 +1,132 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Customizing the JRMPContainerInvoker Socket Factories</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s126.html" title="External JNDI Configuration and JNDI Viewing"><link rel="next" href="ch13s135.html" title="Configuring and Using JAXP 1.1 In JBoss"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s126.html"><img src="images\prev.gif" border="0"></a><a href="ch13s135.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e11749"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e11749"></a>Customizing the JRMPContainerInvoker Socket Factories</h2></div></div><p>Author:<span class="author">Scott Stark</span>
+		<tt>&lt;<a href="mailto:Scott_Stark@displayscape.com">Scott_Stark@displayscape.com</a>&gt;</tt>
+	</p><div class="section"><a name="d0e11763"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11763"></a>Introduction</h3></div></div><p>The RMI/JRMP based implementation of the org.jboss.ejb.ContainerInvoker
+interface supports customization of the socket factory implementation using the
+standard RMI java.rmi.server.RMIClientSocketFactory and java.rmi.server.RMIServerSocketFactory
+interfaces. This HowTo describes the customization usage and demonstrates an example
+custom factory from the 1.3 RMI<a href="http://java.sun.com/j2se/1.3/docs/guide/rmi/rmisocketfactory.doc.html" target="_top">The Custom Socket Factory Tutorial</a>
+		</p></div><div class="section"><a name="d0e11771"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11771"></a>Configuring the ContainerInvoker</h3></div></div><p>One of the many items that can be customized about the JBoss container
+configurations is the container invoker and its configuration. <a href="ch13s131.html#container_invoker_conf.dtd" title="Figure 13.26. jboss.xml container-invoker-config elements">Figure 13.26</a> illustrates the jboss.xml
+elements that are available for customizing the container-invoker element
+when it is set to org.jboss.ejb.plugins.jrmp.server.JRMPContainerInvoker</p><div class="figure"><p><a name="container_invoker_conf.dtd"></a><b>Figure 13.26. jboss.xml container-invoker-config elements</b></p><div class="mediaobjectco"><img src="images\container_configuration_dtd.jpg"><div class="calloutlist"><a name="d0e11790"></a><table border="0" summary="Callout list"><tr><td width="5%" valign="top" align="left"><a name="d0e11791"></a><img src="images\callouts\1.png" alt="1" border="0"></td><td valign="top" align="left"><p>The Optimized element tells if the container invoker to bypass
+RMI layer when the client is local (same VM as the server). This optimizes RMI calls.
+Its value must be true or false.</p></td></tr><tr><td width="5%" valign="top" align="left"><a name="d0e11794"></a><img src="images\callouts\2.png" alt="2" border="0"></td><td valign="top" align="left"><p>The RMIObjectPort element indicates what port the RMI objects
+created by this container should listen on.  Any number of objects
+in the same VM can use the same port.  However, objects in
+different VMs cannot use the same port.  You may set this value
+to 0 to use anyonmous ports (that is, each object just picks a
+free port to use).  If you want to run jBoss more than once on
+the same machine, you must either create separate configurations
+with separate ports, or set all the configurations to use
+anonymous port.  The standard jBoss setting is "4444".
+
+Its value must an integer (0, or a valid port number).  Note that
+normal user on a UNIX system cannot access privileged ports (less than 1024)</p></td></tr><tr><td width="5%" valign="top" align="left"><a name="d0e11797"></a><img src="images\callouts\3.png" alt="3" border="0"></td><td valign="top" align="left"><p>The RMIClientSocketFactory element indicates the use of a custom
+socket factory that should be used by RMI objects created by
+this container. The combination of socket factory type and port
+must be unique but more than one container can use the same
+socket factory, port combination.
+
+Its value must be the fully qualified name of the class that
+implements the java.rmi.server.RMIClientSocketFactory interface,
+and the class must be available to the JBoss class loader.
+If this element is not specified the default VM client socket
+factory will be used.</p></td></tr><tr><td width="5%" valign="top" align="left"><a name="d0e11800"></a><img src="images\callouts\4.png" alt="4" border="0"></td><td valign="top" align="left"><p>The RMIServerSocketFactory element indicates the use of a custom
+socket factory that should be used by RMI objects created by
+this container. The combination of socket factory type and port
+must be unique but more than one container can use the same
+socket factory, port combination.
+
+Its value must be the fully qualified name of the class that
+implements the java.rmi.server.RMIServerSocketFactory interface,
+and the class must be available to the JBoss class loader.
+If this element is not specified the default VM server socket
+factory will be used.</p></td></tr></table></div></div></div><p>Custominzation of the ContainerInvoker sockets entails sepecifying the
+classes that implement the java.rmi.server.RMIClientSocketFactory and
+java.rmi.server.RMIServerSocketFactory interfaces. <a href="ch13s131.html#comp.sockets.conf" title="Figure 13.27. Sample container-invoker-conf Element">Figure 13.27</a>gives a sample container-invoker-conf element.</p><div class="figure"><p><a name="comp.sockets.conf"></a><b>Figure 13.27. Sample container-invoker-conf Element</b></p><div class="literallayout"><br>
+&lt;container-invoker-conf&gt;<br>
+&nbsp;&nbsp;&lt;Optimized&gt;true&lt;/Optimized&gt;<br>
+&nbsp;&nbsp;&lt;RMIObjectPort&gt;4445&lt;/RMIObjectPort&gt;<br>
+&nbsp;&nbsp;&lt;RMIClientSocketFactory&gt;org.jboss.test.jrmp.ejb.CompressionClientSocketFactory&lt;/RMIClientSocketFactory&gt;<br>
+&nbsp;&nbsp;&lt;RMIServerSocketFactory&gt;org.jboss.test.jrmp.ejb.CompressionServerSocketFactory&lt;/RMIServerSocketFactory&gt;<br>
+&lt;/container-invoker-conf&gt;<br>
+</div></div></div><div class="section"><a name="d0e11812"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11812"></a>CompressionSocket Example</h3></div></div><p>The jbosstest cvs module contains a org.jboss.test.jrmp package in the
+src/main directory which contains tests of custom socket configuration. One
+example is the CompressionSocket example from the RMI custom socket tutorial.
+The org.jboss.test.jrmp.test.TestCustomSockets class access a stateless session
+bean using the compression custom sockets as well as a stateful session bean
+using the default JRMP socket factories. The ejb-jar.xml and jboss.xml deployment
+descriptors for the ejb jar are given in <a href="ch13s131.html#comp.ejb-jar.xml" title="Figure 13.28. TestCustomSockets Example ejb-jar.xml Descriptor">Figure 13.28</a>and <a href="ch13s131.html#comp.jboss.xml" title="Figure 13.29. TestCustomSockets Example jboss.xml Descriptor">Figure 13.29</a> See the jbosstest module code for the
+complete details.</p><div class="figure"><p><a name="comp.ejb-jar.xml"></a><b>Figure 13.28. TestCustomSockets Example ejb-jar.xml Descriptor</b></p><div class="literallayout"><br>
+&lt;?xml&nbsp;version="1.0"?&gt;<br>
+&lt;!DOCTYPE&nbsp;ejb-jar&nbsp;PUBLIC&nbsp;"-//Sun&nbsp;Microsystems,&nbsp;Inc.//DTD&nbsp;Enterprise&nbsp;JavaBeans&nbsp;1.1//EN"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"http://java.sun.com/j2ee/dtds/ejb-jar_1_1.dtd"&gt;<br>
+<br>
+&lt;ejb-jar&gt;<br>
+&nbsp;&nbsp;&lt;display-name&gt;JRMP&nbsp;Custom&nbsp;Socket&nbsp;Tests&lt;/display-name&gt;<br>
+&nbsp;&nbsp;&lt;enterprise-beans&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;description&gt;A&nbsp;trival&nbsp;echo&nbsp;stateless&nbsp;session&nbsp;bean&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;ejb-name&gt;StatelessSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;home&gt;org.jboss.test.jrmp.interfaces.StatelessSessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;remote&gt;org.jboss.test.jrmp.interfaces.StatelessSession&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;ejb-class&gt;org.jboss.test.jrmp.ejb.StatelessSessionBean&lt;/ejb-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;session-type&gt;Stateless&lt;/session-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;transaction-type&gt;Container&lt;/transaction-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/session&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;description&gt;A&nbsp;trival&nbsp;echo&nbsp;stateful&nbsp;session&nbsp;bean&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;ejb-name&gt;StatefulSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;home&gt;org.jboss.test.jrmp.interfaces.StatelessSessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;remote&gt;org.jboss.test.jrmp.interfaces.StatelessSession&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;ejb-class&gt;org.jboss.test.jrmp.ejb.StatelessSessionBean&lt;/ejb-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;session-type&gt;Stateful&lt;/session-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;transaction-type&gt;Container&lt;/transaction-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/session&gt;<br>
+<br>
+&nbsp;&nbsp;&lt;/enterprise-beans&gt;<br>
+<br>
+&lt;/ejb-jar&gt;<br>
+</div></div><div class="figure"><p><a name="comp.jboss.xml"></a><b>Figure 13.29. TestCustomSockets Example jboss.xml Descriptor</b></p><div class="literallayout"><br>
+&lt;?xml&nbsp;version="1.0"?&gt;<br>
+<br>
+&lt;!--&nbsp;The&nbsp;jboss.xml&nbsp;descriptor&nbsp;for&nbsp;the&nbsp;jrmp-gzip.jar&nbsp;ejb&nbsp;unit&nbsp;--&gt;<br>
+&lt;jboss&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;container-configurations&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;container-configuration&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;container-name&gt;Standard&nbsp;Stateless&nbsp;SessionBean&lt;/container-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;!--&nbsp;Override&nbsp;the&nbsp;container&nbsp;socket&nbsp;factories&nbsp;--&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;container-invoker-conf&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;Optimized&gt;true&lt;/Optimized&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;RMIObjectPort&gt;4445&lt;/RMIObjectPort&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;RMIClientSocketFactory&gt;org.jboss.test.jrmp.ejb.CompressionClientSocketFactory&lt;/RMIClientSocketFactory&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;RMIServerSocketFactory&gt;org.jboss.test.jrmp.ejb.CompressionServerSocketFactory&lt;/RMIServerSocketFactory&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/container-invoker-conf&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/container-configuration&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/container-configurations&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;enterprise-beans&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;!--&nbsp;This&nbsp;section&nbsp;is&nbsp;not&nbsp;really&nbsp;necessary&nbsp;since&nbsp;we&nbsp;are&nbsp;using&nbsp;the&nbsp;default&nbsp;container-name.<br>
+				It&nbsp;is&nbsp;here&nbsp;to&nbsp;indicate&nbsp;that&nbsp;only&nbsp;the&nbsp;StatelessSession&nbsp;bean&nbsp;is&nbsp;using&nbsp;custom<br>
+				socket&nbsp;factories.<br>
+			--&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;ejb-name&gt;StatelessSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;configuration-name&gt;Standard&nbsp;Stateless&nbsp;SessionBean&lt;/configuration-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/enterprise-beans&gt;<br>
+&lt;/jboss&gt;<br>
+</div></div><p>Note that we specified an RMIObjectPort of 4445 rather than the default value of
+4444 used by the default container configurations in the standardjboss.xml descriptor. This is
+necessary because JRMP RMI implementation keeps track of the exported object endpoints based
+on (port, host, ClientSocketFactory, ServerSocketFactory) rather than just (port, host). If
+we had used a port value of 4444 we would see an exception at deployment time indicating that
+port 4444 could not be bound because it was already in use. The reason is that the RMI layer
+would try to create two ServerSocket instances with the same port,host combination for the
+two different (ClientSocketFactory, ServerSocketFactory) combinations. If you don't have a
+reason to choose a fixed port the safest RMIObjectPort configuration to use it 0 which allows
+the system to bind any available port.</p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s126.html"><img src="images\prev.gif" border="0"></a><a href="ch13s135.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

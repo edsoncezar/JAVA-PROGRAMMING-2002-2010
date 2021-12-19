@@ -1,0 +1,332 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-14.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-16.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H3><A NAME="Heading18"></A><FONT COLOR="#000077">Running and Hosting Servlets</FONT></H3>
+<P>There are a growing number of products that support servlets. In writing this book, we have used several providers. First, the Java Servlet Development Kit, or JSDK, provides a command-line program called servletrunner. This program loads servlets and handles servlet requests, but it does not support normal HTML requests, so it doesn&#146;t provide the same complete environment as a Web server. Second, the Java Web Server, a product provided by Sun, supports both servlets and JavaServer Pages, as discussed in later chapters. BEA WebLogic Application Server also supports servlets. All of these hosts support initialization arguments that the servlet acquires via the ServletConfig object.
+</P>
+<P>Regardless of the host you pick, you need to know several things before running servlets:</P>
+<DL>
+<DD><B>Where do the servlet&#146;s class files go?</B> Often the host provides a directory called servlets for these files. The Java Web Server has a directory called servlets; servletrunner uses command-line arguments to indicate the directory all the servlet classes are contained in.
+<DD><B>Where do supporting classes go?</B> Most likely, supporting files will go with the servlet, in the CLASSPATH, or in another special directory defined by the host. The Java Web Server provides a directory called classes that is a sibling to the servlets directory. Supporting classes should go in this directory. For servletrunner, the supporting classes should be in either the same directory as the servlet class or in the CLASSPATH used to run servletrunner.
+<DD><B>How is the server told about a servlet?</B> In most cases, either a special file or tool is used to tell the server about servlets. The Java Web Server provides an administrative tool that can be used to add servlets to the server, set their names, and assign a class to each name. This name is used in the URL to indicate the servlet using the form <A HREF="http://server/servlet/servletname">http://server/servlet/servletname</A>. The servletrunner uses a properties file and expects lines of the form:
+<PRE>
+servlet.adrotator.code=AdRotatorServlet
+</PRE>
+<BR>This indicates a servlet&#146;s name and class. This properties file can be assigned as a command-line argument to servlet runner.
+<DD><B>How are initialization parameters set?</B> As with the previous question, either a file or tool is often used to set these parameters. The Java Web Server provides an administrative tool that can be used to add servlets to the server, set their names, and assign a class to each name. This name is used in the URL to indicate the servlet using the form <A HREF="http://server/servlet/servletname.">http://server/servlet/servletname.</A> The servletrunner uses a properties file and expects lines of the form:
+<PRE>
+ servlet.adrotator.initArgs=\
+                       imagedir=c:\\temp\\chapter_07\\images
+</PRE>
+<DD><B>This code indicates a servlet&#146;s arguments.</B> Multiple arguments should be comma delimited, and the \ character can be used to break the arguments across lines. A \ in the argument must be escaped, as shown in the preceding code. This properties file can be assigned as a command-line argument to servlet runner.
+</DL>
+<P>The Java Web Server provides excellent support for servlet programming. Even better is the fact that there is every indication that other major server vendors are adopting this technology as well. Expect support and additional functionality to appear in most server products. This means that if you write servlets now, you should see enhanced features and performance in the years to come at very little cost to you.
+</P>
+<P>The servlet development kit is included on the CD-ROM that accompanies this book. Visit java.sun.com for information on downloading a trial version of the Java Web Server or check with your server provider to see if it supports servlets. You might also want to browse to <A HREF="http://library.cs.tuiasi.ro/programming/java/developing_java_enterprise_app/ch07/www.livesoftware.com">www.livesoftware.com</A>, a company that provides tools for adding servlet support to your existing Web server.</P>
+<H3><A NAME="Heading19"></A><FONT COLOR="#000077">Debugging Servlets</FONT></H3>
+<P>Perhaps one of the hardest aspects of programming servlets is testing them&#151;not testing the features as much as the reliability. Consider that the servlet runs on the Web server and therefore is probably not accessible to a debugger. Certainly, some servlet hosts might provide debug capabilities, but it is not the norm. When an uncaught exception occurs in a servlet, it simply fails to return data. The programmer won&#146;t get any information from the client about the error beyond the nagging message, &#147;document contains no data.&#148; Also, many developers may write and test their servlets on one Web server and deploy them to another one, making it hard to expect normal debugging facilities. Finally, although servlets do have access to the log file, there are a number of issues with using log statements to debug the program.
+</P>
+<P>The destination for the log is server dependent. Strings sent to the log may be altered and may have other log messages interspersed between them. Log-style debugging is also time consuming in the sense that you will often add logging comments to the code and then remove them for deployment. More important, the log is intended for administratively significant messages, not debugging. Despite these drawbacks, log-style debugging is perhaps the most portable and stable debugging mechanism for servlets.</P>
+<P>To make log-style, or printf-style, debugging easier with servlets and other distributed programs, we have created a class listed in the code that follows; this code defines a class named DebugLog. The goal of this class is to provide multiple logging destinations, rather than just supporting the servlet log. In particular, the DebugLog object can be told to send log messages to a file, stream, or even to a log server that has been provided. This server prints messages to System.out or a file. In the case of the log server, you can watch log messages in real time while testing the servlet. Two methods are provided: one to log string messages and the other to log an exception&#146;s stack trace. This can be especially useful when an exception occurs.</P>
+<P>We also want to minimize the code changes required to move from development to production. The technique we use to accomplish this is a simple one. First, the DebugLog object is not initialized with a specific log destination. If no destination is provided, the logging code will simply ignore all logging messages. This means that you can leave debugging code in your servlets at the cost of a message send and an if statement. In the context of a server, this is a minimal requirement for reducing the maintenance required to remove debugging code.</P>
+<P>The code for DebugLog follows. Notice that the main issues are keeping track of the server in a way that allows the server to go down and the logger to reconnect appropriately. In fact, if either the servlet goes away or the server goes down, the other will self-correct.</P>
+<PRE>
+import java.io.*;
+import java.net.*;
+import LogServer;
+
+public class DebugLog extends Object
+{
+    private Socket server;
+    private String serverName;
+    private BufferedReader serverReader;
+
+    private PrintWriter log;
+
+    private static DebugLog sharedLog;
+
+    public static synchronized DebugLog getSharedLog()
+    {
+        if(sharedLog == null) sharedLog = new DebugLog();
+        return sharedLog;
+    }
+
+    public DebugLog()
+    {
+        log = null;
+    }
+
+    public synchronized boolean initialized()
+    {
+        return ((log != null)||(serverName!=null));
+    }
+
+    public synchronized void log(String str)
+    {
+//exit quick if no log
+        if((log != null)||(serverName!=null))
+        {
+            log(str,true);//retry
+        }
+    }
+
+    public synchronized void log(Exception exp)
+    {
+        if((log != null)||(serverName!=null))
+        {
+            StringWriter out;
+            PrintWriter printOut;
+            String logTrace;
+            StringReader in;
+            BufferedReader bufIn;
+            String curLine;
+
+            try
+            {
+                out = new StringWriter();
+                printOut = new PrintWriter(out);
+
+                exp.printStackTrace(printOut);
+                printOut.close();
+
+
+                logTrace = out.toString();
+                in = new StringReader(logTrace);
+                bufIn = new BufferedReader(in);
+
+                while((curLine = bufIn.readLine()) != null)
+                {
+                    log(curLine,true);
+                }
+
+                bufIn.close();
+            }
+            catch(Exception ex)
+            {
+            }
+        }
+    }
+
+    //protected method that allows the logger to reconnect
+    //to a server
+    protected synchronized void log(String str,boolean retry)
+    {
+        boolean error=false;
+
+        if(log != null)//exit quick if no log
+        {
+            try
+            {
+                log.println(str);
+
+                if(serverReader != null)
+                {
+                    //Read the response, but ignore
+                    //This should force an exception
+                    // if the socket is closed
+                    serverReader.readLine();
+                }
+            }
+            catch(Exception ex)
+            {
+                error = true;
+                closeLog();
+            }
+        }
+        else
+        {
+            error = true;
+        }
+
+        if((serverName != null) &amp&amp error)
+        {
+            if(retry)
+            {
+                logTo(serverName);
+                log(str,false);//only retry one time
+            }
+            else
+            {
+                closeLog();
+            }
+        }
+    }
+
+    public synchronized void logTo(File f)
+    {
+        if(f!=null)
+        {
+            closeLog();
+
+            try
+            {
+                FileWriter fileIn = new
+                   FileWriter(f.getAbsolutePath(),true);
+                log = new PrintWriter(fileIn,true);
+            }
+            catch(Exception exp)
+            {
+                log = null;
+            }
+        }
+    }
+
+    public synchronized void logTo(OutputStream stream)
+    {
+        if(stream!=null)
+        {
+            closeLog();
+
+            try
+            {
+                log = new PrintWriter(stream,true);
+            }
+            catch(Exception exp)
+            {
+                log = null;
+            }
+        }
+    }
+
+    public synchronized void logTo(String logServer)
+    {
+        if(logServer!=null)
+        {
+
+            closeLog();
+
+            serverName = logServer;
+
+            try
+            {
+                server = new
+                   Socket(logServer,LogServer.DEFAULT_PORT);
+
+                InputStreamReader readIn;
+                readIn = new
+                  InputStreamReader(server.getInputStream());
+                serverReader = new BufferedReader(readIn);
+
+                log = new
+                      PrintWriter(server.getOutputStream(),true);
+                server.setSoTimeout(2000);//two seconds
+            }
+            catch(Exception exp)
+            {
+                log = null;
+                server = null;
+            }
+        }
+    }
+
+    public synchronized void closeLog()
+    {
+        if((log!=null)&amp&amp(server!=null))
+        {
+            try
+            {
+                log.println(LogServer.DISCONNECT_MSG);
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+
+        if(log != null)
+        {
+            log.flush();
+            log.close();
+            log = null;
+        }
+
+        if(server != null)
+        {
+            try
+            {
+                if(serverReader != null) serverReader.close();
+                server.close();
+                server = null;
+                serverReader = null;
+            }
+            catch(Exception ex)
+            {
+            }
+        }
+    }
+
+    public synchronized void finalize()
+    {
+        closeLog();
+    }
+}
+
+class DebugLogTester
+{
+    public static int MSG_COUNT=100;
+
+    public static void main(String[] args)
+    {
+        DebugLog logger = DebugLog.getSharedLog();
+        int i;
+
+        System.out.println(&#147;Created log.&#148;);
+        logger.logTo(&#147;192.168.0.172&#148;);
+        System.out.println(&#147;Set log dest.&#148;);
+
+        System.out.println(&#147;Logging messages.&#148;);
+
+        for(i=0;i&ltMSG_COUNT;i&#43;&#43;)
+        {
+            try
+            {
+                logger.log(&#147;Test &#148;&#43;i);
+
+                Thread.sleep(100);
+            }
+            catch(Exception exp)
+            {
+                System.out.println(&#147;Exception: &#148;&#43;exp);
+            }
+        }
+
+        System.out.println(&#147;Closing log.&#148;);
+        logger.closeLog();
+    }
+
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-14.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-16.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

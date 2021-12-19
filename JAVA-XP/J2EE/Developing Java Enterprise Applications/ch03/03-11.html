@@ -1,0 +1,130 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Basic JDBC Programming</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-10.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-12.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H4 ALIGN="LEFT"><A NAME="Heading15"></A><FONT COLOR="#000077">Prepared Statements</FONT></H4>
+<P>As shown in the last example, it is common to execute the same statements repeatedly, with changes to only the value attributes. Each time you construct a statement string, it must be compiled and the driver must map the values in your string to the SQL understood by the underlying database. If you execute enough identical statements, this can become inefficient. JDBC provides an interface called a <I>prepared statement</I> that implements the Statement interface. A prepared statement represents a &#147;compiled&#148; statement that is fairly static. You can get a prepared statement from a connection by calling the prepareStatement() method. The only things that change in the PreparedStatement string are the parameters to the SQL string that the statement contains. These parameters are represented in the original string by question marks (?). To set the values for these parameters, PreparedStatement has setXXX methods that take two parameters. The first parameter is the index (starting at 1) of the parameter you want to modify; the second parameter is the value. Consider the previous example. Here is what the PreparedStatement version of that example might look like:</P>
+<PRE>
+...
+ Statement stmt = con.createStatement();
+<B>PreparedStatement pstmt = con.prepareStatement(
+    &#147;INSERT INTO Temp VALUES (?,?,?)&#148;
+);
+</B>
+stmt.executeUpdate(&#147;CREATE TABLE Temp &#148; &#43;
+                   &#147;(id int, name varchar(25), value int)&#148;);
+
+<B>//First paramter is index, second is value of specified type
+pstmt.setInt(1,1);
+pstmt.setString(2,&#147;test1&#148;);
+pstmt.setFloat(3,5.0);
+int insCount = pstmt.executeUpdate();</B>
+System.out.println(&#147;Inserted &#148; &#43; insCount &#43; &#147;rows&#148;);
+
+pstmt.setInt(1,2);
+pstmt.setString(2,&#147;test2&#148;);
+pstmt.setFloat(3,10.0);
+insCount = pstmt.executeUpdate();
+System.out.println(&#147;Inserted &#148; &#43; insCount &#43; &#147;rows&#148;);
+
+int updateCount = stmt.executeUpdate(&#147;UPDATE Temp SET value=1.0&#148;);
+System.out.println(&#147;Updated &#148; &#43; insCount &#43; &#147;rows&#148;);
+
+int deleteCount = stmt.executeUpdate(&#147;DELETE FROM Temp&#148;);
+System.out.println(&#147;Deleted &#148; &#43; insCount &#43; &#147;rows&#148;);
+
+Stmt.executeUpdate(&#147;DROP TABLE Temp&#148;);
+
+Stmt.close();
+</PRE>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Stored procedures can be called from the Statement and PreparedStatement objects. However, a connection has a method named prepareCall() that returns an object that implements the CallableStatement interface. This interface extends the PreparedStatement interface by adding methods that allow you to get the values coming back from a store procedure. Typically, these values are marked as OUT parameters in the stored procedure declaration. Stored procedure handling is beyond the scope of this section, but the principle is similar to the topics discussed so far.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>PreparedStatement is beneficial when you intend to call the same SQL multiple times. It saves on the time necessary to compile a query. For a one&#150;time query, use the Statement object. In each case, you are handling one SQL statement at a time.
+</P>
+<P>The next section looks at how to control multiple SQL calls in a single transaction.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading16"></A><FONT COLOR="#000077">Managing Transactions</FONT></H4>
+<P>A <I>transaction</I> is a collection of consecutively executed database commands that are considered linked as one business process. If any part of a transaction fails, the programmer has the option of retrying the transaction or saving the current state of the transaction as permanent. To retry a transaction, it must be rolled back. <I>Rollback transaction</I> is a common term for resetting the state of the database to the point before the transaction was executed. To save the transaction, execute a <I>commit transaction</I> function. This saves all the changes made to the database as permanent changes. The important point is that all statements executed as part of a transaction are considered a group. Whatever you do to the transaction affects all statements in that transaction. For example, if you deleted a row, changed the value in another row, and then rolled back the transaction, both the delete and the update would be undone.</P>
+<P>By default, a connection is set to auto commit. This means that every statement executed is considered to be in its own transaction. So, if the statement is successful, it is committed. To have several statements executed as a single transaction, turn off auto commit by calling the Connection method setAutoCommit() and passing false. Then use the Connection methods commit() and rollback() to control the status of your transaction. Not all databases support transactions; even the ones that do support them at different levels.</P>
+<P>Most JDBC drivers support transactions. In fact, a JDBC&#150;compliant driver <I>must</I> support transactions. DatabaseMetaData supplies information describing the level of transaction support a DBMS provides. This level is called the <I>transaction isolation level</I>. The higher this level, the more careful the database will be in preventing multiple users from overwriting each other&#146;s transactions. However, the higher the isolation level, the slower the database may be. This is due to the degree of locking the database will perform. To find out the isolation level of your database, call the Connection method getTransactionIsolation(). Calling setTransactionIsolation can set level(). Be careful changing the isolation level during a transaction, because this causes the method commit to be called, which will cause any changes up to that point to be made permanent.</P>
+<P>The isolation levels are listed and explained in Table 3.12.</P>
+<P>Most databases support transactions; however, some do not. In these cases, you may find that the driver ignores your transaction calls. You can usually find out how the driver will handle transactions by checking the metadata and checking the property supportsTransactions. In some situations, an exception may even be raised.</P>
+<P>The next section details the error&#150;handling mechanisms of JDBC.</P>
+<TABLE WIDTH="80%"><TD CAPTION VALIGN="TOP" ALIGN="LEFT" COLSPAN="3"><B>Table 3.12</B> Transaction Isolation Levels
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="25%" VALIGN="TOP" ALIGN="LEFT">TRANSACTION LEVEL
+<TH WIDTH="25%" VALIGN="TOP" ALIGN="LEFT">MEANING
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT">TRANSACTION_NONE
+<TD VALIGN="TOP" ALIGN="LEFT">Transactions are not supported.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT">TRANSACTION_READ_COMMITTED
+<TD VALIGN="TOP" ALIGN="LEFT">Dirty reads are prevented; non&#150;repeatable reads and phantom reads can occur.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT">TRANSACTION_READ_UNCOMMITTED
+<TD VALIGN="TOP" ALIGN="LEFT">Dirty reads, non&#150;repeatable reads, and phantom reads can occur.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT">TRANSACTION_REPEATABLE_READ
+<TD VALIGN="TOP" ALIGN="LEFT">Dirty reads and non&#150;repeatable reads are prevented; phantom reads can occur.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT">TRANSACTION_SERIALIZABLE
+<TD VALIGN="TOP" ALIGN="LEFT">Dirty reads, non&#150;repeatable reads, and phantom reads are prevented.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<H4 ALIGN="LEFT"><A NAME="Heading17"></A><FONT COLOR="#000077">Exception&#150;Handling /SQL Warning</FONT></H4>
+<P>Notice the previous examples were catching SQLExceptions. This is the generic exception type for JDBC methods. JDBC provides three types of exception handling:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;SQLException
+<DD><B>&#149;</B>&nbsp;&nbsp;SQLWarning
+<DD><B>&#149;</B>&nbsp;&nbsp;DataTruncation
+</DL>
+<P>Let&#146;s take a look at each of these in more detail.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-10.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-12.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

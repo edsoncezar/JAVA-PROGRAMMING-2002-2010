@@ -1,0 +1,135 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A JMS-Based Alarm System</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="21-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="21-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>When the thread is notified, it gets the current time, then checks with each timer to see whether it should fire. The timer performs this calculation internally and returns the actual time until it should fire. If the value is negative, the timer should fire now; otherwise, the PTimer keeps track of the minimum time until a timer should fire. For example, let&#146;s say that there are three timer specs, one for 1:00, one for every 10 minutes, and one for 2:00. If it is currently 1:00, the 1:00 will fire and the 10 minute will fire, but the 2:00 will not. The minimum wait time is 10 minutes because the repeating timer will fire again then.
+</P>
+<P>The timer reads this list backward to allow timer specs to be removed from the list without altering the loop. Specs are removed from the list using the deschedule method.</P>
+<PRE>
+                curTime =  System.currentTimeMillis();
+                minWaitTime = curTime;
+               
+                count&#43;&#43;;
+               
+                for(i=(max-1);i&gt=0;i--)
+                {
+                    curItem = (PTimerSpec) specs.elementAt(i);
+                   
+                    testTime = curItem.timeToFire(curTime);
+                   
+                    if(testTime&lt=0)
+                    {
+                        curItem.notifyListeners(this);
+                        if(!curItem.isRepeat()
+                                     || curItem.isAbsolute())
+                                                deschedule(curItem);
+                        else testTime = curItem.getTime();
+                    }
+                   
+                    if(testTime&ltminWaitTime)
+                    {
+                        minWaitTime = testTime;
+                    }
+                }
+</PRE>
+<P>Finally, if there were timers, PTimer decides how long to wait until the next check for a timer firing. If the minimum wait time is less than the CUTOFF, 500 milliseconds, the timer thread waits only RESOLUTION (10 milliseconds) before checking again. This ensures that timers for short amounts of time are fairly accurate. If all of the specs will not fire for more than CUTOFF time, the timer thread waits for the minimum time minus the SAFETY, 100 milliseconds. This causes the thread to wake up a little early and start waiting for only 10 milliseconds at a time until it is really time to fire. The long timer specs don&#146;t take resources until right before they fire, and they are still very accurate.
+</P>
+<P>Because the schedule method notifies this thread if a new timer spec is added, the PTimer handles the case of a long timer being added, and thus a long wait initiated, followed by a short timer being added. In this case, the long wait is interrupted by the schedule method&#146;s notify, and the timer rechecks the correct wait time, adjusting it as necessary. The following code concludes the PTimer&#146;s run method and shows this &#147;smart&#148; call to the wait method.</P>
+<PRE>
+                if(max != 0)
+                {
+                    try
+                    {
+                        if(minWaitTime &gt CUTOFF)
+                        {   
+                            wait(minWaitTime - SAFETY);
+                        }
+                        else
+                        {
+                            wait(RESOLUTION);
+                        }
+                    }
+                    catch(InterruptedException exp)
+                    {
+                    }
+                }
+            }
+        }
+    }
+</PRE>
+<P>The schedule method, which follows, adds PTimerSpecs to PTimer&#146;s list and notifies any waiting threads. If this is the first spec added, PTimer&#146;s thread is started. The timer waits until the last minute to start a thread to make sure that a thread is not created if nothing is scheduled. The deschedule method merely removes all occurrences of a timer spec from the list.
+</P>
+<PRE>
+    public synchronized void schedule(PTimerSpec t)
+    {
+        PTimerSpec curItem;
+       
+        if(t.isAbsolute()
+           &amp&amp (t.timeToFire(System.currentTimeMillis())&lt0))
+        {
+            t.notifyListeners(this);
+            return;
+        }
+       
+        t.initTime();
+       
+        specs.addElement(t);
+       
+        if(kicker == null)
+        {
+            kicker = new Thread(this);
+            kicker.start();
+        }
+       
+        notifyAll();
+    }
+   
+    public synchronized void deschedule(PTimerSpec t)
+    {
+        while(specs.removeElement(t))
+        {
+        }
+    }
+}
+</PRE>
+<P>PTimer is a flexible class of performing timed operations. The main advantages of it are that it is fairly accurate, approaching 2*RESOLUTION, and it minimizes resource usage. Of course, the main disadvantage is that listeners are notified in a background thread. This could be remedied by using Swing to integrate the notification into the event thread.
+</P>
+<P><A NAME="Fig4"></A><A HREF="images\21-04.jpg"><IMG SRC="images\21-04t.jpg"></A>
+<BR><A HREF="images\21-04.jpg"><FONT COLOR="#000077"><B>Figure 21.4</B></FONT></A>&nbsp;&nbsp;AlarmConfig user interface.</P>
+<H3><A NAME="Heading5"></A><FONT COLOR="#000077">AlarmConfig</FONT></H3>
+<P>The AlarmConfig application is implemented in a single class called AlarmConfig and a small helper class for handling the window close messages. This class is very similar to the examples in Chapter 20, so the complete code is not included here (it is available on the CD-ROM, however.) Instead, the implementation for onMessage and the code for telling the server to shut down are included. When run, the AlarmConfig application displays an interface like the one pictured in Figure 21.4.
+</P>
+<P>When created, an AlarmConfig object registers as a subscriber to the ALARM_TOPIC and assigns itself as a MessageListener for this TOPIC. It also registers as a sender for the ADMIN_QUEUE storing the QueueSender instance in the variable sender.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="21-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="21-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

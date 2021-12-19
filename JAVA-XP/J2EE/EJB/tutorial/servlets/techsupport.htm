@@ -1,0 +1,1096 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 4.0">
+<link REL="stylesheet" TYPE="text/css" HREF="../cursos.css" />
+<title>Programação de Servlets: Acesso a Bancos de Dados com JDBC</title>
+</head>
+
+<body>
+
+<h1 align="center">Programação de Servlets</h1>
+
+<h1 align="center">Acesso a Bancos de Dados com JDBC</h1>
+
+<h2>O Problema: Aplicação de Suporte Técnico</h2>
+
+<ul>
+  <li>Queremos implementar uma aplicação simples de <font color="#0080FF">Suporte Técnico </font>usada
+    por um Help Desk</li>
+  <li>Não temos tempo de implementar uma solução completa<ul>
+      <li>Queremos apenas mostrar como acessar um banco de dados relacional numa aplicação</li>
+    </ul>
+  </li>
+  <li>Nossa aplicação tem a seguinte funcionalidade básica:<ul>
+      <li>Cadastrar um problema no banco de dados de suporte do help desk<ul>
+          <li>Cada pedido de suporte recebe uma identificação única</li>
+        </ul>
+      </li>
+      <li>Listar todos os problemas de suporte no banco de dados</li>
+      <li>Examinar os detalhes de um pedido de suporte particular</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>A Demo</h2>
+
+<ul>
+  <li>Exercite a aplicação <a href="http://anjinho.dsc.ufpb.br:8000/techsup">aqui</a><ul>
+      <li><a href="http://anjinho.dsc.ufpb.br:8000/techsup">http://anjinho.dsc.ufpb.br:8000/techsup</a></li>
+      <li>Isso é uma máquina Linux</li>
+    </ul>
+  </li>
+  <li>(Tomará que o professor tenha deixado a aplicação executando antes da aula ...)<ul>
+      <li>Caso contrário, o presente material mostra como implementar e fazer o deployment da
+        aplicação e a demo poderá ser realizada no final</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>A Teoria sobre Servlets e JDBC</h2>
+
+<ul>
+  <li>Para entendermos a solução, temos que aprender alguns detalhes adicionais sobre como
+    servlets funcionam e como podem acessar um banco de dados</li>
+</ul>
+
+<h3>Vários servlets numa mesma aplicação</h3>
+
+<ul>
+  <li>Nossa aplicação tem que gerar 3 páginas dinâmicas:<ul>
+      <li>Confirmação do cadastro</li>
+      <li>Lista completa de pedidos de suporte</li>
+      <li>Detalhamento de um pedido de suporte</li>
+    </ul>
+  </li>
+  <li>Podemos usar um único servlet para gerar essas três páginas, ou 2 servlets ou até 3
+    servlets, um por página</li>
+  <li>Usaremos 3 servlets, para mostrar como fazer uma aplicação com vários servlets</li>
+  <li>Os servlets se chamarão:<ul>
+      <li>TechSupServlet: para cadastrar um pedido e gerar a página de confirmação de cadastro</li>
+      <li>TechSupListaServlet: para listar todos os pedidos do banco de dados</li>
+      <li>TechSupDetalhaServlet: para listar os detalhes de um pedido particular</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Sobre JDBC e o acesso a Bancos de Dados</h3>
+
+<h4>Criação do Banco de Dados</h4>
+
+<ul>
+  <li>A aplicação manipula o seguinte banco de dados:</li>
+</ul>
+
+<pre class="clsCode">CREATE TABLE SUPP_REQUESTS(
+  REQUEST_ID INTEGER PRIMARY KEY,
+  NOME       VARCHAR(40),
+  SOBRENOME  VARCHAR(40),
+  EMAIL      VARCHAR(40),
+  FONE       VARCHAR(40),
+  SOFTWARE   VARCHAR(40),
+  SO         VARCHAR(40),
+  PROBLEMA   VARCHAR(256)
+);
+
+CREATE TABLE SEQ_NO(
+  PROX_NUM   INTEGER
+);
+
+INSERT INTO SEQ_NO VALUES(0);</pre>
+
+<ul>
+  <li>A tabela SUPP_REQUESTS contém os pedidos de suporte</li>
+  <li>A tabela SEQ_NO será usada para gerar números de sequência únicos<ul>
+      <li>A maioria dos BDs oferece uma forma mais eficiente de gerar números de sequência
+        únicos para registros</li>
+      <li>Exemplo: o ROWID do Oracle</li>
+      <li>Geraremos os números &quot;na mão&quot; para exemplificar o uso de transações</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>DataSource e JNDI</h4>
+
+<ul>
+  <li>Um banco de dados é visto como um Recurso do tipo <font color="#0080FF">DataSource</font></li>
+  <li>JNDI é usado para localizar o DataSource<ul>
+      <li>JNDI é essencialmente um repositório de objetos em rede</li>
+      <li>JNDI = Java Naming and Directory Interface</li>
+    </ul>
+  </li>
+  <li>Alguma aplicação (o J2EE server) vai cadastrar a URL para chegar ao banco de dados
+    junto ao JNDI, junto com um nome JNDI para chamar o recurso</li>
+  <li>Uma outra aplicação (nosso servlet) usa JNDI para localizar o recurso usando seu nome
+    JNDI</li>
+  <li>InitialContext é uma classe do pacote JNDI (javax.naming)<ul>
+      <li>É o ponto de entrada básico para usar o serviço de naming JNDI</li>
+    </ul>
+  </li>
+  <li>O método lookup() é usado para consultar o serviço de naming</li>
+</ul>
+
+<pre class="clsCode">import java.sql.*;
+import javax.sql.*;
+import javax.naming.*;
+import java.util.*;
+
+public class TechSupDB {
+  Connection con;
+  private String dbName = &quot;java:comp/env/jdbc/TechSupDB&quot;;
+
+  public TechSupDB() throws Exception {
+    try  {               
+      InitialContext ic = new InitialContext();
+      DataSource ds = (DataSource)ic.lookup(dbName);
+      con =  ds.getConnection();
+    } catch (Exception ex) {
+      throw new Exception(&quot;Nao pode abrir conexao para o banco de dados: &quot; +
+                          ex.getMessage());
+    }
+  }
+    
+  public void remove() {
+    try {
+      con.close();
+    } catch (SQLException ex) {
+      System.out.println(ex.getMessage());
+    }
+  }
+  // ...
+}</pre>
+
+<ul>
+  <li>No código acima, o que significa &quot;java:comp/env/jdbc/TechSupDB&quot;?
+    <ul>
+      <li>JNDI armazena os nomes que mapeia numa hierarquia de
+        &quot;contextos&quot;</li>
+      <li>O prefixo <font color="#0080FF">java:comp/env</font> é o nome do
+        contexto JNDI para o <font color="#0080FF">ambiente de nomes do
+        componente</font></li>
+      <li>O que é isso?</li>
+      <li>O &quot;ambiente de nomes&quot; (naming environment) é um mecanismo
+        que permite que um componente seja customizado sem acessar o componente
+        ou alterar seu código.</li>
+      <li>O ambiente de nomes é implementado pelo container</li>
+      <li>O container provê este ambiente ao componente através de um contexto
+        de nomes JDNI (o contexto java:comp/env)</li>
+      <li>Entradas neste ambiente são especificadas declarativamente no
+        Deployment Descriptor do componente</li>
+      <li>Nomes JNDI para objetos do tipo DataSource são armazenados no
+        subcontext <font color="#0080FF">java:comp/env/jdbc</font></li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Abertura e fechamento de conexão de BD</h4>
+
+<ul>
+  <li>Um banco de dados é acessado usando o pacote JDBC do Java<ul>
+      <li>Pacotes java.sql e javax.sql</li>
+    </ul>
+  </li>
+  <li>Para acessar o banco, deve-se:<ul>
+      <li>Localizar o DataSource correspondendo ao BD</li>
+      <li>Obter uma conexão para o BD</li>
+    </ul>
+  </li>
+  <li>DataSource é usado com JDBC 2.0<ul>
+      <li>Anteriormente, tinha que usar a classe DriverManager e carregar o driver no código</li>
+    </ul>
+  </li>
+  <li>Localizar o DataSource usando JNDI já carrega o driver apropriado<ul>
+      <li>Nosso código não precisa mais saber de drivers, URL da base de dados, etc.</li>
+      <li>Precisamos apenas saber o nome &quot;java:comp/env/jdbc/TechSupDB&quot;, por exemplo</li>
+      <li>Onde esse recurso fica é problema do JNDI</li>
+    </ul>
+  </li>
+  <li>A Connection que recebemos com ds.getConnection() vem de um pool de conexões e não tem
+    necessariamente uma conexão física de banco de dados alocada permanentemente a ela</li>
+  <li>Isso faz com que obter uma conexão assim seja muito barato</li>
+  <li>Observe também a forma de fechar a conexão</li>
+  <li>Uma SQLException pode ser lançada pelo pacote JDBC</li>
+</ul>
+
+<h4>Como fazer um query e processar a resposta</h4>
+
+<ul>
+  <li>Podemos usar uma conexão&nbsp; para preparar um statement SQL</li>
+  <li>A execução de um statement SELECT é feita com executeQuery()<ul>
+      <li>Aqui, queremos retornar uma ArrayList com todos os pedidos</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public class TechSupDB {
+  // ...
+  public Collection getTechSupRequests() throws RequestsNotFoundException {
+    ArrayList techSupRequests = new ArrayList();
+    try {
+      String selectStatement = &quot;select * from SUPP_REQUESTS&quot;;
+      PreparedStatement prepStmt = con.prepareStatement(selectStatement);
+      ResultSet rs = prepStmt.executeQuery();
+
+      while (rs.next()) {
+        techSupRequests.add(new RequestDetails(
+                                         rs.getInt(1),
+                                         rs.getString(2),
+                                         rs.getString(3),
+                                         rs.getString(4), 
+                                         rs.getString(5), 
+                                         rs.getString(6), 
+                                         rs.getString(7), 
+                                         rs.getString(8)));
+      }
+      rs.close();
+      prepStmt.close();
+    } catch(SQLException ex) {
+      throw new RequestsNotFoundException(ex.getMessage());
+    }
+    Collections.sort(techSupRequests);
+    return techSupRequests;
+  }</pre>
+
+<ul>
+  <li>A resposta do query está disponível num &quot;ResultSet&quot; como visto acima</li>
+  <li>rs.next() move o cursor uma linha para baixo no ResultSet</li>
+</ul>
+
+<h4>Outro exemplo de query</h4>
+
+<ul>
+  <li>O exemplo abaixo mostra outro query SQL<ul>
+      <li>Aqui, queremos obter os detalhes de um pedido com requestId (chave) conhecido</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public class TechSupDB {
+  // ...
+  public RequestDetails getRequestDetails(int requestId)
+                        throws RequestNotFoundException {
+    try {
+      String selectStatement = &quot;select * from SUPP_REQUESTS where REQUEST_ID = ?&quot;;
+      PreparedStatement prepStmt = con.prepareStatement(selectStatement);
+      prepStmt.setInt(1, requestId);
+      ResultSet rs = prepStmt.executeQuery();
+      if (rs.next()) {
+        RequestDetails requestDetail = new RequestDetails(
+                                         rs.getInt(1),
+                                         rs.getString(2),
+                                         rs.getString(3),
+                                         rs.getString(4), 
+                                         rs.getString(5), 
+                                         rs.getString(6), 
+                                         rs.getString(7), 
+                                         rs.getString(8));
+        rs.close();
+        prepStmt.close();
+        return requestDetail;
+      } else {
+        rs.close();
+        prepStmt.close();
+        throw new RequestNotFoundException(&quot;Nao pode achar request: &quot; + 
+                                           requestId);
+      }
+    } catch (SQLException ex) {
+      throw new RequestNotFoundException(&quot;Nao pode achar request: &quot; + 
+                                         requestId + &quot; &quot; + ex.getMessage());
+    }
+  }</pre>
+
+<ul>
+  <li>prepStmt.setInt(1, requestId); significa atribuir requestId ao primeiro &quot;?&quot; do
+    statement SQL</li>
+</ul>
+
+<h4>Como adicionar informação ao banco</h4>
+
+<ul>
+  <li>O método executeUpdate() é usado para executar um &quot;INSERT&quot; em SQL</li>
+</ul>
+
+<pre class="clsCode">public class TechSupDB {
+  // ...
+  public int addRequest(String nome,
+                        String sobrenome, String email,
+                        String fone, String software,
+                        String so, String problema) 
+                        throws RequestNotInsertedException {
+
+    int requestId = 0;
+    try {
+      requestId = getPróximoNúmero();
+    } catch (SQLException ex) {
+      throw new RequestNotInsertedException(&quot;Nao pode obter requestId: &quot; + 
+                                            ex.getMessage());
+    }
+    try {
+      String insertStatement = &quot;insert into SUPP_REQUESTS VALUES(?, ?, ?, ?, ?, ?, ?, ?)&quot;;
+      PreparedStatement prepStmt = con.prepareStatement(insertStatement);
+      prepStmt.setInt(1, requestId);
+      prepStmt.setString(2, nome);
+      prepStmt.setString(3, sobrenome);
+      prepStmt.setString(4, email);
+      prepStmt.setString(5, fone);
+      prepStmt.setString(6, software);
+      prepStmt.setString(7, so);
+      prepStmt.setString(8, problema);
+      con.setAutoCommit(true);
+      prepStmt.executeUpdate();
+      prepStmt.close();
+    } catch (SQLException ex) {
+      throw new RequestNotInsertedException(&quot;Nao pode inserir request: &quot; + 
+                                         requestId + &quot; &quot; + ex.getMessage());
+    }
+    return requestId;
+  }</pre>
+
+<ul>
+  <li>O método getPróximoNúmero() retorna um novo número de identificação de pedido<ul>
+      <li>Veremos a implementação abaixo</li>
+    </ul>
+  </li>
+  <li>setAutoCommit(true) significa que alterações ao banco sofrem commit imediato</li>
+  <li>Em seguida, veremos um exemplo de uma transação envolvendo mais de um statement</li>
+</ul>
+
+<h4>Tratamento de transações</h4>
+
+<ul>
+  <li>Como obter um número de sequência único para servir de chave para o pedido?</li>
+  <li>Muitos bancos de dados oferecem a geração automática de números de sequência
+    únicos<ul>
+      <li>ROWID do Oracle, por exemplo</li>
+    </ul>
+  </li>
+  <li>Aqui, geraremos nosso próprio número</li>
+  <li>Precisaremos de dois statements SQL para efetuar o trabalho e é importante que o
+    controle de concorrência serialize os acessos por parte das várias sessões da
+    aplicação que poderiam estar executando ao mesmo tempo</li>
+  <li>Para resolver o problema, desligamos o &quot;autocommit&quot; da conexão e fazemos o
+    commit() manualmente<ul>
+      <li>Existe também o método rollback(), caso seja necessário</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public class TechSupDB {
+  // ...
+  private int getPróximoNúmero() throws SQLException {
+    final String updateStatementStr = &quot;UPDATE SEQ_NO SET PROX_NUM = PROX_NUM + 1&quot;;
+    final String selectStatementStr = &quot;SELECT PROX_NUM FROM SEQ_NO&quot;;
+    PreparedStatement updateStatement = con.prepareStatement(updateStatementStr);
+    PreparedStatement selectStatement = con.prepareStatement(selectStatementStr);
+    con.setAutoCommit(false);
+    // Incrementa sequenciador
+    updateStatement.executeUpdate();
+    updateStatement.close();
+    // Pega número de sequência
+    ResultSet rs = selectStatement.executeQuery();
+    rs.next();
+    int next = rs.getInt(1);
+
+    selectStatement.close();
+    con.commit();
+    // volta ao valor original do auto commit
+    con.setAutoCommit(true);
+    return next;
+  }</pre>
+
+<ul>
+  <li>Terminamos nosso tratamento inicial de JDBC</li>
+</ul>
+
+<h3>Sobre o ciclo de vida de um servlet</h3>
+
+<ul>
+  <li>Examine a figura abaixo:</li>
+</ul>
+
+<p align="center"><img src="servlet3.gif" width="777" height="473"
+alt="servlet3.gif (13571 bytes)"></p>
+
+<ul>
+  <li>Durante sua vida, o servlet passa pelas seguintes etapas:<ul>
+      <li><font color="#0080FF">Instanciação</font><ul>
+          <li>O Web Container cria uma instância do servlet</li>
+        </ul>
+      </li>
+      <li><font color="#0080FF">Inicialização</font><ul>
+          <li>O Web Container chama o método init() do servlet</li>
+        </ul>
+      </li>
+      <li><font color="#0080FF">Serviço</font><ul>
+          <li>Se o container receber um pedido para o servlet, o método service() do servlet é
+            chamado</li>
+        </ul>
+      </li>
+      <li><font color="#0080FF">Destruição</font><ul>
+          <li>Antes de destruir a instância, o Web Container chama o método destroy() do servlet</li>
+        </ul>
+      </li>
+      <li><font color="#0080FF">Não disponível</font><ul>
+          <li>A instância é destruída e marcada para coleta de lixo</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Sobre o compartilhamento de informação entre servlets</h3>
+
+<ul>
+  <li>Usaremos os métodos init() e destroy() para obter e liberar um objeto TechSupDB para
+    acessar o banco de dados</li>
+  <li>Porém, temos 3 servlets e cada um tem seus métodos init() e destroy()</li>
+  <li>Como queremos tratar o objeto TechSupDB?<ul>
+      <li>Queremos compartilhá-lo entre todos os servlets que compõem a aplicação</li>
+    </ul>
+  </li>
+  <li>A seguinte tabela mostra como fazer compartilhamento através de objetos de escopos
+    variados</li>
+</ul>
+
+<table border="1" width="100%">
+  <tr>
+    <td width="23%" align="center"><big><strong>Escopo</strong></big></td>
+    <td width="43%" align="center"><big><strong>Classe</strong></big></td>
+    <td width="34%" align="center"><big><strong>Quem pode acessar?</strong></big></td>
+  </tr>
+  <tr>
+    <td width="23%">Contexto Web<br>
+    (a aplicação toda)</td>
+    <td width="43%">javax.servlet.ServletContext</td>
+    <td width="34%">Qualquer componente Web da aplicação</td>
+  </tr>
+  <tr>
+    <td width="23%">Sessão</td>
+    <td width="43%">javax.servlet.http.HttpSession</td>
+    <td width="34%">Qualquer componente Web tratando de um pedido da sessão</td>
+  </tr>
+  <tr>
+    <td width="23%">Pedido</td>
+    <td width="43%">subtipo de javax.servlet.ServletRequest</td>
+    <td width="34%">Qualquer componente Web tratando do pedido</td>
+  </tr>
+  <tr>
+    <td width="23%">Página</td>
+    <td width="43%">javax.servlet.jsp.PageContext</td>
+    <td width="34%">A página JSP que cria o objeto<br>
+    (Veja outro capítulo sobre JSP)</td>
+  </tr>
+</table>
+
+<ul>
+  <li>Portanto, no nosso caso, queremos armazenar nosso objeto único techSupDB no <font
+    color="#0080FF">ServletContext</font> para que seja compartilhado por todos os servlets da
+    aplicação</li>
+  <li>Temos três questões:<ul>
+      <li>Onde colocar o &quot;new TechSupDB()&quot; que será o objeto compartilhado entre os
+        servlets?</li>
+      <li>Como armazenar o objeto compartilhado no ServletContext?</li>
+      <li>Como acessar o objeto compartilhado uma vez que ele está no ServletContext?</li>
+    </ul>
+  </li>
+  <li>Primeira pergunta: onde criar o objeto compartilhado?<ul>
+      <li>Temos que fazer com que o Container chame algum código nosso que poderá fazer o
+        &quot;new TechSupDB()&quot;</li>
+      <li>Fazemos isso através do design pattern Observer</li>
+      <li>Em vários momentos &quot;interessantes&quot;, o Web Container gera um evento e o envia
+        para os interessados cadastrados junto a ele</li>
+      <li>No nosso caso, os dois eventos que importam são:<ul>
+          <li>contextInitialized (a aplicação está iniciando)</li>
+          <li>contextDestroyed (a aplicação está terminando)</li>
+        </ul>
+      </li>
+      <li>Usaremos o evento contextInitialized para criar um objeto TechSupDB e colocá-lo no
+        contexto da aplicação<ul>
+          <li>Este objeto abre uma conexão para o BD</li>
+        </ul>
+      </li>
+      <li>Usaremos contextDestroyed para fechar a conexão ao BD</li>
+    </ul>
+  </li>
+  <li>A classe ContextListener faz o trabalho:<ul>
+      <li>A instanciação dessa classe e seu cadastro junto ao Container serão feitos durante a
+        composição da aplicação</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">import javax.servlet.*;
+
+public final class ContextListener
+  implements ServletContextListener {
+  private ServletContext context = null;
+
+  public void contextInitialized(ServletContextEvent event) {
+    context = event.getServletContext();
+   
+    try {
+      context.setAttribute(&quot;techSupDB&quot;, new TechSupDB());
+    } catch (Exception ex) {
+      context.log(&quot;Nao pode criar o objeto de base de dados de pedidos: &quot; + ex.getMessage());
+    }
+  }
+    
+  public void contextDestroyed(ServletContextEvent event) {
+    context = event.getServletContext();
+    TechSupDB techSupDB = (TechSupDB)context.getAttribute(&quot;techSupDB&quot;);
+    techSupDB.remove();
+    context.removeAttribute(&quot;techSupDB&quot;);
+  }
+}</pre>
+
+<ul>
+  <li>Estamos também vendo no código acima a resposta à segunda pergunta: Como armazenar o
+    objeto compartilhado no ServletContext?</li>
+</ul>
+
+<pre class="clsCode">    context.setAttribute(&quot;techSupDB&quot;, new TechSupDB());</pre>
+
+<ul>
+  <li>Como se pode ver, um nome é associado ao objeto para poder recuperá-lo depois</li>
+  <li>A recuperação do objeto é feita assim, em cada servlet:</li>
+</ul>
+
+<pre class="clsCode">public class TechSupServlet extends HttpServlet {
+  private TechSupDB techSupDB;
+
+  public void init() throws ServletException {
+    techSupDB = (TechSupDB)getServletContext().getAttribute(&quot;techSupDB&quot;);
+    if(techSupDB == null) {
+      throw new UnavailableException(&quot;Nao pode obter o banco de dados.&quot;);
+    }
+  }
+  // ...</pre>
+
+<h2>A Solução</h2>
+
+<h3>A classe TechSupDB</h3>
+
+<ul>
+  <li>Já vimos a parte de acesso ao Banco de Dados com a classe TechSupDB<ul>
+      <li>Isolamos nesta classe todo o acesso ao banco de dados</li>
+      <li>O resto do código usa os seguintes métodos:<ul>
+          <li>Collection <font color="#0080FF">getTechSupRequests</font>()</li>
+          <li>RequestDetails <font color="#0080FF">getRequestDetails</font>(int requestId)</li>
+          <li>int <font color="#0080FF">addRequest</font>(String nome, ..., String problema)<ul>
+              <li>Retorna o requestId</li>
+            </ul>
+          </li>
+          <li>void <font color="#0080FF">remove</font>()</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Todo o código da classe já foi visto acima</li>
+</ul>
+
+<h3>A classe RequestDetails</h3>
+
+<ul>
+  <li>Essa classe não possui responsabilidades e existe apenas para conter dados</li>
+  <li>O método compareTo é necessário para estabelecer a ordem desejada devido à chamada
+    seguinte em TechSupDB.getTechSupRequests():</li>
+</ul>
+
+<pre class="clsCode">    Collections.sort(techSupRequests);</pre>
+
+<h3>O ContextListener</h3>
+
+<ul>
+  <li>Já vimos o ContextListener acima</li>
+</ul>
+
+<h3>techsup.html</h3>
+
+<ul>
+  <li>Esta é a &quot;Welcome page&quot; da aplicação: a primeira página exibida</li>
+  <li>Seu conteúdo segue<ul>
+      <li>Observe os alias que usaremos para os servlets (/cadastra, /lista)</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">&lt;html&gt;
+
+&lt;head&gt;
+&lt;title&gt;UFPb - Help Desk&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+
+&lt;h1&gt;Pedido de Suporte Técnico - Help Desk da UFPb&lt;/h1&gt;
+
+&lt;hr&gt;
+
+&lt;p align=&quot;center&quot;&gt;&lt;br&gt;
+&lt;/p&gt;
+
+&lt;form ACTION=&quot;<font
+color="#0080FF">/techsup/cadastra</font>&quot; METHOD=&quot;POST&quot;&gt;
+  &lt;table ALIGN=&quot;center&quot; WIDTH=&quot;100%&quot; CELLSPACING=&quot;2&quot; CELLPADDING=&quot;2&quot;&gt;
+    &lt;tr&gt;
+      &lt;td ALIGN=&quot;right&quot;&gt;Nome:&lt;/td&gt;
+      &lt;td&gt;&lt;input TYPE=&quot;Text&quot; NAME=&quot;nome&quot; ALIGN=&quot;LEFT&quot; SIZE=&quot;15&quot;&gt;&lt;/td&gt;
+      &lt;td ALIGN=&quot;right&quot;&gt;Sobrenome:&lt;/td&gt;
+      &lt;td&gt;&lt;input TYPE=&quot;Text&quot; NAME=&quot;sobrenome&quot; ALIGN=&quot;LEFT&quot; SIZE=&quot;15&quot;&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td ALIGN=&quot;right&quot;&gt;Email:&lt;/td&gt;
+      &lt;td&gt;&lt;input TYPE=&quot;Text&quot; NAME=&quot;email&quot; ALIGN=&quot;LEFT&quot; SIZE=&quot;25&quot;&gt;&lt;/td&gt;
+      &lt;td ALIGN=&quot;right&quot;&gt;Fone:&lt;/td&gt;
+      &lt;td&gt;&lt;input TYPE=&quot;Text&quot; NAME=&quot;fone&quot; ALIGN=&quot;LEFT&quot; SIZE=&quot;15&quot;&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td ALIGN=&quot;right&quot;&gt;Software:&lt;/td&gt;
+      &lt;td&gt;&lt;select NAME=&quot;software&quot; SIZE=&quot;1&quot;&gt;
+        &lt;option VALUE=&quot;Word&quot;&gt;Microsoft Word&lt;/option&gt;
+        &lt;option VALUE=&quot;Excel&quot;&gt;Microsoft Excel&lt;/option&gt;
+        &lt;option VALUE=&quot;Access&quot;&gt;Microsoft Access&lt;/option&gt;
+      &lt;/select&gt; &lt;/td&gt;
+      &lt;td ALIGN=&quot;right&quot;&gt;Sistema Operacional:&lt;/td&gt;
+      &lt;td&gt;&lt;select NAME=&quot;so&quot; size=&quot;1&quot;&gt;
+        &lt;option VALUE=&quot;95&quot;&gt;Windows 95&lt;/option&gt;
+        &lt;option VALUE=&quot;98&quot;&gt;Windows 98&lt;/option&gt;
+        &lt;option VALUE=&quot;NT&quot;&gt;Windows NT&lt;/option&gt;
+        &lt;option VALUE=&quot;2000&quot;&gt;Windows 2000&lt;/option&gt;
+      &lt;/select&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/table&gt;
+  &lt;p&gt;&lt;br&gt;
+  Descrição do Problema&lt;br&gt;
+  &lt;textarea NAME=&quot;problema&quot; COLS=&quot;50&quot; ROWS=&quot;4&quot;&gt;&lt;/textarea&gt; &lt;/p&gt;
+  &lt;hr&gt;
+  &lt;p&gt;&lt;br&gt;
+  &lt;input TYPE=&quot;submit&quot; NAME=&quot;submit&quot; VALUE=&quot;Submeter Pedido&quot;&gt; &lt;/p&gt;
+&lt;/form&gt;
+
+&lt;p&gt;&lt;a href=&quot;<font
+color="#0080FF">/techsup/lista</font>&quot;&gt;Listar pedidos de suporte existentes&lt;/a&gt;&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+
+<h3>TechSupServlet</h3>
+
+<ul>
+  <li>Este é o servlet de cadastro</li>
+</ul>
+
+<pre class="clsCode">// Import Servlet packages
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+// Import other Java packages
+import java.io.*;
+import java.sql.*;
+
+public class TechSupServlet extends HttpServlet {
+  private TechSupDB techSupDB;
+
+  public void init() throws ServletException {
+    techSupDB =
+            (TechSupDB)getServletContext().getAttribute(&quot;techSupDB&quot;);
+    if(techSupDB == null) {
+      throw new UnavailableException(&quot;Nao pode obter o banco de dados.&quot;);
+    }
+  }
+
+  public void destroy() {
+    techSupDB.remove();
+    techSupDB = null;
+  }
+
+  protected void doPost(HttpServletRequest req, HttpServletResponse res) 
+          throws ServletException, IOException {
+    String nome = req.getParameter(&quot;nome&quot;);
+    String sobrenome = req.getParameter(&quot;sobrenome&quot;);
+    String email = req.getParameter(&quot;email&quot;);
+    String fone = req.getParameter(&quot;fone&quot;);
+    String software = req.getParameter(&quot;software&quot;);
+    String so = req.getParameter(&quot;so&quot;);
+    String problema = req.getParameter(&quot;problema&quot;);
+    // deveria verificar os parametros para ter certeza que não são nulos
+    int requestId = 0;
+    try {
+      requestId = techSupDB.addRequest(nome, sobrenome, email, fone,
+                             software, so, problema);
+    } catch (RequestNotInsertedException e) {
+      throw new ServletException(&quot;Erro no banco de dados: &quot;, e);
+    } 
+
+    // Prepara resposta
+    PrintWriter out = res.getWriter();
+
+    res.setContentType(&quot;text/html&quot;);
+
+    out.println(&quot;&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;&quot;);
+    out.println(&quot;Suporte Técnico: Confirmação de Pedido&quot;);
+    out.println(&quot;&lt;/TITLE&gt;&lt;/HEAD&gt;&quot;);
+    out.println(&quot;&lt;BODY&gt;&quot;);
+    out.println(&quot;&lt;H1&gt;Suporte Técnico: Confirmação de Pedido&lt;/H1&gt;&quot;);
+    out.println(&quot;&lt;P&gt;Obrigado por seu pedido. Recebemos seu pedido e ele recebeu o número de identificação seguinte.&lt;/P&gt;&quot;);
+    out.println(&quot;&lt;P&gt;Identificação do Pedido: &quot; + requestId + &quot;&lt;/P&gt;&quot;);
+    out.println(&quot;&lt;P&gt;Favor anotar este número para referência futura.&lt;/P&gt;&quot;);
+    out.println(&quot;&lt;P&gt;Atenderemos seu pedido nos próximos 24 horas.&lt;/P&gt;&quot;);
+    out.println(&quot;&lt;P&gt;O administrador&lt;br&gt;Equipe de Suporte Técnico. &lt;/P&gt;&quot;);
+    out.println(&quot;&lt;/BODY&gt;&lt;/HTML&gt;&quot;);
+
+    out.close();
+  } 
+}</pre>
+
+<h3>TechSupListaServlet</h3>
+
+<ul>
+  <li>Este servlet obtém a coleção de pedidos e e a exibe em HTML</li>
+</ul>
+
+<pre class="clsCode">// Import Servlet packages
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+// Import other Java packages
+import java.io.*;
+import java.util.*;
+import java.sql.*;
+
+public class TechSupListaServlet extends HttpServlet {
+  private TechSupDB techSupDB;
+
+  public void init() throws ServletException {
+    techSupDB =
+            (TechSupDB)getServletContext().getAttribute(&quot;techSupDB&quot;);
+    if(techSupDB == null) {
+      throw new UnavailableException(&quot;Nao pode obter o banco de dados.&quot;);
+    }
+  }
+
+  public void destroy() {
+    techSupDB.remove();
+    techSupDB = null;
+  }
+
+  protected void doGet(HttpServletRequest req, HttpServletResponse res) 
+          throws ServletException, IOException {
+
+    Iterator it = null;
+    try {
+      Collection requests = techSupDB.getTechSupRequests();
+      it = requests.iterator();
+    } catch(RequestsNotFoundException e ) {
+      throw new ServletException(&quot;Erro no banco de dados: &quot;, e);
+    }
+    PrintWriter out = res.getWriter();
+    res.setContentType(&quot;text/html&quot;);
+    out.println(&quot;&lt;HTML&gt;&lt;HEAD&gt;&quot;);
+    out.println(&quot;&lt;LINK REL=\&quot;stylesheet\&quot; TYPE=\&quot;text/css\&quot; HREF=\&quot;style.css\&quot;/&gt;&quot;);
+    out.println(&quot;&lt;TITLE&gt;&quot;);
+    out.println(&quot;Suporte Técnico: Lista de Pedidos&quot;);
+    out.println(&quot;&lt;/TITLE&gt;&quot;);
+    out.println(&quot;&lt;/HEAD&gt;&quot;);
+    out.println(&quot;&lt;BODY&gt;&quot;);
+    out.println(&quot;&lt;H1&gt;Suporte Técnico: Lista de Pedidos&lt;/H1&gt;&quot;);
+    out.println(&quot;&lt;TABLE CLASS=\&quot;clsIndex\&quot;&gt;&quot;);
+    out.println(&quot;&lt;TR&gt;&quot;);
+    out.println(&quot;&lt;TD CLASS=\&quot;clsBigNav\&quot;&gt;&quot;);
+    out.println(&quot;Identificação de pedido&quot;);
+    out.println(&quot;&lt;/TD&gt;&quot;);
+    out.println(&quot;&lt;TD CLASS=\&quot;clsBigNav\&quot;&gt;&quot;);
+    out.println(&quot;Sobrenome&quot;);
+    out.println(&quot;&lt;/TD&gt;&quot;);
+    out.println(&quot;&lt;TD CLASS=\&quot;clsBigNav\&quot;&gt;&quot;);
+    out.println(&quot;Software&quot;);
+    out.println(&quot;&lt;/TD&gt;&quot;);
+    out.println(&quot;&lt;/TR&gt;&quot;);
+    while(it.hasNext()) {
+      RequestDetails rd = (RequestDetails)it.next();
+      out.println(&quot;&lt;TR&gt;&quot;);
+      out.println(&quot;&lt;TD CLASS=\&quot;clsTitle\&quot;&gt;&quot;);
+      out.println(&quot;&lt;a href=\&quot;/techsup/detalha?requestId=&quot; + rd.getRequestId() + &quot;\&quot;&gt;&quot;);
+      out.println(rd.getRequestId());
+      out.println(&quot;&lt;/A&gt;&quot;);
+      out.println(&quot;&lt;/TD&gt;&quot;);
+      out.println(&quot;&lt;TD CLASS=\&quot;clsTitle\&quot;&gt;&quot;);
+      out.println(rd.getSobrenome());
+      out.println(&quot;&lt;/TD&gt;&quot;);
+      out.println(&quot;&lt;TD CLASS=\&quot;clsTitle\&quot;&gt;&quot;);
+      out.println(rd.getSoftware());
+      out.println(&quot;&lt;/TD&gt;&quot;);
+      out.println(&quot;&lt;/TR&gt;&quot;);
+    }
+    out.close();
+  } 
+}</pre>
+
+<h3>TechSupDetalhaServlet</h3>
+
+<ul>
+  <li>Este servlet dá detalhes de um pedido</li>
+  <li>É muito simples, como os outros servlets, já que camada de acesso aos dados está
+    isolada em TechSupDB</li>
+</ul>
+
+<pre class="clsCode">// Import Servlet packages
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+// Import other Java packages
+import java.io.*;
+import java.util.*;
+import java.sql.*;
+
+public class TechSupDetalhaServlet extends HttpServlet {
+  private TechSupDB techSupDB;
+
+  public void init() throws ServletException {
+    techSupDB =
+            (TechSupDB)getServletContext().getAttribute(&quot;techSupDB&quot;);
+    if(techSupDB == null) {
+      throw new UnavailableException(&quot;Nao pode obter o banco de dados.&quot;);
+    }
+  }
+
+  public void destroy() {
+    techSupDB.remove();
+    techSupDB = null;
+  }
+
+  protected void doGet(HttpServletRequest req, HttpServletResponse res) 
+          throws ServletException, IOException {
+
+    int requestId = Integer.parseInt(req.getParameter(&quot;requestId&quot;));
+    RequestDetails rd = null;
+    try {
+      rd = techSupDB.getRequestDetails(requestId);
+    } catch(RequestNotFoundException e) {
+      throw new ServletException(&quot;Erro no banco de dados: &quot;, e);
+    }
+
+    PrintWriter out = res.getWriter();
+    res.setContentType(&quot;text/html&quot;);
+    out.println(&quot;&lt;HTML&gt;&lt;HEAD&gt;&quot;);
+    out.println(&quot;&lt;LINK REL=\&quot;stylesheet\&quot; TYPE=\&quot;text/css\&quot; HREF=\&quot;style.css\&quot;/&gt;&quot;);
+    out.println(&quot;&lt;TITLE&gt;&quot;);
+    out.println(&quot;Suporte Técnico: Detalhe de Pedido&quot;);
+    out.println(&quot;&lt;/TITLE&gt;&quot;);
+    out.println(&quot;&lt;/HEAD&gt;&quot;);
+    out.println(&quot;&lt;BODY&gt;&quot;);
+    out.println(&quot;&lt;H1&gt;Suporte Técnico: Detalhe de Pedido&lt;/H1&gt;&quot;);
+    out.println(&quot;&lt;H2&gt;Identificação de Pedido: &quot; + rd.getRequestId() + &quot;&lt;/H2&gt;&quot;);
+    out.println(&quot;&lt;UL&gt;&quot;);
+    out.println(&quot;&lt;LI&gt;Nome: &quot; + rd.getNome() + &quot;&lt;/LI&gt;&quot;);
+    out.println(&quot;&lt;LI&gt;Sobrenome: &quot; + rd.getSobrenome() + &quot;&lt;/LI&gt;&quot;);
+    out.println(&quot;&lt;LI&gt;Email: &quot; + rd.getEmail() + &quot;&lt;/LI&gt;&quot;);
+    out.println(&quot;&lt;LI&gt;Fone: &quot; + rd.getFone() + &quot;&lt;/LI&gt;&quot;);
+    out.println(&quot;&lt;LI&gt;Software: &quot; + rd.getSoftware() + &quot;&lt;/LI&gt;&quot;);
+    out.println(&quot;&lt;LI&gt;SO: &quot; + rd.getSo() + &quot;&lt;/LI&gt;&quot;);
+    out.println(&quot;&lt;LI&gt;Problema: &quot; + rd.getProblema() + &quot;&lt;/LI&gt;&quot;);
+    out.println(&quot;&lt;/UL&gt;&quot;);
+    out.close();
+  } 
+}</pre>
+
+<h2>A Composição da Aplicação</h2>
+
+<ul>
+  <li>Imagine que esteja usando a máquina do desenvolvedor da aplicação<ul>
+      <li>Lembre que não estamos no servidor J2EE</li>
+      <li>Tampouco estamos usando uma máquina dos clientes que eventualmente comprarão a
+        aplicação</li>
+      <li><font color="#0080FF">Esta é a máquina onde o programador compõe a aplicação</font></li>
+    </ul>
+  </li>
+  <li>Vamos compilar tudo:</li>
+</ul>
+
+<pre class="clsCode">C:\...\src&gt;ant techsup
+Buildfile: build.xml
+
+init:
+
+techsup:
+    [mkdir] Created dir: C:\...\build\techsup
+     [copy] Copying 2 files to C:\...\build\techsup
+    [javac] Compiling 10 source files to C:\...\build\techsup
+
+BUILD SUCCESSFUL
+
+Total time: 5 seconds</pre>
+
+<ul>
+  <li>Agora, vamos compor a aplicação usando o deploytool<ul>
+      <li>Criar nova aplicação TechSupApp no diretório src/techsup</li>
+      <li>Criar um novo Web component TechSupAppWAR com conteúdo<ul>
+          <li>Todos os arquivos .class de build/techsup e techsup.html e style.css</li>
+          <li>Tipo Servlet, com classe de servlet TechSupServlet, alias /cadastra</li>
+        </ul>
+      </li>
+      <li>Adicionar a TechSupAppWAR um novo servlet com classe de servlet TechSupListaServlet,
+        alias /lista</li>
+      <li>Adicionar a TechSupAppWAR um novo servlet com classe de servlet TechSupDetalhaServlet,
+        alias /detalha</li>
+      <li>Na orelha &quot;Event Listeners&quot;, adicione ContextListener</li>
+      <li>Na orelha &quot;File Refs&quot;, adicione &quot;techsup.html&quot; como Welcome File</li>
+      <li>Salve para criar o arquivo TechSupApp.ear (a aplicação)</li>
+      <li>Envie o arquivo TechSupApp.ear para seu cliente final (junto com a fatura ...)</li>
+      <li>Na realidade, para testar, o desenvolvedor da aplicação também faria um deployment,
+        é claro</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>O Deployment da Aplicação</h2>
+
+<ul>
+  <li>Estamos agora nas dependências do cliente final</li>
+  <li>Use deploytool para terminar de ajustar o Deployment Descriptor<ul>
+      <li>Já fizemos um pouco de deployment antes ao acertar o nome dos aliases dos servlets<ul>
+          <li>Esses nomes poderiam ser alterados agora durante o deployment</li>
+        </ul>
+      </li>
+      <li>Adiciona referência de recurso para o banco de dados Cloudscape<ul>
+          <li>Selecione TechSupAppWAR</li>
+          <li>Selecione a orelha &quot;Resource Ref&quot;</li>
+          <li>Clique em &quot;Add&quot;</li>
+          <li>Selecione &quot;javax.sql.DataSource&quot; na coluna Type</li>
+          <li>Insira &quot;jdbc/TechSupDB&quot; no campo &quot;Coded Name&quot;</li>
+          <li>Insira &quot;jdbc/TechSupDB&quot; no campo &quot;JNDI Name&quot;<ul>
+              <li>Não é obrigado a ser o mesmo nome do Coded Name</li>
+              <li>Adiante, veremos como fazer com que o servidor J2EE cadastre a URL associada ao JNDI
+                Name junto ao JNDI (usando o comando j2eeadmin)</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>Em TechSupApp, defina um &quot;Context root&quot; com valor &quot;/techsup&quot;</li>
+      <li>Salve para criar o arquivo TechSupApp.ear</li>
+    </ul>
+  </li>
+  <li>Agora, precisamos preparar o servidor de banco de dados, o servidor J2EE e depois fazer
+    o deployment da aplicação</li>
+</ul>
+
+<h3>No servidor de banco de dados</h3>
+
+<ul>
+  <li>Criação do banco de dados<ul>
+      <li>cloudscape -start</li>
+      <li>ant create-techsup-db</li>
+    </ul>
+  </li>
+  <li>Os comandos SQL executados para criar o banco de dados estão em createdb.sql:</li>
+</ul>
+
+<pre class="clsCode">DROP TABLE SUPP_REQUESTS;
+CREATE TABLE SUPP_REQUESTS(
+  REQUEST_ID INTEGER PRIMARY KEY,
+  NOME       VARCHAR(40),
+  SOBRENOME  VARCHAR(40),
+  EMAIL      VARCHAR(40),
+  FONE       VARCHAR(40),
+  SOFTWARE   VARCHAR(40),
+  SO         VARCHAR(40),
+  PROBLEMA   VARCHAR(256)
+);
+
+DROP TABLE SEQ_NO;
+CREATE TABLE SEQ_NO(
+  PROX_NUM   INTEGER
+);
+
+INSERT INTO SEQ_NO VALUES(0);</pre>
+
+<h3>No servidor J2EE</h3>
+
+<ul>
+  <li>Configurar o servidor J2EE para que saiba sobre o nome JNDI <small>jdbc/TechSupDB</small><ul>
+      <li>Ao entrar no ar, o servidor J2EE fará o bind de <small>jdbc/TechSupDB com a URL
+        indicada</small></li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">j2ee -stop
+j2eeadmin -addJdbcDatasource jdbc/TechSupDB jdbc:cloudscape:rmi:TechSupDB;create=true</pre>
+
+<ul>
+  <li>Na segunda linha, a sintaxe é:</li>
+</ul>
+
+<pre class="clsCode">j2eeadmin -addJdbcDatasource &lt;nome JNDI&gt; &lt;URL&gt;</pre>
+
+<ul>
+  <li>Agora, o servidor J2EE pode entrar no ar:</li>
+</ul>
+
+<pre class="clsCode">j2ee -verbose</pre>
+
+<ul>
+  <li>Uma das linhas impressas durante a inicialização será:</li>
+</ul>
+
+<pre class="clsCode">Binding DataSource, name = jdbc/TechSupDB, url = jdbc:cloudscape:rmi:TechSupDB;create=true</pre>
+
+<ul>
+  <li>É neste momento que o servidor J2EE contacta o serviço JNDI<ul>
+      <li>O servidor de nomes sendo usado para fornecer o que está por trás do JNDI é o
+        &quot;RMI JDBCServer&quot;, no caso do servidor grátis que vem com o J2EE SDK</li>
+    </ul>
+  </li>
+  <li>Outros produtos podem usar outros serviços de nomes (NDS, Active Directory, ...)</li>
+</ul>
+
+<h3>Na máquina de deployment</h3>
+
+<ul>
+  <li>Agora passamos para a máquina do cliente final a partir da qual o deployment está
+    sendo feito<ul>
+      <li>Essa máquina não precisa ser o servidor mas pode ser</li>
+      <li>O deployment pode ser remoto</li>
+    </ul>
+  </li>
+  <li>Use o deploytool e escolha Tools/Deploy<ul>
+      <li>Faça deploy de TechSupApp.ear no servidor desejado</li>
+    </ul>
+  </li>
+  <li>Execute a aplicação:<ul>
+      <li><a href="http://anjinho.dsc.ufpb.br:8000/techsup">http://anjinho.dsc.ufpb.br:8000/techsup</a></li>
+    </ul>
+  </li>
+  <li>Experimente em casa causando erros nos servlets
+    <ul>
+      <li>Por exemplo, desconecte o banco de dados
+        <ul>
+          <li>Comando: &quot;cloudscape -stop&quot;</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Conclusão</h2>
+
+<ul>
+  <li>Observe que os seguintes passos podem ser feitos em máquinas diferentes com sistemas
+    operacionais diferentes (Windows, Linux, ...)<ul>
+      <li>Compilação</li>
+      <li>Composição da aplicação com deploytool (criar o arquivo .ear)</li>
+      <li>Deployment da aplicação com deploytool</li>
+      <li>Execução no Servidor</li>
+    </ul>
+  </li>
+  <li>Também, observe que o banco de dados poderia executar numa máquina diferente do
+    servidor<ul>
+      <li>Bastaria mudar o Deployment Descriptor para que isso ocorresse, sem necessidade de
+        recompilação</li>
+    </ul>
+  </li>
+</ul>
+
+<p class="botref">techsupport <a href="../j2ee-2.htm">programa</a> </p>
+</body>
+</html>

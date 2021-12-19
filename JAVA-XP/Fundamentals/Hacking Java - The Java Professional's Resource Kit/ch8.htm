@@ -1,0 +1,1071 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 8 -- Reading and Writing Files from an Applet</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;8</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Reading and Writing Files from
+an Applet</FONT></H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#AppletsandFiles">
+Applets and Files</A>
+<LI><A HREF="#UsingtheJFSFilesystemforApplets">
+Using the JFS Filesystem for Applets</A>
+<UL>
+<LI><A HREF="#PrintingFilesUsingJFS">
+Printing Files Using JFS</A>
+<LI><A HREF="#AccessingOtherWebServersfromJFS">
+Accessing Other Web Servers from JFS</A>
+</UL>
+<LI><A HREF="#SavingFilesUsingHTTPPost">
+Saving Files Using HTTP Post</A>
+<LI><A HREF="#StoringandRetrievingFileswithFTP">
+Storing and Retrieving Files with FTP</A>
+<UL>
+<LI><A HREF="#SendingFTPCommands">
+Sending FTP Commands</A>
+<LI><A HREF="#EstablishinganFTPSession">
+Establishing an FTP Session</A>
+<LI><A HREF="#SendingSimpleFTPCommands">
+Sending Simple FTP Commands</A>
+<LI><A HREF="#EstablishingaDataConnection">
+Establishing a Data Connection</A>
+</UL>
+</UL>
+<HR>
+<H2><A NAME="AppletsandFiles"><FONT SIZE=5 COLOR=#FF0000>
+Applets and Files</FONT></A></H2>
+<P>
+Because of security restrictions, an applet may not read or write
+files on the local system. This is to protect you from a malicious
+applet storing a virus on your computer or deleting all your files.
+Even if you could only read files on the local system, someone
+could snoop around on your computer and retrieve private information.
+<P>
+Before you start exploring the various methods of storing files
+from an applet, ask yourself first whether you want your applet
+manipulating files directly. If you are designing a system where
+you have an applet presenting the user interface for an application
+running on a server, you should consider doing all the file access
+from the application. The more code you put on the applet, the
+longer it takes for it to start up. Even if you have designed
+your application this way, you may still have reasons to directly
+read and write files from the applet. For example, you might want
+to save configuration information for the user interface (colors,
+fonts). It wouldn't make sense to make this part of the main application,
+because separating the user interface from the application also
+means separating the application from the user interface. In other
+words, the application shouldn't know anything about the user
+interface, except how it interacts with the applet.
+<H2><A NAME="UsingtheJFSFilesystemforApplets"><FONT SIZE=5 COLOR=#FF0000>
+Using the JFS Filesystem for Applets</FONT></A></H2>
+<P>
+The JFS filesystem, by Jamie Cameron, is one of the most useful
+sets of Java classes to come along. It provides NFS-like file
+and print services for applets. You can get this wonderful product
+on the Internet at <B>http://www.ncs.com.sg/java/jfs</B>.
+<P>
+JFS solves a number of pesky problems for applets. It provides
+a way to read and write files, create and delete files and directories,
+print files, and open URLs and socket connections to hosts other
+than the ones the applets came from. JFS isn't some sort of cheap
+hack around Java's security model; it is a full-featured server
+system. This means, of course, that you have to run the JFS server,
+which is written in Java, to use JFS.
+<P>
+The <TT>JFSclient</TT> class is the
+applet's interface to the JFS server. You create an instance of
+<TT>JFSclient</TT> by passing the
+host name of the JFS server to the constructor. If you are doing
+this from an applet, the host must be the host that the applet
+was loaded from, which means your Web server has to run JFS.
+<P>
+Once you create a <TT>JFSclient</TT>,
+you must send a user name and password to the JFS server. JFS
+has its own set of user names and passwords; these are not the
+operating system's user names. This is quite important because
+the applet must contain the user name and password in order to
+perform the logon. Anyone with evil intentions and a little patience
+can find out the user name and password that the applet sends.
+If these were logon IDs for your Web server, it would be simple
+for someone to log on to your Web server and wreak all kinds of
+havoc. If you forget to send the authentication information, the
+other methods in the <TT>JFSclient</TT>
+will simply hang, which may not be quite the result you were looking
+for.
+<P>
+Listing 8.1 shows a very simple example that retrieves a file
+stored in the JFS file system.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 8.1&nbsp;&nbsp;Source Code for JFSGet.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+
+// This program demonstrates the use of the JFSclient
+// class to fetch a file.
+
+public class JFSGet extends Object
+{
+     public static void main(String args[])
+     {
+          try {
+
+// Create a JFS client to host 192.0.0.3
+               JFSclient jfs = new JFSclient(&quot;192.0.0.3&quot;);
+          
+// Log on as root, with no password
+               jfs.auth(&quot;root&quot;, &quot;&quot;);
+
+// Fetch the file called &quot;volcano&quot;
+               byte[] volcfile = jfs.get(&quot;/home/root/volcano&quot;, 0);
+
+// Dump it to the screen
+               for (int i=0; i &lt; volcfile.length; i++) {
+                    System.out.print((char)volcfile[i]);
+               }
+               System.out.println();
+
+          } catch (Exception e) {
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The JFSGet program is very straightforward. It creates a <TT>JFSclient</TT>
+object that is connected to a JFS server whose IP address is <B>192.0.0.3</B>,
+then it authenticates itself using the name <TT>root</TT>
+with no password. Next, it uses the <TT>get</TT>
+method to retrieve a file as an array of bytes. Finally, it loops
+through the array of bytes and prints them to the <TT>System.out</TT>.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+This example does not use an authentication password. In practice, you should always use a password in JFS authentication. Otherwise, you may open your system up to possible corruption from other people on the Internet.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="PrintingFilesUsingJFS">
+Printing Files Using JFS</A></H3>
+<P>
+Under most of the current browser implementations, you may not
+print Java applets within a Web page. You will usually find an
+unfortunate blank space on your printout where the applet should
+be. There aren't even any methods or classes within Java to perform
+printing functions. While JFS can't quite deal with rendering
+the output from your applet on a printer, it does allow you to
+send text data to a printer. If you have a PostScript printer,
+you could sent PostScript codes to the printer and get graphical
+output. Printer access in JFS is done through a special device
+called &quot;/dev/Printer.&quot; This one device file represents
+all the printers on your system. You choose the printer when you
+send a message to this device. Unlike UNIX, in which you use the
+same functions to write to devices or files, JFS uses special
+methods named <TT>devput</TT> and
+<TT>devget</TT> to communicate with
+the special devices. When you want to send data to a printer,
+you can pass the printer name to the device driver using the <TT>devput</TT>
+method. The following code fragment sends an array of bytes to
+a printer named myprinter:
+<BLOCKQUOTE>
+<PRE>
+JFSclient myClient = new JFSClient(getDocumentBase().getHost());
+byte databytes[] =  (some way of getting data bytes)
+Message deviceInfo = new Message();
+deviceInfo.add(&quot;Printer&quot;, &quot;myprinter&quot;);
+myClient.devput(&quot;/dev/Printer&quot;, databytes, deviceInfo);
+</PRE>
+</BLOCKQUOTE>
+<P>
+The printers are defined in a file called /etc/printers within
+the JFS filesystem. If you are running UNIX, you don't need to
+be concerned about all these /dev and /etc files. JFS maintains
+its own filesystem structure, the root of which can be in any
+directory on the system. What JFS calls /etc/printers may really
+be /home/mark/jfs/root/etc/printers. The /etc/printers file contains
+multiple lines that each contain four fields separated by colons:
+<BLOCKQUOTE>
+<PRE>
+printer name:printer type:printer description:print command
+</PRE>
+</BLOCKQUOTE>
+<P>
+The default /etc/printers that comes with JFS contains the single
+line:
+<BLOCKQUOTE>
+<PRE>
+default:Postscript:The Default Printer:lpr
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="AccessingOtherWebServersfromJFS">
+Accessing Other Web Servers from JFS</A></H3>
+<P>
+One of the other problems that JFS solves for applets is the nasty
+restriction of not being able to access any other servers other
+than the one the applet came from. The /dev/Web device in JFS
+is a URL redirection device that enables you to retrieve data
+from any URL on the Net. Use the <TT>devget</TT>
+method to tell the /dev/Web device where to get the data from:
+<BLOCKQUOTE>
+<PRE>
+JFSclient myClient = new JFSClient(getDocumentBase().getHost());
+Message deviceInfo = new Message();
+deviceInfo.add(&quot;URL&quot;, &quot;http://www.mcp.com&quot;);
+Message response = myClient.devget(&quot;/dev/Web&quot;, deviceInfo);
+byte[] responseData = response.getdata();
+</PRE>
+</BLOCKQUOTE>
+<H2><A NAME="SavingFilesUsingHTTPPost"><FONT SIZE=5 COLOR=#FF0000>
+Saving Files Using HTTP Post</FONT></A></H2>
+<P>
+If you don't want the overhead of JFS, you have some alternatives.
+You can take advantage of the existing classes that are able to
+post data to a Web server. Remember that when you post data to
+a Web server, you are essentially sending it a file. The only
+thing you have to do is create something to take the posted data
+and store it in a file. This turns out to be a trivial task under
+UNIX. The following shell script enables you to store data in
+a file:
+<BLOCKQUOTE>
+<PRE>
+#!/bin/sh
+echo &quot;Content-type: text/plain&quot;
+echo
+dd ibs=1 count=$CONTENT_LENGTH of=$QUERY_STRING 2&gt;/dev/null
+echo $?
+</PRE>
+</BLOCKQUOTE>
+<P>
+This script probably requires a bit of explanation. First of all,
+the filename that you are storing into is encoded in the URL and
+not in the posted data. If you were to call this script <TT>putfile</TT>
+and put it in the <TT>cgi-bin</TT>
+directory of your Web server, the following URL would try to post
+to a file called putme:
+<BLOCKQUOTE>
+<PRE>
+http://mywebhost/cgi-bin/putfile?putme
+</PRE>
+</BLOCKQUOTE>
+<P>
+The shell script kicks into action by first printing response
+data that is required by every CGI program, namely the &quot;Context-type&quot;
+information. Next, it prints a blank line, signifying the end
+of the header information. Now comes the key to this script-the
+<TT>dd</TT> command. This command
+is similar to the <TT>cat</TT> command,
+except that it has the ability to read and write a fixed number
+of records. The <TT>ibs=1</TT> option
+tells <TT>dd</TT> to use an input
+block size of 1 byte, meaning that the <TT>count</TT>
+option will tell how many bytes to read. Because the http server
+stores the number of bytes you posted in an environment variable
+called <TT>CONTENT_LENGTH</TT>, you
+use this variable as the <TT>count</TT>
+parameter for <TT>dd</TT>. Finally,
+the <TT>of</TT> parameter is the name
+of the output file you are writing to. Any error messages are
+sent to <TT>/dev/null</TT>, but the
+numeric exit code is printed as the final line of the response
+generated by the script. If the <TT>dd</TT>
+command is successful, the <TT>echo $?</TT>
+line will echo a 0.
+<P>
+Listing 8.2 shows a class that uses the <TT>POST</TT>
+command to send data to this script.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 8.2&nbsp;&nbsp;Source Code for PostPutFile.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.net.*;
+import java.io.*;
+
+// This class provides a static method to post a file to the
+// putfile script, which takes a filename as a parameter passed
+// in the POST request itself, and then receives the bytes as
+// the posted data.
+
+public class PostPutFile extends Object
+{
+// Put sends the named file to a specific URL. The URL should
+// contain the path name of the putfile script. This method
+// will append the ?filename to the script name.
+// It returns 0 if the put was successful, or a non-zero number
+// if it failed for some reason.
+
+    public static int put(URL url, String filename, byte[] bytes)
+    throws IOException, MalformedURLException
+    {
+// Run the putfile script and ask it to store the data in a file called &quot;putme&quot;
+
+        URL destURL = new URL(url.getProtocol(), url.getHost(),
+          url.getPort(), url.getFile()+&quot;?&quot;+filename);
+
+// Define the data that you want stored in the file.
+
+        URLConnection urlConn = destURL.openConnection();
+
+        urlConn.setDoOutput(true);    // we need to write
+        urlConn.setDoInput(true);    // just to be safe...
+        urlConn.setUseCaches(false);    // get info fresh from server
+
+// Tell the server what kind of data we are sending - in this case,
+// just a stream of bytes.
+
+        urlConn.setRequestProperty(&quot;Content-type&quot;,
+            &quot;application/octet-stream&quot;);
+
+// Must tell the server the size of the data we are sending. This also
+// tells the URLConnection class that we are doing a POST instead
+// of a GET.
+
+        urlConn.setRequestProperty(&quot;Content-length&quot;, &quot;&quot;+bytes.length);
+
+// Open an output stream so we can send the info we are posting
+
+        OutputStream outStream = urlConn.getOutputStream();
+
+// Write out the actual request data
+
+        outStream.write(bytes);
+
+        outStream.close();
+
+// Now that we have sent the data, open up an input stream and get
+// the response back from the server
+
+        DataInputStream inStream = new DataInputStream(
+            urlConn.getInputStream());
+
+        String line = inStream.readLine();
+
+        inStream.close();
+
+        try {
+            int result = Integer.valueOf(line).intValue();
+            return result;
+        } catch (Exception parseError) {
+            return -1;
+        }
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 8.3 shows a simple example applet that stores a file using
+the <TT>PostPutFile</TT> class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 8.3&nbsp;&nbsp;Source Code for TestPutFile.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.net.*;
+import java.applet.*;
+
+public class TestPutFile extends Applet
+{
+     public void init()
+     {
+          try {
+               URL destURL = new URL(getDocumentBase(),
+                    &quot;/cgi-bin/putfile&quot;);
+
+// Define a string we want to send
+
+               String dataToSend = &quot;This is a string that I want \n&quot;+
+                    &quot;to store in the file.\n&quot;;
+
+// The PostPutFile class wants a byte array, however, so we convert
+// the string to a byte array.
+
+               byte[] bytes = new byte[dataToSend.length()];
+
+               dataToSend.getBytes(0, dataToSend.length(), bytes, 0);
+
+               PostPutFile.put(destURL, &quot;/home/mark/putme&quot;, bytes);
+
+          } catch (Exception e) {
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The new version of HTTP (HTTP 1.1) includes a <TT>PUT</TT> command that allows you to store a file without creating a separate CGI program to save the file. Some HTTP servers already support this new option. If you have a server that supports <TT>PUT</TT> 
+
+and you want to save files from Java, you won't be able to use the <TT>URL</TT> class to send the file (until the <TT>URL</TT> class supports <TT>POST</TT>). You can, however, use the <TT>PostSockURL</TT> class from <A HREF="ch6.htm" >Chapter 6</A> 
+&quot;Communicating with a Web Server,&quot; with a little modification (change <TT>POST</TT> to <TT>PUT</TT> when it sends the HTTP command).
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="StoringandRetrievingFileswithFTP"><FONT SIZE=5 COLOR=#FF0000>
+Storing and Retrieving Files with FTP</FONT></A></H2>
+<P>
+As its name implies, the File Transfer Protocol is useful for
+sending files back and forth between an applet and a server. You
+just need to make sure that your server supports FTP. If you are
+running UNIX or Windows NT, it should come with the operating
+system. The FTP protocol is defined in Internet RFC 959.
+<P>
+The FTP protocol requires you to use two different connections
+between client and server. The control connection is used by the
+client to send commands to the server. The server sends responses
+over the control connection. Whenever the client or server needs
+to send a large block of data, a data connection must be established.
+Figure 8.1 illustrates the connections between a client and an
+FTP server.
+<P>
+<A HREF="f8-1.html"><B>Figure 8.1 : </B><I>A client uses two different connections
+to communicate with an FTP server</I>.</A>
+<H3><A NAME="SendingFTPCommands">
+Sending FTP Commands</A></H3>
+<P>
+The control connection used in FTP is an ASCII, line-oriented
+connection, similar to SMTP (Simple Mail Transfer Protocol). A
+client sends a command to the server as a line terminated by carriage.
+The response from the server is one or more ASCII lines containing
+a 3-digit return code and a text response. For example, when you
+send the <TT>USER</TT> command to
+tell the FTP server that you want to log in as <B>mark</B>, you
+send:
+<BLOCKQUOTE>
+<PRE>
+USER mark
+</PRE>
+</BLOCKQUOTE>
+<P>
+The FTP server would respond with a line like:
+<BLOCKQUOTE>
+<PRE>
+331 Password required for mark
+</PRE>
+</BLOCKQUOTE>
+<P>
+The response codes from FTP are grouped into five categories,
+based on the first digit in the response code:
+<UL>
+<LI><TT>1xx</TT> means that the command
+has been started successfully, and is in the process of running.
+You will get another response when the command completes. When
+the server starts transmitting a file it sends a <TT>1xx</TT>
+response, and then sends a <TT>2xx</TT>
+response when the file has been sent.
+<LI><TT>2xx</TT> indicates that the
+command has been completed successfully.
+<LI><TT>3xx</TT> is sent when the
+server accepts your command, but needs more information from you
+in order to proceed. This often occurs when you send a <TT>USER</TT>
+command and the system wants you to send a password.
+<LI><TT>4xx</TT> means that the command
+cannot be completed due to some temporary problem. If you send
+the same command again, it may be accepted.
+<LI><TT>5xx</TT> indicates that the
+command cannot be completed. If you try the same command again,
+it will be rejected again.
+</UL>
+<P>
+FTP responses can span more than one line. Whenever the server
+sends a multiline response, each line begins with the response
+code followed by a dash (-). The last line of the response does
+not contain a dash. All you have to do when reading responses
+is look for a dash as the fourth character. If there is a dash,
+you need to read another line. Listing 8.4 shows the <TT>doCommand</TT>
+and <TT>getResponse</TT> methods from
+the <TT>FTPSession</TT> class which
+are included on the CD for this book. These methods are responsible
+for sending commands and receiving responses. The <TT>getResponse</TT>
+method checks for a dash to see if the response is a multiline
+response. You could use these same methods for other Internet
+protocols that use this same request-response format, like SMTP.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The <TT>FTPSession</TT> class uses <TT>DataInputStream</TT> and <TT>DataOutputStream</TT> filters on top of the normal socket input and output streams. This allows <TT>FTPSession</TT> to send and receive whole lines of data rather than reading and writing 
+
+one character at a time.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 8.4&nbsp;&nbsp;doCommand and getResponse Methods from
+FTPSession.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// Send a command and wait for a response
+
+     public String doCommand(String commandString)
+     throws IOException
+     {
+          outStream.writeBytes(commandString+&quot;\n&quot;);
+          String response = getResponse();
+          return response;
+     }
+
+// Get a response back from the server. Handles multi-line responses
+// and returns them as part of the string.
+
+     public String getResponse()
+     throws IOException
+     {
+          String response = &quot;&quot;;
+
+          for (;;) {
+               String line = inStream.readLine();
+
+               if (line == null) {
+                    throw new IOException(
+                         &quot;Bad response from server.&quot;);
+               }
+
+// FTP response lines should at the very least have a 3-digit number
+
+               if (line.length() &lt; 3) {
+                    throw new IOException(
+                         &quot;Bad response from server.&quot;);
+               }
+               response += line + &quot;\n&quot;;
+
+// If there isn't a '-' immediately after the number, we've gotten the
+// complete response. ('-' is the continuation character for FTP responses)
+
+               if ((line.length() == 3) ||
+                    (line.charAt(3) != '-')) return response;
+          }
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If you already had a class that implemented the SMTP protocol, you might consider moving the methods for sending and receiving commands into a new superclass for the SMTP class. Then the FTP and SMTP classes would be subclasses of this new class. This kind 
+
+of situation occurs often in object-oriented programming. You discover that there are parts of a class that can be used by other classes, so you split out the reusable parts into a separate class. Obviously, it would have been better if you could have 
+anticipated that the parts would need to be reused, but you don't always realize these things ahead of time.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="EstablishinganFTPSession">
+Establishing an FTP Session</A></H3>
+<P>
+The first step in establishing an FTP session is creating the
+connection to the FTP server. FTP connections are normal TCP socket
+connections. The default FTP port is 21, but you should allow
+for other port numbers, since you may be running a special version
+of FTP for another reason.
+<P>
+Once you have established a connection, the FTP server will send
+you a response, which is really just a greeting from the server.
+It is very important that you be prepared to read this response
+once you have connected to the server. If you don't read the response
+and just go on and send a <TT>USER</TT>
+command to begin your login, you will be confused and think that
+the greeting is the response from the <TT>USER</TT>
+command, and you will probably remain confused for the rest of
+the session. The greeting usually looks something like this:
+<BLOCKQUOTE>
+<PRE>
+220 flamingo FTP server (Version wu-2.4(1) Wed May 10 21:00:32 CDT 1995) ready
+</PRE>
+</BLOCKQUOTE>
+<P>
+Once you connect to the server, you have to log on. At the minimum,
+you must send a <TT>USER</TT> command.
+This command is in the format:
+<BLOCKQUOTE>
+<PRE>
+USER <I>username</I>
+</PRE>
+</BLOCKQUOTE>
+<P>
+For example, for you to sign on as <B>mark</B>, you would use
+the command line:
+<BLOCKQUOTE>
+<PRE>
+USER mark
+</PRE>
+</BLOCKQUOTE>
+<P>
+Since most user names on an FTP server have a password (if they
+don't, there's a security risk), the server will most likely respond
+with a command like:
+<BLOCKQUOTE>
+<PRE>
+331 Password required for mark
+</PRE>
+</BLOCKQUOTE>
+<P>
+You would then be required to send a password with the <TT>PASS</TT>
+command:
+<BLOCKQUOTE>
+<PRE>
+PASS <I>password</I>
+</PRE>
+</BLOCKQUOTE>
+<P>
+If mark's password is <B>Shh!!!!!</B>, the appropriate <TT>PASS</TT>
+command is:
+<BLOCKQUOTE>
+<PRE>
+PASS Shh!!!!!
+</PRE>
+</BLOCKQUOTE>
+<P>
+The response to the <TT>PASS</TT>
+command is usually something like this:
+<BLOCKQUOTE>
+<PRE>
+230 User mark logged in.
+</PRE>
+</BLOCKQUOTE>
+<P>
+The FTP protocol allows for a third login parameter called the
+<TT>account</TT>, which is sent using
+the <TT>ACCT</TT> command. If you
+get a response with a response code of <TT>332</TT>
+(need <TT>account</TT> for login)
+after sending the <TT>PASS</TT> command,
+you need to send an <TT>ACCT</TT>
+command:
+<BLOCKQUOTE>
+<PRE>
+ACCT <I>account</I>
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>account</TT> parameter is
+rarely used on UNIX systems, and is not restricted to the login
+sequence. You could receive a <TT>332</TT>
+response code for any operation, meaning that you must supply
+an <TT>account</TT> parameter when
+performing that operation. For instance, your server may password-protect
+files, and could require you to send the password to a file with
+the <TT>ACCT</TT> command before you
+can retrieve the file.
+<H3><A NAME="SendingSimpleFTPCommands">
+Sending Simple FTP Commands</A></H3>
+<P>
+The FTP protocol supports many useful commands that allow you
+to perform most important file operations. Some of the simple
+FTP commands are shown in Table 8.1.<BR>
+<P>
+<CENTER><B>Table 8.1&nbsp;&nbsp;Some Common FTP Commands</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=229><I>Command</I></TD><TD WIDTH=361><I>Function</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=229><TT>CWD</TT> <I><FONT FACE="Times New Roman Italic">directory</FONT></I>
+</TD><TD WIDTH=361>Changes the working directory</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=229><TT>CDUP</TT></TD>
+<TD WIDTH=361>Changes directory to the parent of the current directory (like cd .. in UNIX or Windows)
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=229><TT>DELE</TT> <I><FONT FACE="Times New Roman Italic">filename</FONT></I>
+</TD><TD WIDTH=361>Deletes a file</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=229><TT>MKD</TT> <I><FONT FACE="Times New Roman Italic">directory</FONT></I>
+</TD><TD WIDTH=361>Creates a new directory</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=229><TT>RMD</TT> <I><FONT FACE="Times New Roman Italic">directory</FONT></I>
+</TD><TD WIDTH=361>Deletes a directory</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=229><TT>RNFR</TT> <I><FONT FACE="Times New Roman Italic">old-filename</FONT></I>
+</TD><TD WIDTH=361>Renames <I><FONT FACE="Times New Roman Italic">old-filename</FONT></I> (must be followed by <TT>RNTO</TT>, which gives the new name)
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=229><TT>RNTO</TT> <I><FONT FACE="Times New Roman Italic">new-filename</FONT></I>
+</TD><TD WIDTH=361>Sets the new name of a file being renamed by a <TT>RNFR</TT> command
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+A simple command is one that does not require a data connection.
+Some FTP commands require you to set up a second connection, either
+to send raw data to the server, or receive raw data from the server.
+Table 8.2 shows you the commands that require a data connection.
+<BR>
+<P>
+<CENTER><B>Table 8.2&nbsp;&nbsp;FTP Commands that Require a Data
+Connection</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=125><I>Command</I></TD><TD WIDTH=328><I>Function</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=125><TT>LIST</TT></TD>
+<TD WIDTH=328>Gets a list of all the files in the current directory
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=125><TT>LIST</TT> <I><FONT FACE="Times New Roman Italic">directory</FONT></I>
+</TD><TD WIDTH=328>Gets a list of all the files in a specific directory
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=125><TT>RETR</TT> <I><FONT FACE="Times New Roman Italic">filename</FONT></I>
+</TD><TD WIDTH=328>Retrieves a file from the FTP server</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=125><TT>STOR</TT> <I><FONT FACE="Times New Roman Italic">filename</FONT></I>
+</TD><TD WIDTH=328>Sends a file to the FTP server</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="EstablishingaDataConnection">
+Establishing a Data Connection</A></H3>
+<P>
+Whenever an FTP server needs to transfer raw data to or from a
+client, it uses a separate data connection for the transfer. Normally,
+the client sets up a listen socket (in Java, a ServerSocket) to
+accept an incoming connection from the FTP server. The client
+then sends the host address and port number of the listen socket
+to the server using the <TT>PORT</TT>
+command. The format of the <TT>PORT</TT>
+command is:
+<BLOCKQUOTE>
+<PRE>
+PORT <I>h1,h2,h3,h4,p1,p2</I>
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>h1-h4</TT> parameters are
+the individual bytes in the client's host address. If the client's
+host address was <B>192.0.0.1</B>, the bytes would be 192,0,0,1.
+The <TT>p1</TT> and <TT>p2</TT>
+parameters are the upper and lower bytes of the listen socket's
+port number. The following code fragment extracts <TT>p1</TT>
+and <TT>p2</TT> from a port number:
+<BLOCKQUOTE>
+<PRE>
+int p1 = (portNumber &gt;&gt; 8) &amp; 0xff;
+int p2 = portNumber &amp; 0xff;
+</PRE>
+</BLOCKQUOTE>
+<P>
+An example <TT>PORT</TT> command for
+a host with an address is <B>192.0.0.3</B> and a port number of
+1234 is:
+<BLOCKQUOTE>
+<PRE>
+PORT 192,0,0,3,4,210
+</PRE>
+</BLOCKQUOTE>
+<P>
+You can verify that the port bytes of 4 and 210 are indeed port
+1234 by computing (p1*256) + p2, or (4*256) + 210.
+<P>
+Once you send the <TT>PORT</TT> command,
+you can issue a command that requires a data connection like <TT>RETR</TT>,
+<TT>STOR</TT>, or <TT>LIST</TT>.
+Once you issue a command that requires a data connection, the
+server will connect to the listen socket and either send or receive
+data, depending on the command. Figure 8.2 shows the typical interaction
+sequence between an FTP server and a client performing a <TT>RETR</TT>
+command.
+<P>
+<A HREF="f8-2.html"><B>Figure 8.2 : </B><I>A server connects to a client to establish
+a data connection</I>.</A>
+<P>
+The normal method of data connection will not work for Java applet
+because an applet may not accept an incoming socket connection.
+Fortunately, the FTP protocol gives you another option for establishing
+a data connection-the <TT>PASV</TT>
+command.
+<P>
+The <TT>PASV</TT> command is similar
+to the <TT>PORT</TT> command, except
+that it causes the server to create the listen socket. The response
+from the <TT>PASV</TT> command gives
+the host address and port number for the listen socket in the
+same <TT>h1</TT>,<TT>h2</TT>,<TT>h3</TT>,<TT>h4</TT>,<TT>p1</TT>,<TT>p2</TT>
+format as used in the <TT>PORT</TT>
+command. Here is an example <TT>PASV</TT>
+command and the response from the server:
+<BLOCKQUOTE>
+<PRE>
+PASV
+227 Entering Passive Mode (127,0,0,1,6,114)
+</PRE>
+</BLOCKQUOTE>
+<P>
+Once the server returns the response, the client can establish
+the data connection. Figure 8.3 shows the typical interaction
+sequence between an FTP server and a client performing a <TT>STOR</TT>
+command, using <TT>PASV</TT> to set
+up the data connection.
+<P>
+<A HREF="f8-3.html"><B>Figure 8.3 : </B><I>The PASV command forces the server to create
+the listen socket for the data connection</I>.</A>
+<P>
+Listing 8.5 shows the <TT>doPasvPort</TT>
+method from the <TT>FTPSession</TT>
+class. It sends a <TT>PASV</TT> command,
+parses the response, and then establishes a socket connection
+with the server.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 8.5&nbsp;&nbsp;doPasvPort Method from FTPSession.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+protected synchronized Socket doPasvPort()
+     throws IOException
+     {
+
+// Send the PASV command
+          String response = doCommand(&quot;PASV&quot;);
+
+// If it wasn't in the 200s, there was an error
+
+          if (response.charAt(0) != '2') {
+               throw new IOException(response);
+          }
+
+// The pasv response looks like: 
+// 227 Entering Passive Mode (127,0,0,1,4,160)
+// We'll look for the ()'s at the end first
+
+          int parenStart = response.lastIndexOf('(');
+          int parenEnd = response.lastIndexOf(')');
+
+// Make sure they're both there and that the ) comes after the (
+          if ((parenStart &lt; 0) || (parenEnd &lt; 0) ||
+               (parenStart &gt;= parenEnd)) {
+               throw new IOException(&quot;PASV response format error&quot;);
+          }
+
+// Extract the address bytes
+          String pasvAddr = response.substring(parenStart+1, parenEnd);
+
+// Create a tokenizer to parse the bytes
+          StringTokenizer tokenizer = new StringTokenizer(pasvAddr, &quot;,&quot;);
+
+// Create the array to store the bytes
+          int[] addrValues = new int[6];
+
+// Parse each byte
+          for (int i=0; (i &lt; 6) &amp;&amp; tokenizer.hasMoreTokens(); i++) {
+               try {
+                    addrValues[i] = Integer.valueOf(
+                         tokenizer.nextToken()).intValue();
+               } catch (Exception e) {
+                    throw new IOException(
+                         &quot;PASV response format error&quot;);
+               }
+          }
+
+// We ignore the host addresses, assuming that the host address is
+// the same as the host address we used to connect the first time.
+
+          Socket newSock = new Socket(host, (addrValues[4] &lt;&lt; 8) +
+               addrValues[5]);
+
+          return newSock;
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 8.6 shows the <TT>put</TT>
+method from the <TT>FTPSession</TT>
+class. It uses the <TT>doPasvPort</TT>
+command to set up a data connection, then sends a <TT>STOR</TT>
+command to the FTP server. The <TT>STOR</TT>
+command should return a response code in the 100-199 range, indicating
+that the STOR may proceed. When you finish sending the file to
+the FTP server, you must close down the data connection. This
+tells the server that you have finished. You should then receive
+another response from the server over the command connection,
+which should have a response code in the 200-299 range.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 8.6&nbsp;&nbsp;put Method from FTPSession.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public synchronized void put(String remoteFile, byte[] data,
+          boolean doBinary)
+     throws IOException
+     {
+
+// If transferring in binary mode, send a type command for type I (IMAGE)
+          if (doBinary) {
+               String response = doCommand(&quot;TYPE I&quot;);
+               if (response.charAt(0) != '2') {
+                    throw new IOException(response);
+               }
+
+// If transferring in ASCII mode, send a type command for type A (ASCII)
+          } else {
+               String response = doCommand(&quot;TYPE A&quot;);
+               if (response.charAt(0) != '2') {
+                    throw new IOException(response);
+               }
+          }
+
+// Open up a data connection
+          Socket putSock = doPasvPort();
+
+// Tell the server where we want it to store the data we are sending
+
+          String response = doCommand(&quot;STOR &quot;+remoteFile);
+
+// If the request is successful, the server should send a response
+// in the 100s and then start receiving the bytes. Once the data
+// connection is closed, it should send a response in the 200s.
+
+          if (response.charAt(0) != '1') {
+               putSock.close();
+               throw new IOException(response);
+          }
+
+// If binary mode, just write all the bytes
+          if (doBinary) {
+               OutputStream out = putSock.getOutputStream();
+
+               out.write(data);
+
+// If ASCII mode, write the data a line at a time
+
+          } else {
+               DataInputStream in = new DataInputStream(
+                    new ByteArrayInputStream(data));
+               DataOutputStream out = new DataOutputStream(
+                    putSock.getOutputStream());
+
+               String line;
+
+               while ((line = in.readLine()) != null) {
+                    out.writeBytes(line+&quot;\r&quot;);
+               }
+          }
+
+          putSock.close();
+
+          response = getResponse();
+
+// Make sure we got a 200 response
+
+          if (response.charAt(0) != '2') {
+               throw new IOException(response);
+          }
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>FTPSession</TT> class is quite
+simple to use. You just create an instance of <TT>FTPSession</TT>
+by passing the destination host name, the user name, and the password
+to the constructor, and then using the <TT>get</TT>
+and <TT>put</TT> methods to retrieve
+and send files, respectively. Listing 8.7 shows an example applet
+that copies a file by retrieving it and then storing it under
+a new name.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 8.7&nbsp;&nbsp;Source Code for TryFTP.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.io.*;
+
+// This applet demonstrates the use of the FTPSession class.
+// It copies a file called &quot;volcano&quot; to a file called &quot;vol.ftp&quot;
+// by fetching the file and then storing it with a new name.
+
+public class TryFTP extends Applet
+{
+     public void init()
+     {
+          try {
+// Create the session to host 192.0.0.3, using a user name of anonymous
+// and a password of mark@localhost
+
+               FTPSession sess = new FTPSession(
+                    &quot;192.0.0.3&quot;,
+                    &quot;anonymous&quot;, &quot;mark@localhost&quot;);
+
+// Fetch the file
+               byte[] file = sess.get(&quot;/home/mark/volcano&quot;, true);
+
+// Store the file
+               sess.put(&quot;/home/mark/vol.ftp&quot;, file, true);
+               
+
+          } catch (Exception e) {
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Be extremely careful when using the <TT>FTPSession</TT> class with respect to the user name and password. Even though your applet is compiled, it is fairly trivial to look through the code and find the user name and password that are sent. You should 
+either use anonymous FTP, or set up a user account that is not allowed to log on to your system and is allowed to use only FTP. Otherwise, you are broadcasting a free user account all over the Internet whenever you put your applet out there.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<HR>
+
+<CENTER><P><A HREF="ch7.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch9.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

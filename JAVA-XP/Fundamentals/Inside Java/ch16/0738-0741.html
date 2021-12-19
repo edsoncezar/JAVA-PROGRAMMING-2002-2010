@@ -1,0 +1,285 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Remote Method Invocation and Object Serialization:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+<P><CENTER>
+<a href="0732-0737.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0742-0745.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-738"><P>Page 738</P></A>
+
+
+
+<P><a href="images\ch16fg05.jpg"><img src="images\tn_ch16fg05.jpg"></a><BR>
+Figure 16.5
+<I>java.rmi and java.rmi.server classes used in the examples
+in this chapter.</I>
+</P>
+
+<P><b>Code the GreetingGenImpl Implementation Class</b>
+</P>
+
+<P>Each remote object must have an implementation class. In this example,
+the GreetingGenImpl class is the implementation class (see listing 16.4).
+</P>
+
+<P>Lines 12_14 show that this remote object implements GreetingGen, which was created
+in the last section:
+</P>
+
+<PRE>
+12   class GreetingGenImpl
+13           extends UnicastRemoteObject
+14           implements GreetingGen
+</PRE>
+
+<P>A remote object can implement any number of remote interfaces.
+</P>
+
+<P>Line 13 extends GreetingGenImpl from the UnicastRemoteObject class, which is an
+RMI class that supplies server functionality so that you don't have to. Specifically, this
+class is used when the server has a non-replicated remote object, which is the usual case.
+As shown in figure 16.5, UnicastRemoteObject is derived from RemoteServer, which
+is derived from RemoteObject. In the future, remote servers will be extended from
+other subclasses of RemoteServer. These subclasses will implement servers with
+different semantics than the UnicastRemoteObject class provides. These semantics are part of
+the Remote Reference Layer in figure 16.2.
+</P>
+
+<P>In line 19 in listing 16.4, the constructor declares that it throws RemoteException.
+This declaration must be done so that if a problem occurs when creating the remote
+server, the client can gracefully handle the exception:
+</P>
+<A NAME="PAGENUM-739"><P>Page 739</P></A>
+
+
+<PRE>
+19       public GreetingGenImpl() throws RemoteException {
+20           super();
+</PRE>
+
+<P>Line 20 (listing 16.4) calls the constructor of the super class, which
+is UnicastRemoteObject. This action causes the server to begin listening for requests.
+Note that it is not necessary to explicitly call
+super(), because the super class constructor is called by default.
+</P>
+
+<P>Lines 27_37 (listing 16.4) contain the
+makeGreeting() method. The arguments and return
+type must be identical to the corresponding method in the GreetingGen interface
+class examined previously, and the makeGreeting() method must throw RemoteException:
+</P>
+
+<PRE>
+27       public String makeGreeting(String lastGreeting)
+28                       throws RemoteException {
+29           String newGreeting;
+30
+31           // Toggle between the two greetings
+32           if (lastGreeting.equals(helloString))
+33               newGreeting = goodbyeString;
+34           else
+35               newGreeting = helloString;
+36           return newGreeting;
+37       }
+</PRE>
+
+<P>The remaining server-side modification adds a
+main() method to this class so that it can run as a server and also have the opportunity to register its availability to remote clients.
+</P>
+
+<P>Line 42 in the main() method creates and installs a security manager for this server:
+</P>
+
+<PRE>
+42           System.setSecurityManager(new RMISecurityManager());
+</PRE>
+
+<P>RMISecurityManager is one of the java.rmi classes identified in figure 16.5. This class
+is derived from java.lang.SecurityManager, and it ensures that the classes this server
+loads will not harm the server or the platform on which the server runs. Setting a
+security manager is necessary for the server to be able to dynamically load classes.
+</P>
+
+<P>Line 45 (listing 16.4) creates an instance of the remote object:
+</P>
+
+<PRE>
+45               GreetingGenImpl obj = new GreetingGenImpl();
+</PRE>
+
+<P>You can create one or more instances of a remote object.
+</P>
+
+<P>Line 47 in listing 16.4 registers this remote object with an RMI registry that runs on
+the remote platform:
+</P>
+<A NAME="PAGENUM-740"><P>Page 740</P></A>
+
+
+<PRE>
+47               Naming.rebind(&quot;GreetingServer&quot;, obj);
+</PRE>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+TIP
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+This RMI registry is a part of the RMI system and can be started with the
+rmiregistry utility. The RMI registry is sometimes called a
+bootstrap registry, because it is used to find a reference to the first object, which in turn provides references to other objects
+on the remote platform. The RMI registry should be restarted each time you make a
+change to a remote object's interface that is registered with the RMI registry.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<P>The Naming class is used to register, or bind, this object with the RMI registry. In
+this case, the static method rebind() is used. The
+rebind() method has two arguments: a URL name assigned to this object, and an object reference. The object reference was
+created in line 45 during construction. As you'll see in the next section, a client can use the
+static lookup() method of the Naming class to gain a reference to the desired remote
+object, which is actually a reference to the stub in the client's VM.
+</P>
+
+<P>Because the hostname and port aren't specified in the name passed by the
+Naming.rebind() method in line 47, the rebind() method assigns defaults. The default for hostname is
+the current host, and the default for the port number is the same one to which the
+rmiregistry utility defaults: 1099.
+</P>
+
+<P>That takes care of the remote object, so we will now turn to the client modifications.
+</P>
+
+<P><b>Modify the Applet to Call Remote Methods</b>
+</P>
+
+<P>The following two areas in the client code require changes:
+</P>
+
+<UL>
+<LI>          Getting a reference to the remote object
+<LI>          Handling remote exceptions
+</UL>
+
+<P>In HelloApplet1, the client simply could refer to the GreetingGen object: The client
+knew where it was because the client created the object. In the remote case, however,
+obtaining a reference to a GreetingGen requires knowing the name of the instance
+of GreetingGen (many could exist), and handling the situation where one doesn't exist.
+</P>
+
+<P>For simplicity, this example uses a single name that is known at compile time to both
+the client and server. This name, &quot;GreetingServer,&quot; is passed as part of the URL
+formatted argument of the Naming.lookup() method in lines 36 and 37 (listing 16.2):
+</P>
+
+<PRE>
+36               obj = (GreetingGen)Naming.lookup(&quot;//&quot; +
+37                   getCodeBase().getHost() + &quot;/GreetingServer&quot;);
+</PRE>
+
+<P>The rest of the argument in the Naming.lookup() call consists of the hostname of the
+RMI registry in which to identify this object's name. In the HelloApplet2 example, the
+RMI registry exists on the same platform from which the applet was retrieved. Because this
+is 
+</P>
+
+<A NAME="PAGENUM-741"><P>Page 741</P></A>
+
+
+<P>
+an applet, the host from which it was retrieved is returned from a call
+to getCodeBase().getHost().
+</P>
+
+<P>Lines 38_41 (listing 16.2) provide exception handling code, to be used when an
+exception occurs while calling the Naming.lookup() method.
+</P>
+
+<PRE>
+38           } catch (Exception e) {
+39               System.out.println(&quot;HelloApplet2: an exception occurred:&quot;);
+40               e.printStackTrace();
+41           }
+</PRE>
+
+<P>Naming.lookup() returns a reference to the remote object, which is actually the stub
+that represents the remote object. If the call is successful, and if a remote object that
+implements GreetingGen is registered, then the reference to that object is used to invoke
+its methods, just as in the local version.
+</P>
+
+<P>Notice that the Naming class is used in both the remote object and the client. The
+remote object uses it to bind the object to a name in the RMI registry, and the client uses it
+to look up a reference to the remote object by supplying a name. Table 16.1 lists
+the methods in the Naming class:
+</P>
+
+<P><B>
+Table 16.1</B><BR>
+Methods in the Naming Class
+</P>
+
+<TABLE>
+
+<TR><TD>
+Constructor/Method
+</TD><TD>
+Description
+</TD></TR><TR><TD>
+void bind(String, Remote)
+</TD><TD>
+Binds the specified name to the remote object in
+the RMI registry
+</TD></TR><TR><TD>
+void rebind(String, Remote)
+</TD><TD>
+Rebinds the specified name to the remote object in
+the RMI registry; Replaces the existing binding, if
+already bound
+</TD></TR><TR><TD>
+void unbind(String)
+</TD><TD>
+Unbinds the specified name from a remote
+object reference
+</TD></TR><TR><TD>
+String[] list(String)
+</TD><TD>
+Returns an array of names that are currently bound
+in the RMI registry
+</TD></TR><TR><TD>
+Remote lookup(String)
+</TD><TD>
+Returns a reference to the remote object that is
+bound to the specified name
+</TD></TR></TABLE>
+
+<P>Notice that in line 36 of listing 16.2, the reference returned from
+Naming.lookup() is cast to GreetingGen; in line 20 of listing 16.2, the object reference is declared as a
+GreetingGen. With remote references, you always use the interface (in this case GreetingGen), not
+the
+</P>
+<P><CENTER>
+<a href="0732-0737.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0742-0745.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

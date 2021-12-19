@@ -1,0 +1,147 @@
+<html>
+<head>
+<title>Slash and Burn (Ch. 5, Sec. 6) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-five.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-five-5.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Attack Applets: Exploiting Holes in the Security Model
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-five-1.html">1</a> / <a href="chapter-five-2.html">2</a> / <a href="chapter-five-3.html">3</a> / <a href="chapter-five-4.html">4</a> / <a href="chapter-five-5.html">5</a> / <b>6</b> / <a href="chapter-five-7.html">7</a> / <a href="chapter-five-8.html">8</a> / <a href="chapter-five-9.html">9</a> / <a href="chapter-five-10.html">10</a> / <a href="chapter-five-11.html">11</a> / <a href="chapter-five-12.html">12</a> / <a href="chapter-five-13.html">13</a> / <a href="chapter-five-14.html">14</a> / <a href="chapter-five-15.html">15</a> / <a href="chapter-five-16.html">16</a> / <a href="chapter-five-17.html">17</a> / <a href="chapter-five-18.html">18</a> / <a href="chapter-five-19.html">19</a> / <a href="chapter-five-20.html">20</a><p>
+
+<font size="+2" color="#000000"><b>Section 6 -- Slash and Burn</b></font>
+</td><td width=60 align=center>
+<a href="chapter-five-7.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+The second set of attacks involves Java code that passes itself off as belonging to the browser. In early versions of the JDK (before Java 2), code that came with the browser was assumed to be safe (see Chapter 2 and [McGraw and Felten, 1996]). The original built-in code distinction was scrapped with the introduction of code signing, and these days very little code is trusted (see Chapter 3). In any case, the Slash and Burn fraud allows the malicious code access it would not ordinarily have. It could, for example, access files on the local disk.<p>
+
+In order to properly understand this attack, you need to understand how Java works. In particular, examine how Java accesses its own code on the browser's local disk.<p><br>
+
+
+<center><font size="+1"><b>Where Java Code Comes From</b></font></center><p>
+
+When a Java applet runs, many Java classes (pieces of Java code) are loaded and run. Some applet-related classes are loaded by the applet, using the Web server. Other classes are part of the browser itself. Browser-related code is stored with the browser on the local disk. Netscape, for example, keeps its Java class files zipped up in an archive called classes.zip. When Netscape is installed, the class archive needs to be put somewhere special, like /usr/local/lib/netscape on Unix machines. Because the browser classes were considered part of the trusted browser program, they were given more privileges. (This is no longer the case.)<p>
+
+In general, before JDK 1.1, Java treated code loaded from the local disk as trusted, and code loaded over the Net as untrusted. That meant if an attacker could somehow get some malicious code loaded from the local disk, the attacker was home free. The original system was changed significantly with the introduction of JDK 1.0.2, which stopped treating code loaded off the disk as trusted. This change was made behind the scenes with little fanfare. As the Cache Cramming attack (explained later) shows, many people were confused by the change.<p>
+
+From our discussion of the Java class loader in <a href="..\chapter-two\index.html">Chapter 2</a>, we know that when Java needs to find a piece of code, say, for a class MyClass, it first looks on the local disk for a file called MyClass.class. If Java fails to find an appropriate file on the local disk, then it tries to fetch the file from the Web server that originally provided the applet.<p>
+
+We've glossed over one key issue at this point: How does Java know what class to look for? The answer is that a class is only loaded when it is mentioned by another class already resident. This is called dynamic loading. The name of the mentioned class is stored in the Java code for the mentioning class.<p>
+
+Java classes have names like security.book.chapter5. When the Java system wants to look up a class on the disk, it translates the dots in the class name into backslashes. The name security.book.chapter5 becomes security\book\chapter5.<sup><a href="..\footnotes\footnote-five-2.html" onclick="window.open('../footnotes/footnote-five-2.html','footnote','toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=no,resizable=yes,copyhistory=no,width=400,height=150'); return false;">2</sup></a> This transformed name is the filename used to search for the file on the local disk.<p><br>
+
+
+<center><font size="+1"><b>What Went Wrong: Dots and Slashes</b></font></center><p>
+
+If a bad guy wants to pass off a piece of code as trusted (in systems before JDK 1.0.2), two steps must be carried out: 1) Get the malicious code onto the victim's disk, and 2) Trick the victim's browser into loading it.<p>
+
+The first part, getting code onto the victim's disk, isn't as difficult as it sounds. For example, some machines have public FTP directories, where anyone can put a file. Alternatively, if the victim is using a shared, public machine, the attacker could get an account on that machine and put the file in that account's home directory.<p>
+
+Perhaps the most effective way to inject code is to take advantage of the browser's cache. Most Web browsers keep on-disk copies of recently accessed files. This allows repeated accesses to the same Web documents without continually downloading the documents. Unfortunately, it also gives a malicious applet a way to get a file onto the victim's machine. The applet could load the file across the Net, pretending that it was an image or a sound file. Once this was done, the file would be on the victim's disk in the cache. If the applet knew how the browser organized its cache, it would know where on the victim's disk the file resided. This sneaky trick makes a second appearance in the Cache Cramming attack as well (see <a href="chapter-five-13.html">page 171</a>).<p>
+
+Once the file is on the victim's disk, the attacker tricks the victim's browser into loading the file. Since the browser only looks up classnames in relation to the current directory, the attacker would have to place a file into the victim's working directory. Filename lookup is relative because Java classnames cannot start with a dot; therefore, the translated name cannot start with a backslash.<p>
+
+David Hopwood discovered that Java 1.0.1 and Netscape Navigator 2.01 erroneously allowed a classname to start with a backslash. Such a classname could reference any file on the system, not just those files associated with the browser. For example, a class named \programs.browser.cache.file407 would be looked up on the local disk as \programs\browser\cache\file407.<p>
+
+This trick could be used to cause any file on the local disk to be loaded as Java code. Because code loaded from the local disk was trusted (pre-JDK 1.0.2), it could proceed to illegally access the local system. This attack allows full system penetration-the bad guy can do anything at all on the victim's machine.<p><br>
+
+
+<center><font size="+1"><b>The Fix</b></font></center><p>
+This problem was fixed in Netscape Navigator 2.02 and in all Java-enabled versions of Microsoft Internet Explorer. The fix was simple: Prohibit classnames from starting with backslashes (or slashes, as the case may be). It is no longer possible to execute impostor code using the Slash and Burn attack.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-five-5.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-five-7.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+
+

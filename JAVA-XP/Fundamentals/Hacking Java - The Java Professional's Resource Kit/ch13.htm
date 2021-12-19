@@ -1,0 +1,863 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 13 -- Running Applets as Applications</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;13</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Running Applets as Applications</FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#DifferencesBetweenAppletsandApplications">
+Differences Between Applets and Applications</A>
+<LI><A HREF="#AllowinganApplettoRunasanApplication">
+Allowing an Applet to Run as an Application</A>
+<LI><A HREF="#TheAppletsRuntimeEnvironment">
+The Applet's Runtime Environment</A>
+<LI><A HREF="#CreatinganAppletContext">
+Creating an Applet Context</A>
+</UL>
+
+<HR>
+<H2><A NAME="DifferencesBetweenAppletsandApplications"><FONT SIZE=5 COLOR=#FF0000>
+Differences Between Applets and Applications</FONT></A></H2>
+<P>
+Although there are many differences between thecapabilities of
+applets and of applications in terms of security restrictions,
+there are very few environmental differences between the two.
+You can actually run an applet as a stand-alone application with
+just a few minor additions.
+<P>
+Applets automatically have a parent frame when they are loaded.
+When you run a stand-alone application, however, you have to create
+your own frame. 
+<P>
+Applets also have the notion of document-base and code-base URLs,
+as well as an application context. This context represents the
+browser itself and supplies methods to load sound files, fetch
+images, and open other documents.
+<P>
+One of the biggest differences between an applet and an application
+is something that you might never think of. An applet has a network-aware
+class loader. When an applet needs to load a class, its class
+loader goes over the network to get it. The system class loader
+that is used by applications does not do this. If you want a stand-alone
+application to load classes over a network, you must write your
+own class loader to do it. The section &quot;A Zipfile Class Loader&quot;
+in <A HREF="ch21.htm" >Chapter 21</A>, &quot;Download Strategies,&quot; shows you how
+to write your own class loader.
+<P>
+Applets are, of course, intended to run inside Web browsers. In
+fact, you cannot run a stand-alone application in a Web browser,
+only an applet. You can, however, run an applet outside of a Web
+browser. You simply have to implement the same kind of framework
+that the browser provides automatically.
+<P>
+There are some benefits to being able to run an applet as a stand-alone
+application. If you always write your user interfaces as applets,
+you can run them inside of a browser or stand-alone without changing
+your code. This means that you never have to go in and change
+your code to run inside a browser, or to run stand-alone. Each
+time you write a new user interface, it is automatically ready
+to run wherever it is needed.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The term application, when used in conjunction with Java, usually indicates a program running stand-alone. The term applet always refers to a program running within a browser. Unfortunately, this separation implies that the two are always separate things. 
+
+A distributed application, in the traditional sense, is made up of many components. In the Java world, some of these components may be applets, and some may be stand-alone applications, but they all fit together to make a distributed 
+application.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="AllowinganApplettoRunasanApplication"><FONT SIZE=5 COLOR=#FF0000>
+Allowing an Applet to Run as an Application</FONT></A></H2>
+<P>
+You can run almost any applet as an application but some are easier
+than others. If your applet does not use the <TT>getDocumentBase</TT>,
+<TT>getCodeBase</TT>, or any of the
+<TT>AppletContext</TT> methods, you
+may be able to get away with creating a frame and launching the
+applet in the frame. In these cases, the applet is little more
+than a typical AWT container (remember, the <TT>Applet</TT>
+class is a subclass of <TT>java.awt.Panel</TT>).
+<P>
+Applets are first initialized by the <TT>init</TT>
+method, then started by the <TT>start</TT>
+method. Applications, on the other hand, are initialized and started
+with a static method called <TT>main</TT>.
+Fortunately, these methods can peacefully coexist in the same
+class.
+<P>
+By adding a <TT>main</TT> method that
+automatically creates a frame and adds the applet to the frame,
+you make your applet run either as an applet or as an application.
+Listing 13.1 shows a simple applet that will also run as an application.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 13.1&nbsp;&nbsp;Source Code for StandaloneApplet.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+
+// StandaloneApplet is an applet that runs either as
+// an applet or a standalone application.  To run
+// standalone, it provides a main method that creates
+// a frame, then creates an instance of the applet and
+// adds it to the frame.
+
+public class StandaloneApplet extends Applet
+{
+     public void init()
+     {
+          add(new Button(&quot;Standalone Applet Button&quot;));
+     }
+
+     public static void main(String args[])
+     {
+// Create the frame this applet will run in
+          Frame appletFrame = new Frame(&quot;Some applet&quot;);
+
+// The frame needs a layout manager, use the GridLayout to maximize
+// the applet size to the frame.
+          appletFrame.setLayout(new GridLayout(1,0));
+
+// Have to give the frame a size before it is visible
+          appletFrame.resize(300, 100);
+
+// Make the frame appear on the screen. You should make the frame appear
+// before you call the applet's init method. On some Java implementations,
+// some of the graphics information is not available until there is a frame.
+// If your applet uses certain graphics functions like getGraphics() in the
+// init method, it may fail unless there is a frame already created and
+// showing.
+          appletFrame.show();
+
+// Create an instance of the applet
+          Applet myApplet = new StandaloneApplet();
+
+// Add the applet to the frame
+          appletFrame.add(myApplet);
+
+// Initialize and start the applet
+          myApplet.init();
+          myApplet.start();
+
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 13.1 shows <TT>StandaloneApplet</TT>
+running within a Web browser, while Figure 13.2 shows it running
+as a stand-alone application.
+<P>
+<A HREF="f13-1.gif"><B>Figure 13.1 : </B><I>Many applets act as simple AWT containers</I>.</A>
+<P>
+<A HREF="f13-2.gif"><B>Figure 13.2 : </B><I>Sometimes a simple frame is all you need
+to run an applet stand-alone</I>.</A>
+<H2><A NAME="TheAppletsRuntimeEnvironment"><FONT SIZE=5 COLOR=#FF0000>
+The Applet's Runtime Environment</FONT></A></H2>
+<P>
+An applet is itself just an AWT container with a few extra methods
+for interacting with its runtime environment. Most of the applet's
+other methods are really implemented by three interfaces-<TT>AppletStub</TT>,
+<TT>AppletContext</TT>, and <TT>AudioClip</TT>.
+<P>
+The <TT>AppletStub</TT> interface
+is used by a browser or other applet environment to give the <TT>Applet</TT>
+class access to its environment. The applet stub defines methods
+for determining the applet's document base and code base (the
+URLs from which the applet's parent document and .class file were
+loaded), the applet's parameters (usually specified by the <TT>&lt;PARAM&gt;</TT>
+HTML tag), and the applet's context.
+<P>
+The <TT>AppletContext</TT> interface
+provides an applet with methods for loading images and audio clips,
+as well as opening up new URLs in the browser, and finding out
+what other applets are running in the current environment. Each
+browser has its own <TT>AppletContext</TT>
+class that knows how to perform specific tasks within the browser.
+When a browser loads an applet, it calls <TT>setStub</TT>
+in the <TT>Applet</TT> object, which
+sets the applet's stub (as you might guess). This stub, in turn,
+has a method called <TT>getAppletContext</TT>,
+which returns the applet's <TT>AppletContext</TT>
+object. If you want to implement your own <TT>AppletContext</TT>
+object, you must also create your own <TT>AppletStub</TT>
+object. Otherwise, there would be no way to associate your <TT>AppletContext</TT>
+object with an applet-there's no <TT>setAppletContext</TT>
+method in the <TT>Applet</TT> class.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+As an applet programmer, you never access the <TT>AppletContext</TT> and <TT>AppletStub</TT> interfaces directly. The <TT>Applet</TT> class presents all the methods available in the <TT>AppletContext</TT> and <TT>AppletStub</TT> interfaces. The methods in 
+
+the <TT>Applet</TT> class simply call the corresponding methods in the <TT>AppletContext</TT> and <TT>AppletStub</TT> interfaces. This technique is called delegation.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Figure 13.3 shows the relationship between the <TT>Applet</TT>,
+the <TT>AppletStub</TT>, and the <TT>AppletContext</TT>.
+<P>
+<A HREF="f13-3.gif"><B>Figure 13.3 : </B><I>The applet stub is directly associated
+with the applet, and provides access to the applet context</I>.</A>
+<P>
+If you look at the <TT>Applet</TT>
+class, you'll notice that it has methods for playing audio clips.
+Like most of the other methods provided by the <TT>Applet</TT>
+class (with the exception of the AWT container methods), the audio
+methods simply call methods in the <TT>AudioClip
+</TT>interface. 
+<H2><A NAME="CreatinganAppletContext"><FONT SIZE=5 COLOR=#FF0000>
+Creating an Applet Context</FONT></A></H2>
+<P>
+When you create an applet manually and add it to a frame, the
+applet is missing some key information that it may rely on. Many
+applets make use of the <TT>getDocumentBase</TT>
+and <TT>getCodeBase</TT> methods,
+as well as some methods in the <TT>AppletContext</TT>
+class. If you want to run an applet stand-alone that uses these
+methods, you have to create an applet stub and an applet context
+for the applet.
+<P>
+The applet stub interface defines a set of methods that an applet
+uses to get information about where it was loaded from. The <TT>getCodeBase</TT>,
+<TT>getDocumentBase</TT>, and <TT>getParameter</TT>
+methods in the applet class actually go to the applet's stub to
+get these pieces of information.
+<P>
+In addition, the applet stub is responsible for finding the <TT>AppletContext</TT>
+object for the applet. The <TT>AppletContext</TT>
+object has methods for fetching images and sound clips, opening
+up URLs in the browser, and displaying status messages in the
+browser's status window area (on Netscape, this is at the bottom
+of the browser). The <TT>AppletContext</TT>
+also provides methods to locate other applets running within the
+browser.
+<P>
+Listing 13.2 shows the <TT>RunAppletContext</TT>,
+which implements an <TT>AppletContext</TT>
+that can be used to run almost any applet in a stand-alone application.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 13.2&nbsp;&nbsp;Source Code for RunAppletContext.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.util.*;
+import java.awt.*;
+import java.net.*;
+
+// This class provides a generic applet context for standalone
+// applications. It is implemented as a singleton object, which
+// means that there is only one instance of this class within the
+// runtime environment. It stores all the loaded applets in a
+// hash table so it can provide working getApplet and getApplets methods.
+
+public class RunAppletContext extends Object implements AppletContext,
+     AudioClip
+{
+
+// The pointer to the lone instance of this class
+     protected static RunAppletContext context;
+
+// The table of all the known applets in the runtime environment.
+     protected Hashtable applets;
+
+     protected RunAppletContext()
+     {
+          applets = new Hashtable();
+     }
+// Returns the lone instance of the RunAppletContext. If there isn't
+// an instance, it creates a new one.
+
+     public synchronized static RunAppletContext instance()
+     {
+          if (context == null) {
+               context = new RunAppletContext();
+          }
+          return context;
+     }
+
+// Adds an applet to the table of known applets
+
+     public void addApplet(Applet applet, String name)
+     {
+          applets.put(name, applet);
+     }
+
+// Locates an applet in the table
+
+     public Applet getApplet(String name)
+     {
+          return (Applet) applets.get(name);
+     }
+
+// Returns an enumeration of all the known applets
+
+     public Enumeration getApplets()
+     {
+          return applets.elements();
+     }
+
+// Tries to load an audio clip using Sun's AppletAudioClip
+// which is distributed with the JDK. This class may not be
+// available in all Java implementations since it is not a
+// documented part of the JDK.
+
+     public AudioClip getAudioClip(URL url)
+     {
+          try {
+               return new sun.applet.AppletAudioClip(url);
+          } catch (Exception e) {
+               return this;
+          }
+     }
+
+// Uses the AWT Toolkit class to fetch an image from a URL
+
+     public Image getImage(URL url)
+     {
+          return Toolkit.getDefaultToolkit().getImage(url);
+     }
+
+// Since we aren't running in a browser and there aren't really 
+// any classes to render HTML in Java, we have to wimp out with
+// the showDocument method and just print a message that the
+// applet wanted to load a URL.
+
+     public void showDocument(URL url)
+     {
+          System.out.println(&quot;Wanted to show document on: &quot;+url);
+     }
+
+     public void showDocument(URL url, String target)
+     {
+          System.out.println(&quot;Wanted to show document on: &quot;+url+
+               &quot; in frame &quot;+target);
+     }
+
+// Just print to System.out for showStatus.
+
+     public void showStatus(String status)
+     {
+          System.out.println(status);
+     }
+
+// If we can't create an instance of sun.applet.AppletAudioClip, we
+// return a pointer to this same object, which happens to also implement
+// the AudioClip interface, but it doesn't do anything with them.
+// The following three methods are the methods for AudioClip:
+
+     public void play() {};
+     public void loop() {};
+     public void stop() {};
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+To use a custom applet context, you need a custom applet stub
+since the stub is the class that returns the applet context. The
+stub contains the very useful <TT>getDocumentBase</TT>,
+<TT>getCodebase</TT>, and <TT>getParameter</TT>
+methods. 
+<P>
+Listing 13.3 shows a handy <TT>RunAppletStub</TT>
+that allows you to customize the code and document bases as well
+as the applet parameters by using the system properties. It also
+returns an instance of <TT>RunAppletContext</TT>
+for the applet's context.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 13.3&nbsp;&nbsp;Source Code for RunAppletStub.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.net.*;
+import java.awt.*;
+
+// This class provides an applet stub for applets running
+// as standalone applications. You can set the document base
+// by setting the &quot;docbase&quot; system property. Likewise, you can set
+// the code base through the &quot;codebase&quot; property.
+// You can provide applet parameters by setting system properties
+// with the applet's name followed by the parameter. For example:
+// &lt;PARAM name=&quot;stooge&quot; value=&quot;moe&quot;&gt;
+// for an applet named MyApplet, could be set in this stub
+// with by setting the system property &quot;MyAppletstooge&quot; to &quot;moe&quot;.
+// You can also just set the &quot;stooge&quot; property, but it will try
+// using the appletname in front first. This allows you to run
+// multiple applets at once that have the same parameter names.
+
+
+public class RunAppletStub extends Object implements AppletStub
+{
+     Frame appletFrame;
+     Applet applet;
+     String appletName;
+     String startDir;
+
+     public RunAppletStub()
+     {
+     }
+
+// startDir is the local directory where this applet is started, or
+// another directory if you prefer. If you don't specify a code base
+// or a document base, the startDir is used for those. The directory
+// separators must be '/' and not '\' or the URL class gets confused.
+
+     public RunAppletStub(Frame appletFrame, Applet applet, String name,
+          String startDir)
+     {
+          this.appletFrame = appletFrame;
+          this.applet = applet;
+          this.appletName = name;
+          this.startDir = startDir;
+
+          RunAppletContext.instance().addApplet(applet, name);
+     }
+
+     public void setParams(Frame appletFrame, Applet applet, String name,
+          String startDir)
+     {
+          this.appletFrame = appletFrame;
+          this.applet = applet;
+          this.appletName = name;
+          this.startDir = startDir;
+
+          RunAppletContext.instance().addApplet(applet, name);
+     }
+
+     public boolean isActive() { return true; }
+
+// Return the document base URL. Try getting the docbase system parameter.
+// If that isn't available, use the startDir directory.
+
+     public URL getDocumentBase()
+     {
+          String docbase = System.getProperty(&quot;docbase&quot;);
+
+          try {
+               if (docbase == null) {
+                    return new URL(&quot;file://&quot;+startDir);
+               } else {
+                    return new URL(docbase);
+               }
+          } catch (MalformedURLException e) {
+               return null;
+          }
+     }
+
+// Return the code base URL. Try getting the codebase system parameter.
+// If that isn't available, use the startDir directory.
+
+     public URL getCodeBase()
+     {
+          String codebase = System.getProperty(&quot;codebase&quot;);
+
+          try {
+               if (codebase == null) {
+                    return new URL(&quot;file://&quot;+startDir);
+               } else {
+                    return new URL(codebase);
+               }
+          } catch (MalformedURLException e) {
+               return null;
+          }
+     }
+
+// fetch a parameter for the applet from the system properties. First
+// try the applet name followed by the param name. If that's null,
+// try just the param name.
+
+     public String getParameter(String paramName)
+     {
+          String prop = System.getProperty(appletName+paramName);
+          if (prop != null) return prop;
+          return System.getProperty(paramName);
+     }
+
+     public AppletContext getAppletContext()
+     {
+          return RunAppletContext.instance();
+     }
+
+// appletResize is the only reason we need a reference to the applet's
+// frame. If the applet wants to resize, we resize the frame, then
+// the applet.
+
+     public void appletResize(int width, int height)
+     {
+          appletFrame.resize(width+10, height+20);
+          applet.resize(width, height);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+All you have to do in your applet to use the <TT>RunAppletStub</TT>
+is create the stub and call the <TT>setStub</TT>
+applet method. Listing 13.4 shows the stand-alone applet updated
+to use the <TT>RunAppletStub</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 13.4&nbsp;&nbsp;Source Code for Standalone2.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+
+// StandaloneApplet is an applet that runs either as
+// an applet or a standalone application.  To run
+// standalone, it provides a main method that creates
+// a frame, then creates an instance of the applet and
+// adds it to the frame.
+
+public class Standalone2 extends Applet
+{
+     public void init()
+     {
+          add(new Button(&quot;Standalone Applet Button&quot;));
+     }
+
+     public static void main(String args[])
+     {
+// Create the frame this applet will run in
+          Frame appletFrame = new Frame(&quot;Some applet&quot;);
+
+// The frame needs a layout manager, use the GridLayout to maximize
+// the applet size to the frame.
+          appletFrame.setLayout(new GridLayout(1,0));
+
+// Have to give the frame a size before it is visible
+          appletFrame.resize(300, 100);
+
+// Make the frame appear on the screen. You should make the frame appear
+// before you call the applet's init method. On some Java implementations,
+// some of the graphics information is not available until there is a frame.
+// If your applet uses certain graphics functions like getGraphics() in the
+// init method, it may fail unless there is a frame already created and
+// showing.
+          appletFrame.show();
+
+// Create an instance of the applet
+          Applet myApplet = new Standalone2();
+
+// Add the applet to the frame
+          appletFrame.add(myApplet);
+
+// Now try to get an applet stub for this class.
+
+          RunAppletStub stub = new RunAppletStub(appletFrame,
+               myApplet, &quot;standalone-applet&quot;, &quot;http://localhost/&quot;);
+          myApplet.setStub(stub);
+
+// Initialize and start the applet
+          myApplet.init();
+          myApplet.start();
+
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+You have to write this special <TT>main</TT>
+method only a few times before you start wondering whether you
+couldn't create a loader that automatically did all that stuff
+for you. The <TT>RunApplet</TT> class,
+included on the CD with this book, can load multiple applets.
+<P>
+When you start an applet, you can specify the applet's width,
+height, name, and starting directory. For example, the following
+command line starts the applet <TT>Applet1</TT>
+with a size of 400<FONT FACE="Symbol">&#165;</FONT>300, a name
+of <TT>myapplet</TT>, and a starting
+directory of /home/mark:
+<BLOCKQUOTE>
+<PRE>
+java RunApplet Applet1,width=400,height=300,name=myapplet,startDir=/home/mark
+</PRE>
+</BLOCKQUOTE>
+<P>
+Make sure there are no spaces in the parameters for a single applet;
+otherwise, they will be confused with parameters for another applet.
+You can run multiple applets by putting them all on the same command
+line. The following command runs applets named <TT>Applet1</TT>
+and <TT>Applet2</TT>:
+<BLOCKQUOTE>
+<PRE>
+java RunApplet Applet1 Applet2
+</PRE>
+</BLOCKQUOTE>
+<P>
+Notice that the <TT>width</TT>, <TT>height</TT>,
+<TT>name</TT>, and <TT>startDir</TT>
+parameters are optional.
+<P>
+The <TT>RunApplet</TT> class is arranged
+slightly differently from the preceding <TT>Standalone2</TT>
+class. Most of the work that is done in the <TT>main</TT>
+method in <TT>Standalone2</TT> is
+now in a method called <TT>StartApplet</TT>.
+Listing 13.5 shows the <TT>startApplet</TT>
+method for the <TT>RunApplet</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 13.5&nbsp;&nbsp;startApplet Method from RunApplet.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// Creates the frame, sets the stub, starts the applet
+
+    public static void startApplet(Applet applet, int width, int height,
+        String name, String startDir)
+    {
+
+// Create the applet's frame
+        Frame appletFrame = new Frame(name);
+
+// Allow room for the frame's borders
+        appletFrame.resize(width+10, height+20);
+
+// Use a grid layout to maximize the applet's size
+        appletFrame.setLayout(new GridLayout(1, 0));
+
+// Add the applet to the frame
+        appletFrame.add(applet);
+
+// Show the frame, which makes sure all the graphics info is loaded
+// for the applet to use.
+
+        appletFrame.show();
+
+// Create and set the stub
+        AppletStub stub = new RunAppletStub(appletFrame, applet, name,
+            startDir);
+        applet.setStub(stub);
+// initialize the applet
+        applet.init();
+
+// Make sure the frame shows the applet
+        appletFrame.validate();
+
+// Start up the applet
+        applet.start();
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The bulk of the <TT>RunApplet</TT>
+class is taken up by the <TT>main</TT>
+method, which spends all its time parsing command-line arguments.
+For each command-line argument, the <TT>main</TT>
+method creates a <TT>StringTokenizer</TT>
+object that uses a comma as the separator. For each token, the
+method checks to see whether it contains any of the allowable
+parameters, and, if so, parses the parameter. The applet's <TT>startDir</TT>
+parameter is used by the applet stub to return the document base
+and code base URLs. The <TT>URL</TT>
+class requires all directories to use the forward slash (/), as
+opposed to the backward slash (\) used by Windows and OS/2. The
+<TT>main</TT> method has to scan through
+the <TT>startDir</TT> parameter and
+replace any backward slashes with forward slashes. It uses a <TT>StringBuffer</TT>
+object to do this. The <TT>StringBuffer</TT>
+class allows you to build and edit strings more efficiently than
+using the <TT>String</TT> class, because
+you can directly change the characters in a <TT>StringBuffer</TT>
+object.
+<P>
+The main method simply turns the <TT>startDir</TT>
+parameter into a <TT>StringBuffer</TT>
+object, scans through the buffer replacing \s with /s, and then
+converts the <TT>StringBuffer</TT>
+object back into a <TT>String</TT>.
+Listing 13.6 shows the source code for the <TT>main</TT>
+method.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The technique of using a <TT>StringBuffer</TT> object to manipulate a <TT>String</TT> object is used very often by Java, but you don't always know it. Whenever you combine an integer and a string, like <TT>&quot;Count: &quot;+5</TT>, the Java compiler 
+actually generates calls to the <TT>StringBuffer</TT> class to create the new string.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 13.6&nbsp;&nbsp;main Method from RunApplet.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+ public static void main(String[] args)
+    {
+        if (args.length &lt; 1) {
+            System.err.println(&quot;Please supply the applet name.&quot;);
+        }
+
+// For each arg, parse out the applet class name and other params
+
+        for (int i=0; i &lt; args.length; i++) {
+            StringTokenizer tokenizer = new StringTokenizer(
+        
+            String className = null;
+
+// default to 300x200 frame
+            int width = 300;
+            int height = 200;
+
+            String name = null;
+            String startDir = null;
+
+            while (tokenizer.hasMoreTokens()) {
+                String token = tokenizer.nextToken();
+
+// Look for width= parameter, if found, get the integer. If there's
+// an error parsing the int, just ignore it
+
+                if (token.startsWith(&quot;width=&quot;)) {
+                    try {
+                        width = Integer.valueOf(
+                            token.substring(6)).
+                            intValue();
+                    } catch (Exception ignore) {
+                    }
+
+// Look for the height parameter, ignore if there's an error
+                } else if (token.startsWith(&quot;height=&quot;)) {
+                    try {
+                        height = Integer.valueOf(
+                            token.substring(7)).
+                            intValue();
+                    } catch (Exception ignore) {
+                    }
+
+// Look for the optional applet name
+                } else if (token.startsWith(&quot;name=&quot;)) {
+                    name = token.substring(5);
+
+// Normally, you just give the applet's class name in the parameter
+// list, but if you like, you can be more specific and say
+// applet=xxx.
+                } else if (token.startsWith(&quot;applet=&quot;)) {
+                    className = token.substring(7);
+
+// Set the home directory for the applet. If not set, will
+// use the current directory (from System property &quot;user.dir&quot;)
+
+                } else if (token.startsWith(&quot;startdir=&quot;)) {
+                    startDir = token.substring(9);
+                } else {
+                    if (className == null) {
+                        className = token;
+                    } else {
+                        System.err.println(
+                            &quot;Invalid parameter - &quot;+
+                            token);
+                    }
+                }
+            }
+                
+            if (className == null) {
+                System.err.println(
+                    &quot;No class name specified in: &quot;+
+                    args[i]);
+            }
+            if (name == null) name = className;
+
+// If no startDir set, use the &quot;user.dir&quot; property
+
+            if (startDir == null) {
+                startDir = System.getProperty(&quot;user.dir&quot;)+&quot;//&quot;;
+            }
+
+// This little piece of bogosity changes any \'s in the start dir
+// to /'s, since the URL classes require /'s.
+
+            StringBuffer buff = new StringBuffer(startDir);
+            for (int j=0; j &lt; buff.length(); j++) {
+                if (buff.charAt(j) == '\\') {
+                    buff.setCharAt(j, '/');
+                }
+            }
+
+// Convert the string buffer back to a string.
+            startDir = new String(buff);
+
+// Load the applet's class
+            try {
+                Class appletClass = Class.forName(className);
+                Applet runme = (Applet) appletClass.
+                    newInstance();
+
+// Start the applet
+                startApplet(runme, width, height, name,
+                    startDir);
+            } catch (Exception e) {
+
+// If there's an error, just say which applet had the problem,
+// but don't quit.
+
+                System.err.println(&quot;Error starting applet - &quot;+
+                    args[i]);
+                System.err.println(e);
+            }
+        }
+    }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+
+<CENTER><P><A HREF="ch12.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch14.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

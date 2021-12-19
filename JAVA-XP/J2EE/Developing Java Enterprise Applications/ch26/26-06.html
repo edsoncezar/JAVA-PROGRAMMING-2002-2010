@@ -1,0 +1,269 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H4 ALIGN="LEFT"><A NAME="Heading9"></A><FONT COLOR="#000077">MiniSession</FONT></H4>
+<P>Perhaps the heart of the MiniJMS client implementation is the MiniSession class. This class defines the core behaviors of sending and receiving messages. Each MiniSession contains a reference to a RemoteMiniSession. This reference is used to communicate with the MiniJMS server. The MiniSession registers with the remote session as an RMI object. When messages arrive for this session on the server, the remote session sends them to the client using the addMessage message as defined in the ClientMiniSession interface. In order for the session to support RMI, it extends UnicastRemoteObject as discussed in Chapter 13, &#147;Introduction to Java RMI,&#148; and the MiniSession constructor is declared to possibly throw RemoteExceptions.
+</P>
+<P>Messages for a session are organized into a hash table that groups messages by destination. Message listeners registered with consumers are also tracked by the session in a hash table that groups them by destination.</P>
+<PRE>
+package minijms;
+
+//Imports removed to save space.
+
+public abstract class MiniSession extends UnicastRemoteObject
+ implements Session, MiniClientSession
+{
+    protected boolean transacted;
+    protected int ackMode;
+    protected MessageListener listener;
+    protected RemoteMiniSession session;
+    protected MiniConnection conn;
+    protected Hashtable messagesForDest;
+    protected Hashtable listenerForDest;
+    protected Random rand;
+
+    public MiniSession(boolean transacted,
+                       int ackMode)
+      throws RemoteException
+    {
+        this.ackMode = ackMode;
+        this.transacted = transacted;
+
+        messagesForDest = new Hashtable();
+        listenerForDest = new Hashtable();
+
+        rand = new Random();
+    }
+</PRE>
+<P>While the MiniSessions constructor creates the basic resources, it is up to the connection that creates a MiniSession to provide it with the RemoteMiniSession reference. This reference is obtained from the RemoteMiniConnection to which a MiniConnection has a reference.
+</P>
+<PRE>
+    public void setRemote(RemoteMiniSession r)
+        throws JMSException
+    {
+        session = r;
+
+        if(session == null)
+            throw new JMSException(&#147;Failed to connect.&#148;);
+
+        try
+        {
+            if(transacted) session.setTransacted(true);
+              session.setClient(this);
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;Failed to connect.&#148;);
+        }
+    }
+
+    public RemoteMiniSession getRemote()
+    {
+        return session;
+    }
+</PRE>
+<P>MiniSessions keep track of their connection, acknowledgment mode, and whether or not they are transacted.
+</P>
+<PRE>
+    public void setConnection(MiniConnection c)
+    {
+        conn = c;
+    }
+
+    //Used by messages to determine if ack should
+    //do anything.
+    int getAckMode()
+    {
+        return ackMode;
+    }
+
+    public boolean getTransacted() throws JMSException
+    {
+        return transacted;
+    }
+</PRE>
+<P>Normally, a session uses its connection&#146;s client ID. If for any reason this fails, a random number is used.
+</P>
+<PRE>
+    public String getClientID()
+        throws JMSException
+    {
+        if(conn != null) return conn.getClientID();
+        else return String.valueOf(rand.nextInt());
+    }
+</PRE>
+<P>Sessions are expected to create the message that a client will send. MiniSession provides access to all of the message types, as specified in the JMS specification. When a client wants to send a message, it uses the session to create it.
+</P>
+<PRE>
+    public BytesMessage createBytesMessage() throws JMSException
+    {
+        return new MiniStreamMessage();
+    }
+
+    public MapMessage createMapMessage() throws JMSException
+    {
+        return new MiniMapMessage();
+    }
+
+    public Message createMessage() throws JMSException
+    {
+        return new MiniMessage();
+    }
+
+    public ObjectMessage createObjectMessage() throws JMSException
+    {
+        return new MiniObjectMessage();
+    }
+
+    public ObjectMessage createObjectMessage(Serializable object)
+       throws JMSException
+    {
+        return new MiniObjectMessage(object);
+    }
+
+    public StreamMessage createStreamMessage() throws JMSException
+    {
+        return new MiniStreamMessage();
+    }
+
+    public TextMessage createTextMessage() throws JMSException
+    {
+        return new MiniTextMessage();
+    }
+
+    public TextMessage createTextMessage(StringBuffer stringBuffer)
+throws JMSException
+    {
+        return new MiniTextMessage(stringBuffer);
+    }
+</PRE>
+<P>MiniSession provides a simple interface to MessageProducers in the MiniJMS library for sending messages. The send method forwards the message to the RemoteMiniSession on the server.
+</P>
+<PRE>
+    public void send(Message message)
+                 throws JMSException
+    {
+        try
+        {
+             <B>session.send(message);</B>
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>Commit, recover, and rollback are also forwarded to the server for processing.
+</P>
+<PRE>
+    public void commit() throws JMSException
+    {
+        try
+        {
+              <B>session.commit();</B>
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+    }
+
+    public void rollback() throws JMSException
+    {
+        try
+        {
+             <B>session.rollback();</B>
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+    }
+
+    public void recover() throws JMSException
+    {
+        try
+        {
+             <B>session.recover();</B>
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+    }
+</PRE>
+<P>When a session is closed using the close method defined here, it stops polling the server for messages, notifies the server that it will close, and removes itself from its connection.
+</P>
+<PRE>
+    public void close() throws JMSException
+    {
+        try
+        {
+            if(session != null)
+            {
+                checker.stop();
+                session = session.close();
+                conn.removeSession(this);
+            }
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

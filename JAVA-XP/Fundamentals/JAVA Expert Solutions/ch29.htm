@@ -1,0 +1,1070 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 29 -- Creating a Java Shopping Cart</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter 29</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Creating a Java Shopping Cart</FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#DesigningaBasicShoppingCart">
+Designing a Basic Shopping Cart</A>
+<LI><A HREF="#CreatingaShoppingCartUserInterface">
+Creating a Shopping Cart User Interface</A>
+<UL>
+<LI><A HREF="#CreatingaCatalogApplet">
+Creating a Catalog Applet</A>
+<LI><A HREF="#CreatingtheShoppingCartApplet">
+Creating the Shopping Cart Applet</A>
+</UL>
+</ul>
+<HR>
+<P>
+One of the popular mechanisms in electronic commerce is the electronic
+shopping cart. When you are shopping over the Web, you can select
+numerous items that go into your virtual shopping cart. The shopping
+cart keeps a continuous list of what you want to buy and how much
+it costs. When you have finished selecting items, you simply push
+a button and place your order.
+<P>
+One of the problems with many CGI shopping carts is that all the
+shopping cart information resides on the Web server. Every time
+you add an item to your cart, you have to communicate with the
+Web server. If you have a slow connection, it may take you quite
+a while to select the items. A Java applet is an ideal place for
+a shopping cart. It can manage the items locally rather than saving
+them on the Web server. When you decide that it's time to place
+your order, the Java applet sends your order to the Web server.
+<H2><A NAME="DesigningaBasicShoppingCart"><FONT SIZE=5 COLOR=#FF0000>
+Designing a Basic Shopping Cart</FONT></A></H2>
+<P>
+One of the themes you have been hearing over and over again in
+this book is that you should separate the application from the
+user interface. In the case of the shopping cart, this guideline
+still holds true. You create a simple framework for a shopping
+cart and then attach a user interface to it. The first thing you
+need to do is figure out how the shopping cart will work. The
+cart itself is nothing fancy; it is just a container of items.
+<P>
+Before you start writing the shopping cart, you should spend a
+little time on the items that go in the cart. You probably need
+some sort of name for the item, a price, and maybe a quantity.
+The quantity value is handy if you don't want to have multiple
+instances of the same item in your cart. For instance, if you
+are ordering tires, you can either have four separate instances
+of a tire item, or have one tire item with a quantity of four.
+Listing 29.1 shows a simple implementation of a shopping cart
+item. It contains a name, a price, a quantity, and also an URL
+that refers to a description of the item.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 29.1&nbsp;&nbsp;Source Code for ShoppingCartItem.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This class contains data for an individual item in a
+// shopping cart.
+
+import java.net.URL;
+
+public class ShoppingCartItem implements Cloneable
+{
+	public String itemName;
+	public int itemCost;
+	public int quantity;
+	public URL descriptionURL;
+
+	public ShoppingCartItem()
+	{
+	}
+
+	public ShoppingCartItem(String itemName, int itemCost,
+		int quantity, URL descriptionURL)
+	{
+		this.itemName = itemName;
+		this.itemCost = itemCost;
+		this.quantity = quantity;
+		this.descriptionURL = descriptionURL;
+	}
+
+// The add method is a quick method for combining two similar
+// items. It doesn't perform any checks to insure that they are
+// similar, however. You use this method when adding items to a
+// cart, rather than storing two instances of the same item, you
+// add the quantities together.
+
+	public void add(ShoppingCartItem otherItem)
+	{
+		this.quantity = this.quantity + otherItem.quantity;
+	}
+
+// The subtract method is similar to the add method, but it
+// removes a certain quantity of items.
+
+	public void subtract(ShoppingCartItem otherItem)
+	{
+		this.quantity = this.quantity - otherItem.quantity;
+	}
+
+// You can store items in a hash table if you implement hashCode. It's
+// always a good idea to do this.
+
+	public int hashCode()
+	{
+		return itemName.hashCode() + itemCost;
+	}
+
+// The equals method does something a little dirty here, it only
+// compares the item names and item costs. Technically, this is
+// not the way that equals was intended to work.
+
+	public boolean equals(Object other)
+	{
+		if (this == other) return true;
+
+		if (!(other instanceof ShoppingCartItem))
+			return false;
+
+		ShoppingCartItem otherItem =
+			(ShoppingCartItem) other;
+
+		return (itemName.equals(otherItem.itemName)) &amp;&amp;
+			(itemCost == otherItem.itemCost);
+	}
+
+// Create a copy of this object
+
+	public ShoppingCartItem copy()
+	{
+		return new ShoppingCartItem(itemName, itemCost,
+			quantity, descriptionURL);
+	}
+
+// Create a printable version of this object
+
+	public String toString()
+	{
+		return itemName+&quot; cost: &quot;+itemCost+&quot; qty: &quot;+quantity+&quot; desc: &quot;+
+			descriptionURL;
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+One interesting thing about the <TT>ShoppingCartItem</TT> class is that it cheats when it comes to object equality. It treats any two objects with the same name and cost as being equal. If they have different quantities, they are still considered equal. 
+This is usually not a good idea, since it can lead to confusion, but in this particular instance, it works nicely. If you have an item with some quantity value, you can search through the cart for the same object (ignoring the quantities) and if you find a 
+
+matching object, you can just add their quantities together.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The next item on the agenda is the shopping cart itself. Since
+this is a very simple model of a cart, independent of the user
+interface, the cart should be observable. In other words, other
+objects should be able to watch the shopping cart to see when
+it changes. This allows you to write a user interface that updates
+itself whenever the cart is changed, yet you keep the user interface
+code out of the cart. The <TT>Observer</TT>/<TT>Observable</TT>
+mechanism is very handy for this sort of thing. The shopping cart
+is a subclass of the <TT>Observable</TT>
+class. Whenever the cart changes, it sends a notification to its
+observers. When you implement an observable object, you frequently
+need to notify the observers of different types of changes. For
+instance, in the shopping cart, you can add an item, remove an
+item, or change the quantity of an item. Since there is only one
+way to notify the observers that a change has taken place, you
+need to cram all that information into a single method call. You
+can accomplish this by creating an object that holds the information
+about the change. Listing 29.2 shows the <TT>ShoppingCartEvent</TT>
+class that holds the change information.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 29.2&nbsp;&nbsp;Source Code for ShoppingCartEvent.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public class ShoppingCartEvent
+{
+// Define the kinds of changes that can take place
+	public static final int ADDED_ITEM = 1;
+	public static final int REMOVED_ITEM = 2;
+	public static final int CHANGED_ITEM = 3;
+
+// item is the item that is affected
+	public ShoppingCartItem item;
+
+// eventType is the kind of change that has taken
+// place (add/remove/change)
+	public int eventType;
+
+	public ShoppingCartEvent()
+	{
+	}
+
+	public ShoppingCartEvent(ShoppingCartItem item,
+		int eventType)
+	{
+		this.item = item;
+		this.eventType = eventType;
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now you can create the shopping cart itself. All you really need
+is a vector object for storing the cart items and a variable for
+the total cost so far. You must also be sure that you always notify
+your observers whenever the cart changes. Another object may be
+keeping a duplicate record of all the items in the cart. If you
+add or remove an item from the cart without sending a notification,
+the other object will no longer have an accurate representation
+of the shopping cart. Listing 29.3 shows the <TT>ShoppingCart</TT>
+object.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 29.3&nbsp;&nbsp;Source Code for ShoppingCart.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.net.*;
+import java.util.*;
+
+// This class is a simple container of shopping cart items.
+// It is observable, which means that it notifies any interested
+// classes whenever it changes.
+
+public class ShoppingCart extends Observable
+{
+	protected Vector items;	// the items in the cart
+	protected int total;	// the total item cost so far
+
+	public ShoppingCart()
+	{
+		items = new Vector();
+		total = 0;
+	}
+
+// Add a new item and update the total
+
+	public void addItem(ShoppingCartItem newItem)
+	{
+
+// See if there's already an item like this in the cart
+		int currIndex = items.indexOf(newItem);
+
+		ShoppingCartEvent event = new ShoppingCartEvent();
+
+		if (currIndex == -1) {
+// If the item is new, add it to the cart
+			items.addElement(newItem);
+			event.item = newItem;
+			event.eventType = ShoppingCartEvent.ADDED_ITEM;
+		} else {
+
+// If there is a similar item, just add the quantities
+		ShoppingCartItem currItem =
+			(ShoppingCartItem) 
+			items.elementAt(currIndex);
+
+		currItem.add(newItem);
+		event.item = currItem;
+		event.eventType = ShoppingCartEvent.CHANGED_ITEM;
+	}
+
+	total += newItem.itemCost * newItem.quantity;
+
+// Tell the observers what just happened
+	setChanged();
+	notifyObservers(event);
+	}
+
+// Remove item removes an item from the cart. Since it removes
+// n items from the cart at a time, if there are more than n items
+// in the cart, it just subtracts n from the quantity.
+
+	public void removeItem(ShoppingCartItem oldItem)
+	{
+// Find this object in the cart
+	int currIndex = items.indexOf(oldItem);
+	ShoppingCartEvent event = new ShoppingCartEvent();
+
+	if (currIndex == -1) {
+// If it wasn't there, just return, assume everything's okay
+		return;
+	} else {
+		ShoppingCartItem currItem =
+				(ShoppingCartItem)
+				items.elementAt(currIndex);
+
+// If you are trying to subtract more items than are in the cart,
+// adjust the amount you want to subtract so it is equal to the
+// number of items in the cart.
+
+		if (oldItem.quantity &gt; currItem.quantity) {
+			oldItem.quantity = currItem.quantity;
+		}
+
+// Adjust the total
+		total -= oldItem.itemCost * oldItem.quantity;
+
+		currItem.subtract(oldItem);
+
+		event.item = currItem;
+		event.eventType = ShoppingCartEvent.CHANGED_ITEM;
+
+// If the quantity drops to 0, remove the item entirely
+
+		if (currItem.quantity == 0) {
+			items.removeElementAt(currIndex);
+			event.eventType =
+				ShoppingCartEvent.REMOVED_ITEM;
+		}
+			
+		}
+
+// Tell everyone what happened
+
+	setChanged();
+	notifyObservers(event);
+	}
+
+// getItems returns a copy of all the items in the cart
+
+	public ShoppingCartItem[] getItems()
+	{
+	ShoppingCartItem[] itemArray = 
+		new ShoppingCartItem[items.size()];
+
+	items.copyInto(itemArray);
+
+	return itemArray;
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now that you have the basic framework for a shopping cart, you
+can work on a user interface for it.
+<H2><A NAME="CreatingaShoppingCartUserInterface"><FONT SIZE=5 COLOR=#FF0000>
+Creating a Shopping Cart User Interface</FONT></A></H2>
+<P>
+The user interface for an electronic shopping cart is rarely a
+simple thing. Many shopping cart interfaces are incredibly complex,
+but also extremely easy to use. You can keep the interface pretty
+simple and still create a useful shopping cart, however.
+<P>
+If you think about the structure of a shopping cart application,
+you'll see that it really has two parts to it-the shopping cart
+and the catalog. When you are buying items, you look through the
+catalog of available items and select the ones you want. The catalog
+then sends these items to the shopping cart.
+<P>
+At some point, you go over to the shopping cart and review what
+you have selected. You may decide to put some of the items back,
+in which case the shopping cart must remove them from its list
+and possibly return them to the catalog. There are a number of
+ways to design a system like this. One of the more interesting
+ways is to create two separate applets-a catalog applet and a
+shopping cart applet.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+It is frequently useful to split the user interface into separate applets. Many times, you can reuse one of the applets in another project without going through the pain of separating out the other parts of the user interface.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+In order to implement this system with multiple applets, you need
+a way for the applets to locate each other. While applets can
+use the <TT>AppletContext</TT> class
+to find each other, your best bet is the <TT>AppletRegistry</TT>
+class, which was introduced in <A HREF="ch10.htm" >Chapter 10</A>, &quot;Inter-Applet
+Communication.&quot; The <TT>AppletRegistry</TT>
+class is an observable class, which means that an applet can be
+notified whenever new applets are loaded. If you don't use the
+registry, you must be prepared to occasionally poll for the other
+applets in case your applet starts up first.
+<P>
+For a simple user interface, you may decide to present a scrollable
+list of items both in the catalog and in the shopping cart. Unfortunately,
+the AWT <TT>List</TT> class leaves
+much to be desired when it comes to scrollable lists. The biggest
+problem with the <TT>List</TT> class
+is that is only stores strings. Since the strings you store in
+the scrollable lists are the strings the user sees, you can't
+really hide any information in them. For instance, if you look
+at the information stored in the <TT>ShoppingCartItem</TT>
+class, you realize that you don't want the URL for the item's
+description clogging up space in the list.
+<P>
+Listing 29.4 shows an <TT>ObjectList</TT>
+class that allows you to associate an object with each entry in
+a scrollable list.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 29.4&nbsp;&nbsp;Source Code for ObjectList.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.util.*;
+
+// This class is a special version of a scrollable list that
+// associates an object with each element in the list.
+
+public class ObjectList extends List
+{
+	Vector objects;	// the objects that correspond to list entries
+
+	public ObjectList()
+	{
+		objects = new Vector();
+	}
+
+	public ObjectList(int items, boolean multiSelect)
+	{
+		super(items, multiSelect);
+		objects = new Vector();
+	}
+
+	public synchronized void addObject(Object ob)
+	{
+// add a string version of the object to the list
+		super.addItem(ob.toString());
+
+// add the object itself to the object vector
+		objects.addElement(ob);
+	}
+
+	public synchronized void addObject(Object ob, int position)
+	{
+// add a string version of the object to the list
+		super.addItem(ob.toString(), position);
+
+// add the object itself to the object vector
+		if (position &gt;= objects.size()) {
+			objects.addElement(ob);
+		} else {
+			objects.insertElementAt(ob.toString(),
+				position);
+		}
+	}
+
+	public synchronized void addObject(String label, Object ob)
+	{
+// Allow the object to be assigned a label independently of the object
+		super.addItem(label);
+		objects.addElement(ob);
+	}
+
+	public synchronized void addObject(String label, Object ob,
+		int position)
+	{
+// Allow the object to be assigned a label independently of the object
+		super.addItem(label, position);
+		if (position &gt;= objects.size()) {
+			objects.addElement(ob);
+		} else {
+			objects.insertElementAt(ob.toString(),
+				position);
+		}
+	}
+
+	public synchronized void delObject(Object ob)
+	{
+// See if the object is in the vector
+		int index = objects.indexOf(ob);
+
+// If not, just return
+		if (index &lt; 0) return;
+
+// Remove the object from the vector
+		objects.removeElementAt(index);
+
+// Remove the list entry
+		super.delItem(index);
+	}
+
+	public synchronized Object getSelectedObject()
+	{
+// Get the index of the current selection
+		int i = getSelectedIndex();
+
+		if (i == -1) return null;
+
+// Return the object currently selected
+		return objects.elementAt(i);
+	}
+
+	public synchronized Object[] getSelectedObjects()
+	{
+// Get the indices of all the selected objects
+		int[] selectedItems = getSelectedIndexes();
+
+// Create an array of all the selected objects
+		Object[] whichObjects = new Object[
+			selectedItems.length];
+
+		for (int i=0; i &lt; selectedItems.length; i++) {
+			whichObjects[i] = objects.elementAt(i);
+		}
+
+		return whichObjects;
+	}
+
+	public int indexOf(Object ob)
+	{
+// Locate a particular object
+		return objects.indexOf(ob);
+	}
+
+	public Object objectAt(int index)
+	{
+// Return the object at a particular index
+		return objects.elementAt(index);
+	}
+
+	public void replaceObject(Object ob, int index)
+	{
+// Change a specific entry in the vector
+		replaceItem(ob.toString(), index);
+
+// Change a specific entry in the list
+		objects.setElementAt(ob, index);
+	}
+
+	public void replaceObject(String label, Object ob, int index)
+	{
+// Change a specific entry in the vector
+		replaceItem(label, index);
+
+// Change a specific entry in the list
+		objects.setElementAt(ob, index);
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You should use the <TT>ObjectList</TT> class in place of the <TT>List</TT> class in many, if not all, situations. It is important to be able to associate objects with the entries in a list, and even more important to keep the content of the list strings 
+down to the bare minimum needed by the user.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="CreatingaCatalogApplet">
+Creating a Catalog Applet</A></H3>
+<P>
+The catalog interface should allow a user to browse through the
+items that are for sale. You should at least provide some sort
+of description. If you are selling software or online services,
+it would be even better to offer a small sample. This would also
+be true for music or video recordings. While Java doesn't have
+the ability to display many of these kinds of media yet, that
+capability is coming. For now, you can take advantage of the wonderful
+infrastructure of the Web and use simple URLs to describe the
+product. That way, you can include audio and video clips as you
+see fit.
+<P>
+Since the catalog and the shopping cart are different applets,
+they need some way to communicate back and forth. The <TT>ShoppingCart</TT>
+class is the perfect mechanism for this. Whenever someone selects
+an item from the catalog, the catalog applet adds the item to
+the <TT>ShoppingCart</TT> class. The
+shopping cart applet is an observer of the <TT>ShoppingCart</TT>
+class and sees the new item immediately.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If you recall the Model-View-Controller paradigm, which was discussed in <A HREF="ch9.htm" >Chapter 9</A> &quot;Creating Reusable Graphics Components,&quot; the <TT>ShoppingCart</TT> class represents the model of the data. The catalog represents the 
+controller, since it takes user input and translates it into changes in the model. The shopping cart applet is the view of the model, since it displays the items stored in the actual cart. The shopping cart applet also acts as a controller since it also 
+takes input.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+When the catalog applet starts up, it looks for the shopping cart
+applet via the applet registry. When it finds the other applet,
+it calls <TT>getShoppingCart</TT>
+to locate the instanceof the <TT>ShoppingCart</TT>
+class that the two applets will share. Listing 29.5 shows the
+<TT>ItemPickerApplet</TT> class, which
+implements the user interface for the catalog portion of the shopping
+cart system.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 29.5&nbsp;&nbsp;Source Code for ItemPickerApplet.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+import java.net.*;
+import java.util.*;
+import java.io.*;
+
+// This class represents the catalog portion of a shopping cart.
+// You can select items and then either view a description of
+// the item or add the item to the shopping cart.
+
+public class ItemPickerApplet extends Applet implements Observer
+{
+	ObjectList items;
+	ShoppingCart cart;
+	AppletRegistry registry;
+
+	public void init()
+	{
+// Watch the applet registry to see when the Shopping Cart applet
+// becomes active
+		registry = AppletRegistry.instance();
+		registry.addObserver(this);
+
+		items = new ObjectList();
+
+// Get the URL of the list of items that are for sale
+		String itemURL = getParameter(&quot;itemList&quot;);
+		if (itemURL != null) fetchItems(itemURL);
+
+// Put the items in the center of the screen 
+		setLayout(new BorderLayout());
+		add(&quot;Center&quot;, items);
+
+		checkForShoppingCart();
+
+// Add this applet to the registry
+		registry.addApplet(&quot;Item Picker&quot;, this);
+	}
+
+	public void checkForShoppingCart()
+	{
+// See if the shopping cart has been loaded yet
+		Applet applet = registry.findApplet(&quot;Shopping Cart&quot;);
+		if (applet == null) return;
+
+		ShoppingCartApplet cartApplet = (ShoppingCartApplet)
+			applet;
+
+// Get the shopping cart used by the shopping cart applet
+		cart = cartApplet.getShoppingCart();
+
+// Create the panel for adding items
+		Panel southPanel = new Panel();
+
+// Set up some command buttons for adding and describing items
+		southPanel.add(new CommandButton(&quot;Describe Item&quot;,
+			new ItemPickerDescribe(this)));
+		southPanel.add(new CommandButton(&quot;Add Item&quot;,
+			new ItemPickerAdd(this)));
+
+		add(&quot;South&quot;, southPanel);
+	}
+
+	public void update(Observable obs, Object ob)
+	{
+		if (cart != null) return;
+
+		checkForShoppingCart();
+	}
+
+// When someone presses the &quot;Add Item&quot; button, the doAdd method
+// is called.
+	public void doAdd()
+	{
+// Find out what object was selected
+		Object ob = items.getSelectedObject();
+
+		if (ob == null) return;
+
+// Add the item to the cart
+		cart.addItem(((ShoppingCartItem)ob).copy());
+	}
+
+// When someone presses &quot;Describe Item&quot;, the doDescribe method
+// is called.
+
+	public void doDescribe()
+	{
+
+// Find out which object was selected
+		Object ob = items.getSelectedObject();
+
+		if (ob == null) return;
+
+		ShoppingCartItem item = (ShoppingCartItem) ob;
+
+// If it has a description URL, open it up in another frame
+		if (item.descriptionURL != null) {
+			getAppletContext().showDocument(
+				item.descriptionURL, &quot;descframe&quot;);
+		}
+	}
+
+// parseItem extracts an item name, cost, and URL from a string. The
+// items should be separated by |'s.
+	public void parseItem(String str)
+	{
+		StringTokenizer tokenizer = new StringTokenizer(str, &quot;|&quot;);
+
+		if (tokenizer.countTokens() &lt; 3) return;
+
+		String name = tokenizer.nextToken();
+
+		int cost = 0;
+		try {
+			cost = Integer.parseInt(tokenizer.nextToken());
+		} catch (Exception ignore) {
+		}
+
+		URL descURL = null;
+
+		try {
+			descURL = new URL(tokenizer.nextToken());
+		} catch (Exception ignore) {
+		}
+
+		items.addObject(name,
+			new ShoppingCartItem(name, cost, 1, descURL));
+
+	}
+
+// fetchItems gets a list of available items from the web server and
+// uses parseItem to parse the individual items. If a line begins with
+// the # character, it is ignored (# is typically a comment character).
+
+	public void fetchItems(String urlName)
+	{
+		try {
+			URL url = new URL(urlName);
+
+			DataInputStream inStream =
+				new DataInputStream(
+					url.openStream());
+
+			String line;
+
+			while ((line = inStream.readLine()) != null) {
+				if (line.charAt(0) == '#') continue;
+				parseItem(line);		
+			}
+		} catch (Exception e) {
+		}
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Notice that the <TT>ItemPickerApplet</TT>
+uses the <TT>CommandButton</TT> class
+that was also introduced in <A HREF="ch10.htm" >Chapter 10</A>, &quot;Inter-Applet Communication.&quot;
+The <TT>CommandButton</TT> class did
+not have to be changed at all in order to be used with this application.
+The only necessary items are a few command classes that provide
+the glue between the command buttons and the catalog applet. Listing
+29.6 shows the <TT>ItemPickerDescribe</TT>
+command class. The other command classes are almost identical
+to the <TT>ItemPickerDescribe</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 29.6&nbsp;&nbsp;Source Code for ItemPickerDescribe.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public class ItemPickerDescribe extends Object implements Command
+{
+	ItemPickerApplet cart;
+
+	public ItemPickerDescribe(ItemPickerApplet cart)
+	{
+		this.cart = cart;
+	}
+
+	public void doCommand()
+	{
+		cart.doDescribe();
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="CreatingtheShoppingCartApplet">
+Creating the Shopping Cart Applet</A></H3>
+<P>
+Now that most of the hard work has been done, the shopping cart
+interface itself is<BR>
+fairly easy. Basically, the shopping cart applet must be an observer
+of the shopping cart. Whenever the applet receives an update notification
+telling it that the shopping cart has changed, the applet simply
+changes its local list of items, which is a scrollable list (actually,
+it's an <TT>ObjectList</TT>). The
+shopping cart applet is also responsible for sending the order
+to the Web server. For posting data to the Web server, you can
+adapt the <TT>PostSockURL</TT> or
+<TT>URLPost</TT> classes from Chapter
+6, &quot;Communicating with a Web Server.&quot; Listing 29.7 shows
+the <TT>ShoppingCartApplet</TT> class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 29.7&nbsp;&nbsp;Source Code for ShoppingCartApplet.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+
+// This class provides a user interface for the ShoppingCart class
+
+public class ShoppingCartApplet extends Applet
+	implements Observer
+{
+	protected ShoppingCart cart;
+	protected ObjectList itemList;
+	protected TextField customerName;
+	protected TextField totalField;
+
+	public ShoppingCartApplet()
+	{
+// Make this class an observer of the shopping cart
+		cart = new ShoppingCart();
+		cart.addObserver(this);
+
+// Create the list of objects in the cart
+		itemList = new ObjectList();
+
+// Create the field for the total cost so far
+		totalField = new TextField(10);
+		totalField.setEditable(false);
+		totalField.setText(&quot;Total: &quot;+cart.total);
+
+		setLayout(new BorderLayout());
+
+// Create a field for the customer name
+		customerName = new TextField(20);
+
+// Combine the label and the name field on a single panel
+		Panel namePanel = new Panel();
+		namePanel.add(new Label(&quot;Customer Name: &quot;));
+		namePanel.add(customerName);
+
+// Put the name field up at the top and the item list in the center
+		add(&quot;North&quot;, namePanel);
+		add(&quot;Center&quot;, itemList);
+
+// Create buttons for removing items and placing an order and put
+// them along the bottom.
+
+		Panel southPanel = new Panel();
+		southPanel.add(new CommandButton(
+			&quot;Remove Item&quot;,
+			new ShoppingCartRemove(this)));
+		southPanel.add(new CommandButton(
+			&quot;Place Order&quot;,
+			new ShoppingCartOrder(this)));
+		southPanel.add(totalField);
+
+		add(&quot;South&quot;, southPanel);
+
+// Tell the applet registry about this applet
+		AppletRegistry.instance().addApplet(&quot;Shopping Cart&quot;, this);
+	}
+
+	public String makeItemString(ShoppingCartItem item)
+	{
+		return item.itemName+&quot;   Qty: &quot;+item.quantity+
+			&quot;  Cost: &quot;+item.itemCost;
+	}
+
+	public void update(Observable whichCart, Object ob)
+	{
+		ShoppingCartEvent event = (ShoppingCartEvent) ob;
+
+		if (event.eventType == ShoppingCartEvent.ADDED_ITEM) {
+// If there is a new item in the cart, add it to the scrollable list
+			itemList.addObject(makeItemString(event.item),
+				event.item);
+			totalField.setText(&quot;Total: &quot;+cart.total);
+			itemList.validate();
+		} else if (event.eventType ==
+// If an item has been removed from the cart, remove it from the list
+			ShoppingCartEvent.REMOVED_ITEM) {
+			itemList.delObject(event.item);
+			totalField.setText(&quot;Total: &quot;+cart.total);
+			itemList.validate();
+		} else if (event.eventType ==
+			ShoppingCartEvent.CHANGED_ITEM) {
+// If an item has changed, update the list
+			int index = itemList.indexOf(event.item);
+			itemList.replaceObject(makeItemString(
+				event.item), event.item, index);
+			totalField.setText(&quot;Total: &quot;+cart.total);
+			itemList.validate();
+		}
+	}
+
+// If the user clicks on &quot;Remove Item,&quot; remove it from he list
+	public void doRemove()
+	{
+		Object ob = itemList.getSelectedObject();
+		if (ob == null) return;
+
+		ShoppingCartItem item = ((ShoppingCartItem)ob).copy();
+		item.quantity = 1;
+		cart.removeItem(item);
+	}
+
+// doPlaceOrder uses PostSockURL to post the order to a web
+// server. You will need to customize this method to fit your needs.
+
+	public void doPlaceOrder()
+	{
+		try {
+			URL postURL = new URL(
+				getDocumentBase().getProtocol(),
+				getDocumentBase().getHost(),
+				getDocumentBase().getPort(),
+				&quot;/shopping&quot;);
+
+			ByteArrayOutputStream byteOut = 
+				new ByteArrayOutputStream();
+			PrintStream outStream = 
+				new PrintStream(byteOut);
+
+			outStream.println(&quot;Custname: &quot;+
+				customerName.getText());
+			ShoppingCartItem[] items = cart.getItems();
+			for (int i=0; i &lt; items.length; i++) {
+				outStream.println(
+				items[i].itemName+&quot;|&quot;+
+				items[i].quantity);
+			}
+
+			String response = PostSockURL.post(postURL,
+				byteOut.toString());
+			System.out.println(response);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+			
+	}
+
+	public ShoppingCart getShoppingCart()
+	{
+		return cart;
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 29.1 shows the shopping cart applet in action.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f29-1.gif"><B>Figure 29.1 : </B><I>The shopping cart applet works in conjunction
+with a catalog applet</I>.</A>
+<P>
+When you request a description of an item, the catalog applet
+opens another browser window for viewing descriptions. Since the
+descriptions are simple URLs, you can include any data that you
+could normally place on a Web page. Figure 29.2 shows the description
+window for the shopping cart applet.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f29-2.gif"><B>Figure 29.2 : </B><I>An item description can be described by
+simple HTML pages</I>.</A>
+<P>
+In addition to providing an introduction to electronic shopping
+carts, this chapter reuses several key components from previous
+chapters. This makes the programs in this chapter easier to write,
+and it shows that the components that were presented as being
+reusable really <TT><I>are</I></TT>
+reusable.
+<P>
+One of the upcoming additions to Java, the Java Electronic Commerce
+Framework (JECF), will help you when developing shopping cart
+applications. Your shopping cart will be allowed to conduct financial
+transactions with the user's Java Wallet, which provides payment
+via credit card access, electronic cash, and other forms of electronic
+transactions. <A HREF="ch31.htm" >Chapter 31</A>, &quot;Java Electronic Commerce Framework
+(JECF),&quot; provides an overview of the services provided by
+the JECF.
+<P>
+Finally, remember to use secure communications when performing
+any transactions that involve personal information such as credit
+card numbers or social security numbers. It is a good idea to
+provide secure access at all times, because some customers will
+want all aspects of a transaction to be hidden from prying eyes.
+<HR>
+
+<CENTER><P><A HREF="ch28.htm"><IMG SRC="http://docs.rinet.ru/JSol/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JSol/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JSol/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch30.htm"><IMG SRC="http://docs.rinet.ru/JSol/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

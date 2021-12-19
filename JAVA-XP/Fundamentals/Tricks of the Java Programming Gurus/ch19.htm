@@ -1,0 +1,1510 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 19 -- Persistence</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 19</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Persistence</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+
+<UL>
+<LI><A HREF="#WhatIsPersistence" >What Is Persistence?</A>
+<LI><A HREF="#FormsofPersistenceinJava" >Forms of Persistence (in Java)</A>
+<LI><A HREF="#ImplementingaSimpleFileBasedPersist" >Implementing a Simple File-Based Persistent Store</A>
+<LI><A HREF="#ThePersistentJavaPJavaProject" >The PersistentJava (PJava) Project</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+<I>Persistence</I> in an object-oriented programming language
+that deals with the ability of objects to exist beyond the lifetime
+of the program in which they were created. This chapter addresses
+the topic of persistence from a number of perspectives.
+<P>
+First, it looks at what persistence is and what it means for Java
+objects to be persistent. An overview of several forms of persistence
+is presented.
+<P>
+Then the chapter delves into implementing file-based persistence,
+a strategy in which the programmer does most of the work to store
+objects persistently in a file. A <TT>Persistent</TT>
+framework is also introduced to provide developers a framework
+in which to implement persistence in their own classes.
+<P>
+Finally, the chapter covers the subject of Persistent Java (PJava),
+a research project at the University of Glasgow. This project's
+stated goals include building a prototype persistent storage interface
+for implementing orthogonal persistence in Java. An overview of
+persistent stores is presented prior to the discussion of PJava.
+<H2><A NAME="WhatIsPersistence"><FONT SIZE=5 COLOR=#FF0000>What
+Is Persistence?</FONT></A></H2>
+<P>
+<I>Persistence</I> describes something that exists beyond its
+expected lifetime. As applied to an object-oriented programming
+language, persistence describes objects that exist for an extended
+period of time, often beyond the lifetime of the original program
+that created the objects.
+<H3>Object Lifetime</H3>
+<P>
+New Java programmers learn that objects have a <I>lifetime</I>.
+An object begins its life when created by the <TT>new</TT>
+operator (for example, <TT>new String(&quot;hi&quot;)</TT>).
+After it is created, the object exists until destroyed by the
+Java Virtual Machine's garbage collector. (An object can be garbage
+collected only when the Java program no longer holds a reference
+to the object.) Objects can also be destroyed implicitly, when
+the Java program ends. This code snippet demonstrates the essential
+concepts of Java object lifetimes:
+<BLOCKQUOTE>
+<TT>{<BR>
+&nbsp;&nbsp;Date d = new Date();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Date object starts its life<BR>
+&nbsp;&nbsp;System.out.println(d.toString());<BR>
+}<BR>
+// Date object is no longer reachable, and may be destroyed</TT>
+</BLOCKQUOTE>
+<P>
+In this example, a new <TT>Date</TT>
+is created within a program block (<TT>{}</TT>)
+and stored in a variable (<TT>d</TT>)
+local to that block.  Upon reaching the ending curly brace (<TT>}</TT>),
+the local variable <TT>d</TT> exists
+no longer. From that moment, the <TT>Date</TT>
+object that was created is no longer reachable and may be garbage
+collected.
+<H3>Persistence as Extending an Object's Lifetime</H3>
+<P>
+Persistence is a way to extend the lifetime of an object beyond
+the lifetime of the program that created it.  To understand why
+it is useful to have persistent objects, consider an <TT>AddressBook</TT>
+class that contains names, addresses, and telephone numbers:
+<BLOCKQUOTE>
+<TT>public class AddressBook {<BR>
+&nbsp;&nbsp;public String[] names = null;<BR>
+&nbsp;&nbsp;public String[] addresses = null;<BR>
+&nbsp;&nbsp;public String[] phonenums = null;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+A person writes information in an address book so that it is available
+at a later date, when the information is needed. Most people are
+unlikely to remember addresses and telephone numbers, so they
+write that information into a book. If you try to use the <TT>AddressBook</TT>
+class to represent a real address book, you will find that it
+does not support the &quot;save it now, use it later&quot; paradigm.
+All instances of the <TT>AddressBook</TT>
+class are destroyed when the Java program ends.
+<P>
+To be useful, an <TT>AddressBook</TT>
+object must exist for an extended period of time. It must be <I>persistent</I>
+(probably for years). Every time the user looks up, adds, or modifies
+address information, the <TT>AddressBook</TT>
+object is needed. Because the program that uses the <TT>AddressBook</TT>
+isn't always running, the <TT>AddressBook</TT>
+must be preserved during the time the program is not running.
+<P>
+Persistence is usually implemented by preserving the state (attributes)
+of an object between executions of the program. To preserve state,
+the object is converted to a sequence of bytes and stored on a
+form of long term media (usually, a disk). When the object is
+needed again, it is restored from the long term media; the restoration
+process creates a new Java object that is identical to the original.
+Although the restored object is not &quot;the same object,&quot;
+its state and behavior are identical. (Object identity in a persistent
+system is an important issue, and is discussed in greater detail
+later in this chapter.) The following example outlines an API
+for a helper class that might be used to provide save and restore
+capabilities for <TT>AddressBook</TT>
+objects:
+<BLOCKQUOTE>
+<TT>class AddressBookHelper {<BR>
+&nbsp;&nbsp;public static void store(AddressBook book, File file)
+{...}<BR>
+&nbsp;&nbsp;public static AddressBook restore(File file) {...}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+To save an <TT>AddressBook</TT> to
+a file, you must explicitly write a few lines of code to store
+the object. The code might look like the following:
+<BLOCKQUOTE>
+<TT>File output = new new File(&quot;address.book&quot;);&nbsp;&nbsp;//
+persistent media<BR>
+AddressBookHelper.store(addrBook, output);</TT>
+</BLOCKQUOTE>
+<P>
+Restoring an <TT>AddressBook</TT>
+from a file would look similar:
+<BLOCKQUOTE>
+<TT>File input = new File(&quot;address.book&quot;);&nbsp;&nbsp;//
+persistent media<BR>
+AddressBook addrBook = AddressBookHelper.restore(input);</TT>
+</BLOCKQUOTE>
+<H2><A NAME="FormsofPersistenceinJava"><FONT SIZE=5 COLOR=#FF0000>Forms
+of Persistence (in Java)</FONT></A></H2>
+<P>
+There are several forms of persistence available to Java programmers.
+The forms discussed in this chapter include file-based persistence,
+relational databases, and object databases. These forms of persistence
+differ in several categories, including: logical organization
+of an object's state, the amount of work required of the application
+programmer to support persistence, concurrent access to the persistent
+object (from different processes), and support for transactional
+<I>commit</I> and <I>rollback</I> semantics.
+<H3>Files</H3>
+<P>
+Files are often used to store information between invocations
+of a program. Data stored in a file may be simple (a text file),
+or it may be complex (a circuit diagram). In daily use of a computer,
+you often interact with objects that are stored in files (word
+processing documents, spreadsheets, network diagrams, and so on).
+<P>
+Files can be used as the basis for a persistence scheme in Java.
+Although Java 1.0 does not support a built-in mechanism to store
+objects in files, Java 1.0 does provide a portable streaming library
+(<TT>DataInput</TT> and <TT>DataOutput</TT>).
+This library makes it easier for the programmer to save and restore
+objects.
+<P>
+A file-based persistence mechanism requires the programmer to
+put a bit of work into achieving persistence. The programmer must
+choose an external representation of the object, and write the
+code that saves and restores the objects.
+<P>
+Usually, concurrency control and transactional semantics do not
+apply to file-based persistence. Storing objects in files is usually
+appropriate for single-user applications that follow the <TT>File/Open&#133;</TT>
+and <TT>File/Save</TT> model.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Just before this book went to press, JavaSoft introduced a new API that simplifies the process of storing objects in files (and streaming objects across the network). nformation about the Object Serialization API can be found at <TT><A 
+HREF="http://chatsubo.javasoft.com/current/">http://chatsubo.javasoft.com/current/</A></TT>. These Web pages claim that Object Serialization will be part of Java 1.1.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>RDBMS</H3>
+<P>
+Relational database management systems (RDBMS) can also store
+persistent objects, but the characteristics of a relational database
+are different from file-based persistence. A relational database
+is organized into tables, rows, and columns, rather than the unstructured
+sequence of bytes represented by a file. An effort is under way
+to standardize the use of relational databases in Java (the JDBC
+API).
+<P>
+There are two major ways to store objects in a relational database.
+The first option is to interact with the database on its terms.
+The JDBC API provides interfaces that directly represent relational
+database structures. These structures can be used and manipulated
+as is. The other option is to write your own Java classes and
+&quot;map&quot; between the relational data structures and your
+classes. This type of mapping is a well-understood problem for
+which many commercial solutions are available (Java implementations
+will no doubt be available soon).
+<P>
+When using a relational database, unless you are using a tool
+to perform database-to-class mapping, you must write a large volume
+of code to interact with the database. Managing objects in the
+database requires you to write SQL statements (inserts, updates,
+deletes, and so on), which are forwarded to the database through
+the JDBC API.
+<P>
+Although using a relational database is more work, there are a
+few benefits. Relational databases usually support concurrency
+control and transactional properties. Multiple users can access
+the database without stepping on each other's changes, because
+the database uses locks to safeguard access. Additionally, almost
+all relational databases support ACID properties (<I>atomicity
+concurrency isolation durability</I>). These properties protect
+the integrity of the data by assuring that blocks of work (referred
+to as transactions) either complete successfully or are rolled
+back without affecting other users.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+As this book goes to press, the JDBC API was just officially standardized. Although few vendors are shipping products that support the API, almost all relational database vendors have publicly committed to providing implementations of the JDBC 
+API.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>ODBMS</H3>
+<P>
+Object database management systems (ODBMS) support persistence
+in a different manner than file-based persistence and relational
+databases. The philosophy behind object databases is to make the
+programmer's job simpler. Object databases (as the name implies)
+store objects; the programmer does not have to write SQL statements
+or methods to package and unpackage objects-the object database
+interface usually takes care of those details.
+<P>
+Object databases usually support concurrency control and ACID
+properties, like relational databases. They provide for concurrency
+access to the database, and they also provide commit and rollback
+transactional control. (Object databases are covered in greater
+depth later in this chapter, in the Persistent Java section.)
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+As this book went to press, there were no commercial object databases available for Java. Three vendors (Versant, O2, and Object Design) had publicly stated their intent to release Java object database products, but none was available. On the academic 
+front, the Persistent Java project was nearing completion of its first implementation (see the Persistent Java section, later in this chapter).</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="ImplementingaSimpleFileBasedPersist"><FONT SIZE=5 COLOR=#FF0000>Implementing
+a Simple File-Based Persistent Store</FONT></A></H2>
+<P>
+This section presents an example of how to implement a simple
+file-based persistent store (that you can use to add <I>persistability</I>
+to your classes). First, the section looks at how to read and
+write primitive data using standard classes and interfaces provided
+by Java. Then it looks at how to read and write whole objects,
+not just primitive data types. Finally, it discusses how to apply
+these new interfaces to make your classes persistent.
+<H3>IO Helpers-<TT><FONT SIZE=4 >DataInput</FONT></TT><FONT SIZE=4>
+and </FONT><TT><FONT SIZE=4 >DataOutput</FONT></TT>
+</H3>
+<P>
+Before discussing how to store whole objects in files, it is important
+to learn how to store primitive Java data values in files (<TT>int</TT>,
+<TT>float</TT>, <TT>String</TT>,
+and so on). The <TT>java.io</TT> package
+provides two interfaces (<TT>DataInput</TT>
+and <TT>DataOutput</TT>) that contain
+a standard API for reading and writing primitive Java types. Table
+19.1 provides a summary of the methods in <TT>DataInput</TT>
+and <TT>DataOutput</TT>.<BR>
+<P>
+<CENTER>
+<B>Table 19.1. The </B><TT><B></TT>DataInput</FONT></B></TT><B>
+and </B><TT><B></TT>DataOutput</FONT></B></TT><B>
+APIs.</B>
+<P><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=50%>
+<TR><TD WIDTH=33%>Data Type</TD><TD WIDTH=33%>DataInput</TD><TD WIDTH=33%>DataOutput
+</TD></TR>
+<TR><TD WIDTH=33%><TT>boolean</TT>
+</TD><TD WIDTH=33%><TT>readBoolean()</TT>
+</TD><TD WIDTH=33%><TT>writeBoolean()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>byte</TT></TD>
+<TD WIDTH=33%><TT>readByte()</TT>
+</TD><TD WIDTH=33%><TT>writeByte()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>char</TT></TD>
+<TD WIDTH=33%><TT>readChar()</TT>
+</TD><TD WIDTH=33%><TT>writeChar()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>short</TT></TD>
+<TD WIDTH=33%><TT>readShort()</TT>
+</TD><TD WIDTH=33%><TT>writeShort()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>int</TT></TD>
+<TD WIDTH=33%><TT>readInt()</TT></TD>
+<TD WIDTH=33%><TT>writeInt()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>long</TT></TD>
+<TD WIDTH=33%><TT>readLong()</TT>
+</TD><TD WIDTH=33%><TT>writeLong()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>float</TT></TD>
+<TD WIDTH=33%><TT>readFloat()</TT>
+</TD><TD WIDTH=33%><TT>writeFloat()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>double</TT></TD>
+<TD WIDTH=33%><TT>readDouble()</TT>
+</TD><TD WIDTH=33%><TT>writeDouble()</TT>
+</TD></TR>
+<TR><TD WIDTH=33%><TT>String</TT></TD>
+<TD WIDTH=33%><TT>readUTF()</TT></TD>
+<TD WIDTH=33%><TT>writeUTF()</TT>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Even though <TT>String</TT> is not strictly an elemental data type (it is a class), <TT>DataInput</TT> and <TT>DataOutput</TT> define an API for reading and writing <TT>String</TT>s. The primary reason is that the <TT>String</TT> data type is a major part 
+of the language-<TT>DataInput</TT> and <TT>DataOutput</TT> without <TT>String</TT> support would be a less-than-functional solution. The <TT>String</TT> data type is also handled differently; <TT>String</TT>s are encoded in a way that compacts the 
+representation, when possible.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The <TT>DataInput</TT> and <TT>DataOutput</TT>
+interfaces are simple to use. The following example demonstrates
+a few of the <TT>DataInput</TT> and
+<TT>DataOutput</TT> methods:
+<BLOCKQUOTE>
+<TT>class Person {<BR>
+&nbsp;&nbsp;String name = null;<BR>
+</TT>&nbsp;<TT>&nbsp;int age = 0;
+<BR>
+&nbsp;&nbsp;...<BR>
+</TT>&nbsp;<TT>&nbsp;void write(DataOutput
+out) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;out.writeUTF(name);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+write the name string<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;out.writeInt(age);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// write the age<BR>
+&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;...<BR>
+&nbsp;&nbsp;void read(DataInput in) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;name
+= in.readUTF();&nbsp;&nbsp;&nbsp;&nbsp; // read the name string
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;age = in.readInt();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+read the age<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+<TT>DataInput</TT> and <TT>DataOutput</TT>
+provide a platform independent solution for the data representation
+problem. Data written to a file (or socket) on one platform can
+be read by Java programs on different platforms, as the representation
+of the data types is standardized. An <TT>int</TT>
+or <TT>String</TT> written to a file
+on a Windows NT machine can be read from that file on a Solaris
+machine, Macintosh, and so on. If Java did not provide a standard
+interface for data formatting, every programmer would solve this
+problem independently. The result would be a Tower of Babel, which
+would make communicating between Java programs problematic (especially
+because Java is targeted for the network computing industry).
+<P>
+Sun has solved the data representation problem before. Years ago,
+Sun created the eXternal Data Representation (XDR) format, and
+an accompanying C library. XDR was created to provide a standard
+format for data interchange over networks, and to serve as the
+data format for Remote Procedure Calls (Rpc). Today, XDR is still
+widely used. 
+<P>
+Although similar to XDR, the format required by <TT>DataInput</TT>
+and <TT>DataOutput</TT> is not identical
+to XDR. Java's solution is less complicated, and more compact.
+The <TT>DataInput</TT>/<TT>DataOutput</TT>
+format requires that:
+<UL>
+<LI>Data is represented in binary form (not ASCII), for compactness.
+<LI>Data is represented in network byte-order (big-endian).
+<LI>For elemental data types, data is stored in exactly the same
+number of bytes as guaranteed by the JVM-that is, a <TT>byte</TT>
+is stored as one byte; a <TT>char</TT>,
+as two bytes; an <TT>int</TT>, as
+four bytes, and so on.
+<LI>No padding or byte-alignment is required.
+<LI><TT>String</TT>s are <I>encoded</I>
+using a special format that reduces the number of bytes written
+(especially if you are using the Latin character set).
+</UL>
+<P>
+Primitive data types can be written to or read from files, sockets,
+or any type of stream using the <TT>DataInput</TT>
+and <TT>DataOutput</TT> interfaces.
+<P>
+When reading and writing files, there are two implementations
+of the <TT>DataInput</TT> and <TT>DataOutput</TT>
+interfaces to choose from (in the <TT>java.io</TT>
+package). The <TT>RandomAccessFile</TT>
+class implements both <TT>DataInput</TT>
+and <TT>DataOutput</TT>. The more
+frequently used classes are <TT>DataInputStream</TT>
+(which implements <TT>DataInput</TT>)
+and the <TT>DataOutputStream</TT>
+(which implements <TT>DataOutput</TT>).
+To write data to a file, you should use a <TT>DataOutputStream</TT>
+as a filter over a <TT>FileOutputStream</TT>
+(see Chapter 5 &quot;Building Special-Purpose I/O Classes,&quot;
+for more information on filters). Here's an example:
+<BLOCKQUOTE>
+<TT>void write(File file, String s, int i,
+float f) {<BR>
+&nbsp;&nbsp;// first open the FileOutputStream<BR>
+</TT>&nbsp;<TT>&nbsp;FileOutputStream
+fileout = new FileOutputStream(file);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;// then open
+the DataOutputStream &quot;on top of&quot; the<BR>
+&nbsp;&nbsp;// FileOutputStream that's already open<BR>
+</TT>&nbsp;<TT>&nbsp;DataOutputStream
+dataout = new DataOutputStream(fileout);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;// then write
+to the DataOutputStream, which will be<BR>
+&nbsp;&nbsp;// streamed &quot;into&quot; the FileOutputStream
+<BR>
+</TT>&nbsp;<TT>&nbsp;dataout.writeUTF(s);
+<BR>
+&nbsp;&nbsp;dataout.writeInt(i);<BR>
+</TT>&nbsp;<TT>&nbsp;dataout.writeFloat(f);
+<BR>
+&nbsp;&nbsp;dataout.close();<BR>
+}<BR>
+</TT>Reading from a file is as simple as the last example.
+You open a <TT>DataInputStream</TT>
+over a <TT>FileInputStream</TT> and
+make calls to the <TT>DataInput</TT>
+reading methods.
+</BLOCKQUOTE>
+<H3>The <TT><FONT SIZE=4 >Persistent</FONT></TT><FONT SIZE=4>
+Framework</FONT></H3>
+<P>
+The <TT>java.io</TT> package supplies
+the necessary classes to read and write primitive data. But what
+about reading and writing entire objects? Although <TT>DataInput</TT>/<TT>DataOutput</TT>
+is a powerful concept (the portable data format), these interfaces
+do not contain methods to read or write entire objects. Objects
+seem to be &quot;left as an exercise for the reader.&quot; This
+author decided to take up the challenge and implement a simple
+framework for reading and writing objects. The interfaces and
+classes in this framework are present on the accompanying CD-ROM.
+Feel free to use the provided framework in your code.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Just before this book went to press, JavaSoft announced the (alpha) availability of the Object Serialization API. The API, which is scheduled to be part of Java 1.1, is a framework for reading and writing Java objects. Object Serialization is <I>very</I> 
+similar to the <TT>Persistent</TT> framework presented in this chapter. By learning the <TT>Persistent</TT> framework, you will also be learning about Object Serialization. 
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+You have already encountered the concepts that go into reading
+and writing primitive data. <TT>DataInput</TT>
+and <TT>DataOutput</TT> can handle
+the streaming of primitive types, but they do not handle class
+types. In order to stream class types, we need a new concept-the
+concept of &quot;a class whose instances that can stream themselves.&quot;
+This can be generalized in an interface, called <TT>Persistent</TT>:
+<BLOCKQUOTE>
+<TT>import PersistentInput;<BR>
+import PersistentOutput;<BR>
+import java.io.IOException;<BR>
+<BR>
+/**<BR>
+&nbsp;* Persistent interface. Provides a class with the ability
+to write<BR>
+</TT>&nbsp;<TT>* itself to a stream,
+and to read itself from a stream.&lt;p&gt;<BR>
+&nbsp;*<BR>
+</TT>&nbsp;<TT>* @see PersistentInput
+<BR>
+&nbsp;* @see PersistentOutput<BR>
+</TT>&nbsp;<TT>* @author&nbsp;&nbsp;Eric
+R Williams<BR>
+&nbsp;*/<BR>
+public interface Persistent {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;* Writes self to the specified output stream.&lt;p&gt;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;*<BR>
+&nbsp;&nbsp;&nbsp;* @param out the persistent output interface
+to write self to.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;* @exception
+IOException if an I/O problem occurs.<BR>
+&nbsp;&nbsp;&nbsp;*/<BR>
+</TT>&nbsp;<TT>&nbsp;public void write(PersistentOutput
+out) throws IOException;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;* Reads self from the specified input stream.&lt;p&gt;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;*<BR>
+&nbsp;&nbsp;&nbsp;* @param in the persistent input interface to
+read self from.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;* @exception
+IOException if an I/O problem occurs.<BR>
+&nbsp;&nbsp;&nbsp;*/<BR>
+</TT>&nbsp;<TT>&nbsp;public void read(PersistentInput
+in) throws IOException;<BR>
+}<BR>
+</TT>
+</BLOCKQUOTE>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Note the use of javadoc-style comments in the preceding example. Documenting your code using the javadoc standard format is always a good idea. This format helps you produce on-line documents describing your code, and it is generally expected by other 
+developers. For the remainder of this chapter, however, the javadoc-style comments have been removed to cut down on the size of the code listings.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The <TT>Persistent</TT> interface
+provides a standard way to add persistence (and streamability)
+to classes. To add persistence to a class, implement the <TT>Persistent</TT>
+interface in that class. There are only two methods to implement:
+one to write the object to an output stream (<TT>write(PersistentOutput)</TT>)
+and one to read the object from an input stream (<TT>read(PersistentInput)</TT>).
+<P>
+If you examine the <TT>Persistent</TT>
+interface, you encounter two additional classes: <TT>PersistentOutput</TT>
+and <TT>PersistentInput</TT>. They
+are actually not classes, but interfaces. These interfaces extend
+the <TT>DataInput</TT> and <TT>DataOutput</TT>
+interface models to provide support reading and writing <TT>Persistent</TT>
+objects, as follows:
+<BLOCKQUOTE>
+<TT>import Persistent;<BR>
+import java.io.DataOutput;<BR>
+import java.io.IOException;<BR>
+<BR>
+public interface PersistentOutput extends DataOutput {<BR>
+&nbsp;&nbsp;void writePersistent(Persistent obj) throws IOException;
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+<TT>PersistentOutput</TT> defines
+an API that extends the <TT>DataOutput</TT>
+interface and adds a new method (to write <TT>Persistent</TT>
+objects). The new method, <TT>writePersistent(Persistent)</TT>,
+is declared in a style consistent with the other methods declared
+in the <TT>DataOutput</TT> interface.
+<P>
+A similar interface is defined to extend <TT>DataInput</TT>-the
+<TT>PersistentInput</TT> interface:
+<BLOCKQUOTE>
+<TT>import Persistent;<BR>
+import java.io.DataInput;<BR>
+import java.io.IOException;<BR>
+<BR>
+public interface PersistentInput extends DataInput {<BR>
+&nbsp;&nbsp;Persistent readPersistent() throws IOException;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+These three interfaces-<TT>Persistent</TT>,
+<TT>PersistentInput</TT>, and <TT>PersistentOutput</TT>-form
+a framework that makes it easy to add persistence to your classes.
+There are two additional classes in the <TT>Persistent</TT>
+framework, <TT>PersistentInputStream</TT>
+and <TT>PersistentOutputStream</TT>;
+these classes are discussed in detail in a later section.
+<H3>Using the Simple Persistent Store</H3>
+<P>
+Now that you have been introduced to the <TT>Persistent</TT>
+framework, let's examine how to apply that framework to make objects
+persistent. This process involves modifying a class that you have
+already written, to add the <TT>Persistent</TT>
+interface to that class. We will use a simple class created to
+demonstrate the <TT>Persistent</TT>
+framework, the <TT>Shape</TT> class.
+The original code for <TT>Shape</TT>
+(without persistence) is listed below:
+<BLOCKQUOTE>
+<TT>import java.io.*;<BR>
+import java.awt.Point;<BR>
+public class Shape {<BR>
+&nbsp;&nbsp;private Point[] vertices;<BR>
+</TT>&nbsp;<TT>&nbsp;private String&nbsp;&nbsp;name;
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public Shape(Point[]
+vertices, String name) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.name = name;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.vertices
+= vertices;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public Shape(int size, String name) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.name
+= name;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices = new
+Point[size];<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int i=0; i&lt;size; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices[i]
+= new Point(0, 0);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public Point getPoint(int pos) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+vertices[pos];<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public String getName() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+name;<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+<TT>Shape</TT> is a simple class;
+it has only two attributes, a name and an array of points (the
+boundaries of the shape). The <TT>Shape</TT>
+class depends on <TT>java.awt.Point</TT>
+to represent <TT>Point</TT> objects.
+<P>
+To add persistence to the <TT>Shape</TT>
+class, we need to make a few changes to the class source code:
+<UL>
+<LI>Add &quot;<TT>implements Persistent</TT>&quot;
+to the class declaration line
+<LI>Add a no-parameter constructor (the reason for this will be
+discussed later)
+<LI>Code the <TT>write(PersistentOutput)</TT>
+method, which is required by the <TT>Persistent</TT>
+interface
+<LI><FONT COLOR=#000000>Code the </FONT><TT>read(PersistentInput)</TT>
+method, which is also required by the <TT>Persistent</TT>
+interface
+</UL>
+<P>
+The first two items on this list are trivial. They involve minor
+changes to the class. The latter two items are more involved tasks.
+<P>
+Before we start coding the <TT>read()</TT>
+and <TT>write()</TT> methods, we need
+to choose an external format for the <TT>Shape</TT>
+class. The external format is a specification of the order and
+structure of the object's attributes. One convenient notation
+used to express this format is similar to C <TT>struct</TT>
+declarations. (This notation is used in the Java Virtual Machine
+Specification to describe the layout for Java <TT>.class</TT>
+files.) We can represent the <TT>Shape</TT>
+class using the following structure:
+<BLOCKQUOTE>
+<TT>int vertex_count;<BR>
+struct {<BR>
+</TT>&nbsp;<TT>&nbsp;int x;<BR>
+&nbsp;&nbsp;int y;<BR>
+} vertices [vertex_count];<BR>
+String name;</TT>
+</BLOCKQUOTE>
+<P>
+This notation specifies that the first element in the format is
+labeled <TT>vertex_count</TT> and
+is an <TT>int</TT>. The second element
+is labeled <TT>vertices</TT>; it is
+an array of length <TT>vertex_count</TT>
+(which was already specified). The array is composed of a compound
+structure containing two <TT>int</TT>s,
+<TT>x</TT> and <TT>y</TT>,
+respectively. The last element is a <TT>String</TT>,
+labeled <TT>name</TT>. In this notation,
+the labels exist for human consumption only-they are not included
+in the stored objects. Labels help readers of the format understand
+what data is being represented.
+<P>
+Once you choose an external format for the <TT>Shape</TT>
+class, you can begin to construct the routines to read and write
+a <TT>Shape</TT>.  Here is an implementation
+of the <TT>write(PersistentOutput)</TT>
+method:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;public void write(PersistentOutput
+out) throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;out.writeInt(vertices.length);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+write # of points<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for(int
+i=0; i&lt;vertices.length; i++) {&nbsp;&nbsp;// write each point
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeInt(vertices[i].x);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeInt(vertices[i].y);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;out.writeUTF(name);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+write shape name<BR>
+&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+Only two of the <TT>DataOutput</TT>
+interface methods are used in this example: <TT>writeInt()</TT>
+and <TT>writeUTF()</TT>. As you can
+see, this method logically carries out the agreed-upon format-array
+length, followed by the array of points, and then followed by
+a string. The process of writing an object to a file is not difficult;
+it is expressed in about five lines of code.
+<P>
+The following is an implementation of the <TT>read(PersistentInput)</TT>
+method:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;public void read(PersistentInput
+in) throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;vertices = new Point[in.readInt()];&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+read # of points<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for(int
+i=0; i&lt;vertices.length; i++) {&nbsp;&nbsp;&nbsp;&nbsp; // read
+each point<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices[i] = new Point(in.readInt(),
+in.readInt());<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;name = in.readUTF();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// read shape name<BR>
+</TT>&nbsp;<TT>&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>read()</TT> method implements
+the agreed-upon format. Again, the method is short and simple
+to understand, using just two methods from the <TT>DataInput</TT>
+interface: <TT>readInt()</TT> and
+<TT>readUTF()</TT>. First, it reads
+the vertices' array size, followed by each vertex (a <TT>Point</TT>
+consisting of two <TT>int</TT>s, <TT>x</TT>
+and <TT>y</TT>), and finally reads
+a <TT>String</TT>, the name of the
+shape.
+<P>
+Now that we have seen the pieces, let's put it all together. The
+following code listing includes the <TT>Shape</TT>
+class (renamed to <TT>PShape</TT>),
+plus the additions that have been made (in <B>bold</B>) to support
+persistence:
+<BLOCKQUOTE>
+<TT>import java.io.*;<BR>
+import java.awt.Point;<BR>
+public class PShape <B>implements Persistent</B> {<BR>
+&nbsp;&nbsp;private Point[] vertices;<BR>
+</TT>&nbsp;<TT>&nbsp;private String&nbsp;&nbsp;name;
+<BR>
+<BR>
+</TT>&nbsp;<TT><B></TT>&nbsp;public PShape()
+{&nbsp;&nbsp;&nbsp;&nbsp;// need a no-parameter constructor<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;&nbsp;&nbsp;vertices
+= null;<BR>
+</B></TT>&nbsp;<TT><B></TT>&nbsp;&nbsp;&nbsp;name
+= null;<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;}<BR>
+<BR>
+</B>&nbsp;&nbsp;public PShape(Point[] vertices, String name) {
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;this.name
+= name;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;this.vertices = vertices;<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public PShape(int
+size, String name) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;this.name = name;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;vertices
+= new Point[size];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (int i=0; i&lt;size; i++) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices[i]
+= new Point(0, 0);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public Point
+getPoint(int pos) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return vertices[pos];<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public String
+getName() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return name;<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT><B></TT>&nbsp;public void
+write(PersistentOutput out) throws IOException {<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;&nbsp;&nbsp;out.writeInt(vertices.length);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+write # of points<BR>
+</B></TT>&nbsp;<TT><B></TT>&nbsp;&nbsp;&nbsp;for(int
+i=0; i&lt;vertices.length; i++) {&nbsp;&nbsp;// write each point
+<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeInt(vertices[i].x);
+<BR>
+</B></TT>&nbsp;<TT><B></TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeInt(vertices[i].y);
+<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;&nbsp;&nbsp;}<BR>
+</B></TT>&nbsp;<TT><B></TT>&nbsp;&nbsp;&nbsp;out.writeUTF(name);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+write shape name<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;}<BR>
+</B></TT>&nbsp;<TT><B></TT>&nbsp;public
+void read(PersistentInput in) throws IOException {<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;&nbsp;&nbsp;vertices
+= new Point[in.readInt()];&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+read # of points<BR>
+</B></TT>&nbsp;<TT><B></TT>&nbsp;&nbsp;&nbsp;for(int
+i=0; i&lt;vertices.length; i++) {&nbsp;&nbsp;&nbsp;&nbsp; // read
+each point<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices[i]
+= new Point(in.readInt(), in.readInt());<BR>
+</B></TT>&nbsp;<TT><B></TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+</FONT></B></TT>&nbsp;<B>&nbsp;&nbsp;&nbsp;name
+= in.readUTF();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// read shape name<BR>
+</B></TT>&nbsp;<TT>&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;public String
+toString() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;StringBuffer b = new StringBuffer(name);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for
+(int i=0; i&lt;vertices.length; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b.append(&quot; (&quot; +
+vertices[i].x + &quot;,&quot; + vertices[i].y + &quot;)&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return b.toString();<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+To validate the persistence of the above class, we need to have
+a test class that:
+<UL>
+<LI>Creates a <TT>Shape</TT> object.
+<LI>Writes it to a file, using a <TT>PersistentOutputStream</TT>.
+<LI>Reads it back from the file, using a <TT>PersistentInputStream</TT>.
+<LI><FONT COLOR=#000000>Compares the two objects.</FONT>
+</UL>
+<P>
+The following class, <TT>PShapeTest</TT>,
+validates the persistence of <TT>PShape</TT>.
+(All of these classes are on the accompanying CD-ROM, so feel
+free to run this test.)
+<BLOCKQUOTE>
+<TT>package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import COM.MCP.Samsnet.tjg.PShape;<BR>
+import COM.MCP.Samsnet.tjg.PersistentOutputStream;<BR>
+import COM.MCP.Samsnet.tjg.PersistentInputStream;<BR>
+import java.io.*;<BR>
+public class PShapeTest {<BR>
+&nbsp;&nbsp;public static void main(String[] args) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PShape square = new PShape(4,
+&quot;SquareOne&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;square.getPoint(0).move(0,
+0);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;square.getPoint(1).move(1,
+0);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;square.getPoint(2).move(1,
+1);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;square.getPoint(3).move(0,
+1);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PersistentOutputStream out
+=&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // create a PersistentOutputStream
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new
+PersistentOutputStream(&nbsp;&nbsp;&nbsp;&nbsp;// on top of a
+FileOutputStream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new
+FileOutputStream(&quot;pshape.sav&quot;));<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writePersistent(square);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// *** write the Shape ***<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.close();
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PersistentInputStream
+in =&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// create
+a PersistentInputStream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new
+PersistentInputStream(&nbsp;&nbsp;&nbsp;&nbsp; // on top of a
+FileInputStream<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new
+FileInputStream(&quot;pshape.sav&quot;));<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PShape
+shape2 = <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(PShape)
+in.readPersistent();&nbsp;&nbsp;// *** read the Shape ***<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in.close();
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(square.equals(shape2)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;everything
+is ok!&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;} catch (Exception ee) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.err.println(ee.toString());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ee.printStackTrace();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;}&nbsp;&nbsp;// main<BR>
+} // class</TT>
+</BLOCKQUOTE>
+<H3>The Implementation of <TT><FONT SIZE=4 >PersistentInputStream</FONT></TT><FONT SIZE=4>
+and </FONT><TT><FONT SIZE=4 >PersistentOutputStream</FONT></TT>
+</H3>
+<P>
+The only missing pieces now are the classes that provide implementations
+for the <TT>PersistentOutput</TT>
+and <TT>PersistentInput</TT> interfaces.
+As interfaces, they are API specifications only; implementations
+are required if you are going to use the interfaces.
+<P>
+Let's start with <TT>PersistentOutput</TT>.
+The <TT>PersistentOutput</TT> interface
+is very complicated; it contains all the methods of <TT>DataOutput</TT>
+(approximately 14 methods), plus <TT>writePersistent()</TT>.
+That's a lot of methods to implement! Fortunately, reuse by inheritance
+comes in handy; a class that nearly matches the needs already
+exists. By subclassing <TT>DataOutputStream</TT>,
+all of the <TT>DataOutput</TT> methods
+defined in <TT>DataOutputStream</TT>
+are inherited (and do not need to be reimplemented). You only
+have to implement a constructor and <TT>writePersistent()</TT>
+method. Here's a listing of the <TT>DataOutputStream</TT>
+class:
+<BLOCKQUOTE>
+<TT>import java.io.*;<BR>
+import Persistent;<BR>
+import PersistentOutput;<BR>
+<BR>
+public class PersistentOutputStream extends DataOutputStream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;implements PersistentOutput {<BR>
+public PersistentOutputStream(OutputStream out) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;super(out);<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public final
+void writePersistent(Persistent obj) throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (obj == null) {&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+treat null in a special way<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writeUTF(&quot;null&quot;);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+write &quot;null&quot; as the class name<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;} else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writeUTF(obj.getClass().getName());&nbsp;&nbsp;//
+write the object's class name<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj.write(this);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+then write the object itself<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>writePersistent()</TT> method
+writes the string &quot;null&quot; if the specified <TT>Persistent</TT>
+object is null. Otherwise, the method writes the class name of
+the object (a <TT>String</TT>), followed
+by the object writing itself to the stream (using the <TT>write(PersistentOutput)</TT>
+method of the <TT>Persistent</TT>
+interface). The <TT>PersistentOutputStream</TT>
+does not have to understand the format a <TT>Persistent</TT>
+object uses when it writes itself to the stream. Moving the writing
+logic to the classes that implement <TT>Persistent</TT>
+is what the <TT>Persistent</TT> interface
+is all about.
+<P>
+The <TT>PersistentInputStream</TT>
+is slightly more complicated, but it still inherits most of its
+behavior from <TT>DataInputStream</TT>,
+as shown here:
+<BLOCKQUOTE>
+<TT>import java.io.*;<BR>
+import Persistent;<BR>
+import PersistentInput;<BR>
+<BR>
+public class PersistentInputStream extends DataInputStream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;implements PersistentInput {<BR>
+public PersistentInputStream(InputStream in) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;super(in);<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public final
+Persistent readPersistent() throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Persistent obj = null;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;String
+classname = readUTF();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+read the class name<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (&quot;null&quot;.equals(classname))
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj
+= null;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// if &quot;null&quot;, return null<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;} else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// retrieve the
+Class object for the specified class name<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Class
+clazz = Class.forName(classname);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+build a new instance of the Class (throws an exception if<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// the class is
+abstract or does not have a no-param constructor<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj
+= (Persistent) clazz.newInstance();<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+let the object read itself from the stream<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj.read(this);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+catch (ClassNotFoundException ee) {&nbsp;&nbsp;&nbsp;&nbsp; //
+catch all kinds of<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new IOException(ee.toString());&nbsp;&nbsp;&nbsp;//
+exceptions and rethrow<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+catch (InstantiationException ee) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new IOException(ee.toString());
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+catch (IllegalAccessException ee) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new IOException(ee.toString());
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;return
+obj;<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>readPersistent()</TT> method
+reads the name of the object's class from the stream. If that
+name is equal to &quot;null,&quot; the <TT>null</TT>
+value is returned. Otherwise, the method locates the Java <TT>Class</TT>
+object corresponding to the class name and uses the <TT>Class</TT>
+to create a new instance of the <TT>Persistent</TT>
+object. The new <TT>Persistent</TT>
+object then reads itself from the stream in the <TT>read(PersistentInput)</TT>
+method.
+<P>
+You might wonder about the exception handling in the <TT>readPersistent()</TT>
+method. Why does it have so many <TT>catch</TT>
+statements? They were used to keep the <TT>readPersistent()</TT>
+method consistent with the methods of <TT>DataInput</TT>,
+all of which throw only <TT>IOException</TT>.
+If you do not catch the listed exceptions and rethrow them as
+<TT>IOExceptions</TT>, the exception
+class names must be declared in the <TT>throws</TT>
+clause of the <TT>readPersistent()</TT>
+method-which would be inconsistent with <TT>DataInput</TT>.
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The object creation step in the <TT>PersistentInputStream</TT> class requires the use of the <TT>Class</TT> method <TT>newInstance()</TT>, which is Java's generic interface for creating an object, given the <TT>Class</TT> instance. To allocate a new object 
+of a class using <TT>newInstance()</TT>, the class must have a <TT>public</TT> constructor that takes no parameters (this is the constructor method that will be invoked by <TT>newInstance()</TT>). A <TT>public</TT> no-parameter constructor was added to the 
+<TT>PShape</TT> class to support the use of <TT>newInstance()</TT>.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The <TT>PersistentInputStream</TT>
+and <TT>PersistentOutputStream</TT>
+implementation of reading and writing <TT>Persistent</TT>
+objects has several limitations:
+<UL>
+<LI>If you attempt to read a persistent object for which the Java
+class has not yet been loaded, an exception is thrown.
+<LI>Object identity is not considered. Two references to a single
+object are written as two objects on a <TT>PersistentOutputStream</TT>.
+<LI><FONT COLOR=#000000>Cyclical data structures cause the </FONT><TT>PersistentOutputStream</TT>
+to enter a recursive loop, eventually exhausting stack space and
+throwing an exception. (An example of a cyclical structure is
+one in which two objects contain references to each other.)
+</UL>
+<P>
+The <TT>Persistent</TT> framework
+classes are simple and straightforward. In short order, you can
+add &quot;persistence&quot; to your classes; you can store objects
+in files or send them across a network to another computer. These
+interfaces and classes are not a general solution to the problem
+of persistence, but it's a good solution when you have to store
+or send simple objects. Additionally, the <TT>Persistent</TT>
+framework is a useful tool to teach some of the concepts of persistence.
+<H2><A NAME="ThePersistentJavaPJavaProject"><FONT SIZE=5 COLOR=#FF0000>The
+PersistentJava (PJava) Project</FONT></A></H2>
+<P>
+In October 1995 (the early days of Java, before the language skyrocketed
+in popularity), Sun funded a year-long research project at the
+University of Glasgow to investigate adding &quot;persistence&quot;
+to the Java programming language. The Glasgow researchers have
+proposed a design specification for adding &quot;orthogonal&quot;
+persistence to Java. They have also begun building a persistent
+storage interface to link Java to a persistent store.
+<H3>Persistent Store Concepts</H3>
+<P>
+Few programmers are familiar with persistent stores or object
+databases. This brief section introduces the basic concepts involved
+in a persistent store.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The phrases &quot;persistent store&quot; and &quot;object database&quot; are often used interchangeably. Because the authors of the PJava design refer to PJava as an &quot;interface to a persistent store,&quot; this chapter refers to PJava as a 
+&quot;persistent storage&quot; interface.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Persistent Stores Versus Relational Databases</H4>
+<P>
+Foremost, a persistent store is a <I>kind of</I> database. You
+are probably familiar with the term &quot;database&quot; (a storage
+pool for information). Most commercially available databases support
+long term data storage on disk, structural organization of the
+data, methods to retrieve data from the database, methods to update
+data already stored in the database, row or page locking to prevent
+concurrent access problems, isolation of uncompleted transactions
+from other transactions, and so on. Most persistent stores meet
+these criteria.
+<P>
+By far the most common type of client-server database system is
+the relational database (for example, Oracle, Informix, Sybase,
+DB2, and so on). Contrasting a persistent store with a relational
+database is a useful exercise to understand what a persistent
+store is and what it is not.
+<P>
+Relational databases are organized in tabular data structures:
+tables, columns, and rows. Data from different tables can be joined
+to create new ways of looking at the data. SQL is used to send
+commands to the database, such as commands to create new rows
+of data, to update rows, and so on. SQL commands can also be used
+from other programming languages, because they are sent to the
+database server for processing.
+<P>
+Relational databases, with their tabular data structures, do not
+mesh well with object-oriented (OO) programming languages. There
+are three major problems encountered using relational databases
+from an OO language. First, relational data structures do not
+provide for class encapsulation. OO programmers are encouraged
+to model their domain using classes, providing an API to class
+users, and &quot;hiding&quot; all data within the class. Relational
+structures expose all data and do not allow encapsulation by an
+API. Second, OO classes support a rich set of data types that
+are difficult or impossible to model efficiently in a relational
+structure. Examples include multidimensional arrays, dictionaries,
+and object references. Last, it is difficult to represent class
+inheritance in a relational database. Although it is possible,
+deep class inheritance trees can result in <I>n</I>-way joins
+on the database server that have poor performance.
+<P>
+Tools that attempt to solve the object and relational mismatch
+are available. These tools map relational data structures into
+OO classes using relatively simple rules (for example, map tables
+to classes, columns to attributes, and foreign key attributes
+to object relationships). Although some of these products have
+been successful, this approach has had problems. These products
+suffer from performance issues, particularly when complex navigation
+is performed through the mapped data structures. Additionally,
+these products limit the type-expressiveness of the language,
+because not all the data types expressible in the object-oriented
+language are easily expressible in a relational database.
+<P>
+Persistent stores are different from relational databases. Persistent
+stores do the following:
+<UL>
+<LI>Eliminate the use of relational data structures (instead,
+whole objects are stored directly in the database)
+<LI>Enable the programmer to write classes in a normal, object-oriented
+fashion to represent data that will be made persistent
+<LI>Enable the programmer to take advantage of more data types
+than is possible when using a relational database
+<LI><FONT COLOR=#000000>Provide a simpler interface than a relational
+database interface</FONT>
+</UL>
+<H4>Creating and Using Persistent Objects</H4>
+<P>
+Different persistent storage interfaces have different methods
+for creating persistent objects (or making existing objects persistent).
+Some interfaces require the programmer to specify whether an object
+is to be persistent at the time an object is created. Other persistent
+stores implement a concept referred to as <I>persistent roots</I>.
+Persistent root objects are explicitly identified as objects that
+are persistent; any object that is referred to by the persistent
+root is also considered persistent. All objects that are reachable
+in this fashion (from the persistent root) are also considered
+to be persistent and are saved in the persistent store. This concept
+is called <I>persistence via reachability</I>.
+<P>
+Retrieving objects from a persistent store is significantly different
+from retrieving data through SQL. When using SQL, the programmer
+must explicitly request data (using <TT>SELECT</TT>
+statements); but with persistent stores, programmers seldom make
+explicit queries for objects. Persistent stores usually provide
+a mechanism to request only &quot;top-level&quot; objects, either
+through direct query or through a request for a particular persistent
+root.
+<P>
+Persistent storage interfaces almost universally employ a process
+known as <I>swizzling</I> (or object faulting) to retrieve objects
+from the database. Objects are retrieved on the fly, as they are
+needed. After obtaining a reference to a top-level object, programmers
+normally use that object to access related objects. When attempting
+to access an object that has not yet been retrieved from the database,
+the object is <I>swizzled</I> in. The attempt to access the object
+is trapped by the database interface, which then retrieves the
+object's storage block from the database, restores the object,
+and then allows the object access to continue.
+<P>
+Finally, persistent stores usually have a mechanism to identify
+objects uniquely: the object ID. Every object in a persistent
+store is assigned its own unique object ID, which can be used
+to differentiate objects of the same class whose values are equal.
+<H3>PJava Design</H3>
+<P>
+The first Persistent Java design, known as PJava0, was published
+in January 1996. An additional paper (Atkinson, et al. '96) was
+published in February and describes the design issues of PJava0.
+(Both of these papers are available from <TT><A HREF="http://www.dcs.gla.ac.uk/~susan/pjava">http://www.dcs.gla.ac.uk/~susan/pjava</A></TT>.)
+The PJava0 design goals, principles, and architecture are outlined
+in the following sections.
+<H4>Project Goals</H4>
+<P>
+The stated goal of the PersistentJava project is to provide orthogonal
+persistence in Java. The PJava researchers are creating a persistent
+storage mechanism that can store objects of any type in the persistent
+store. This is the operating meaning of &quot;orthogonal&quot;-the
+independence of the persistence from data type. Any object, without
+respect to type, can be made persistent.
+<P>
+Many persistent stores and object databases do not support orthogonal
+persistence. Orthogonal persistence is extremely hard to implement
+in most programming languages. It means that the programmer can
+write code without considering that they might be dealing with
+persistent objects. This forces the persistent storage interface
+to be extremely flexible in how it deals with data types. Additionally,
+this makes implementing a programming-language independent database
+server difficult because a very tight binding is made to one language's
+type system.
+<P>
+The Glasgow team has set out with a goal of orthogonal persistence;
+doing so has implications they must handle. Any object, be it
+of a user-defined or system-defined class, can be persistent.
+Persistent objects can include <TT>Object</TT>,
+<TT>Panel</TT>, <TT>SecurityManager</TT>,
+<TT>Button</TT>, <TT>Class</TT>,
+<TT>Hashtable</TT>, and so on.
+<P>
+An additional goal of the research project is the building of
+a prototype application that uses the prototype persistent storage
+interface. The application is referred to as <I>Forest</I>, a
+distributed software configuration management and build system
+([Atkinson, et al. 96] Atkinson, Dayn&egrave;s &amp; Spence. Draft
+PJava Design 1.2. Department of Computer Science, University of
+Glasgow. January 1996).
+<H4>Design Principles</H4>
+<P>
+The PJava team used several principles to guide their design:
+<UL>
+<LI>Data type independence from persistence (orthogonal)
+<LI>Persistence through reachability from persistent roots
+<LI>No changes to the Java language
+<LI>Support for different styles of transactions
+<LI>Persistence without modification to existing Java code
+<LI><FONT COLOR=#000000>Flexibility, to allow for integration
+with multiple persistent stores</FONT>
+</UL>
+<P>
+The PJava team intentionally left out one potential design goal:
+&quot;No changes to the Java virtual machine.&quot; In fact, the
+team has actively pursued the modification of the JVM; it is a
+central part of the architecture (and probably the only feasible
+way to implement orthogonal persistence). Unfortunately, JavaSoft
+has stated that they will not incorporate the PJava changes into
+the commercial JVM, effectively relegating PJava to the academic
+community for the time being.
+<P>
+The foremost point to remember about the design of Persistent
+Java is that it does not require the programmer to change any
+existing classes. It does not require the programmer to use a
+&quot;special&quot; version of the system classes. It does, however,
+require the programmer to use a customized virtual machine.
+<H4>Storing and Retrieving Objects</H4>
+<P>
+One of the first things you want to know as the user of a persistent
+store is how to make objects persistent. How do you store objects
+in the database? Persistent Java incorporates the concept of a
+persistent root. The <I>Draft PJava Design 1.2</I> document states
+that an early revision of the design included a <TT>PersistentRoot</TT>
+class-objects of type <TT>PersistentRoot</TT>
+(or a subclass thereof) have the property of &quot;being a persistent
+root.&quot; However, the design was changed; any object may be
+registered as a persistent root, thus making the &quot;root&quot;
+property independent of data type.
+<P>
+Here is an example of how to make an object a persistent root
+in PJava0:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;// make obj a persistent
+root (pstore is a PJavaStore)<BR>
+&nbsp;&nbsp;pstore.registerPRoot(&quot;root-1&quot;, obj);<BR>
+</TT>To retrieve a persistent root from the database, follow
+this example:<BR>
+&nbsp;<TT>&nbsp;// get the handle for all
+Open Orders<BR>
+&nbsp;&nbsp;Orders[] orders = (Orders[]) pstore.getPRoot(&quot;OpenOrders&quot;);
+<BR>
+</TT>
+</BLOCKQUOTE>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The previous code example is the only PJava code sample included with this book. As this book goes to press, the PJava0 implementation has yet to be completed. It is scheduled to be completed during the Summer of 1996.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Recall from the earlier discussion of persistent roots (in the
+section &quot;Persistent Store Concepts&quot;) that roots are
+only the starting point for the identification of persistent objects.
+By adding a single persistent root to the database, you may be
+adding thousands of objects to the persistent Java store.
+<P>
+Now you can store root objects in the persistent store and retrieve
+them. But how do you access other objects? Does a similar &quot;ask
+the database for the object&quot; interface exist? The answer
+is both yes and no. When you use a root object to access related
+objects, you call methods on and retrieve the attributes of those
+objects. When you attempt to access a related object that has
+not yet been brought from the database, the modified virtual machine
+intercepts this action, bringing the object from the database
+for you. You are not required to do anything special. Use objects
+as you normally would-the object retrieval mechanism is transparent.
+<P>
+The PJava virtual machine (a modified JVM) performs work that
+is not visible to the programmer-the VM monitors access to objects.
+When an attempt is made to access a persistent object that has
+not yet been accessed, PJava goes into action. Part of the PJava
+system is called upon to retrieve the object. It determines whether
+the storage block containing the object has already been loaded;
+if not, it makes a trip to the persistent store. When the object's
+storage is loaded, PJava converts the byte-oriented storage into
+a Java object. The PJava VM then allows your code to continue
+accessing the object. This mechanism of transparent object retrieval
+is often called <I>swizzling</I>, or object faulting (a legacy
+of certain object databases that perform this operation using
+OS page faulting mechanisms).
+<H4>Transactions</H4>
+<P>
+The next thing you might want to know about PJava is how to begin
+and end a transaction. The designers of PJava wanted to allow
+multiple transaction styles, so they created a transaction root
+class, <TT>TransactionShell</TT>.
+This class has two provided subclasses: <TT>NestedTransaction</TT>
+and <TT>OLTPTransaction</TT>, but
+the programmer can subclass <TT>TransactionShell</TT>
+to create new transactional styles.
+<P>
+Transactions in PJava can either be launched synchronously (that
+is, in the same thread) or asynchronously (in a different thread)
+by invoking the <TT>start()</TT> method
+of the transaction object. The <TT>TransactionShell</TT>
+class executes the user's transaction logic through a <TT>Runnable</TT>
+object, whose <TT>run()</TT> method
+is invoked as the &quot;main&quot; method of the transaction.
+To obtain the result of the transaction (whether it succeeds or
+fails), call the <TT>claim()</TT>
+method. If you want to stop an asynchronously running transaction,
+you can invoke the <TT>kill()</TT>
+method on that transaction.
+<P>
+In PJava, you can run one transaction nested within another transaction
+using the <TT>NestedTransaction</TT>
+class. Nested transactions enable you to perform updates in a
+child transaction without affecting the state of the parent transaction.
+A child transaction that completes successfully passes all it
+updates (the modified objects) to its parent transaction. If the
+child transaction aborts, none of its updates are ever reflected
+in the parent transaction. You also can spawn parallel, independent
+<TT>NestedTransaction</TT>s. In this
+case, each of the sibling transactions is isolated from each other,
+and can commit or abort independently.
+<P>
+An additional transaction class, the <TT>OLTPTransaction</TT>,
+also is available. An <TT>OLTPTransaction</TT>
+is a traditional transaction style that cannot be executed asynchronously
+and cannot be nested.
+<H3>State of the PJava Project</H3>
+<P>
+I would like to thank Susan Spence, a researcher on the PJava
+project, for providing me with much of the following information.
+<P>
+The PJava project began in October 1995, when it was funded for
+one year by Sun. The first phase of the project is expected to
+be complete by October 1996, when the Glasgow team expects to
+begin an additional two years of work on the project. As of the
+time of this writing (May 1996), partial funding for the additional
+two years has already been obtained.
+<P>
+By the time this book is published, an implementation of PJava0
+may be available. The implementation will contain basic support
+for persistence via reachability and a default transaction model.
+Platform availability will be limited to Solaris, and distribution
+may be restricted due to a lack of support funding.
+<P>
+During the summer of 1996, the PJava team will begin designing
+PJava1, which will likely contain more advanced transactional
+models, support for distributed databases, and database garbage
+collection. Up-to-date information about the PJava project can
+be found at <TT><A HREF="http://www.dcs.gla.ac.uk/~susan/pjava">http://www.dcs.gla.ac.uk/~susan/pjava</A></TT>.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+Persistence involves extending the lifetime of an object beyond
+the lifetime of the program in which it was created. In this chapter,
+you have seen several possible ways to implement persistence:
+<UL>
+<LI>Saving the representation of an object directly to a file
+using the <TT>DataOutput</TT> and
+<TT>DataInput</TT> interfaces
+<LI>Using the <TT>Persistent</TT>
+framework that has been provided with this chapter
+<LI>Using some form of database library (for example, JDBC)
+<LI><FONT COLOR=#000000>Using a persistent store, like the one
+being created by researchers at the University of Glasgo</FONT>w
+</UL>
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch18.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch20.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,289 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>A number of methods, defined in the following code, are provided to the MiniJMS client classes for registering with the session. All of these result in a call to the MiniRemoteSession.
+</P>
+<PRE>
+    public void registerFor(Destination dest)
+        throws JMSException
+    {
+        registerFor(dest,true,conn.getClientID());
+    }
+
+    public void registerFor(Destination dest,String name)
+        throws JMSException
+    {
+        registerFor(dest,true,name);
+    }
+
+    public void registerFor(Destination dest,boolean durable)
+        throws JMSException
+    {
+        registerFor(dest,durable,conn.getClientID());
+    }
+
+    public void registerFor(Destination dest
+                             , boolean durable,String name)
+        throws JMSException
+    {
+        try
+        {
+            <B>session.registerFor(dest,true,name);</B>
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+
+    public void unregisterFor(Destination dest)
+        throws JMSException
+    {
+        unregisterFor(dest,conn.getClientID());
+    }
+
+    public void unregisterFor(Destination dest,String name)
+        throws JMSException
+    {
+        try
+        {
+            <B>session.unregisterFor(dest,name);</B>
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>When a connection is told to stop and start, it sends suspend and resume to the sessions. Currently, these messages are ignored.
+</P>
+<PRE>
+    public void suspend()
+    {
+    }
+
+    public void resume()
+    {
+    }
+}
+</PRE>
+<P>MiniSession is the key element in the client implementation for MiniJMS. Make sure that you are comfortable with its implementation and purpose before continuing with the material in this chapter.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading10"></A><FONT COLOR="#000077">MiniConsumer</FONT></H4>
+<P>Rather than implement separate consumers for the two messaging models, MiniJMS implements a single consumer that supports both. MiniConsumer is a MessageConsumer, TopicSubscriber, and QueueReceiver. Because MiniDestinations are both queues and topics, the consumer can use a single destination object to represent its associated destination.
+</P>
+<P>A MiniConsumer tracks its session, a MessageListener, its destination, selector, and registered name. This name is the same one used to register with the session and will default to the connection&#146;s ClientID. The Boolean variable noLocal is used by the consumer to remember if it should ignore messages from the connection that it is attached to; currently, MiniJMS ignores the value of this flag. The Boolean variable unregOnClose is used by the consumer to remember whether it is durable or not. If this value is true, the consumer will unregister with the server when it is closed.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>MiniJMS does not support selectors or the noLocal feature.</FONT><HR>
+</BLOCKQUOTE>
+<PRE>
+package minijms;
+
+//Imports removed to save space.
+public class MiniConsumer
+ implements MessageConsumer
+ , TopicSubscriber, QueueReceiver
+{
+    protected MessageListener listener;
+    protected MiniSession session;
+    protected MiniDestination dest;
+    protected String selector;
+    protected boolean noLocal;
+    protected boolean unregOnClose;
+    protected String regName;
+
+    public MiniConsumer(MiniSession session
+                            ,MiniDestination dest)
+    {
+        this.session = session;
+        this.dest = dest;
+        noLocal = false;
+        unregOnClose = false;
+    }
+</PRE>
+<P>When a MiniConsumer is closed, it notifies the session in two ways. First, if it is a non-durable consumer, it unregisters its destination. Second, by setting its MessageListener to null, MiniConsumer tells the session to remove the MessageListener from its list.
+</P>
+<PRE>
+    public void close()
+      throws JMSException
+    {
+        if(unregOnClose) session.unregisterFor(dest);
+        setMessageListener(null);
+    }
+</PRE>
+<P>The following accessors are provided for the message selector, registered name, and MessageListener.
+</P>
+<PRE>
+    public String getMessageSelector() throws JMSException
+    {
+        return selector;
+    }
+
+    public void setMessageSelector(String s)
+     throws JMSException
+    {
+        selector = s;
+    }
+
+    public MessageListener getMessageListener()
+     throws JMSException
+    {
+        return listener;
+    }
+
+    public void setMessageListener(MessageListener lst)
+        throws JMSException
+    {
+        if(listener != null)
+        {
+            session.removeMessageListenerFor(listener,dest);
+        }
+
+        listener = lst;
+
+        if(listener != null)
+            session.addMessageListenerFor(listener,dest,regName);
+    }
+
+    public String getRegName()
+    {
+        return regName;
+    }
+
+    public void setRegName(String name)
+    {
+        regName = name;
+    }
+
+    protected void setNoLocal(boolean b)
+    {
+        noLocal = b;
+    }
+
+    public boolean getNoLocal() throws JMSException
+    {
+        return noLocal;
+    }
+</PRE>
+<P>Consumers provide three methods for receiving messages directly, defined as follows. These methods call the equivalent methods in the MiniSession object.
+</P>
+<PRE>
+    public Message receive()
+     throws JMSException
+    {
+        Message retVal = null;
+
+        try
+        {
+            <B>retVal = session.messageFor(dest,regName);</B>
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+
+        return retVal;
+    }
+
+    public Message receive(long timeOut)
+     throws JMSException
+    {
+        Message retVal = null;
+
+        try
+        {
+            <B>retVal = session.messageFor(dest,timeOut,regName);</B>
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+
+        return retVal;
+    }
+
+    public Message receiveNoWait()
+     throws JMSException
+    {
+        Message retVal = null;
+
+        try
+        {
+            <B>retVal = session.messageForNoWait(dest,regName);</B>
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;No remote connection.&#148;);
+        }
+
+        return retVal;
+    }
+</PRE>
+<P>TopicSubscribers and QueueReceivers both provide type-specific access to their destination. The MiniConsumer implements both methods, as shown here, and throws an exception if the wrong one is used.
+</P>
+<PRE>
+    public Queue getQueue() throws JMSException
+    {
+        if(dest.isQueue()) return dest;
+        else throw new JMSException();
+    }
+
+    public Topic getTopic() throws JMSException
+    {
+        if(!dest.isQueue()) return dest;
+        else throw new JMSException();
+    }
+
+    public void setUnregisterOnClose(boolean tf)
+    {
+        unregOnClose=tf;
+    }
+}
+</PRE>
+<P>As you can see, the consumer in MiniJMS is mainly a front for the session, providing the basic information required to specify the destination and name for requests.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading11"></A><FONT COLOR="#000077">MiniProducer</FONT></H4>
+<P>Like the MiniConsumer, the MiniProducer implements all three of the producer interfaces: MessageProducer, TopicPublisher, and QueueSender. The producer keeps a reference to its session for performing the actual message sending. Configuration parameters for a producer include the default delivery mode, default priority, and default timeToLive for messages. Flags are used to indicate whether a message ID and time stamp are required for each message sent.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

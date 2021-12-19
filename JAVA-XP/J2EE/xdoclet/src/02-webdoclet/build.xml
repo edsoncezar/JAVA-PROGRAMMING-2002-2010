@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="webdoclet"  default="package">
+    <!-- obtem as variáveis de ambiente -->
+    <property environment="env"/>
+
+    <!-- propriedades configuráveis -->
+    <property file="build.properties"/>
+
+    <!-- path das bibliotecas necessárias p/ compilação -->
+    <path id="compile.classpath">
+        <pathelement location="${servlet.jar}"/>
+    </path>
+   
+    <!-- path das bibliotecas necessárias p/ execução do XDoclet -->
+    <path id="xdoclet.classpath">
+    	<path refid="compile.classpath"/>
+        <fileset dir="${xdoclet.home}/lib">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+   
+    <!-- apaga tudo o que foi construído -->
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <!-- compila a aplicação -->
+    <target name="compile">
+        <mkdir dir="${build.classes.dir}"/>
+        <javac 	
+            srcdir="${src.java.dir}"
+            destdir="${build.classes.dir}" 
+        	debug="true" 
+            deprecation="true"
+            >
+            <classpath refid="compile.classpath"/>
+        </javac>
+    </target>
+
+    <!-- gera a lista de todo's da aplicação -->
+    <target name="todo">
+        <mkdir dir="${build.todo.dir}"/>
+        <taskdef
+            name="todo"
+            classname="xdoclet.modules.doc.DocumentDocletTask"
+            classpathref="xdoclet.classpath"
+            />
+        <todo destdir="${build.todo.dir}">
+            <fileset dir="${src.java.dir}"/>
+            <info/>
+        </todo>
+    </target>
+
+    <!-- gera os deployments descriptors através das tasks do XDoclet -->
+    <target name="generateDD">
+        <taskdef 
+            name="webdoclet"
+            classname="xdoclet.modules.web.WebDocletTask" 
+            classpathref="xdoclet.classpath"
+            />
+        <mkdir dir="${build.web-inf.tlds.dir}"/>
+        <webdoclet destdir="${build.dir}">
+            <fileset dir="${src.java.dir}">
+                <include name="**/*Servlet.java" />
+                <include name="**/*Tag.java" />
+            </fileset>
+            <deploymentdescriptor servletspec="2.3" destdir="${build.web-inf.dir}">
+                <taglib 
+                    uri="mytaglib"
+                    location="tlds/mytaglib.tld"
+                    />
+            </deploymentdescriptor>
+            <jsptaglib
+                jspversion="1.2" 
+                destdir="${build.web-inf.tlds.dir}"
+                shortname="basic" 
+                filename="mytaglib.tld"
+                />
+        </webdoclet>
+    </target>
+
+    <!-- gera o arquivo war -->
+    <target name="package" depends="compile,generateDD">
+        <mkdir dir="${build.war.dir}"/>
+        <war destfile="${build.app.war}" webxml="${build.web-inf.dir}/web.xml">
+            <webinf dir="${build.web-inf.dir}" excludes="web.xml"/>
+            <fileset dir="${src.web.dir}"/>
+            <classes dir="${build.classes.dir}"/>
+        </war>
+    </target>
+
+    <!-- instala a aplicação no JBoss -->
+    <target name="deploy" depends="package">
+        <copy file="${build.app.war}" todir="${deploy.dir}"/>
+    </target>
+
+    <!-- checa se a aplicação está instalada no JBoss -->
+    <target name="check-app-installed">
+        <available property="build.app.war.installed" file="${deploy.dir}/${app.war}"/>
+    </target>
+
+    <!-- desinstala a aplicação do JBoss -->
+    <target name="undeploy" depends="check-app-installed" if="build.app.war.installed">
+        <delete file="${deploy.dir}/${app.war}"/>
+    </target>
+
+</project>

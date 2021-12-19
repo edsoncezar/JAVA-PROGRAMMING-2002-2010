@@ -1,0 +1,277 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>JMX Connector Description and HowTo</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s26.html" title="How to Integrate Custom Services via MBeans"><link rel="next" href="ch13s55.html" title="How To use the Timer MBean"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s26.html"><img src="images\prev.gif" border="0"></a><a href="ch13s55.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e9809"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e9809"></a>JMX Connector Description and HowTo</h2></div></div><p>Author:
+      <span class="author">Andreas Schaefer</span>
+      <tt>&lt;<a href="mailto:andreas.schaefer@madplanet.com">andreas.schaefer@madplanet.com</a>&gt;</tt>   
+   </p><div class="section"><a name="d0e9823"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9823"></a>Introduction</h3></div></div><div class="section"><a name="d0e9826"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9826"></a>JMX Spec from Sun</h4></div></div><p> 
+            Sun release in fall 2000 the final specification, API and Reference Implemenation to the                              
+            <a href="http://www.javasoft.com/products/JavaManagement/index.html" target="_top">
+               <i>Java Management Extention(JMX)</i>
+            </a>. 
+            The idea behind this is to provide an API to which the component vendors can make their
+            components manageable and the management tools vendor can use this API to manage these
+            components.
+         </p><p> 
+            Therefore the whole JMX is separated into 3 parts:
+            <div class="orderedlist"><ol type="1"><li><p><a name="d0e9840"></a>
+                     Components implement a certain API to offer their management API to
+                     the JMX world. There are 3 ways: through an Interface, through a API
+                     descriptions (Open MBean) and through a Model MBean (but for this
+                     have a look at the spec). 
+                  </p></li><li><p><a name="d0e9843"></a>
+                     JMX Agent which contains a MBean Server, certain services like
+                     dynamic download, timers, relations etc. and at least one Connector
+                     or Adaptor. 
+                  </p></li><li><p><a name="d0e9846"></a>
+                     Management Tool using a Connector or Adaptor to manage the
+                     components of the JMX Agent the tool is connected to. 
+                  </p></li></ol></div>     
+         </p></div><div class="section"><a name="d0e9850"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9850"></a>JMX Implementation in JBoss</h4></div></div><p>
+            At the moment (8th of September 2000) JBoss uses the final release JMX API for its services
+            defined in the jboss.conf file (in there you see that also HTML Adaptor and the JMX Connector
+            are manageable components). In addition JBoss use the MBean Server implementation and the
+            HTML adaptor from the JMX-RI. The JMX Connector also follows the JMX final spec and API.
+         </p><p>
+            You use JMX first when you start JBoss because the Main class loads the &lt;mbean&gt; tags
+            from the jboss.jcml file and hand it over to the MBeanServer which loads the MBean dynamically
+            (originally in JMX MLET tags are used to dynamically load a MBean by the MBeanServer but they
+            were troublesome use). Afterwards it went through the loaded MBeans and starts all the loaded
+            MBeans. 
+         </p><p>
+            Afterwards you can use JMX either trough the JMX HMTL Adaptor on port 8082 or through the new
+            JMX Connector. The JMX HTML Adaptor is provided by the JMX-RI and the source code is not
+            available (it is part of Sun's JDMK which you have to buy when you want to get the source
+            as far as I know). The JMX Connector is part of the JBoss code and should be considered as
+            first draft because the Connector is mentioned within the spec by not further specified (Sun's
+            JDMK also has a RMI-Connector but JDMK is very pricy).
+         </p><p>
+            Finally JMX is used within the shutdown hook and ServiceControl MBean to terminate all the
+            services before JBoss is terminated itself (whatever this means) by going through all available
+            MBeans and send them the stop signal (call the appropriate method). This let you shutdown
+            JBoss gracefully even programatically.
+         </p></div></div><div class="section"><a name="d0e9861"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9861"></a>Design of the JMX Connector</h3></div></div><div class="section"><a name="d0e9864"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9864"></a>Introduction</h4></div></div><p> 
+            According to the JMX spec the Connector should allow a management tool to work on a MBeanServer
+            and its MBeans from another JVM which can be on the same computer or a remote computer. One
+            particular Connector is bound to its protocol it supports but a MBeanServer can offer more
+            than one (a JMX agent has to offer  at least an Adaptor or a Connector) supporting different
+            protocols. Because the spec does not say much about Connectors I take the freedom and
+            implemented the actual Connector within JBoss to lay the base for a remote JBoss management
+            which is a little bit more comfortable than the HTML Adaptor.
+         </p><p>By the way I will take this opportunity to thanks Rickard &Ouml;berg for his support.</p></div><div class="section"><a name="d0e9871"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9871"></a>Goals</h4></div></div><p>
+            These are my goals for a JMX Connector: 
+            <div class="itemizedlist"><ul><li><p><a name="d0e9877"></a>Ease of use</p></li><li><p><a name="d0e9880"></a>From the user perspective the Connector should appear like a local</p></li><li><p><a name="d0e9883"></a>MBeanServer</p></li><li><p><a name="d0e9886"></a>Unsupported methods throw an exception</p></li><li><p><a name="d0e9889"></a>Supports remote notification handling</p></li><li><p><a name="d0e9892"></a>First draft supports RMI protocol</p></li></ul></div>      
+         </p><p>
+            According to the spec the JMX Connector should offer the client a Proxy for a remote MBean
+            but then the MBean proxy must be available at compile time and this compete with the JMX
+            agent requirements that an JMX agent has to support dynamic loading of MBeans therefore this 
+            is not supported now.
+         </p></div><div class="section"><a name="d0e9898"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9898"></a>Design</h4></div></div><p>
+            The JMX Connector is separated into 4 parts: 
+            <div class="orderedlist"><ol type="1"><li><p><a name="d0e9904"></a>Server-side implementation  </p></li><li><p><a name="d0e9907"></a>Client-side implementation </p></li><li><p><a name="d0e9910"></a>Connector Factory to lookup servers and protocols (optional)</p></li><li><p><a name="d0e9913"></a>Test client </p></li></ol></div>      
+         </p></div><div class="section"><a name="d0e9917"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9917"></a>Server-side implementation</h4></div></div><p>
+            The server-side implementation is loaded and started by the MBeanServer which should become
+            available for remote management. For this we have the necessary MBean service classes, the
+            Connector implementation and an Object Handler class. The Object Handler class is a
+            serializable class allowing the remote client to deal with remotely instantiated classes.
+            This eliminates problems with not serializable classes and with the unique identification
+            of serialized classes (on a round trip you get a copy of the original instance).
+         </p><p>
+            The Object Handler is also used to avoid troubles with not serializable classes used as a
+            Handback object in the Notification handling. This class allows the client to work on the
+            JMX Connector as he would work on a local MBeanServer.
+         </p></div></div><div class="section"><a name="d0e9924"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9924"></a> Client-side implementation</h3></div></div><p>
+         The client-side implementation can either be used directly by instantiating the
+         RMIClientConnectorImpl or by using the Connector Factory. The client-side Connector is more or
+         less a MBeanServer which sends the request over the supported protocol to the server-side connector and returns the returned object back to
+         the caller. There are a few methods which cannot be supported and therefore throw a unsupported
+         operation exception.
+      </p><p>
+         To make it clear and also for documentation purpose the client-side connector implements the
+         RemoteMBeanServer Interface. At the moment I want still keep this interface even when MBeanServer
+         is now an interface too because which all good programming techniques it is (at least at the
+         moment) not possible to make it 100% transparent (but see later under limitations).
+      </p></div><div class="section"><a name="d0e9931"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9931"></a> Connector Factory</h3></div></div><p>
+         When I started with the JMX Connector I had a management tool in mind like the network
+         administration tool from CA or the proposed AppCenter from Inprise. Therefore I want to make
+         it as easy as possible for the client to connector as many remote MBeanServers as he/she wants
+         and which any protocol available. The client should never have to worry about the protocol or
+         to know which classes are behind. That's why I created the Connector Factory which allows the
+         client to search for all the remote available MBeanServers and their supported protocols.
+         The user only has to select a server and then a protocol and the Connector Factory returns the
+         appropriate instance of the RemoteMBeanServer interface.
+      </p></div><div class="section"><a name="d0e9936"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9936"></a> Test Client</h3></div></div><p> 
+         The JMX Connector Test Client is first a test tool that the JMX Connector is working and second
+         a demonstration how to use it. The test tool first starts a local MBeanServer and register the
+         Connector Factory as first and then only MBean. Now the test client ask the Connector Factory
+         for all available, remote MBeanServers and let the user select one, then it asks the Connector
+         Factory for all available Connectors or more precise all the supported protocols of the available
+         Connectors. Now the user can select the protocol and the Test Client loads and starts the
+         appropriate Connector (if available) and register it as a new MBean at the local MBeanServer.
+         Afterwards it asks the Connector for all available MBeans on the remote server, displays it wit
+         all the attributes and operations on this remote MBean. At the end it will try to register to
+         all remote MBeans a notification listener which will inform the client about notification send
+         by the MBean. That's why the test client will still run after finishing. When the user terminates
+         the Test Client it will remove all the notification listeners from the remote MBeanServer and
+         terminate the Test Client.
+      </p></div><div class="section"><a name="d0e9941"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9941"></a>How To use the JMX Connector</h3></div></div><p>You need the following to use the JMX Connector: 
+         <div class="itemizedlist"><ul><li><p><a name="d0e9947"></a>Connector.jar (from client directory) </p></li><li><p><a name="d0e9950"></a>jnp-client.jar (from client directory) </p></li><li><p><a name="d0e9953"></a>jmxri.jar (from lib directory) </p></li><li><p><a name="d0e9956"></a>
+                  jndi.properties (from conf directory) which you probably have to
+                  adjust
+               </p></li></ul></div>      
+      </p></div><div class="section"><a name="d0e9960"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9960"></a>How to create a client with the server and protocol</h3></div></div><p>          
+         <div class="orderedlist"><ol type="1"><li><p><a name="d0e9966"></a>
+                  Instantiate the RMIClientConnectorImpl. 
+                  <pre class="programlisting"> 
+   RemoteMBeanServer lConnector = new RMIClientConnectorImpl("server-name" );
+                  </pre>          
+               </p></li><li><p><a name="d0e9972"></a>
+                  Use either instance or its interface RemoteMBeanServer or MBeanServer. If you got back an
+                  instance you can now work on the remote MBeanServer like it would be a local one. 
+               </p></li><li><p><a name="d0e9975"></a>
+                  Look up for the available MBeans, its attributes and operations. You can now retrieve
+                  and set the attributes or perform an operation on the remote MBean. 
+               </p></li><li><p><a name="d0e9978"></a>             
+                  If you register a Notification Listener then stop this instance before terminating the
+                  program otherwise the remote MBeanServer will throw an exception when this Notification
+                  Listener is called lConnector.stop(); 
+               </p></li></ol></div>        
+      </p></div><div class="section"><a name="d0e9982"></a><div class="titlepage"><div><h3 class="title"><a name="d0e9982"></a>How to create a client without the server and protocol/H3&gt; </h3></div></div><p>
+         First you have to make sure that the JNDI property:
+         java.naming.provider.url points to the JNDI server your JMX Connectors
+         are registered to. At the moment you can only have one JMX Connector
+         running at the same computer (but serveral can be registered at the same
+         JNDI server) and you can only have one JNDI server.
+      </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e9988"></a>
+               Import the necessary classes 
+               <pre class="programlisting">
+   import com.sun.management.jmx.MBeanServerImpl; 
+   import javax.management.MBeanAttributeInfo; 
+   import javax.management.MBeanInfo; 
+   import javax.management.MBeanOperationInfo; 
+   import javax.management.MBeanServer; 
+   import javax.management.Notification;
+   import javax.management.NotificationFilter; 
+   import javax.management.NotificationListener;
+   import javax.management.ObjectInstance; 
+   import javax.management.ObjectName; 
+   import javax.management.ReflectionException; 
+   import javax.management.RuntimeErrorException; 
+   import javax.management.RuntimeMBeanException; 
+   import javax.management.RuntimeOperationsException; 
+   import javax.naming.InitialContext; 
+   import org.jboss.jmx.interfaces.RemoteMBeanServer; 
+   import org.jboss.jmx.client.RMIClientConnectorImpl;
+               </pre>       
+            </p></li><li><p><a name="d0e9994"></a>
+               Instantiate a local MBeanServer (MBeanServerImpl) 
+               <pre class="programlisting">
+   final MBeanServer lLocalServer = new MBeanServerImpl();
+               </pre>
+               The local variable is made final because it is needed in the shutdown hook. 
+            </p></li><li><p><a name="d0e10000"></a>
+               Load the logger MBean (is needed now because the Connector Factory
+               is a standard JBoss MBean but maybe I should make it to a normal
+               MBean to make it leaner). 
+               <pre class="programlisting">
+   lLocalServer.createMBean(
+      "org.jboss.logging.Logger",
+      new ObjectName( "DefaultDomain :name=Logger" )
+   );
+               </pre>       
+            </p></li><li><p><a name="d0e10006"></a>
+               Load and start the ConnectorFactory MBean 
+               <pre class="programlisting">
+   final ObjectInstance lFactoryInstance = lLocalServer.createMBean(
+      "org.jboss.jmx.client.ConnectorFactoryService",
+      new ObjectName( "DefaultDomain:name=ConnectorFactory" )
+   );
+               </pre>       
+            </p></li><li><p><a name="d0e10012"></a>     
+               Look for the list of remote Connectors at a given JNDI server (lContext.getEnvironment()
+               returns the actual properties from a given InitialContext). 
+               <pre class="programlisting">
+   Hashtable lProperties = lContext.getEnvironment();
+   ConnectorFactoryImpl.JBossConnectorTester lTester = new ConnectorFactoryImpl.JBossConnectorTester();
+   Iterator lConnectors = (Iterator) lLocalServer.invoke(
+      lFactoryInstance.getObjectName(),
+      "getConnectors",
+      new Object[] {
+         lProperties,
+         lTester
+      },
+      new String[] {
+         lProperties.getClass().getName(),
+         lTester.getClass().getName()
+      }
+   );
+               </pre>        
+            </p></li><li><p><a name="d0e10018"></a>
+               Create a connection to the selected Connector (lConnectorName is an instance returned
+               by the previous retrieved iterator). The ConnectorName contains the information about
+               the server, protocol and the JNDI name of a found JMX Connector.
+               <pre class="programlisting">   
+   RemoteMBeanServer lConnector = (RemoteMBeanServer) lLocalServer.invoke(
+      lFactoryInstance.getObjectName(),
+      "createConnection",
+      new Object[] {
+         lConnectorName
+      },
+      new String[] {
+         lConnectorName.getClass().getName()
+      }
+   );
+               </pre>                  
+            </p></li><li><p><a name="d0e10024"></a>
+               Use the new Connector MBean on the local MBeanServer to get and set the attributes and
+               perform operation on the chosen MBeans on the remote MBeanServer. 
+               <pre class="programlisting">
+   Iterator i = pConnector.queryMBeans( null, null).iterator(); 
+   while( i.hasNext() ) {
+      MBeanInfo info = pConnector.getMBeanInfo( ( (ObjectInstance) i.next()).getObjectName() );
+      MBeanAttributeInfo[] aInfos = info.getAttributes(); 
+      ...
+      MBeanOperationInfo[] oInfos = info.getOperations(); 
+   }
+               </pre>       
+            </p></li><li><p><a name="d0e10030"></a>
+               Register a Notification Listener on a remote MBean and wait for notification events sent
+               from the remote MBean. The NotSerializableHandback is a helper class to be a serializable
+               proxy for a Handback which maybe is not serializable.
+               <pre class="programlisting">
+   Iterator i = pConnector.queryMBeans( null, nullitemizedlist).iterator(); 
+   int j = 0; 
+   while( i.hasNext() ) {
+      ObjectInstance lBean = (ObjectInstance) i.next(); 
+      try {
+         pConnector.addNotificationListener(
+            lBean.getObjectName(),
+            (NotificationListener) new Listener(),
+            (NotificationFilter) null, 
+            new NotSerializableHandback( lBean.getObjectName() + "" + j++ ) 
+         ); ...
+               </pre>
+               But when you terminate the connector you have to remove the connection by using the
+               Connector Factory to remove all the Notification Listener from the remote MBeanServer. 
+               <pre class="programlisting">
+   lLocalServer.invoke( lFactoryInstance.getObjectName(),
+      "removeConnection",
+      new Object[] { 
+         lConnectorName
+      },
+      new String[] {
+         lConnectorName.getClass().getName()
+      }
+   );
+               </pre>       
+            </p></li></ol></div></div><div class="section"><a name="d0e10039"></a><div class="titlepage"><div><h3 class="title"><a name="d0e10039"></a>ToDo List</h3></div></div><p>
+         This list contains all the stuff to be done to make the JMX Connector full
+         fledged: 
+         <div class="itemizedlist"><ul><li><p><a name="d0e10045"></a>Test all to make sure that it works from any other JVM that the JBoss VM </p></li></ul></div>      
+      </p><p>
+         This list contains all the stuff to be done around JMX 
+         <div class="itemizedlist"><ul><li><p><a name="d0e10052"></a>Initiate and start full fledged JMX Agent project</p></li><li><p><a name="d0e10055"></a>Design and implement Relation Service for the JMX Agent</p></li><li><p><a name="d0e10058"></a>Design and implement graphic management tool for JBoss</p></li></ul></div>      
+      </p><p>
+         If anything is wrong or not correct please contact me at
+         andreas.schaefer@madplanet.com. Also if you want to know more in detail
+         or have a request for changes in the JMX Connector.
+      </p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s26.html"><img src="images\prev.gif" border="0"></a><a href="ch13s55.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

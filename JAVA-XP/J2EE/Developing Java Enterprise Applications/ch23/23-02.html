@@ -1,0 +1,138 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using Transactions with Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Be very careful when using the other levels, but you may choose to use them if performance or application considerations warrant. For example, applications that are mainly viewing data should not be greatly affected by phantom reads, because they will only add to the data viewed, without showing false data. Non&#150;repeatable reads are also not as bad for viewing applications, because they simply update the viewer&#146;s version of the data. However, you would not want applications that expect data to remain unchanged, such as a commerce program that performs reads to determine account balances, to perform calculations on data and have it changed before updating the row.
+</P>
+<P>To see when each level might be acceptable, let&#146;s look at four examples; one for each isolation level. First, a banking program that needs to access a customer&#146;s account balances and update them to reflect a money transfer would probably use TRANSACTION_SERIALIZABLE to protect both tables during the operation. A program that processes data by performing a read and follows that read with another read based on the first&#151;a basic employee/manager relationship, for example&#151;could use TRANSACTION_REPEATABLE_READ to ensure that an employee&#146;s manager id doesn&#146;t change between the first search for the employee&#146;s information that includes the manager&#146;s id and the subsequent search for the manager&#146;s information.</P>
+<P>A program that groups data can use TRANSACTION _READ_COMMITED to make sure that all the data it reads is valid while allowing changes to data. Consider the case of a program that performs a read on a list of customers to determine how many there are. The program might reread the data to get the final values of each customer, but you wouldn&#146;t mind getting altered data because the latest data would be used anyway. In this example, phantom reads might be ignored and saved for the next time the process is run.</P>
+<P>Finally, programs that are appending data to a table can use the TRANSACTION_READ_UNCOMMITED isolation level because they aren&#146;t really performing read operations. Keep in mind that these isolation levels are applied mainly when a transaction performs multiple reads on the same data. When transactions perform single, atomic read operations, there is little concern for phantom or non&#150;repeatable reads.</P>
+<P>One restriction on a bean&#146;s isolation levels: You cannot mix two isolation levels in a single transaction. For example, if a client and a bean share a transaction, the bean cannot require a different isolation level than the client. This is something to be considered at design time, when you define the relationship between your beans and clients.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading4"></A><FONT COLOR="#000077">Bean&#150;Managed Transactions</FONT></H4>
+<P>EJBs that use bean&#150;managed transactions, TX_BEAN_MANAGED, access their transaction scope using a UserTransaction object. UserTransaction defines a number of constants and methods. The methods for UserTransaction are listed in Table 23.2, along with descriptions of their purposes. The constants defined in UserTransaction are used to indicate the status of a transaction and are discussed in the &#147;Transaction Status&#148; section.
+</P>
+<P>Beans obtain their transaction from the EJBContext using this method:</P>
+<PRE>
+public UserTransaction getUserTransaction()
+  throws IllegalStateException
+</PRE>
+<P>For example, if a bean stored its context in an instance variable called context, it would access the UserTransaction using the following code:
+</P>
+<PRE>
+UserTransaction trans = context.getUserTransaction();
+</PRE>
+<P>Once acquired, the transaction can be controlled using the methods in Table 23.2. In particular, you might begin a transaction to initiate it. Then, if an operation completes successfully, commit the transaction. If an operation fails, roll back the transaction.
+</P>
+<TABLE WIDTH="90%"><TR>
+<TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 23.2</B> User Transaction Methods
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="40%" VALIGN="TOP" ALIGN="LEFT">METHOD
+<TH VALIGN="TOP" ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void begin() throws  IllegalStateException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Begins the transaction.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void commit() throws TransactionRolledbackException, HeuristicMixedException, HeuristicRollbackException, SecurityException, IllegalStateException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Commits the transaction and all of the changes that made it its scope.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void rollback() throws IllegalStateException,</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Rolls back the transaction, undoing any changes.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>SecurityException public void setRollbackOnly() throws IllegalStateException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Tells the transaction that it can only be rollback. This method is used when an error occurs that should prevent the transaction from committing.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public int getStatus()</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Returns the transaction&#146;s status.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void setTransactionTimeout(int seconds)</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Modify the transaction&#146;s time&#150;out value.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P><FONT SIZE="+1"><B><I>Exceptions</I></B></FONT></P>
+<P>As you can see from Table 23.2, a transaction can throw a variety of exceptions. The main exceptions are listed in Table 23.3. These are defined in the javax.transaction package.
+</P>
+<P>Heuristic decisions occur mostly in unusual circumstances, such as network failures, that prevent normal processing. When a transaction makes a heuristic decision, there is a risk that the decision will differ from the actual outcome of the operation, potentially resulting in loss of data integrity. For example, the transaction might lose touch with the database and assume that a rollback occurred when the attempted commit succeeded. This would leave the transaction in an incorrect state.</P>
+<TABLE WIDTH="90%"><TR>
+<TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 23.3</B> Transaction Exceptions
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="40%" VALIGN="TOP" ALIGN="LEFT">EXCEPTION
+<TH VALIGN="TOP" ALIGN="LEFT">MEANING
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>SecurityException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">A security violation has occurred.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>IllegalStateException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The current thread is not associated with the transaction.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>TransactionRolledbackException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The transaction was marked for rollback only or was rolled back.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>HeuristicMixedException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Some changes were committed and others rolled back based on a heuristic decision.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>HeuristicRollbackException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">All changes were rolled back based on a heuristic decision.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

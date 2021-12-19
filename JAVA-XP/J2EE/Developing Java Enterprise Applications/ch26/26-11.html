@@ -1,0 +1,182 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-10.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-12.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The final publish method is the most versatile. This method configures the messages header, using the flags provided. If the message has a timeToLive, the expiration time is set to the current time plus this value. If time stamps are enabled, one is set; if message IDs are enabled, one is assigned. Once configured, the producers session is told to send the message.
+</P>
+<PRE>
+    public void publish(Topic topic, Message message,
+              int deliveryMode, int pri,
+               long timeToLive) throws JMSException
+    {
+        long now = System.currentTimeMillis();
+
+        if((message != null)&amp&amp(topic!=null))
+        {
+            if(session == null)
+                throw new JMSException(&#147;No Session&#148;);
+
+            <B>message.setJMSDestination(topic);
+            message.setJMSPriority(pri);
+            message.setJMSDeliveryMode(deliveryMode);
+
+            if(timeToLive &lt= 0)
+                message.setJMSExpiration(0);
+            else
+                message.setJMSExpiration(now &#43; timeToLive);
+
+            if(!disableTimestamp)
+            {
+                message.setJMSMessageID(createId());
+            }
+
+            if(!disableTimestamp)
+            {
+                message.setJMSTimestamp(now);
+            }
+
+            session.send(message);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+</PRE>
+<P>If message IDs are enabled, they are created using the client&#146;s IP address, the current time, and the client ID. This should ensure uniqueness across all clients in the system. In the worst case, a random number is used. Because JMS specifies that all Message IDs start with &#147;ID:,&#148; that convention is used in the definition of createID as listed here.
+</P>
+<PRE>
+    protected String createId()
+    {
+        String retVal;
+        try
+        {
+            InetAddress here = InetAddress.getLocalHost();
+
+            retVal = &#147;ID:&#148;&#43;System.currentTimeMillis()
+                          &#43;here.getHostAddress()
+                          &#43;session.getClientID();
+        }
+        catch(Exception exp)
+        {
+            retVal =  &#147;ID:&#148;&#43;System.currentTimeMillis()&#43;Math.random();
+        }
+        return retVal;
+    }
+}
+</PRE>
+<P>That concludes the generic client classes for MiniJMS. Subclasses of MiniConnectionFactory, MiniConnection, and MiniSession are provided for the two messaging models defined in JMS.
+</P>
+<P>In order to support point-to-point messaging, MiniJMS implements three classes. MiniQueueConnectionFactory extends MiniConnectionFactory and defines a QueueConnectionFactory. MiniQueueConnection extends MiniConnection and implements QueueConnection. MiniQueueSession extends MiniSession and implements QueueSession.</P>
+<P>In order to support publish-subscribe messaging, MiniJMS implements three different classes. MiniTopicConnectionFactory extends MiniConnectionFactory and defines a TopicConnectionFactory. MiniTopicConnection extends MiniConnection and implements TopicConnection. MiniTopicSession extends MiniSession and implements TopicSession.</P>
+<P>Rather than include the code for these specific classes here, we refer you to the CD-ROM. Basically, all of the model-specific classes are used to create other model-specific classes. Ultimately, the session classes create MessageConsumers and MessageProducers configured appropriately for their messaging model.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>MiniJMS does not support QueueBrowsers, so the MiniQueueSession will throw exceptions if they are requested.</FONT><HR>
+</BLOCKQUOTE>
+<P>MiniJMS&#151;and JMS in generalrelies heavily on JNDI for establishing the relationship between the client and server. The next section discusses how MiniJMS supports JNDI.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading12"></A><FONT COLOR="#000077">JNDI Support</FONT></H4>
+<P>The JMS specification refers to destinations and ConnectionFactories as administered objects. In other words, they are objects that are bound to a JNDI context for access by a client. In general, clients do not create queues and topics. Instead, they look them up. The same is true for ConnectionFactories. This makes the JMS client able to change JMS providers without changing code, because the connection factory acts as the root for all of the other objects created.
+</P>
+<P>Both the MiniQueueConnectionFactory and MiniTopicConnectionFactory classes implement Serializable and Referenceable to allow them to be bound into a JNDI context. MiniDestination, as you have seen, also implements this interface. Because the implementation for all of these classes is very similar, only one, MiniDestination, is shown here. The other examples are provided on the CD-ROM.</P>
+<P>First the MiniDestination class states that it implements Referenceable. Next it implements the getReference method. The MiniJMS implementation creates a StringRefAddr that takes the name of the destination. Another reference is used for the isQueue value of the MiniDestination object. A custom ObjectFactory called MiniDestinationFactory is provided to perform the actual creation of objects removed from the context.</P>
+<PRE>
+public Reference getReference()
+                       throws NamingException
+    {
+        Reference retVal;
+
+        <B>retVal = new Reference(MiniDestination.class.getName()
+         ,new StringRefAddr(&#147;name&#148;,name)
+         ,MiniDestinationFactory.class.getName()
+         ,null);
+
+        retVal.add(new StringRefAddr(&#147;isQueue&#148;
+                                     ,(isQ?&#147;true&#148;:&#147;false&#148;)));</B>
+
+        return retVal;
+    }
+</PRE>
+<P>When a MiniDestination is bound into JNDI, it is asked for this reference. The JNDI provider stores the reference, including the to string addresses.
+</P>
+<P>When a client looks up the destination, a MiniDestinationFactory is created and is asked to create the object that is being requested from the available information. The method getObjectInstance, defined in the javax.naming.spi.ObjectFactory interface, is called on the object factory to ask it to create the new object. This method is provided information about the object, such as the name it is bound under, the context, the context&#146;s environment, and an arbitrary informational object. This informational object for MiniDestinationFactory contains the reference created by the destination before it was bound.</P>
+<P>MiniDestinationFactory uses the reference to recreate the MiniDestination and return it.</P>
+<PRE>
+package minijms;
+
+//Imports removed to save space.
+
+public class MiniDestinationFactory
+ implements ObjectFactory
+{
+
+    public Object getObjectInstance(
+                  Object info,
+                  Name name,
+                  Context nameCtx,
+                  Hashtable environment)
+                  throws Exception
+    {
+        MiniDestination retVal = null;
+
+        if(info instanceof Reference)
+        {
+            Reference ref = (Reference) info;
+            RefAddr nameA;
+            RefAddr isQA;
+            String destName,isQ;
+            boolean isQueue;
+
+            nameA = ref.get(&#147;name&#148;);
+            isQA = ref.get(&#147;isQueue&#148;);
+
+            if((nameA != null)&amp&amp(isQA != null))
+            {
+                destName = (String) nameA.getContent();
+                isQ = (String) isQA.getContent();
+
+                isQueue = Boolean.valueOf(isQ).booleanValue();
+                retVal = new MiniDestination(destName,isQueue);
+            }
+        }
+
+        return retVal;
+    }
+
+}
+</PRE>
+<P>To consolidate the creation of the initial JNDI context in MiniJMS clients and make it easy to configure, the provided examples do two things. First, they use properties files to define their context information. Second, a class called MiniJMSUtils is created that creates a context from a properties file. MiniJMSUtils installs the RMI security manager and updates the RMI classpath, saving the example that step in the code. Currently, the RMI class path is set to the current directory, but this could be configured in the properties file as well. Applets will not be able to change this system property, but they do not need to, so the exception thrown by the setProperties method is caught and ignored.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-10.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-12.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

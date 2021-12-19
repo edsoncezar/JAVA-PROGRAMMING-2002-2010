@@ -1,0 +1,325 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Interfacing C/C++ and Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0630-0633.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0639-0641.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-634"><P>Page 634</P></A>
+
+
+<P>Listing 14.25 Example of the execute_java_static_method() Function
+</P>
+<PRE>
+testClass = FindClass(EE(),&quot;TestObject&quot;,TRUE);
+    if (testClass != 0){
+               printf(&quot;Call TestObject static method.\n&quot;);
+               execute_java_static_method(EE(),testClass,&quot;testStatic&quot;,&quot;()V&quot;);
+        }else{
+               printf(&quot;failed to find TestObject class.\n&quot;);
+        }
+</PRE>
+<P>
+<B>
+execute_java_constructor()
+</B>
+</P>
+<P>Whenever a Java object needs to be created by native code, execute_java_constructor()
+is used. The execute_java_constructor() function creates Java objects of a specific
+class, using a specific class constructor. If this function succeeds, it returns a handle to an
+object. If it fails, it returns zero.
+</P>
+
+<P>The execute_java_constructor() function has four required parameters:
+</P>
+
+<UL>
+<LI>     The first is the current context. The context can be derived by calling the
+EE() function.
+<LI>     The second required parameter is the name of the class that this object is to
+be derived from.
+<LI>     The third parameter is the class pointer that was obtained by calling
+the FindClass() function.
+<LI>     The fourth and final required parameter in the execute_java_constructor()
+function is a text signature of the constructor. This signature is required by Java to
+lookup the correct constructor for the object.
+</UL>
+
+<P>Following the required arguments are the parameters that are to be passed to the
+constructor (see listing 14.26).
+</P>
+
+<P>Listing 14.26 Definition of the execute_java_constructor_method() Function
+</P>
+<PRE>
+HObject *execute_java_constructor_method(  ExeEnv *ee
+                  , ClassClass *classHandle
+                  , char *methodName
+                  , char *signature
+                  ,&#133;);
+</PRE>
+
+<P>Listing 14.27 creates an object from a user-defined object.
+</P>
+
+<A NAME="PAGENUM-635"><P>Page 635</P></A>
+
+
+
+<P>Listing 14.27 An Example of the execute_java_constructor_method() Function
+</P>
+<PRE>
+testClass = FindClass(EE(),&quot;TestObject&quot;,TRUE);
+if (testClass != 0){
+    printf(&quot;failed to find TestObject class.\n&quot;);
+}
+testObject =  (struct HTestObject *)execute_java_constructor(EE()
+             ,&quot;TestObject&quot;
+             ,testClass
+             ,&quot;(ZBSIJFDCLjava/lang/String;)&quot;
+             ,TRUE,1,(char)'A',1L,(byte)1,(float)1.0,(short)1,
+                             &Acirc;(double)1.0,makeJavaString(&quot;One&quot;,strlen(&quot;One&quot;)));
+if (testObject == 0){
+    printf(&quot;failed to create TestObject object.\n&quot;);
+}
+</PRE>
+<P>
+<B>
+execute_java_dynamic_method()
+</B>
+</P>
+<P>After a Java object is available, its non-static methods may be called. In other words,
+the normal methods of the object can now be called. This is accomplished with
+the execute_java_dynamic_method() function.
+</P>
+
+<P>The execute_java_dynamic_method() function has four required parameters.
+</P>
+
+<UL>
+<LI>     The first is the current execution context.
+<LI>     The second required parameter is pointer to the object that has the method to
+be called.
+<LI>     The third is the name of the method to be executed.
+<LI>     The fourth required parameter in the execute_java_dynamic_method() function is
+a text signature of the method. This signature is required by Java to lookup
+the correct method for the object.
+</UL>
+
+<P>Following the required arguments are the parameters that are to be passed to the
+constructor as defined by the signature defined by the fourth parameter, as in listing 14.28.
+</P>
+
+<P>Listing 14.28 The Definition of the execute_java_dynamic_method() Function
+</P>
+<PRE>
+long execute_java_dynamic_method(  ExeEnv *ee
+                   , HObject *objHandle
+                   , char *methodName
+                   , char *signature
+                   ,&#133;);
+</PRE>
+
+<A NAME="PAGENUM-636"><P>Page 636</P></A>
+
+
+<P>The example in listing 14.29 calls a Java method defined as void
+testBoolean(Boolean);. Note that the handle to the object must be cast to HObject in order to prevent the
+compiler from generating warnings.
+</P>
+
+<P>Listing 14.29 Example of the execute_java_dynamic_method() Function
+</P>
+<PRE>
+     execute_java_dynamic_method(EE(),
+                                (struct Hjava_lang_Object *)testObject,
+                                &quot;testBoolean&quot;,
+                                &quot;(Z)V&quot;,
+                                true);
+</PRE>
+
+<H3><A NAME="ch14_ 20">
+Passing Exceptions from Native <BR>Code to Java
+</A></H3>
+
+<P>Just like Java methods, it is sometimes necessary to generate exceptions from native
+code. For instance a native function that reads a file might throw an IOException when an
+IO error occurs. Only common Java exceptions are supported because the current
+native exception system does not enable user-defined exceptions. The following sections
+describe how the exception passing mechanism works.
+</P>
+
+<H4><A NAME="ch14_ 21">
+Throwing Exceptions from C to Java: <BR>SignalError()
+</A></H4>
+
+<P>Throwing exceptions is more limited in C than it is in the Java model. In order for a
+native method to throw an exception, its definition needs to declare that the exception can
+be thrown. For example, the following native function can throw an IOException or
+an ArithmeticException.
+</P>
+
+<P>Listing 14.30 Throwing an IOException of ArithmeticException
+</P>
+
+<PRE>
+native void doExceptions(int type) throws java.io.IOException,
+&Acirc;ArithmeticException ;
+</PRE>
+
+<A NAME="PAGENUM-637"><P>Page 637</P></A>
+
+
+
+<P>From C, currently only simple exceptions can be thrown. In other words, when
+constructing exceptions, remember that they take only one argument, the reason string.
+Listing 14.31 shows the definition of the SignalError() function.
+</P>
+
+<P>Listing 14.31 Definition of the SignalError() Function
+</P>
+
+<PRE>
+void SignalError(ExecEnv *env, char *type, char *reason);
+</PRE>
+
+<P>The type is the full class name with the &quot;.&quot; replaced with the
+&quot;/&quot;. The reason string contains the text to be displayed that describes the error.
+</P>
+
+<P>SignalError() is simple to use. In the Java class, declare the native method as capable
+of throwing one or more exceptions by using the code in listing 14.32.
+</P>
+
+<P>Listing 14.32 Example of a Java Native Method that Throws Two Types of
+                Exception
+</P>
+
+<PRE>
+native someFunction(int type) throws IOException, ArithmeticException ;
+</PRE>
+
+<P>Next, in the C implementation where the error is trapped, call SignalError() and
+return. Listing 14.33 shows the implementation of someFunction(), which always generates
+an exception based on the type requested:
+</P>
+
+<P>Listing 14.33 A Sample C Implementation of a Function that Throws Two
+                Types of Exception
+</P>
+<PRE>
+void NativeTest_someFunction(struct HNativeTest *nativeTest){
+      .
+      .
+      if(IOError){
+            SignalError(EE(),&quot;java/io/IOException&quot;,&quot;test
+                          &Acirc;error=IOException&quot;);
+            return;
+      .
+      .
+      if(mathError){
+            SignalError(EE(),&quot;java/lang/ArithmeticException&quot;,&quot;test
+                         &Acirc;error=ArithmeticException&quot;);
+            return;
+      }
+</PRE>
+<PRE>
+                                                                       continues
+</PRE>
+
+<A NAME="PAGENUM-638"><P>Page 638</P></A>
+
+
+
+<P>Listing 14.33 Continued
+</P>
+<PRE>
+      .
+      .
+      return;
+}
+</PRE>
+
+<H4><A NAME="ch14_ 22">
+Catching Java Exceptions: exceptionOccurred()
+</A></H4>
+
+<P>When calling Java methods, there is the possibility that an exception might occur. In
+the case of some methods, exceptions may be the only way of knowing that an error
+has occurred. To test for exceptions, call the exceptionOccurred() function. If it returns
+true then you should handle the error or generate an exception back to the Java environment.
+</P>
+
+<P>The definition of the function is as follows:
+</P>
+
+<P>Listing 14.33a Definition of the exceptionOccurred() Function
+</P>
+
+<PRE>
+int exceptionOccurred(ExecEnv * env);
+</PRE>
+
+<P>To use it, just check the result after a method call.
+</P>
+
+<H3><A NAME="ch14_ 23">
+Strings
+</A></H3>
+
+<P>Java strings are considered objects when in native C code; however, because they
+are likely to be used often, Sun has supplied several utility routines for their creation
+and translation in C. Be careful to use only the correct sizes of strings. Be especially
+aware that none of these functions depend on the null terminator, used by C. Java writes <BR>
+it when copying, but it does not recognize it when reading C strings.
+</P>
+
+<P>Table 14.4 lists the string utility function that can be used by native C code. Each of
+these functions is discussed in more detail in the following sections.
+</P>
+
+<P>Table 14.4<BR>
+String Functions
+</P>
+<TABLE>
+
+<TR><TD>
+Function
+</TD><TD>
+Purpose
+</TD></TR><TR><TD>
+javaStringLength()
+</TD><TD>
+Returns the length of a Java String.
+</TD></TR><TR><TD>
+AllocCString()
+</TD><TD>
+Creates a C string copy of a Java String.
+</TD></TR><TR><TD>
+javaString2Cstring()
+</TD><TD>
+Copies a Java String to a C character
+buffer.
+</TD></TR></TABLE>
+
+<P><CENTER>
+<a href="0630-0633.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0639-0641.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

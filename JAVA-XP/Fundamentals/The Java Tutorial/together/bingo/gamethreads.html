@@ -1,0 +1,229 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Coordinating Threads in the Game</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="playerthreads.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="communication.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Coordinating Threads in the Game
+</h2>
+<p>
+<blockquote>
+
+The
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/game/RingMaster.java"><code>RingMaster</code></a>
+class provides two methods that the <code>GamesThread</code>
+uses to coordinate its activities with the other threads in
+the Game application: <code>waitForFirstPlayer</code> and
+<code>waitForGameToEnd</code>. As the names of these methods
+imply, these methods cause <code>GamesThread</code> to
+wait until for a condition set by another thread.
+
+<h4>Waiting for the First Player to Register</h4>
+<blockquote>
+The <code>run</code> method for
+<code>GamesThread</code> contains a loop that continues
+until told to stop by the <code>ControlPane</code>.
+Each iteration through
+the loop is a single BINGO game. At the top of the loop,
+and therefore at the beginning of each BINGO game,
+the <code>run</code> method for <code>GamesThread</code>
+calls <code>RingMaster</code>'s <code>waitForFirstPlayer</code>
+method which looks like this:
+<blockquote>
+<pre>
+synchronized void waitForFirstPlayer() {
+    gameNumber++;
+    state = WAITING;
+    socketGate.sendGameStatusMessage(statusString());
+
+    while (state == WAITING) {
+        try {
+           wait();
+        } catch (InterruptedException e) {
+        }
+    }
+
+    socketGate.sendGameStatusMessage("Beginning count down ... ");
+}
+</pre>
+</blockquote>
+In plain English, this method causes the <code>GamesThread</code> to
+wait until the first Player registers. Let's look at the code to find
+out how.
+<p>
+First the method sets the <code>RingMaster</code>'s <code>state</code>
+to <code>WAITING</code>. Then, <code>waitForFirstPlayer</code>
+enters a loop that causes the current thread to <code>wait</code>
+as long as <code>state</code> is still <code>WAITING</code>.
+Which begs the question "How can this loop ever end?"
+The answer is that another thread, a thread in the Player application
+changes <code>state</code> and wakes up the <code>GamesThread</code>.
+Here's how.
+<p>
+To register, a Player application
+makes a remote method call to <code>RegistrarImpl</code>'s <code>mayIPlay</code>
+method. Part of the registration process involves
+adding a <code>PlayerRecord</code> to the <code>Roster</code> which,
+if this is the first player to register, also involves calling the
+<code>RingMaster</code>'s <code>startCountDown</code> method.
+<code>startCountDown</code> looks like this:
+<blockquote>
+<pre>
+synchronized void startCountDown() {
+    state = COUNTINGDOWN;
+    notifyAll();
+}
+</pre>
+</blockquote>
+This method changes the <code>state</code> to <code>COUNTINGDOWN</code>
+and then calls <code>notifyAll</code>.
+<code>notifyAll</code> causes <code>GamesThread</code> to return from
+its <code>wait</code> method.
+Remember that the call to <code>wait</code> is in a loop that continues
+as long as <code>state</code> is <code>WAITING</code>.
+So after <code>GamesThread</code> returns from <code>wait</code>,
+it checks the <code>state</code>, which is no longer <code>WAITING</code>
+and so exits the loop. So this method causes 
+<code>GamesThread</code> to return from <code>waitForFirstPlayer</code>.
+<p>
+Thus when <code>GamesThread</code> calls
+<code>waitForFirstPlayer</code> the effect is that the threads stops and
+waits until the first player registers for the game.
+Then the count down begins.
+
+<p>
+[PENDING: consider diagraming the flow of this using diagrams similar
+to Doug Lea's]
+</blockquote>
+
+<h4>Waiting for the Current Game to End</h4>
+<blockquote>
+<code>GamesThread</code> uses a very similar mechanism to wait until
+the current game is over. A game ends when a Player wins or the
+<code>BallAnnouncer</code> runs out of balls).
+The code is very similar to that used by <code>GamesThread</code> to
+wait for the first player to register so we'll briefly point out the
+classes and methods involved and let you figure out the rest.
+<p>
+After <code>GamesThread</code> has created a <code>BallAnnouncer</code> 
+and started it, <code>GamesThread</code> calls <code>RingMaster</code>'s
+<code>waitForGameToEnd</code> method which looks like this:
+<blockquote>
+<pre>
+synchronized void waitForGameToEnd() {
+    while (gameInProgress()) {
+        try {
+           wait();
+        } catch (InterruptedException e) {
+        }
+    }
+}
+</pre>
+</blockquote>
+Like the <code>waitForFirstPlayer</code> method, this method
+waits until the <code>state</code> changes and indicates that
+the game is no longer in progress. This causes the <code>GamesThread</code>
+to go into a wait state and do nothing.
+<p>
+The <code>state</code> gets changed when <code>RingMaster</code>'s
+<code>setGameOver</code> method gets called.
+<blockquote>
+<pre>
+synchronized void setGameOver() {
+    state = GAMEOVER;
+    announceBall(new BingoBall(BingoBall.GAME_OVER));
+    announcedBalls.removeAllElements();
+    announcedBalls.push(new BingoBall(BingoBall.FREE_SPACE));
+    roster.removeAllElements();
+    notifyAll();
+}
+</pre>
+</blockquote>
+<code>setGameOver</code> can be called under two conditions:
+<ol>
+<li> A Player won the game. When a Player wins, it remotely
+     calls <code>RegistrarImpl</code>'s <code>BINGO</code> method
+     which verifies the claim. If the BINGO claim is valid,
+     then <code>BINGO</code> calls <code>setGameOver</code>.
+
+<li> The <code>BallAnnouncer</code> announced all of the balls
+     and there was no winning claim from any Player. In
+     this case the <code>BallAnnouncer</code> calls <code>setGameOver</code>.
+</ol>
+<code>setGameOver</code> changes the <code>RingMaster</code>'s <code>state</code>
+and then calls <code>notifyAll</code> which wakes up <code>GamesThread</code>.
+
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="playerthreads.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="communication.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

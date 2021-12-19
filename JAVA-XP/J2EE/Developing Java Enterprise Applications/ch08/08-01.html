@@ -1,0 +1,121 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Servlet-Based Search Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch07\07-18.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 8<BR>A Servlet-Based Search Engine
+</FONT></H2>
+<P>This chapter is the first in the set of larger example programs that are included in this book. This example is a servlet that implements a simple Web page search engine. It demonstrates a number of the concepts we discussed in Chapter 7, &#147;Programming Servlets,&#148; such as initialization parameters, path information and parameters from the request, thread synchronization, error codes, and redirection. Searches can be constrained to a maximum number of hits, and navigation links are provided to view the next block of hits if the query results in more than the maximum. Queries can either be plain words or Boolean statements consisting of ands, ors, and nots. The performance for this servlet is adequate for a Web site and can be configured to use custom help pages and support multiple, separately indexed directories. All search results are displayed in a Web page like the one pictured in Figure 8.1. A navigation bar is dynamically generated for moving through large result sets.
+</P>
+<P>The core search engine for this servlet is provided in a package called index, which provides the code needed to index and search HTML files. Indices are represented by HTMLIndex objects in memory and text files on disk. The index objects use hash tables as their internal representation. This makes searches very fast, at the cost of some memory overhead. However, although the size of an index file depends on the number of unique words and files, experience shows that it is approximately one tenth of the size of the pages indexed. Part of this size reduction comes via the use of a skip table that contains words that aren&#146;t indexed. This table can be edited, although it requires recompilation of one of the classes in the index package. Although this example servlet does not take advantage of it, the indices also include the number of occurrences for each word. (This book does not go into the details of the index package.) In a later section, this chapter looks at the index manager that handles loading and unloading of indexes. For details on the index itself, refer to the source code on the CD-ROM that accompanies this book.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>In order to run this example, you will need to install it on a Web server that supports servlets. You will also need to configure the initialization parameters described below.</FONT><HR>
+</BLOCKQUOTE>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">HTMLSearchServlet</FONT></H3>
+<P>The Web interface to the search engine is the class HTMLSearchServlet. This servlet extends HttpServlet and defines an instance variable, logger, to store a DebugLog object (described in Chapter 7, &#147;Programming Servlets&#148;), the helpPage instance variable stores a string containing the URL for a help page, and the instance variable noIndexPage stores a string containing the URL for a page to display when the requested search cannot be performed. The static variable DEFAULT_MAX_HITS is defined to indicate the default maximum hits to display at one time. QUERY_FIELD_NAME, MAX_FIELD_NAME, CURRENT_FIELD_NAME SUBMIT_FIELD_NAME, and HELP_NAME are defined to indicate the names of the parameters that the servlet expects from the client. Static variables for these names are used to improve documentation and reduce the number of magic strings in our code.
+</P>
+<P><A NAME="Fig1"></A><A HREF="images\08-01.jpg"><IMG SRC="images\08-01t.jpg"></A>
+<BR><A HREF="images\08-01.jpg"><FONT COLOR="#000077"><B>Figure 8.1</B></FONT></A>&nbsp;&nbsp;Search results.</P>
+<P>The following code listing is the beginning of the HTMLSearchServlet class file. It contains the required import statements and the defintion of the static variables used in the class.
+</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+import java.net.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import index.*;
+
+public class HTMLSearchServlet extends HttpServlet
+{
+    protected DebugLog logger;
+    protected String noIndexPage;
+    protected String helpPage;
+   
+    protected static final int DEFAULT_MAX_HITS=25;
+   
+    public static final String QUERY_FIELD_NAME="query";
+    public static final String MAX_FIELD_NAME="maxhits";
+    public static final String CURRENT_FIELD_NAME="hitstart";
+    public static final String SUBMIT_FIELD_NAME="submit";
+    public static final String HELP_NAME="help";
+</PRE>
+<P>The HTMLSearchServlet relies on four parameters: the query parameter, the maxhits parameter, the hit-start parameter, and the submit parameter. The query parameter indicates the user&#146;s query. The maxhits parameter is used to change the number of hits to display. If one is not provided, the default is assumed. The hitstart parameter is used internally when a query exceeds the maximum number of hits and the user is scrolling through the blocks of results. If it is not part of a request, the servlet displays the first set of results, without exceeding the maxhits value. The submit parameter is used to determine if the user wants the help page displayed. If the submit parameter is equal to the help name, the help page is displayed; otherwise, the request is interpreted as a query.
+</P>
+<P>The following code segment defines the init method of the HTMLSearchServlet. All of the instance variables are initialized in the init method from configuration parameters listed in Table 8.1.</P>
+<P>The debug log is created from a file or server, depending on the available parameters. If no file or server is provided, the log will ignore debug messages. (For more discussion on the debug log, see Chapter 7, &#147;Programming Servlets.&#148;) Because the class</P>
+<TABLE WIDTH="90%"><TD CAPTION ALIGN="LEFT" COLSPAN="3"><B>Table 8.1</B> HTMLSearchServlet Configuration Parameters
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TH VALIGN="TOP" WIDTH="25%" ALIGN="LEFT">Parameter
+<TH VALIGN="TOP" WIDTH="40%" ALIGN="LEFT">Description
+<TH VALIGN="TOP" ALIGN="LEFT">Default
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>logfile</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">To file to log messages to.
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>not set</SMALL>
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>logserver</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The IP address of the DebugLogServer.
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>not set</SMALL>
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>helppage</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The URL for the help page to display if the user requests it.
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>/SearchHelp.html</SMALL>
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>noindexpage</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The URL for the page to display if no index is available.
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>/NoIndex.html</SMALL>
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>updateinterval</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The number of seconds to wait between checking whether files have changed on the disk and the index should be rebuilt.
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>not set</SMALL>
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+</TABLE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch07\07-18.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

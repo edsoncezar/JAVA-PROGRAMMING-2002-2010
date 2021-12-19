@@ -1,0 +1,377 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Networking with Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+<P><CENTER>
+<a href="0473-0478.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0486-0492.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-479"><P>Page 479</P></A>
+
+
+
+<P>In the run() method, you set up an infinite loop. Within this loop, you call
+accept() on the server class instance, srvSock. This call will be blocked unless there is a
+connection request that is received.
+</P>
+
+<P>When a connection request is received, you will return with an instance of class
+Socket. You pass this socket instance to a server logic thread that will deal with that
+connection. In the method run(), the class ServerLogic implements the server logic thread. An
+outline of this class is shown next:
+</P>
+
+<PRE>
+class ServerLogic extends Thread
+{
+    protected Socket clientSock;
+    protected InputStream is;
+    protected DataInputStream dis;
+    protected OutputStream os;
+    protected PrintStream pos;
+
+    public ServerLogic(Socket clientSock)
+    {
+        this.clientSock = clientSock;
+        try
+        {
+            is = clientSock.getInputStream();
+            dis = new DataInputStream(is);
+
+            os = clientSock.getOutputStream();
+            pos = new PrintStream(pos);
+
+        }
+        catch (IOException e)
+        {
+            System.out.println(&quot;IOException on getting streams for socket&quot;);
+            try
+            {
+                clientSock.close();
+            }
+            catch (IOException ie)
+            {
+                System.out.println(&quot;IOException on closing socket&quot;);
+
+            }  // end try
+</PRE>
+
+
+<A NAME="PAGENUM-480"><P>Page 480</P></A>
+
+
+<PRE>
+            return;
+
+        }  // end try
+
+        // Start the thread.
+        start();
+
+    }  // end ServerLogic
+
+    // Logic to handle client connection.
+    public void run()
+    {
+        // Server logic to handle connection
+        // goes here.
+
+    }  // end run
+
+}  // end ServerLogic
+</PRE>
+
+<P>The ServerLogic constructor records the client socket in its instance variable. Next
+it performs getInputStream() and getOutputStream() on the client socket instance to get an
+instance of the input and output streams. The input stream instance is used to create an
+instance of DataInputStream so that incoming data from the client can be more easily
+handled. The output stream instance is used to create an instance of PrintStream so that
+printable string data can be sent to the client. The server logic thread is started by a call to
+start(). This calls the run() method. The run() method should handle the connection request
+and exit, at which the server logic thread will terminate.
+</P>
+
+<P>The class instance variables for ServerLogic have protected access so that they can
+be inherited by another class that wants to subclass the ServerLogic and override the
+run() method:
+</P>
+
+<PRE>
+public class MySpecialServerLogic
+      extends ServerLogic
+{
+
+      public MySpecialServerLogic()
+      {
+         super();
+
+</PRE>
+
+<A NAME="PAGENUM-481"><P>Page 481</P></A>
+
+
+<PRE>
+
+      } // end MySpecialServerLogic
+
+      public void run()
+      {
+         // Special logic
+
+      } // end run
+
+} // end MySpecialServerLogic
+</PRE>
+
+
+<P>Listing 12.1 shows a complete server implementation (file MyServer.java on the
+CD-ROM) that reads an input line sent by the client and returns the number of
+characters in that line. The logic of this program has already been presented in this section.
+The logic of handling the client message is in the
+ServerLogic.run() method on lines 153_176. The
+main() method to start this program is on lines 19_45. To run this program, you
+should make sure that you have a network connection, and that the TCP/IP stack is
+correctly loaded on your machine.
+</P>
+
+<P>You could modify this program to do something more useful.
+</P>
+
+<P>Listing 12.1
+</P>
+
+<PRE>
+Line==================Java Source=================
+001 /**
+002  * MyServer: Demonstrates how a server can
+003  * be written in Java.
+004  *
+005  * Author: Karanjit S. G. S. Siyan
+006  *
+007  */
+008
+009 import java.net.*;
+010 import java.io.*;
+011
+012 public class MyServer extends Thread
+013 {
+014      private int port;
+015      private final static int DEFAULT_SERVER_PORT = 4000;
+016      private ServerSocket srvSock;
+</PRE>
+<PRE>
+                                                               <I>continues</I>
+</PRE>
+
+
+<A NAME="PAGENUM-482"><P>Page 482</P></A>
+
+
+
+<P>Listing 12.1, Continued
+</P>
+
+<PRE>
+017
+018     // main method to start the program.
+019     public static void main(String[] args)
+020     {
+021         int port;
+022
+023         if (args.length == 1)
+024         {
+025             try
+026             {
+027                 port = Integer.parseInt(args[0]);
+028             }
+029             catch (NumberFormatException e)
+030             {
+031
+032                 System.out.println(&quot;Expecting a numeric argument&quot;);
+033                 System.exit(1);
+034
+035             }  // end if
+036
+037             new MyServer(port);
+038         }
+039         else
+040         {
+041             new MyServer();
+042
+043         }  // end if
+044
+045     }  // end main
+046
+047     // Constructor for MyServer
+048     public MyServer(int port)
+049     {
+050            // Code to initialize the server
+051            // environment.
+052            this.port = port;
+053
+054            try
+
+</PRE>
+
+<A NAME="PAGENUM-483"><P>Page 483</P></A>
+
+
+<PRE>
+055            {
+056                   srvSock = new ServerSocket(port);
+057            }
+058            catch (BindException e) {
+059               System.out.println(e);
+060               System.exit(1);
+061            } catch (SocketException e) {
+062               System.out.println(e);
+063               System.exit(1);
+064            } // end try
+065            System.out.println(&quot;MyServer: Listening on port&quot;+
+066                   port);
+067
+068           // Start the thread.
+069           start();
+070
+071     } // end MyServer
+072
+073     // Default constructor method
+074     public MyServer()
+075     {
+076           this(DEFAULT_SERVER_PORT);
+077
+078     } // end MyServer
+079
+080     // run method overrides method in Thread.
+081     public void run()
+082     {
+083         Socket clientSock;
+084
+085         for(;;)
+086         {
+087             try
+088             {
+089                 clientSock = srvSock.accept();
+090             }
+091             catch (IOException e)
+092             {
+</PRE>
+<PRE>
+                                                            <I>continues</I>
+</PRE>
+
+<A NAME="PAGENUM-484"><P>Page 484</P></A>
+
+
+
+<P>Listing 12.1, Continued
+</P>
+
+<PRE>
+093                 System.out.println(&quot;IOException on accept&quot;);
+094                 System.exit(1);
+095
+096             }  // end try
+097
+098             // Now process the connection request.
+099             ServerLogic srvLogic = new ServerLogic(clientSock);
+100
+101             srvLogic = null; // Mark it for garbage collection
+102
+103         }  // end for
+104
+105     }  // end run
+106
+107 } // end MyServer
+108
+109 // Class ServerLogic to handle connection request.
+110 class ServerLogic extends Thread
+111 {
+112     protected Socket clientSock;
+113     protected InputStream is;
+114     protected DataInputStream dis;
+115     protected OutputStream os;
+116     protected PrintStream pos;
+117
+118     public ServerLogic(Socket clientSock)
+119     {
+120         this.clientSock = clientSock;
+121         try
+122         {
+123             is = clientSock.getInputStream();
+124             dis = new DataInputStream(is);
+125
+126             os = clientSock.getOutputStream();
+127             pos = new PrintStream(pos);
+128
+129         }
+
+</PRE>
+
+<A NAME="PAGENUM-485"><P>Page 485</P></A>
+
+
+<PRE>
+130         catch (IOException e)
+131         {
+132             System.out.println(&quot;IOException on getting streams for
+&Acirc;socket&quot;);
+133             try
+134             {
+135                 clientSock.close();
+136             }
+137             catch (IOException ie)
+138             {
+139                 System.out.println(&quot;IOException on closing socket&quot;);
+140
+141             }  // end try
+142
+143             return;
+144
+145         }  // end try
+146
+147         // Start the thread.
+148         start();
+149
+150     }  // end ServerLogic
+151
+152     // Logic to handle client connection.
+153     public void run()
+154     {
+155         // Server logic to handle connection
+156         // goes here.
+157
+158         String clientMsg;
+159
+160         try
+161         {
+162             clientMsg = dis.readLine();
+163         }
+164         catch (IOException e)
+165         {
+166             System.out.println(&quot;IOException reading line:\n&quot;+e);
+</PRE>
+<PRE>
+                                                               <I>continues</I>
+</PRE>
+
+<P><CENTER>
+<a href="0473-0478.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0486-0492.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

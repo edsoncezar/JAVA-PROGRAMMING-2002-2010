@@ -1,0 +1,392 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Constrained Properties</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="bound.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="indexed.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="JavaBeans | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Properties</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Constrained Properties
+</h2>
+<p>
+<blockquote>
+
+
+<p>
+<blockquote>
+<hr>
+To get the most out of this section, first read the following:
+<ul>
+ <li>Chapter 7 of the <a href="http://java.sun.com/beans/spec.html">
+     JavaBeans API Specification</a>
+
+ <li><a href="http://java.sun.com/beans/docs/javadoc/java.beans.VetoableChangeListener.html">
+     <code>VetoableChangeListener</code></a> interface
+
+ <li><a href="http://java.sun.com/beans/docs/javadoc/java.beans.VetoableChangeSupport.html">
+     <code>VetoableChangeSupport</code></a> class
+
+ <li><a href="http://java.sun.com/beans/docs/javadoc/java.beans.PropertyChangeEvent.html">
+     <code>PropertyChangeEvent</code></a> class
+
+ <li><a href="http://java.sun.com/beans/docs/javadoc/java.beans.PropertyVetoException.html">
+     <code>PropertyVetoException</code></a> class
+</ul>
+<hr>
+</blockquote>
+
+
+<p>
+A Bean property is constrained when any change
+to that property can be vetoed. Usually
+an outside object exercises the right to
+veto, but the Bean itself can also veto a property
+change.
+<p>
+The JavaBeans API provides an event mechanism, very
+similar to the bound property mechanism, that allows
+objects to veto a Bean's property changes.
+
+<p>
+There are three parts to constrained property implementations:
+<ul>
+  <li>A <i>source</i> Bean containing one or more constrained properties.
+  <li><i>Listener</i> objects that implement the 
+      <code>VetoableChangeListener</code> interface. This
+      object accepts or rejects proposed changes to
+      a constrained property in the source Bean.
+  <li>A <code>PropertyChangeEvent</code> object containing
+      the property name, and its old and new values. This is
+      the same class used for bound properties.
+</ul>
+
+<h3>Implementing Constrained Property Support Within a Bean</h3>
+<blockquote>
+<p>
+A Bean containing constrained properties must
+<ul>
+  <li>Allow <code>VetoableChangeListener</code> objects
+      to register and unregister their
+      interest in receiving notification that
+      a property change is <i>proposed</i>.
+  <li>Fire property change events at those interested
+      listeners when a property change is proposed. The
+      event should be fired <i>before</i> the actual property
+      change takes place. This gives each listener a chance
+      to veto the proposed change. The
+      <code>PropertyChangeEvent</code> is fired by a call to
+      each listeners <code>vetoableChange</code> method.
+  <li>If a listener vetoes, then make sure that any
+      other listeners can revert to the old value.
+      This means reissuing the
+      <code>vetoableChange</code> call to all the
+      listeners, with a <code>PropertyChangeEvent</code>
+      containing the old value.
+</ul> 
+
+<p>
+The <code>VetoableChangeSupport</code> utility class
+is provided to implement these capabilities. This class
+implements methods to add and remove
+<code>VetoableChangeListener</code> objects to a
+listener list, and a method that fires
+property change events at each listener in that list when
+a property change is proposed. This method will
+also catch any vetoes, and resend the property change event with the
+original property value. Your Bean can either inherit from
+<code>VetoableChangeSupport</code>, or use an
+instance of it.
+<p>
+Note that, in general, constrained properties should also be
+bound properties. When a constrained property change does occur,
+a <code>PropertyChangeEvent</code> can be sent via
+<code>PropertyChangeListener.propertyChange</code> to
+signal all <code>VetoableChangeListener</code> Beans that
+the change has taken effect. This lets all the
+vetoable change listeners know that the change was
+not vetoed by any listener.
+<p>
+The <code>JellyBean</code> demo Bean has a constrained property.
+We will its code to illustrate the steps in implementing
+constrained properties. Here's the steps to
+implement constrained properties in your Beans:
+<ol>
+  <li><b>Import the <code>java.beans</code> package</b>.
+      This gives you access to the <code>VetoableChangeSupport</code>
+      class.
+     <p>
+  <li><b>Instantiate a <code>VetoableChangeSupport</code> object
+      within your Bean</b>:
+      <pre>
+      private VetoableChangeSupport vetos = 
+                new VetoableChangeSupport(this); 
+      </pre>
+      <code>VetoableChangeSupport</code> manages a list of
+      <code>VetoableChangeListener</code> 
+      objects, and fires property change events at each object
+      in the list when a change occurs to a constrained property.
+      <p>
+  <li><b>Implement methods to maintain the property change listener list</b>.
+      These merely wrap calls to the <code>VetoableChangeSupport</code>
+      object's methods:
+      <pre>
+       public void addVetoableChangeListener(VetoableChangeListener l) {
+        vetos.addVetoableChangeListener(l);
+       }
+       public void removeVetoableChangeListener(VetoableChangeListener l) {
+        vetos.removeVetoableChangeListener(l);
+       }
+      </pre>
+
+  <li><b>Write a property's setter method to fire a property change event
+      when the property is changed.</b> This includes adding a
+      <code>throws</code> clause to the setter method's signature.
+      JellyBean's <code>setPriceInCents</code> method looks like this:
+      <pre>
+      public void setPriceInCents(int newPriceInCents)
+                            throws PropertyVetoException {
+        int oldPriceInCents = ourPriceInCents;
+
+        // First tell the vetoers about the change.  If anyone objects, we
+        // don't catch the exception but just let if pass on to our caller.
+        vetos.fireVetoableChange("priceInCents",
+                                new Integer(oldPriceInCents),
+                                new Integer(newPriceInCents));
+        // No-one vetoed, so go ahead and make the change.
+        ourPriceInCents = newPriceInCents;
+        changes.firePropertyChange("priceInCents",
+                                new Integer(oldPriceInCents),
+                                new Integer(newPriceInCents));
+      }
+      </pre>
+      <p>
+      Note that <code>setPriceInCents</code> stores the old
+      <code>price</code>, because both the old and new prices
+      must be passed to <code>fireVetoableChange</code>.
+      Also note that the primitive <code>int</code> prices
+      are converted to <code>Integer</code> objects.
+      <pre>
+      public void fireVetoableChange(String propertyName, 
+                                    Object oldValue,
+                                    Object newValue)
+                             throws PropertyVetoException
+      </pre>
+      <p>
+      These values are then bundled into
+      a <code>PropertyChangeEvent</code> object sent to each listener.
+      The old and new values are treated as <code>Object</code> values,
+      so if they are primitive types such as <code>int</code>,
+      you must use the object version such as <code>java.lang.Integer</code>.
+  
+</ol>
+<p>
+Now you are ready to implement a Bean that listens for
+constrained property changes.
+</blockquote>
+
+<h3>Implementing Constrained Property Listeners</h3>
+<blockquote>
+<p>
+To listen for property change events, your listener Bean
+must implement the <code>VetoableChangeListener</code> interface.
+This interface contains one method:
+<blockquote>
+<pre>
+void vetoableChange(PropertyChangeEvent evt)
+                        throws PropertyVetoException;
+</pre>
+</blockquote>
+
+<p>
+So to make your class able to listen and respond to
+property change events, your listener class must:<br>
+
+<ol>
+  <li><b>Implement the <code>VetoableChangeListener</code> interface</b>.
+      <p>
+  <li><b>Implement the <code>vetoableChange</code> method</b>.
+      This is the method that will be called by the source Bean
+      on each object in the listener list
+      (maintained by the <code>VetoableChangeSupport</code> object).
+      This is also the method that exercises veto power. A property
+      change is vetoed by throwing the
+      <code>PropertyVetoException</code>.
+</ol>
+
+<p>
+Note that the <code>VetoableChangeListener</code> object is often
+an adapter class. The adapter class implements the
+<code>VetoableChangeListener</code> interface and the
+<code>vetoableChange</code> method. This adapter is
+added to the constrained Bean's listener list, intercepts
+the <code>vetoableChange</code> call, and calls the
+target Bean method that exercises veto power.
+You'll see an example of this in the next section.
+</blockquote>
+
+<h3>Constrained Properties in the BeanBox</h3>
+<blockquote>
+<p>
+When the BeanBox recognizes the design patterns for constrained
+properties within your Bean, you will see
+a <code>vetoableChange</code> interface item when
+you pull down the Edit|Events menu.
+<p>
+As with any event hookup, the BeanBox generates an adapter
+class when you hook up a Bean with a constrained property to another
+Bean. To see how this works, take the following steps:
+
+<ol>
+  <li>Drop <code>Voter</code> and <code>JellyBean</code>
+      instances into the BeanBox.
+  <li>Select the <code>JellyBean</code> instance, and choose the
+      Edit|Events|vetoableChange|vetoableChange menu item.
+  <li>Connect the rubber band line to the <code>Voter</code> Bean.
+      This brings up the <code>EventTargetDialog</code> panel.
+  <li>Choose the <code>Voter</code> Bean's <code>vetoableChange</code> method,
+      and push the OK button. This generates an event adapter.
+      You can view this adapter in the
+      <code>beans/beanbox/tmp/sunw/beanbox</code> directory.
+  <li>Test the constrained property. Select the <code>JellyBean</code>
+      and edit its <code>priceInCents</code> property in the
+      Properties sheet. A <code>PropertyVetoException</code>
+      is thrown, and an error dialog pops up.
+</ol>
+<p>
+Behind the scenes the BeanBox generated the event hookup adapter.
+This adapter implements the <code>VetoableChangeListener</code> interface,
+and also generates a <code>vetoableChange</code> method implementation
+that calls the <code>Voter.vetoableChange</code> method.
+Here's the generated adapter source code:
+<blockquote>
+<pre>
+// Automatically generated event hookup file.
+
+package tmp.sunw.beanbox;
+import sunw.demo.misc.Voter;
+import java.beans.VetoableChangeListener;
+import java.beans.PropertyChangeEvent;
+
+public class ___Hookup_1475dd3cb5 implements
+        java.beans.VetoableChangeListener, java.io.Serializable {
+
+    public void setTarget(sunw.demo.misc.Voter t) {
+        target = t;
+    }
+
+    public void vetoableChange(java.beans.PropertyChangeEvent arg0)
+                               throws java.beans.PropertyVeto Exception {
+        target.vetoableChange(arg0);
+    }
+
+    private sunw.demo.misc.Voter target;
+}
+</pre>
+</blockquote>
+<p>
+The <code>Voter</code> Bean need not implement the
+<code>VetoableChangeListener</code> interface; instead, the
+generated adapter class implements <code>VetoableChangeListener</code>.
+The adapter's <code>vetoableChange</code> method calls the
+appropriate method in the target object (<code>Voter</code>).
+</blockquote>
+
+<h3>Per Property Constraint</h3>
+<blockquote>
+<p>
+As with bound property support, JavaBeans has design pattern
+support for adding and removing <code>VetoableChangeListener</code>
+objects that are tied to a specific named property:
+<blockquote>
+<pre>
+ void addVetoableChangeListener(String propertyName,
+                         VetoableChangeListener listener);
+ void removeVetoableChangeListener(String propertyName,
+                         VetoableChangeListener listener);
+</pre>
+</blockquote>
+
+As an alternative, for each constrained property a Bean
+can provide methods with the following signature to
+register and unregister vetoable change listeners on
+a per property basis:
+<blockquote>
+<pre>
+ void add&lt;<i>PropertyName</i>&gt;Listener(VetoableChangeListener p);
+ void remove&lt;<i>PropertyName</i>&gt;Listener(VetoableChangeListener p);
+</pre>
+</blockquote>
+
+</blockquote>
+<p>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="bound.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="indexed.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="JavaBeans | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Properties</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

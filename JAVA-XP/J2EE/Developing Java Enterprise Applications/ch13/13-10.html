@@ -1,0 +1,95 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Introduction to Java RMI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>There are two sides to the firewall discussion. First, there is the RMI program on the inside of a firewall trying to get out. In this case, the firewall probably uses what is called a <I>proxy server</I> to forward requests from the inside to the outside. Users make requests to the proxy server, and it forwards the requests out. To use RMI in this situation, set the http.proxyHost System property to the IP address of the proxy server. If the proxy server supports connections to any port (a potential security risk), you are good to go. The RMI library sends HTTP POST requests to a port on the proxy, expecting them to be forwarded to that port on the actual server. If the proxy doesn&#146;t allow connections on any port, you can configure a CGI script provided with the JDK called java-rmi.cgi to forward standard HTTP requests for you. Handling the proxy is automatic for the RMI libraries, so the only configuration on your part is to make sure that the CGI script is installed at the following URL:</P>
+<A HREF="http://hostname/cgi-bin/java-rmi.cgi">http://hostname:80/cgi-bin/java-rmi.cgi</A>
+<P>where hostname is the proxy server. Note that the server must accept the connection at port 80 for this to work.
+</P>
+<P>Unfortunately, forwarding with both ports and CGI scripts does not allow unsolicited calls into the RMI object, and the CGI script can be a bit of a security issue because it forwards all requests to any port.</P>
+<P>On the other side of the firewall discussion are programs outside the firewall that want to send messages in. You can use several mechanisms to accomplish this goal. First, you can set up a specific port for your RMI server and configure the firewall to allow connections on that port. Second, you can use a generic proxy that will forward TCP/IP packets through the firewall to the RMI server. Finally, you can use RMI to create a custom proxy server that controls connectivity into the intranet, yet allows arbitrary connections from the outside. This is a very configurable solution but can be a lot of work.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>By default, RMI programs try to use HTTP to communicate, just in case a proxy or firewall is in use. To disable all use of HTTP, set the System property called java.rmi.server.disableHttp to false.</FONT><HR>
+</BLOCKQUOTE>
+<P>All of these mechanisms can require some work on your part. Please refer to the RMI home page at java.sun.com/products/rmi for up-to-the-minute information on RMI and firewalls.
+</P>
+<H3><A NAME="Heading21"></A><FONT COLOR="#000077">Remote Object Activation</FONT></H3>
+<P>A UnicastRemoteObject allows you to create an instance of a remote object that can be accessed from a server program. The server program has to be accessible at all times to allow client connection. This can be a great performance hit if you have many remote object servers supporting various business processes. Java 2 introduces the notion of remote object activation.
+</P>
+<P>Activation is managed by a small program called rmid that runs on the server. When a client requests a service, rmid starts the remote object, and communication proceeds normally. This way, you can have many services that take up processing time only when the service is actually requested. In order for this process to work, you must configure rmid so that it knows where to find your server program and the remote objects. Then, rmid handles the rest.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Activation as a whole is a complex topic and beyond the scope of this book. Instead of trying to cover it completely, we have included a short discussion with an example. Please refer to the documentation in Java 2 for more complete information on the RMI activation framework as implemented in the java.rmi.activation package.</FONT><HR>
+</BLOCKQUOTE>
+<P>An activatable server object can be created by subclassing java.rmi.activation.Activatable or by exporting a Remote object using the static method of Activatable.exportObject. The following code example illustrates the steps for modifying our first messaging example so that it becomes an activatable remote object server. The process involves moving an existing remote object implementation that extends UnicastRemoteObject to a class that extends java.rmi.activation.Activatable. Then it is necessary to create a program that will install the activation information about our remote object. After compiling these objects, both the rmiregistry and rmid must be run with the appropriate configurations. Next, run the setup program that installs the configuration information with rmid. After that, the client can call the remote object as usual, but the remote object will not actually run until the client makes a request.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading22"></A><FONT COLOR="#000077">Modifying Server</FONT></H4>
+<P>The first step is to modify the Server class so that it becomes an activatable object. Begin by importing the activation package and changing the class so that it extends Activatable instead of UnicastRemoteObject.
+</P>
+<PRE>
+package server;
+
+import java.rmi.*;
+import java.rmi.server.*;
+import java.rmi.registry.*;
+import message.*;
+
+//Add support for activation.
+<B>import java.rmi.activation.*;</B>
+
+
+/*
+  Object must extend java.rmi.activation.Activatable instead of
+  java.rmi.server.UnicastRemoteObject.
+*/
+
+public class Server extends <B>Activatable</B>
+     implements MessageServer
+{
+</PRE>
+<P>Next, remove the empty constructor required for the subclass of UnicastRemoteObject and replace it with a constructor that takes two parameters: an ActivationID and a MarshalledObject. The ActivationID, which will be passed in by the activation system, represents a remote reference to the object&#146;s activator and a unique identifier for the object.
+</P>
+<P>A MarshalledObject facilitates passing objects in RMI calls that are not automatically deserialized by the remote peer. The object contains a byte stream with the serialized representation of an object given to its constructor. The contained object is serialized and deserialized, with the same serialization semantics used for marshalling and unmarshalling parameters and return values of RMI calls. When the serialized form is created, classes are configured with a URL from which the class may be loaded, and any remote object referenced in the MarshalledObject is represented by a serialized instance of its stub. MarshalledObjects are not necessary and thus not used for this example.</P>
+<P>The following code defines the new constructor, which calls its superclass constructor, passing in the id for this object and zero so that the object will be exported on an anonymous port.</P>
+<PRE>
+    public Server(ActivationID id, MarshalledObject data)
+      throws RemoteException
+    {
+     // Register the object with the activation system,
+     // then export it on an anonymous port.
+     super(id, 0);
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

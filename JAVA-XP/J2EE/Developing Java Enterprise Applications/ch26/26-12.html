@@ -1,0 +1,180 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The properties file that configures the MiniJMSUtils JNDI connection contains two entries for the example code. These entries configure the initial factory to the FileSystemContext service provider and set the root directory for the context. In fact, the reference-supporting version of the file system context factory is used to support the binding of destinations and connection factories.
+</P>
+<PRE>
+java.naming.factory.initial
+        =com.sun.jndi.fscontext.RefFSContextFactory
+java.naming.provider.url=file:///temp/jndistore
+</PRE>
+<P>The code for MiniJMSUtils, which follows, is basically a recipe for loading a properties file, reading it, and using the properties to create an initial context for JNDI lookups. The properties file is specified by a file name. The file must be in the class path to be found.
+</P>
+<PRE>
+package minijms;
+
+import minijms.*;
+import minijmsserver.*;
+import javax.jms.*;
+import javax.naming.*;
+import java.io.*;
+import java.rmi.*;
+import java.util.*;
+
+public class MiniJMSUtils
+{
+    public static Properties properties;
+    public static Context context;
+
+    public static void init(String propsFile)
+        throws Exception
+    {
+        // Create and install a security manager
+        SecurityManager mng;
+        InputStream propsIn;
+        Properties sysProps;
+
+        <B>mng = new RMISecurityManager();
+        System.setSecurityManager(mng);
+
+        //Update the system props for class loading;
+        //fails for an applet but that&#146;s okay.
+        try
+        {
+            sysProps = System.getProperties();
+            sysProps.put(&#147;java.rmi.server.codebase&#148;
+                      ,&#147;file:/&#148;
+                      &#43; sysProps.getProperty(&#147;user.dir&#148;)
+                      &#43;&#147;/&#148;);
+            System.setProperties(sysProps);
+        }
+        catch(Exception ignore)
+        {
+        }</B>
+
+        //Load the properties file.
+        <B>propsIn
+         = ClassLoader.getSystemResourceAsStream(propsFile);</B>
+        properties = new Properties();
+        properties.load(propsIn);Properties p = new Properties();
+
+        <B>String user=properties.getProperty(&#147;java.naming.user&#148;);
+        String password
+               =properties.getProperty(&#147;java.naming.password&#148;);</B>
+        InitialContext retVal = null;
+
+        <B>p.put(Context.INITIAL_CONTEXT_FACTORY,
+            properties.getProperty(&#147;java.naming.factory.initial&#148;));
+
+        p.put(Context.PROVIDER_URL
+            , properties.getProperty(&#147;java.naming.provider.url&#148;));</B>
+
+        if (user != null)
+        {
+            <B>p.put(Context.SECURITY_PRINCIPAL, user);</B>
+
+            if (password == null) password = &#147;&#148;;
+
+            <B>p.put(Context.SECURITY_CREDENTIALS, password);</B>
+        }
+
+        <B>context = new InitialContext(p);</B>
+    }
+}
+</PRE>
+<P>The properties and context static variables are public and provide easy access to a program. The following examples all initialize the MiniJMSUtils class and use its variables to get to the JNDI context. This context is then used to access destinations or connection factories by name. Although this utility is included in the minijms package, it doesn&#146;t rely on any minijms code beyond the import statements, so you could use it with other JMS providers or JNDI providers.
+</P>
+<P>This concludes the discussion on the MiniJMS client library. The server is discussed next, including code for accessing a database with JDBC, binding JNDI objects, adding the object factories discussed here to the JNDI context, and implementing the remote interfaces discussed in preceding sections.</P>
+<H3><A NAME="Heading13"></A><FONT COLOR="#000077">The Server</FONT></H3>
+<P>The MiniJMS server provides a number of services. It implements the remote interfaces, supporting persistent messaging organized into queues and topics. It also registers the necessary objects in a JNDI context for use by the client. Finally, it maintains a database of messages for durable, nonaccessible clients.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading14"></A><FONT COLOR="#000077">The Message Store</FONT></H4>
+<P>At the heart of the server is the MiniJMSMessageStore class. This object defines the storage scheme for messages in the MiniJMS system. Messages that are marked as persistent are maintained in a database using JDBC. Actually, messages are stored on disk, and their paths are stored in the database. This separation is provided for JBDC drivers that do not correctly support binary data. All messages are held in memory for the destinations to which they will be delivered. However, if no running sessions have registered an interest in a message, it is not stored in memory, meaning that non-persistent messages in which no client is interested are ignored.
+</P>
+<P>The schema for the MiniJMSMessageStore&#146;s database contains three tables. These tables and their columns are listed in Tables 26.4 through 26.6. The messages table, shown in Table 26.4, stores information about the persistent messages that are sent, including their destinations and a reference to their locations on disk. This reference is relative to a root directory configured in the server&#146;s properties file. The destinations table, shown in Table 26.5, contains the available destinations. The ack table, shown in Table 26.6, is keeps track of the last acknowledged message for a particular client and a particular destination.</P>
+<P>The message store has some of the same features in the client code as the MiniSession. It organizes the registered listeners and messages into hash tables for distribution. The actual distribution is handled by the session&#146;s remote counterpart, which will be discussed in a moment. As well as storing messages, the message store is responsible for initializing the JNDI context with the available destinations. These destinations are stored in the store&#146;s database.</P>
+<TABLE WIDTH="100%"><TD CAPTION COLSPAN="2" ALIGN="LEFT"><B>Table 26.4</B> Messages Table
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="25%" ALIGN="LEFT">COLUMN
+<TH ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>MSG_NUM</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The message&#146;s unique number, assigned by the message store.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>MSG_ID</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The message&#146;s unique identifier.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>DESTINATION</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The name of the destination to which the message was sent.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>CONTENT</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The name of the file containing the serialized version of the message.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P>
+</P>
+<TABLE WIDTH="100%"><TD CAPTION COLSPAN="2" ALIGN="LEFT"><B>Table 26.5</B> Destinations Table
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="25%" ALIGN="LEFT">COLUMN
+<TH ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>NAME</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The destination&#146;s name.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>ISQUEUE</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Either &#147;true&#148; or &#147;false,&#148; indicating whether the destination is a queue. If it is not, it is a topic.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

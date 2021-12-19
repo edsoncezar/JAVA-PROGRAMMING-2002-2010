@@ -1,0 +1,248 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Finally, implement the bean. Again, the bean is required to implement all of the SessionBean methods and didn&#146;t really need to do anything in all of them. Notice that the create method uses a custom exception. You could also use this exception in the nextPrime method, in which case the client would see the custom class if it caught it.
+</P>
+<PRE>
+package nextprime;
+
+import javax.ejb.*;
+import java.io.Serializable;
+import java.util.*;
+
+import nextprime.*;
+
+public class <B>NextPrimeBean</B> implements <B>SessionBean</B>
+{
+    transient protected SessionContext context;
+    <B>protected long current;</B>
+
+    public void ejbActivate()
+    {
+    }
+    public void ejbRemove()
+    {
+    }
+    public void ejbPassivate()
+    {
+    }
+    public void setSessionContext(SessionContext ctx)
+    {
+     context = ctx;
+    }
+    <B>public void ejbCreate()</B>
+    {
+         current = 1;
+    }
+    <B>public void ejbCreate(long start) throws NotPrimeException</B>
+    <B>{
+         if(!isPrime(start))
+         {
+             //Only except primes
+             throw new NotPrimeException(start);
+         }
+         else
+         {
+             current = start;
+         }
+    }</B>
+
+    <B>public long nextPrime()</B>
+    {
+         current = nextPrimeAfter(current);
+         return current;
+    }
+
+    <B>public long nextPrimeAfter(long num)</B>
+    {
+         while(!isPrime(&#43;&#43;num)){}
+
+         return num;
+    }
+    public boolean isPrime(long num)
+    {
+         long test;
+         long max;
+         boolean retVal = true;
+
+         if((num==0)||(num==1)) return false;
+
+         num = Math.abs(num);
+
+         max = num/2 &#43; 1;
+
+         for(test=2;test&ltmax;test&#43;&#43;)
+         {
+             if(num%test == 0)
+             {
+                 retVal = false;
+                 break;
+             }
+         }
+
+         return retVal;
+    }
+}
+</PRE>
+<P>Both of these examples kept track of the SessionContext when given it. This is not necessary, but it is a reasonable habit to get into because the context may be used in more complex beans.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading19"></A><FONT COLOR="#000077">Using a Session Bean</FONT></H4>
+<P>Because Enterprise JavaBeans are network objects, it is most likely that you will gain access to them through JNDI, as discussed in Chapter 4, &#147;What Is JNDI?&#148; and Chapter 5, &#147;Using JNDI.&#148; The service provider that is used to access the bean really depends on the EJB host. For example, a host that uses RMI for communication might use the RMI registry to make EJBs available, while a host that uses CORBA might opt for the CORBA naming services. The examples in this book use WebLogic&#146;s JNDI context to gain access to the beans.
+</P>
+<P>Access to a bean is in the form of the bean&#146;s home interface. A client will get the bean&#146;s home from JNDI, for example, and ask the home to create a session object. If the request is for a stateful bean, a bean will probably be created, and if not, one will be activated. In either case, an EJBObject referring to the real bean will be returned to the client. If the request is for a stateless bean, the host will note the request and create an EJBObject to return to the client, but it will probably wait for a real request before creating the bean or selecting one from the pool.</P>
+<P>Once the client has the EJBObject, it can begin to send application-specific messages to the EJB.</P>
+<P>The following complete example, a client for the IsPrimeBean, demonstrates how to create the initial JNDI context, access the home, create the EJBObject, and send messages to it.</P>
+<PRE>
+import javax.ejb.*;
+import javax.naming.*;
+import java.rmi.*;
+import java.util.*;
+import java.io.*;
+
+import isprime.*;
+
+public class IsPrimeClient
+{
+    public static void main(String[] args)
+    {
+        Context ctx=null;
+
+         try
+         {
+            <B>ctx = getInitialContext(args);</B>
+            InputStreamReader readIn;
+            BufferedReader bufIn;
+            String testStr;
+            long test;
+
+            <B>IsPrimeHome home =
+               (IsPrimeHome) ctx.lookup(&#147;isprime.IsPrimeHome&#148;);
+            IsPrime checker = home.create();</B>
+
+            readIn = new InputStreamReader(System.in);
+            bufIn = new BufferedReader(readIn);
+
+            do
+            {
+                System.out.print(&#147;Please enter a number&#148;);
+                System.out.println(&#147; or \&#145;q\&#146; to quit.&#148;);
+
+                testStr = bufIn.readLine();
+
+                try
+                {
+                    test = Long.parseLong(testStr);
+
+                    if(<B>checker.isPrime(test)</B>)
+                    {
+                         System.out.print(test);
+                         System.out.println(&#147; is prime.&#148;);
+                    }
+                    else
+                    {
+                         System.out.print(test);
+                         System.out.println(&#147; is not prime.&#148;);
+                    }
+                }
+            catch(NumberFormatException exp)
+            {
+               //ignore it
+               }
+            }
+            while(!testStr.equals(&#147;q&#148;));
+
+            <B>home.remove(checker.getHandle());</B>
+        }
+        catch (Exception e)
+        {
+            System.out.println(&#147;Error.&#148;);
+            e.printStackTrace();
+        }
+        finally
+        {
+            try
+            {
+                 ctx.close();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+    }
+    static public Context getInitialContext(String[] args)
+    throws
+Exception
+    {
+        Properties p = new Properties();
+        String url = &#147;t3://localhost:7001&#148;;
+        String user=null;
+        String password=null;
+
+        if ((args != null) &amp&amp (args.length &gt 1))
+        {
+            for (int i = 0; i &lt args.length; i&#43;&#43;)
+            {
+                if (args[i].equals(&#147;-url&#148;))
+                    url = args[&#43;&#43;i];
+                else if (args[i].equals(&#147;-user&#148;))
+                    user = args[&#43;&#43;i];
+                else if (args[i].equals(&#147;-password&#148;))
+                    password = args[&#43;&#43;i];
+            }
+       }
+
+       p.put(Context.INITIAL_CONTEXT_FACTORY,
+               &#147;weblogic.jndi.T3InitialContextFactory&#148;);
+
+       p.put(Context.PROVIDER_URL, url);
+
+       if (user != null)
+       {
+            p.put(Context.SECURITY_PRINCIPAL, user);
+
+            if (password == null) password = &#147;&#148;;
+
+            p.put(Context.SECURITY_CREDENTIALS, password);
+       }
+
+       <B>return new InitialContext(p);</B>
+   }
+}
+</PRE>
+<P>The majority of the code in this example is used to read the command-line arguments to build the initial context and to read the command line for input from the user. The actual work of accessing the EJB is only a few lines of code, making Enterprise JavaBeans a powerful and elegant solution for enterprise computing.
+</P>
+<P>This example also shows how the bean is removed from the host by getting its handle and instructing the home object to remove the bean from the server based on that handle. In the case of a stateless bean, this may have no effect on the actual bean object. The server may just keep the bean in a pool for later use by other clients or it may remove the bean. What happens depends on the host&#146;s implementation.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

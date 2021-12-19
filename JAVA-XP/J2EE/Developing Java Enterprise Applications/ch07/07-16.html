@@ -1,0 +1,227 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-15.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-17.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>To use the DebugLog class, you can either make an instance or use the shared instance provided by the class method getSharedLog. Once you have a DebugLog, initialize log to a specific destination using one of the logTo methods. Finally, send log messages to forward strings to the log. In the case of a servlet, the log will probably stay alive for the life of the servlet. However, you can close the log using closeLog. This closes connections and files that are open. Throughout the code, auto-flushing is used with our PrintWriters to ensure that the log messages are sent to the underlying streams immediately.
+</P>
+<P>The log server is implemented in a class called LogServer. The code for this class is available on the CD-ROM but, to save space, has not been included here. The LogServer is a single Java class that uses a separate thread to handle connections from DebugLog clients. Each log message sent by the client is either printed to System.out or a file, depending on the command-line arguments. To make it easier to track messages, they are prepended with the IP address of the client that sends them. The CD-ROM also contains the DebugLog.java file. A class called DebugLogTester is included as part of this file for testing purposes.</P>
+<P>For servlets that want to share a single DebugLog object, the method initialized is provided to check if another servlet has initialized the log. This method should be used inside a synchronized block with the call to logTo in order to ensure that one servlet doesn&#146;t initialize the log between the time that another calls initialized and logTo. The following servlet finds and initializes the log in its init method using configuration parameters for the destination. This servlet, called LoggingServlet, can be used to test the log features. It takes a parameter called message and logs the message. All of the code for interacting with the debug log is in bold in the code that follows. The surrounding code is simply support for the servlet to return Web pages and determine configuration parameters.</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class LoggingServlet extends GenericServlet
+{
+    DebugLog logger;
+
+    public void init(ServletConfig conf) throws ServletException
+    {
+        super.init(conf);
+
+        String logFile,logServer;
+
+        logFile = getInitParameter(&#147;logfile&#148;);
+        logServer = getInitParameter(&#147;logserver&#148;);
+
+        <B>logger = DebugLog.getSharedLog();</B>
+
+        if((logFile != null)||(logServer != null))
+        {<B>
+            //Need to protect against access by multiple clients.
+            synchronized(logger)
+            {
+                if(!logger.initialized())
+                {
+                    if(logServer != null)
+                    {
+                        logger.logTo(logServer);
+                    }
+                    else
+                    {
+                        logger.logTo(new File(logFile));
+                    }
+                }
+            }</B>
+        }
+    }
+
+    public void service(ServletRequest    request,
+                        ServletResponse    response)
+                        throws ServletException, IOException
+    {
+        PrintWriter    out;
+        String message;
+
+        response.setContentType(&#147;text/html&#148;);
+
+        out = response.getWriter();
+
+        out.println(&#147;&ltHTML&gt&ltHEAD&gt&ltTITLE&gt&#148;);
+        out.println(&#147;Log Tester&#148;);
+        out.println(&#147;&lt/TITLE&gt&lt/HEAD&gt&ltBODY&gt&#148;);
+
+        out.println(&#147;&ltH1&gtLogged&lt/H1&gt&#148;);
+
+        message = request.getParameter(&#147;Message&#148;);
+
+        <B>logger.log(message);</B>
+
+        out.println(message);
+
+        out.println(&#147;&lt/BODY&gt&lt/HTML&gt&#148;);
+
+        out.close();
+    }
+
+    public void destroy()
+    {
+        logger.closeLog();
+    }
+
+}
+</PRE>
+<P>An HTML page called LoggingTester.html follows. This Web page activates the LoggingServlet. The HTML contains a field for the message and a Submit button.
+</P>
+<PRE>
+&ltHTML&gt
+&ltHEAD&gt
+&ltTITLE&gt
+Logging Tester
+&lt/TITLE&gt
+&lt/HEAD&gt
+&ltBODY&gt
+&ltFORM METHOD=POST ACTION=&#147;/servlet/logservlet&#148;&gt
+Message to log:
+&ltINPUT NAME=&#147;Message&#148; VALUE=&#147;&#148;&gt&ltBR&gt&ltBR&gt
+&ltINPUT TYPE=&#147;Submit&#148; NAME=&#147;Submit&#148; VALUE=&#147;Log&#148;&gt
+
+&lt/FORM&gt
+&lt/BODY&gt
+&lt/HTML&gt
+</PRE>
+<P>As tools improve, the Web servers that host servlets may begin to provide better debugging tools. Until that time, log-style debugging is a powerful technique.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>WARNING:&nbsp;&nbsp;</B>We have found that servlets often crash if you try to print an invalid or null string to the output writer. Be careful when printing dynamic strings, and take into account the possibility that they may be null.</FONT><HR>
+</BLOCKQUOTE>
+<P>Using the DebugLog object allows you to create servlets with the necessary log messages, without having to change a lot of code when you deploy the servlet. In fact, you can even use a configuration argument to specify the logging destination, thus changing no code when deploying. More important, not changing code means that you won&#146;t introduce new bugs while deploying.
+</P>
+<P>You may also want to use <A HREF="http://library.cs.tuiasi.ro/programming/java/developing_java_enterprise_app/ch07/www.javaworld.com">www.javaworld.com</A> as a jumping-off point to find tools that help servlet debugging. Live Software, mentioned previously, provides one solution, and other companies provide some tools as well. As enterprise Java programming becomes more mainstream, more debugging and testing tools will become available, so keep an eye out for the &#147;latest and greatest.&#148;</P>
+<H3><A NAME="Heading20"></A><FONT COLOR="#000077">Performance Tuning</FONT></H3>
+<P>As you deploy your servlet-based applications, you will probably be concerned about performance. As with all performance-tuning activities, the first step in improving servlet performance is to measure it. To aid in testing the performance of servlets, a simple class follows; its instances use multiple threads to make requests to an arbitrary URL. Currently this class, called LoadTester, supports only GET requests, but it could be updated to support a wider range of request types. The purpose of load tester is to create a load on the server and measure the average response time.
+</P>
+<P>Keep in mind that the implementation of LoadTester is a simple one, mainly to serve as an example for the book. But it does provide a good starting point for testing the general response time of your servlets. Given an optional data file, a load tester even sends data to the servlet for processing. In return, the load tester prints timings for the request and average request times to System.out. Given these times, you can begin to tune performance and check your progress. You can even assign a pause between requests to improve realism.</P>
+<P>The LoadTester class that follows exercises a servlet or Web server by making consecutive requests. If no data is provided to the tester, it will get the contents of the specified URL. If data is provided, that data is sent to the URL and the reply read. Both methods use GET requests (the default).</P>
+<PRE>
+import java.net.*;
+import java.io.*;
+
+/* *
+ * Timing for each request is logged to standard out.
+ *
+ * Usage: LoadTester numTests numThreads pause url optionalDataFile
+ *
+ * The data file should be in the form:
+ * key value
+ * key2 value2
+ *
+ * using spaces for delimeters.
+ *
+ * If numTests==0 then the tester will continute
+ * indefinately. Each thread will make the specified
+ * request numTests times.
+ *
+ * pause is the time between tests in milliseconds.
+ *
+ * The results of each test are read and thrown away.
+ * Timing is performed from the request to the first byte read,
+ * and to the last byte.
+ */
+public class LoadTester extends Object
+{
+    private URL url;
+    private String data;
+    private int numTests;
+    private int numThreads;
+    private int pause;
+
+    static public void main(String[] argv)
+    {
+        LoadTester tester=null;
+        int threads, tests,pause;
+
+        if(argv.length &lt 4)
+        {
+            System.out.println(&#147;Usage: LoadTester numTests &#148;
+&#43;numThreads pause url optionalDataFile&#147;);
+            System.exit(0);
+        }
+
+        try
+        {
+            tests = Integer.parseInt(argv[0]);
+            threads = Integer.parseInt(argv[1]);
+            pause = Integer.parseInt(argv[2]);
+
+            tester = new LoadTester(threads,tests,pause,argv[3]);
+
+            if(argv.length == 5)
+            {
+                tester.setData(argv[4]);
+            }
+
+            tester.start();
+        }
+        catch(Exception exp)
+        {
+            System.out.println(exp);
+            System.exit(0);
+        }
+    }
+
+    public LoadTester(int nthds,int ntsts,int p,String u)
+    throws MalformedURLException
+    {
+        numTests = ntsts;
+        numThreads = nthds;
+        url = new URL(u);
+        pause = p;
+
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-15.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-17.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

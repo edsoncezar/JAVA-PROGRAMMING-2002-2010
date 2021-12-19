@@ -1,0 +1,415 @@
+<html>
+
+<head><meta http-equiv="pragma" content="no-cache">
+
+<meta NAME="GENERATOR" CONTENT="Internet Assistant for Microsoft Word 2.0z">
+<title>8.3 Synchronisation of actions</title>
+
+</head>
+
+<body BGCOLOR="WHITE">
+
+<h2>8.3 Synchronisation of actions<br>
+</h2>
+
+<p>
+The example above illustrated the synchronization of tasks by
+controlling access to shared objects and their data attributes.
+It is also possible, and in some cases essential, to synchronize
+two, or more, tasks by ensuring that an action in one task can
+only take place after an action in a separate task has completed.
+<br>
+
+<p>
+For example a simple software model of a road junction controlled
+by traffic lights may have one set of lights controlling the north-south
+flow of traffic flow and another set of lights controlling the
+east-west traffic flow. In order for the model to be an accurate
+representation of the junction it is essential that the operation
+of both lights are synchronized to ensure that both lights are
+never both on green at the same time.<br>
+
+<p>
+In this model the repeating pattern of traffic lights as used
+in the U.K. will be used. The repeating sequence of lights, from
+red back to red, is given in Table 8.1. <br>
+
+<p>
+
+<center>
+<table BORDER="1">
+
+<tr><td WIDTH="165"><i><font>light colour</font></i></td>
+<td WIDTH="165"><i><font>meaning to driver</font></i></td>
+</tr>
+
+<tr><td WIDTH="165"><font>Red</font></td><td WIDTH="165"><font>wait</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>Red Amber</font></td><td WIDTH="165"><font>prepare to move</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>Green</font></td><td WIDTH="165"><font>move</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>Amber</font></td><td WIDTH="165"><font>stop</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>Red</font></td><td WIDTH="165"><font>wait</font>
+</td></tr>
+
+</table>
+</center>
+
+<center>Table 8.1 Repeating sequence of a single
+traffic light.</center>
+<p>
+For the simple north­south/&nbsp;east­west junction
+the repeating sequence of lights given in Table 8.2 must be enforced.
+<p>
+
+<center>
+<table BORDER="1">
+
+<tr><td WIDTH="165"><center><i><font>north-south</font></i></center>
+</td><td WIDTH="165"><center><i><font>east west</font></i></center>
+</td></tr>
+
+<tr><td WIDTH="165"><font>red</font></td><td WIDTH="165"><font>red</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>red amber</font></td><td WIDTH="165"><font>red</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>green</font></td><td WIDTH="165"><font>red</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>amber</font></td><td WIDTH="165"><font>red</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>red</font></td><td WIDTH="165"><font>red amber</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>red</font></td><td WIDTH="165"><font>green</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>red</font></td><td WIDTH="165"><font>amber</font>
+</td></tr>
+
+<tr><td WIDTH="165"><font>red</font></td><td WIDTH="165"><font>red</font>
+</td></tr>
+
+</table>
+</center>
+
+<center>Table 8.2 Repeating sequence of a pair of traffic lights.</center>
+<p>
+The basis of this implementation is to model the activity of a
+single traffic light, following the sequence given in Table 8.1.
+When the change from <i>amber</i> to <i>red</i> is made the traffic
+light should suspend itself and send a message to the other light
+that it can resume its sequence. As this other light must have
+suspended itself when it changed to <i>red</i>, upon resumption,
+it will cycle through its <i>red/&nbsp;amber</i>, <i>green</i>
+and <i>amber</i> states until it changes back to <i>red</i>. At
+this point the second light will suspend itself and send a message
+back to the original light that it can resume its sequence, whilst
+it waits on <i>red</i>, and so on. The <i>TrafficLight</i> class
+diagram, which implements this behaviour, is as follows. <br>
+
+<p>
+<center><img SRC="c8p3i1.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/c8p3i1.gif" WIDTH="359" HEIGHT="334"></center>
+<p>
+Each <i>TrafficLight</i> instance is given a name upon construction
+in order that the output from the program can identify which light
+produced it. A <i>TrafficLight</i> instance has to know which
+light it has to send a message to when it has completed its cycle
+and is about to suspend itself. However, it cannot be informed
+of this upon construction as the light which it has to inform
+may not yet have been constructed. Accordingly an action to inform
+each <i>TrafficLight</i> instance of which light it is to send
+the message to is required. The remaining instance attribute is
+the <i>state</i> of the light which records its current light
+colour. <br>
+
+<p>
+In addition to the <i>run</i>() action two private actions, <i>holdOn</i>()
+to provide a delay and <i>report</i>() to output the state of
+the light are indicated on the class diagram. The implementation
+of this design as far as the end of the <i>setOtherLight</i>()
+action is as follows. <br>
+
+<pre>
+<font>0001 // Filename <i>TrafficLight.java</i>.
+0002 // Providing a simple model of a traffic light.
+0003 //
+0004 // Written for JFL book Chapter 8 see text.
+0005 // Fintan Culwin, v0.1, January 1997.
+0006 
+0007 
+0008 <b>public class</b> <i>TrafficLight</i> <b>extends</b> Thread { 
+0009 
+0010 
+0011 <b>private static final int</b> <i>RED</i>       = 0;
+0012 <b>private static final int</b> <i>RED_AMBER</i> = 1;
+0013 <b>private static final int</b> <i>GREEN</i>     = 2;
+0014 <b>private static final int</b> <i>AMBER</i>     = 3;
+0015 
+0016 <b>private int </b>         <i>state</i>        = <i>AMBER</i>;
+0017 <b>private </b>String       <i>lightName</i>;
+0018 <b>private </b><i>TrafficLight</i> <i>theOtherLight</i>;
+0019 
+0020    <b>public</b> <i>TrafficLight</i>( String <i>name</i>){ 
+0021       <i>lightName</i> = <b>new</b> String( <i>name</i>);
+0022    } // End <i>TrafficLight</i> constructor.
+0023 
+0024 
+0025    <b>public void</b> <i>setOtherLight</i>(<i>TrafficLight</i> <i>otherLight</i>) { 
+0026      <i>theOtherLight</i> = <i>otherLight</i>;
+0027    } // end <i>setOtherLight</i>.<br>
+</font>
+</pre>
+
+<p>
+The implementation declares four private manifest values to define
+the patterns of the lights and the <i><font FACE="Arial">state</font></i>
+instance attribute is initialised to the value <i><font FACE="Arial">AMBER</font></i>,
+for reasons which will be explained below. The constructor installs
+its argument as the name of the light into the <i><font FACE="Arial">lightName</font></i>
+instance attribute, and the <i><font FACE="Arial">setOtherLight</font></i>()
+action installs its argument into <i><font FACE="Arial">theOtherLight</font></i>
+instance attribute. <br>
+
+<p>
+Before considering the design and implementation of the <i><font FACE="Arial">run</font></i>()
+action the implementation of the two private actions will be presented.
+<br>
+
+<pre>
+<font>0059    <b>private void</b> <i>holdOn</i>() { 
+0060       <b>try</b> {         
+0061          <b>this</b>.sleep( 500);
+0062       } <b>catch</b> ( InterruptedException <i>exception</i> ){ 
+0063          // Do nothing.
+0064       } // End try/ catch.         
+0065    } // End <i>holdOn</i>.
+0066    
+0067 
+0068 
+0069    <b>private void</b> <i>report</i>() { 
+0070 
+0071    String stateString = &quot;&quot;; 
+0072    
+0073        <b>switch</b> ( <i>state</i>) { 
+0074           <b>case</b> <i>RED</i> :
+0075              <i>stateString</i> = <b>new</b> String( &quot; red.&quot;);
+0076              <b>break</b>;
+0077           <b>case</b> <i>RED_AMBER</i> :
+0078              <i>stateString</i> = <b>new</b> String( &quot; red amber.&quot;);
+0079              <b>break</b>;
+0080           <b>case</b> <i>GREEN</i> :
+0081              <i>stateString</i> = <b>new</b> String( &quot; green.&quot;);
+0082              <b>break</b>; 
+0083           <b>case</b> <i>AMBER</i> :
+0084              <i>stateString</i> = <b>new</b> String( &quot; amber.&quot;); 
+0085              <b>break</b>;                        
+0086        } // End switch
+0087        System.out.println( &quot;The &quot; +  <i>lightName</i>        +
+0088                            &quot; lights have changed to &quot; + 
+0089                            <i>stateString</i>);
+0090     } // End <i>report</i>.<br>
+</font>
+</pre>
+
+<p>
+The <i><font FACE="Arial">holdOn</font></i>() action provides
+a half second delay every time it is called and is intended to
+be used to slow down the output in order to make the demonstration
+more watchable. The <i>report</i>() action outputs a message to
+the terminal and is intended to be called every time the colour
+of the light changes. The output indicates which light has changed
+and what colour it has changed to. <br>
+
+<p>
+The design of the <i><font FACE="Arial">run</font></i>()
+action is as follows. <br>
+
+<p>
+<center><img SRC="c8p3i2.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/c8p3i2.gif" WIDTH="712" HEIGHT="390"></center>
+<p>
+The steps performed within the loop when the lights are currently
+<i>red</i> are to <i><font FACE="Arial">holdOn</font></i>(),
+change the state of the lights to <i>red/&nbsp;amber</i> and then
+to <i><font FACE="Arial">report</font></i>() on the change.
+A similar pattern of events takes place when the lights are <i>red/&nbsp;amber</i>
+or <i>green</i> and these details have been omitted from the design
+in the interests of clarity.<br>
+
+<p>
+When the lights are <i>amber</i> the first three steps are essentially
+identical to those of the other states. They are followed by a
+call of the <i><font FACE="Arial">otherLight</font></i>'s
+<font FACE="Arial">resume</font>() action before the current
+thread is <i><font FACE="Arial">suspend</font></i>ed. The
+implementation of this design is as follows. <br>
+
+<pre>
+<font>0028    <b>public void</b> <i>run</i>() {
+0029        <b>while</b> ( <b>true</b>) { 
+0030           <b>switch</b> ( <i>state</i> ) {  
+0031              <b>case</b> <i>RED :
+</i>0032                 <b>this</b>.<i>holdOn</i>();
+0033                 <i>state</i> = <i>RED_AMBER</i>;
+0034                 <b>this</b>.<i>report</i>();
+0035                 <b>break</b>;
+0036              <b>case</b> <i>RED_AMBER :
+</i>0037                 <b>this</b>.<i>holdOn</i>();
+0038                 <i>state</i> = <i>GREEN</i>;
+0039                 <b>this</b>.<i>report</i>();
+0040                 <b>break</b>; 
+0041              <b>case</b> <i>GREEN :
+</i>0042                 <b>this</b>.<i>holdOn</i>();
+0043                 <i>state</i> = <i>AMBER</i>;
+0044                 <b>this</b>.<i>report</i>();
+0045                 <b>break</b>;
+0046              <b>case</b> <i>AMBER :
+</i>0047                 <b>this</b>.<i>holdOn</i>();
+0048                 <i>state</i> = <i>RED</i>;
+0049                 <b>this</b>.<i>report</i>();
+0050                 <i>theOtherLight</i>.resume();
+0051                 <b>this</b>.suspend();
+0052                 <b>break</b>; 
+0053           } // End switch
+0054        } // End while.
+0056    } // End run.<br>
+</font>
+</pre>
+
+<p>
+The <font FACE="Arial">resume</font>() and <font FACE="Arial">suspend</font>()
+actions, which are called on lines 0050 and 0051, are inherited
+from the <i><font FACE="Arial">Thread</font></i> class
+by the <i><font FACE="Arial">TrafficLight</font></i> class.
+The effect of calling the <font FACE="Arial">suspend</font>()
+action is to cause the thread to become inactive and it will not
+be scheduled for further execution until its <font FACE="Arial">resume</font>()
+action is called. <br>
+
+<p>
+The demonstration test harness is comparable to the other concurrent
+demonstrations which have already been presented in this chapter
+and its implementation is as follows. <br>
+
+<pre>
+<font>0001 // Filename <i>TrafficDemo.java</i>.
+0002 // Implementing a simple model of a road junction.
+0003 //
+0004 // Written for JFL book Chapter 8 see text.
+0005 // Fintan Culwin, v0.1, January 1997.
+0006 
+0007 <b>import</b> <i>TrafficLight</i>;
+0008 
+0009 <b>public class</b> <i>TrafficDemo</i> { 
+0010 
+0011    <b>public static void</b> <i>main</i>( String <i>argv</i>[]) { 
+0012    
+0013    <i>TrafficLight</i> <i>northSouth</i> = <b>new</b> <i>TrafficLight</i>( &quot;north south &quot;);
+0014    <i>TrafficLight</i> <i>eastWest</i>   = <b>new</b> <i>TrafficLight</i>( &quot;east west   &quot;);   
+0015 
+0016       <i>northSouth.setOtherLight</i>( <i>eastWest</i>);
+0017       <i>eastWest.setOtherLight</i>(   <i>northSouth</i>);
+0018 
+0019       <i>northSouth</i>.start();  
+0020       <i>eastWest</i>.start();
+0021    } // End <i>main</i>.
+0022    
+0023 } // End <i>TrafficDemo</i>.<br>
+</font>
+</pre>
+
+<p>
+On lines 0013 and 0014 two instances of the <i><font FACE="Arial">TrafficLight</font></i>
+class, called <i><font FACE="Arial">northSouth</font> </i>and<i>
+<font FACE="Arial">eastWest</font></i> are constructed
+with suitable names. Having created both <i><font FACE="Arial">TrafficLight</font></i>s
+each can be informed of the identity of the other by use of the
+<i><font FACE="Arial">setOtherLight</font></i>()<i> </i>action.
+Finally the <i><font FACE="Arial">start</font></i>() action
+of each <i><font FACE="Arial">TrafficLight</font></i> is
+called. The output produced by this demonstration client is as
+follows. <br>
+
+<hr>
+
+<ul><pre>
+The north south  lights have changed to  red.
+The east west    lights have changed to  red.
+The north south  lights have changed to  red amber.
+The north south  lights have changed to  green.
+The north south  lights have changed to  amber.
+The north south  lights have changed to  red.
+The east west    lights have changed to  red amber.
+The east west    lights have changed to  green.
+The east west    lights have changed to  amber.
+The east west    lights have changed to  red.
+The north south  lights have changed to  red amber.
+</pre></ul>
+
+<hr>
+
+<p>
+The output continued through the same pattern until interrupted
+from the keyboard. As each <i><font FACE="Arial">TrafficLight</font></i>
+instance was created with a default state of <font FACE="Arial">AMBER</font>,
+both lights will change immediately to <i>red</i>. The first light
+which changes to <i>red</i> will call the <font FACE="Arial">resume</font>()
+action of the other light and then <i><font FACE="Arial">suspend</font></i>()
+itself. Calling the <font FACE="Arial">resume</font>()
+action of a <font FACE="Arial">Thread</font> object which
+has not been <font FACE="Arial">suspend</font>ed has no
+effect. <br>
+
+<p>
+As the first light has suspended itself the second light can now
+change itself to <i>red</i>. It will then call the <font FACE="Arial">resume</font>()
+action of the first light and <font FACE="Arial">suspend</font>()
+itself. The first light is now active and the second suspended,
+so the first light will cycle through its changes until it returns
+to <i>red</i>. At this point it will <font FACE="Arial">resume</font>()
+the other light and <font FACE="Arial">suspend</font>()
+itself. This pattern will continue indefinitely with each light
+cycling through its sequence whilst the other light is suspended
+on red in compliance with the required pattern of lights shown
+in Table 8.2. <br>
+<br>
+
+
+<p>
+<hr>
+<h2>
+<ul>
+<a HREF="trafficlight.java" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/TrafficLight.java"><img SRC="..\list.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/list.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="40" HEIGHT="35">
+<i>TrafficLight.java</i> source code</a>.
+<p>
+<a HREF="trafficdemo.java" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/TrafficDemo.java"><img SRC="..\list.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/list.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="40" HEIGHT="35">
+<i>TrafficDemo.java</i> source code</a>.
+<p>
+
+
+<a HREF="chap8p4.html" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/chap8p4.html"><img SRC="..\next.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/next.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="50" HEIGHT="40">
+8.4 Problems with concurrency </a>.
+
+<p>
+
+<a HREF="chap8p2.html" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/chap8p2.html"><img SRC="..\last.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/last.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="50" HEIGHT="40">
+8.2 Synchronisation of data attributes</a>.
+
+
+</ul>
+</h2>
+<hr>
+
+</body>
+
+</html>
+&#26;

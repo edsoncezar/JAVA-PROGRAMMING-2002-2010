@@ -1,0 +1,202 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Introduction to Java RMI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H3><A NAME="Heading13"></A><FONT COLOR="#000077">Example with Bidirectional Messaging</FONT></H3>
+<P>This example extends the messaging application by adding the ability for clients to register themselves with the server so the server can call back to each client. A rudimentary user interface is also added to allow the user to type messages and see messages being typed from other clients. The idea is that the client registers with the server, the server stores the client object in a hash table, and when a client sends a message to the server, it forwards the message to each client in the hash table. This creates a simple networked chat program. To implement this application, each object in the previous example is modified and a new interface called MessageReceiver is introduced. MessageReceiver is implemented by the client program and called by the server.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading14"></A><FONT COLOR="#000077">Implementing MessageReceiver</FONT></H4>
+<P>The MessageReceiver interface declares the methods of the client that may be called by the server. The interface is defined in the message package because it is needed by both the client and the server. The MessageReceiver interface that follows declares one remote method called print, which takes a string as a parameter.
+</P>
+<PRE>
+package message;
+
+import java.rmi.*;
+
+public interface MessageReceiver extends Remote
+{
+    void print(String s) throws RemoteException;
+}
+</PRE>
+<P>Remember that each method in a remote interface must declare throws RemoteException. In the MessageServer, an additional message is added that can be sent to a MessageServer.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading15"></A><FONT COLOR="#000077">Updating MessageServer</FONT></H4>
+<P>The MessageServer interface for this example is extended to include two static variables, called SUCCESS and FAILURE, that indicate the success or failure of a client registering with a MessageServer. A method called register has also been added. The register method takes two parameters, a unique name for the message server client and a client object that implements the MessageReceiver interface. The updated code is indicated in boldface type:
+</P>
+<PRE>
+package message;
+
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface MessageServer extends Remote
+{
+    static String SERVER_NAME = &#147;Message_Server&#148;;
+<B>    static int FAILURE = -1;
+    static int SUCCESS = 0;</B>
+
+    void send(String name, String s) throws RemoteException;
+
+<B>    int register(String name, MessageReceiver m)
+     throws RemoteException;</B>
+}
+</PRE>
+<P>Now that both the interfaces have been updated, they can be compiled and stored in a jar. To do this, change directories to the root of this project and type the following:
+</P>
+<PRE>
+javac message\*.java
+</PRE>
+<P>The class files created should be accessible by the client and server.
+</P>
+<H3><A NAME="Heading16"></A><FONT COLOR="#000077">Updating the Server</FONT></H3>
+<P>Now that the interfaces are updated, modify the server to implement the new method. In order to do this, add a hash table to contain the list of clients that will be registering, then implement the register method. Modify the send method so that rather than printing the messages sent to the server on the console, each registered client is told to print the message. New code is indicated with boldface type in the following listing:
+</P>
+<PRE>
+package server;
+
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.rmi.*;
+import java.rmi.server.*;
+import java.rmi.registry.*;
+import message.*;
+
+public class Server extends UnicastRemoteObject
+                  implements MessageServer
+{
+<B>    // Add a hashtable to track registered clients.</B>
+  <B>  static Hashtable receivers = new Hashtable(5);</B>
+</PRE>
+<P>There are no changes to the constructor.
+</P>
+<PRE>
+    public Server() throws RemoteException
+
+    {
+     super();
+    }
+</PRE>
+<P>The send method has been modified to send the massage to all registered clients.
+</P>
+<PRE>
+    public void send(String name, String s)
+     throws RemoteException
+    {
+<B>        // Iterate through the registered clients.
+     for (Enumeration e = receivers.elements() ;
+         e.hasMoreElements() ;)
+     {
+         MessageReceiver m =
+            (MessageReceiver)e.nextElement();
+         // All messageReceivers implement print.
+         m.print(name &#43; &#147;: &#148; &#43; s);
+     }</B>
+   }
+</PRE>
+<P>The register method adds the client to the hash table and returns a success code to the client. This way the client knows if it was successfully added. The register method fails if the client name is already taken or if null is passed in for either parameter.
+</P>
+<PRE>
+    <B>public int register(String name, MessageReceiver m)</B>
+<B>    {
+
+     int retval = MessageServer.FAILURE;
+
+     // Don&#146;t register a null client.
+     if((name !=null) &amp&amp (m != null))
+     {
+         // Only add a client with a unique name.
+         if(receivers.get(name) == null)
+         {
+          // Add client to hash table.
+          receivers.put(name,m);
+          
+          System.out.println(&#147;Added &#148; &#43; name);
+          retval = MessageServer.SUCCESS;
+         }else
+         {
+          System.out.println(
+              &#147;Could not add client because &#148; &#43; name &#43;
+              &#147; already exists on server.&#148;);
+         }
+     }
+     return retval;
+    }</B>
+</PRE>
+<P>In the main method, notice that the java.rmi.Naming rebind method has been replaced with a call to the registry rebind method. The java.rmi.registry.LocateRegistry method createRegistry is used to create a private RMI registry. The createRegistry method returns an object that implements the Registry interface. Registry extends Remote. The Registry variable REGISTRY_PORT defines a known port id used for registries. By creating a registry directly, the server becomes a stand-alone application that does not require starting the rmiregistry application.
+</P>
+<PRE>
+    public static void main(String[] args)
+    {
+      System.setSecurityManager(
+          new RMISecurityManager());
+
+     try
+     {
+         MessageServer srv = new Server();
+
+<B>            // Bootstrap registry
+         Registry reg =  LocateRegistry.createRegistry(
+             Registry.REGISTRY_PORT);</B>
+
+<B>            reg.rebind(MessageServer.SERVER_NAME, srv);</B>
+
+         System.out.println(&#147;Server bound and started&#148;);
+     } catch (Exception e)
+     {
+         System.err.println(&#147;Server exception: &#148; &#43;
+          e.getMessage());
+         e.printStackTrace();
+     }
+    }
+}
+</PRE>
+<P>Once the server has been modified, compile it and generate stubs using the following command under Windows in the project&#146;s root directory:
+</P>
+<PRE>
+javac server\*.java
+rmic -d . server.Server
+</PRE>
+<P>Run the server by typing:
+</P>
+<PRE>
+start java
+    -Djava.security.policy=server.policy server.Server
+</PRE>
+<P>Again, you don&#146;t need to start the rmiregistry utility, because the server creates its own registry. Now let&#146;s modify the client to work with this server.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading17"></A><FONT COLOR="#000077">Updating the Client</FONT></H4>
+<P>Client.java is modified the most often of all the program components. This is due to the fact that a user interface has been included to make the application easier to use. The RMI code for this example is minor compared to the user interface code, as we would hope. This shows how little impact RMI should have on your application when you choose to make it support RMI. Figure 13.3 shows what the new UI looks like.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

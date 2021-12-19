@@ -1,0 +1,788 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 20 -- Increasing Graphics Performance</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;20</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Increasing Graphics Performance</FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#DoubleBufferingtoSpeedUpDrawing">
+Double-Buffering to Speed Up Drawing</A>
+<UL>
+<LI><A HREF="#DetectingtheBestDrawingMethodatRuntime">
+Detecting the Best Drawing Method at Runtime</A>
+<LI><A HREF="#CreatinganAutodetectingFONTSIZEFACECBIHelveticaCondensedBoldOblupdateFONTFONTSIZEMethodFONT">
+Creating an Autodetecting update
+Method</A>
+</UL>
+<LI><A HREF="#PerformingSelectiveUpdates">
+Performing Selective Updates</A>
+<LI><A HREF="#RedrawingChangedAreas">
+Redrawing Changed Areas</A>
+</UL>
+
+<HR>
+<P>
+If you are just doing simple animation sequences in Java,the performance
+you get from most Java environments is probably fine. If you are
+trying to write a video game or some other graphics-intensive
+program, you may find that you have to squeeze out every bit of
+performance from Java. Sometimes you are able to make some basic
+assumptions about the graphics environment you are running on,
+but that is not the case with Java. You don't know if your program
+will be running on a laptop with a simple VGA card, or on a Silicon
+Graphics system with extremely fast graphics.
+<P>
+On the PC platform alone, you have a wide variety of graphics
+capabilities. A simple system may have an old VGA card with an
+ISA bus interface, or an accelerated graphics card running on
+a PCI bus Pentium system. The approach used by many graphics vendors
+is to detect the system type either at installation time or at
+runtime. Once a program knows how well the graphics perform,it
+can adjust itself to accommodate a slower system. You can do this
+in Java, as well.In fact, it is even more important in Java since
+Java runs on so many different platforms.
+<P>
+Aside from adjusting to the capabilities of the local system,
+you can also reduce the amount of drawing your program has to
+do. If you redraw only the parts of a screen that need to be redrawn,
+you have more time to perform other tasks, or to create more animation
+frames.
+<H2><A NAME="DoubleBufferingtoSpeedUpDrawing"><FONT SIZE=5 COLOR=#FF0000>
+Double-Buffering to Speed Up Drawing</FONT></A></H2>
+<P>
+Double-buffering, which was introduced in <A HREF="ch5.htm" >Chapter 5</A> &quot;Animating
+Images,&quot; is typically used to prevent flicker when you are
+doing animation. Under some graphics systems, however, it can
+also increase the graphics drawing speed. 
+<P>
+This happens when the native drawing routines in the operating
+system have a lot of overhead when drawing to a visible area.
+The operating system often does far less work when you are writing
+to an off-screen area.
+<P>
+Just to refresh your memory, when you do double-buffering, you
+create an image that is the same size as the screen. You then
+use the <TT>getGraphics</TT> method
+to get a graphics context for the image, which you pass to your
+<TT>paint</TT> method. When the <TT>paint</TT>
+method does its drawing, it is really drawing on the image you
+created and not the actual screen. Once the <TT>paint</TT>
+method is finished, the <TT>update</TT>
+method copies the off-screen image to the screen.
+<H3><A NAME="DetectingtheBestDrawingMethodatRuntime">
+Detecting the Best Drawing Method at Runtime</A></H3>
+<P>
+Unfortunately, some Java systems draw faster when they are drawing
+off-screen, whereas others draw faster when they are drawing to
+the visible area. If you don't mind taking a short delay when
+your applet starts up, you can do a quick benchmark to choose
+between double-buffering and straight drawing.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+There are many reasons for the speed differences between double-buffering and straight drawing. Sometimes the way the graphics system is implemented makes a difference. Some graphics systems can draw bitmaps to the screen much faster than they can draw 
+individual pixels. In these cases, it is often better to write to a buffer and then draw the whole buffer. Other times, the graphics system may copy things to a buffer anyway, and if you draw to your own off-screen buffer, you waste time copying from one 
+buffer to another.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+To autodetect the graphics speed, do a simple series of drawings
+on an off-screen image and record the number of milliseconds it
+takes to complete the drawing. Then, do the same series of drawings
+to the screen and compare the results.
+<P>
+If you want the test to be invisible, do all the drawings in the
+applet's background color. Instead of doing the drawings invisibly,
+you can make a neat design that is just a normal part of the applet's
+startup.
+<P>
+Listing 20.1 shows an autodetect method that tries doing double-buffering
+and direct drawing. It tries to draw a series of images as many
+times as it can for approximately 500 milliseconds. Normally,
+you would just use whichever method is able to draw more frames
+in 500 milliseconds. If they happen to come up with the same number
+of frames, this autodetect method compares the total time used
+by each test. It is possible that one of the tests was allowed
+more drawing time than the other. If that is the case, and the
+tests each drew the same number of frames, the test that took
+less time to run is the faster method.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 20.1&nbsp;&nbsp;doAutoDetect Method from AutoDetect.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// doAutoDetect performs tries drawing to the screen and to a
+// buffer. Whichever one takes the least time (actually, whichever
+// one it can do the most times within a set time constraint) is
+// the one that is best.
+
+     protected void doAutoDetect(Graphics g)
+     {
+
+// Create the off-screen drawing area
+
+          offscreenImage = createImage(size().width, size().height);
+          offscreenGraphics = offscreenImage.getGraphics();
+
+          long start;
+          long end;
+
+// Tally the number of times we were able to draw direct and buffered
+          int directCount = 0;
+          int bufferedCount = 0;
+
+// Draw in the applet's background color, makes the autodetection invisible.
+
+          g.setColor(getBackground());
+// Mark what time we started
+          start = System.currentTimeMillis();
+          end = start;
+
+// Paint patterns directly to the screen, but only for 500 milliseconds
+
+          while ((end-start) &lt; 500) {
+               paintDetectDesign(g);
+               end = System.currentTimeMillis();
+               directCount++;
+          }
+          g.setColor(getForeground());
+
+// record the total time spent drawing directly
+          long directTime = end - start;
+          
+          start = System.currentTimeMillis();
+          end = start;
+
+// Paint patterns to the offscreen graphics, but only for 500 milliseconds
+
+          while ((end-start) &lt; 500) {
+               paintDetectDesign(offscreenGraphics);
+               end = System.currentTimeMillis();
+               bufferedCount++;
+          }
+
+          long bufferedTime = end - start;
+
+// If we were able to draw more times using the buffered graphics,
+// or if the drawing counts are the same, but the total time for
+// the buffering was less, buffering is faster.
+
+          if ((bufferedCount &gt; directCount) ||
+               ((bufferedCount == directCount) &amp;&amp;
+                (bufferedTime &lt; directTime))) {
+               drawDirect = false;
+          } else {
+
+// If we want to draw direct, free the space taken up by the
+// offscreen image and graphics context.
+               offscreenImage.flush();
+               offscreenImage = null;
+               offscreenGraphics = null;
+               drawDirect = true;
+          }
+          detected = true;
+  }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>doAutoDetect</TT> method does
+not do any drawing itself. Instead, it calls another method called
+<TT>paintDetectDesign</TT>. This allows
+you to change the pattern you draw to perform the test. One of
+the things you might do when performing your test is to simulate
+the kind of drawing you plan to do. If you plan to draw a lot
+of images, your drawing test should draw some images. Listing
+20.2 shows a sample <TT>paintDetectDesign</TT>
+that performs some basic graphics operations.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 20.2&nbsp;&nbsp;paintDetectDesign Method from AutoDetect.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// paintDetectDesign performs some graphical operations to gauge the time
+// it takes to paint either directly or to an offscreen area. It just draws
+// some lines, boxes and ovals a number of times and then returns.
+
+     protected void paintDetectDesign(Graphics g)
+     {
+          for (int i=0; i &lt; 10; i++) {
+               g.drawLine(0, 0, 100, 100);
+               g.fillRect(0, 0, 100, 100);
+               g.fillOval(0, 0, 100, 100);
+          }
+  }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="CreatinganAutodetectingFONTSIZEFACECBIHelveticaCondensedBoldOblupdateFONTFONTSIZEMethodFONT">
+Creating an Autodetecting <FONT SIZE=4 FACE="CBI Helvetica Condensed BoldObl">update</FONT><FONT SIZE=4>
+Method</FONT></A></H3>
+<P>
+The trick with running the autodetection method is that you must
+run it from your <TT>update</TT> method.
+You can also run it from your <TT>paint</TT>
+method, but only if your <TT>update</TT>
+method isn't already doing double-buffering. You can create an
+<TT>update</TT> method that can be
+reused again and again, and can adapt to either direct screen
+drawing or double-buffered drawing. 
+<P>
+The <TT>update</TT> method first checks
+to see if it has already performed the autodetection, and if not,
+calls <TT>doAutoDetect</TT>. Next,
+if the autodetection decided that it is faster to do double- buffering,
+the <TT>update</TT> method clears
+the drawing area in the off-screen buffer and then calls the <TT>paint</TT>
+method, making <TT>paint</TT> draw
+to the off-screen buffer.
+<P>
+If it is faster to draw directly to the screen, the <TT>update</TT>
+method simply calls <TT>super.update</TT>,
+which will clear the screen and call the <TT>paint</TT>
+method. Listing 20.3 shows an <TT>update</TT>
+method that performs all of these functions and works in conjunction
+with the <TT>doAutoDetect</TT> method.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 20.3&nbsp;&nbsp;update Method from AutoDetect.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+     public void update(Graphics g)
+     {
+
+// If we haven't run auto-detection yet, do it now
+          if (!detected) {
+               doAutoDetect(g);
+          }
+
+// If we draw direct, go ahead and call the parent update. This will
+// clear the drawing area and then call paint. If you don't want the
+// drawing area cleared, just change the super.update(g);
+// to paint(g);
+
+          if (drawDirect) {
+               super.update(g);
+          } else {
+
+// If we're doing buffered drawing, simulate the effects of the
+// default update method by clearing the offscreen drawing area.
+// If you don't want the drawing area cleared, remove the calls
+// to setColor and fillRect.
+
+// Clear the offscreen drawing area and set the drawing
+// color back to foreground.
+
+               offscreenGraphics.setColor(getBackground());
+               offscreenGraphics.fillRect(0, 0, size().width,
+                    size().height);
+               offscreenGraphics.setColor(getForeground());
+
+// Paint to the offscreen image
+
+               paint(offscreenGraphics);
+
+// Copy the offscreen image to the screen
+
+               g.drawImage(offscreenImage, 0, 0, this);
+          }
+  }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>doAutoDetect</TT> and <TT>update</TT>
+methods from the <TT>AutoDetect</TT>
+class require some other variables to be present. You will find
+the complete source to the <TT>AutoDetect</TT>
+class on the CD that comes with this book.
+<H2><A NAME="PerformingSelectiveUpdates"><FONT SIZE=5 COLOR=#FF0000>
+Performing Selective Updates</FONT></A></H2>
+<P>
+Normally, when you want to redraw the screen you call the <TT>repaint</TT>
+method. This in turn calls <TT>update</TT>,
+which calls <TT>paint</TT>, which
+redraws the entire screen. If you are redrawing a complex scene,
+you could spend a lot of time redrawing things that never changed.
+<P>
+If you can keep track of which part of the screen actually changed
+and just redraw that part, you will save a lot of time. Unfortunately,
+it isn't always so easy to redraw only a portion of the screen.
+<P>
+Graphics systems like to deal with rectangles when it comes to
+repainting. Some systems allow you to create a list of rectangles
+describing the changed regions. 
+<P>
+Java does not permit this, however. You can either repaint the
+entire screen or repeatedly call the <TT>repaint</TT>
+method for each rectangular region of the screen that needs to
+be changed.
+<P>
+Your ability to override the <TT>update</TT>
+method gives you a third option. If you create an <TT>update</TT>
+method that does not clear the screen, you can call <TT>repaint</TT>
+for the entire drawing area. Then, in your <TT>paint</TT>
+routine, examine only the changed areas and redraw them.
+<P>
+Listing 20.4 shows an applet that calls <TT>repaint</TT>
+to redraw only portions of the drawing area. The applet draws
+several rectangles, but will redraw only a rectangle if it touches
+the part of the screen that is being repainted. You can find out
+the part of the screen that is being repainted by calling the
+<TT>getClipRect</TT> method in the
+<TT>Graphics</TT> object that is passed
+to the <TT>paint</TT> method. The
+<TT>getClipRect</TT> method returns
+a <TT>Rectangle</TT> object that describes
+the area being repainted. One of the handy features about the
+<TT>Rectangle</TT> class is that it
+contains a method to tell whether two rectangles intersect. The
+<TT>UpdateRects</TT> applet uses this
+capability to see which of its rectangles intersect with the drawing
+area. If a rectangle doesn't intersect with the current drawing
+area, it doesn't repaint that rectangle.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If you want to see if a <TT>Polygon</TT> object intersects with the drawing area, you can use the <TT>getBoundingRect</TT> method in the <TT>Polygon</TT> class to get the rectangle that encloses the polygon. You can then use the <TT>intersects</TT> method 
+
+in the enclosing rectangle to see if it intersects with the drawing area. There are cases where this technique might cause you to redraw a polygon when it really didn't need to be redrawn, but the amount of work it would take to prevent these cases 
+probably won't save you any time overall.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 20.4&nbsp;&nbsp;Source Code for UpdateRects.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.applet.*;
+
+// This applet demonstrates the use of selective updates, calling
+// repaint specifically for the areas that change.
+
+public class UpdateRects extends Applet implements TimerCallback
+{
+
+// colors contains the colors we cycle through for each shape we draw
+     Color colors[] = {
+          Color.red, Color.green, Color.blue, Color.yellow
+     };
+
+// rects contains the rectangles for each area we want to draw
+
+     Rectangle rects[] = {
+          new Rectangle(0, 0, 50, 50),
+          new Rectangle(100, 0, 50, 50),
+          new Rectangle(0, 100, 50, 50),
+          new Rectangle(100, 100, 50, 50)
+     };
+
+// We cycle each rectangle through a set of colors. Start them off
+// with different colors.
+
+     int rectColor[] = { 0, 1, 2, 3 };
+
+     Timer timer;
+
+// paint assumes that it is only painting a portion of the screen.
+// It examines the area it is supposed to repaint by calling
+// getClipRect, then it uses the intersects method in the Rectangle
+// class to see which rectangles intersect with the repainted area.
+// If a rectangle doesn't intersect, it doesn't need to be redrawn.
+
+     public void paint(Graphics g)
+     {
+
+// Get the area we are painting
+          Rectangle clipRect = g.getClipRect();
+
+          for (int i=0; i &lt; rects.length; i++) {
+
+// If this rectangle doesn't intersect with the clipping area,
+// we don't need to repaint it, so just go on to the next rectangle
+
+               if (!clipRect.intersects(rects[i])) continue;
+
+// For each rectangle we just call fillOval and use the dimensions of
+// the rectangle.
+               g.setColor(colors[rectColor[i]]);
+               g.fillOval(rects[i].x, rects[i].y,
+                    rects[i].width, rects[i].height);
+          }
+     }
+
+// For every timer tick we change the colors of each rectangle and
+// call repaint for each area we change, rather than calling one
+// big repaint.
+
+     public void tick()
+     {
+          for (int i=0; i &lt; rects.length; i++) {
+
+// Change the rectangle's color
+               rectColor[i] = (rectColor[i] + 1) %
+                    colors.length;
+
+// Call repaint just for this rectangle
+
+               repaint(rects[i].x, rects[i].y, rects[i].width,
+                    rects[i].height);
+          }
+     }
+
+     public void start()
+     {
+// Timer tick every 250 milliseconds (4 times a second)
+          timer = new Timer(this, 250);
+          timer.start();
+}
+
+     public void stop()
+     {
+          timer.stop();
+          timer = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Alternatively, you can create a rectangle that represents the
+changed area and enlarge the rectangle to encompass newly changed
+areas. The <TT>Rectangle</TT> class
+contains an <TT>add</TT> method that
+returns the smallest rectangle that encloses two other rectangles.
+<P>
+When you determine the rectangle that encloses a changed area,
+you add that rectangle to the current changed area, producing
+a new changed-area rectangle. You have to be careful with this
+approach. If you start adding all your rectangles together, you
+may end up with one big rectangle that is as large as the drawing
+area.
+<P>
+This method is useful when you are moving an object around in
+fairly small increments. If the rectangular area holding the object's
+old area intersects with the new area, you might be better off
+adding the rectangles together. The closer the areas are to each
+other, the better it is to add the rectangles. If they are far
+apart, the sum of the rectangles holds a lot more unaffected space.
+<P>
+This might cause you to spend a lot of time repainting areas that
+haven't changed. Adding rectangles is a trade-off. You have to
+balance the redrawing of areas that may not need redrawing against
+the reduced number of repaints you actually do.
+<H2><A NAME="RedrawingChangedAreas"><FONT SIZE=5 COLOR=#FF0000>
+Redrawing Changed Areas</FONT></A></H2>
+<P>
+Rather than updating changed rectangular regions, you can simply
+redraw the changed areas. You create an <TT>update</TT>
+method that does not clear the drawing area. Instead, you assume
+that everything should stay the same and just redraw the changed
+parts.
+<P>
+This is most useful when you don't need to move objects around
+to arbitrary locations. Instead, you have fixed positions that
+can change and you just need to keep track of which ones have
+changed. It becomes more difficult to do this when you have overlapping
+objects that move frequently. Every time you update a portion
+of the screen, you have to figure out which objects are even partially
+visible in the changed section of screen, and you must repaint
+each object. 
+<P>
+A Tetris game is a perfect example of this kind of selective updating.
+The game board is a grid. No grid cells overlap and you don't
+move any objects across the cells. All you need to do when redrawing
+a Tetris board is paint the grid cells that have changed since
+the last time you repainted.
+<P>
+The big snag with this technique is that it doesn't work well
+for direct screen painting, only for off-screen drawing. The reason
+is that the drawing area can be erased by the windowing system
+at any time, and your <TT>paint</TT>
+method is responsible for restoring it. In other words, you may
+be keeping track of the sections of the screen that you change,
+but the screen can be changed by external programs, as well. For
+instance, someone could open up another application that obscures
+your drawing area, and then close down that application again.
+At that point, you would need to update the entire screen.
+<P>
+If you are updating only specific areas of the screen, you will
+lose the rest if the screen gets erased. This doesn't happen with
+off-screen drawing because you control the drawing surface completely.
+It doesn't get erased unless you erase it.
+<P>
+If you are drawing off-screen (double-buffering), you can take
+advantage of the fact that the drawing area is available at any
+time and can't be accidentally erased. You can do your drawing
+from anywhere in your program, not just in the <TT>paint</TT>
+method. Of course, the off-screen picture won't be shown on the
+screen until your <TT>paint</TT> method
+is called.
+<P>
+This can be a huge advantage, since you don't have to keep track
+of what needs to be drawn when the <TT>paint</TT>
+method finally gets called. If you decide something needs to be
+changed, you change it immediately.
+<P>
+Listing 20.5 shows a series of methods from a Tetris-like applet
+that drops blocks on the screen. There are several methods for
+drawing blocks that actually draw on the off-screen drawing area.
+After a drawing method has drawn its blocks, it calls repaint
+to redraw the screen. 
+<HR>
+<BLOCKQUOTE>
+<B>Listing 20.5&nbsp;&nbsp;Partial Listing of BlockDrop.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// paintBlock colors in a single grid block on a graphics object
+
+     public void paintBlock(Graphics g, int x, int y)
+     {
+          g.setColor(colors[blockGrid[y][x]]);
+
+          g.fillRect(x * blockSize, y * blockSize,
+               blockSize, blockSize);
+     }
+
+// drawNewBlock paints a new block on the off-screen image, then calls
+// repaint for just that block's area
+
+     public void drawNewBlock(int x, int y)
+     {
+          paintBlock(offscreenGraphics, x, y);
+
+          repaint(x * blockSize, y * blockSize, blockSize, blockSize);
+     }
+
+// drawBlockPair paints a block and the block below, then calls repaint
+// for the 2-block area.
+
+     public void drawBlockPair(int x, int y)
+     {
+          paintBlock(offscreenGraphics, x, y);
+          paintBlock(offscreenGraphics, x, y+1);
+
+          repaint(x * blockSize, y * blockSize, blockSize, blockSize*2);
+     }
+
+// drawAllBlocks draws all the blocks in the grid to the off-screen area,
+// then calls repaint for the entire screen.
+
+     public void drawAllBlocks()
+     {
+          for (int y=0; y &lt; gridHeight; y++) {
+               for (int x=0; x &lt; gridWidth; x++) {
+                    paintBlock(offscreenGraphics, x, y);
+               }
+          }
+          repaint();
+     }
+                    
+     public void paint(Graphics g)
+     {
+          g.drawImage(offscreenImage, 0, 0, this);
+     }
+
+     public void update(Graphics g)
+     {
+          paint(g);
+  }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Notice that the <TT>drawBlock</TT> and <TT>drawBlockPair</TT> methods in <TT>BlockDrop.java</TT> call <TT>repaint</TT> with a specific region. Even though the <TT>paint</TT> method assumes it is redrawing the entire screen, it really updates just a tiny 
+portion of the screen. This technique does make a difference, even when <TT>paint</TT> still tries to draw the whole area. The reason it makes a difference is that you aren't using the low-level graphics routines to update every pixel on the screen, which 
+
+does take some time.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The whole reason for this exercise of drawing to an off-screen
+buffer is that you are no longer constrained to doing all your
+drawing in the <TT>paint</TT> method.
+As soon as you decide that something on the screen needs to change,
+you can change it. Of course, you have to repaint the screen before
+the change is visible.
+<P>
+The <TT>BlockDrop</TT> applet drops
+blocks from the top of the screen by using a timer. It is able
+to redraw blocks from within the <TT>tick</TT>
+method (called by the timer) because it is drawing to an off-screen
+buffer. If it were drawing directly to the screen, it would have
+to make a note of which items had changed and then repaint the
+area for those items. The <TT>paint</TT>
+method would have to look at what had changed and repaint only
+those areas of the screen. Listing 20.6 shows the <TT>tick</TT>
+method from the <TT>BlockDrop</TT>
+applet. Notice that once it decides to add a new block or change
+a block, it immediately calls the methods to redraw the blocks.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 20.6&nbsp;&nbsp;tick Method from BlockDrop.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// Every time tick is called, either move the current block down, or
+// start a new block
+
+     public void tick()
+     {
+// If there isn't a block falling, create a new one
+
+          if (!blockFalling) {
+               blockX = (int)(gridWidth * Math.random());
+               blockY = 0;
+
+// Put the block into the grid with a random color (adjust the random color
+// to start at 1 and not 0).
+
+               blockGrid[blockY][blockX] = 1+(int)((colors.length-1) *
+                    Math.random());
+               blockFalling = true;
+
+               drawNewBlock(blockX, blockY);
+          } else {
+
+// See if we can still move the block down. If the block's Y is still above
+// the bottom, and the color of the grid element below it is 0, the block
+// is allowed to move.
+               if ((blockY &lt; gridHeight-1) &amp;&amp;
+                    (blockGrid[blockY+1][blockX]) == 0) {
+
+// Copy the block's color to the grid element below
+                    blockGrid[blockY+1][blockX] = 
+                         blockGrid[blockY][blockX];
+// Clear out the current grid element
+                    blockGrid[blockY][blockX] = 0;
+                    blockY++;
+
+// Draw both the newly empty element and the block's new location
+                    drawBlockPair(blockX, blockY-1);
+               } else {
+// If we can't move the block, need to check the next time
+                    blockFalling = false;
+               }
+// See if the bottom is full
+               checkGridFloor();
+          }
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 20.1 shows the <TT>BlockDrop</TT>
+applet in action. The complete source code to <TT>BlockDrop.java</TT>
+is on the CD that comes with this book.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f20-1.gif"><B>Figure 20.1 : </B><I>The </I><TT>BlockDrop</TT><I>
+applet calls drawing routines from outside the paint method</I>.</A>
+<P>
+You can convert the <TT>BlockDrop</TT>
+applet to do direct screen writes very easily. Simply comment
+out the calls to <TT>paintBlock</TT>
+in <TT>drawNewBlock</TT>, <TT>drawBlockPair,</TT>
+and <TT>drawAllBlocks</TT>, and insert
+the following <TT>update</TT> method:
+<BLOCKQUOTE>
+<PRE>
+public void update(Graphics g)
+{
+        Rectangle clipRect = g.getClipRect();
+
+// Compute the starting X and ending X of the area to be repainted
+
+        int blockStartX = clipRect.x / blockSize;
+        int blockEndX = (clipRect.x + clipRect.width) / blockSize;
+        if (blockEndX &gt;= gridWidth) blockEndX = gridWidth - 1;
+
+// Compute the starting Y and ending Y of the area to be repainted
+
+        int blockStartY = clipRect.y / blockSize;
+        int blockEndY = (clipRect.y + clipRect.height) / blockSize;
+        if (blockEndY &gt;= gridHeight) blockEndY = gridHeight - 1;
+
+// Repaint only the blocks that need to be repainted
+
+        for (int y=blockStartY; y &lt;= blockEndY; y++) {
+                for (int x=blockStartX; x &lt;= blockEndX; x++) {
+                        paintBlock(g, x, y);
+                }
+        }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Some of these issues may be less important as the Java graphics
+system is improved. One of the features to be added is sprite
+animation, which allows you to define objects that can move around
+the screen. The graphics system would then take care of updating
+the changed areas. You would no longer have to keep track of them
+by hand.
+<HR>
+
+<CENTER><P><A HREF="ch19.htm"><IMG SRC="http://docs.rinet.ru/JSol/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JSol/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JSol/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch21.htm"><IMG SRC="http://docs.rinet.ru/JSol/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

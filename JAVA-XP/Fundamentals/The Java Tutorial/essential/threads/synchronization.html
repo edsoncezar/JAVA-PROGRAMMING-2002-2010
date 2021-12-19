@@ -1,0 +1,271 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Synchronizing Threads</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="multithreaded.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="monitors.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=bottom border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Synchronizing Threads
+</h2>
+<p>
+<blockquote>
+
+The <a href=http://docs.rinet.ru/Jtuta/essential/threads/example/Producer.java><code>Producer</code></a> generates an integer
+between 0 and 9 (inclusive), stores it in a
+<a href="http://docs.rinet.ru/Jtuta/essential/threads/example/CubbyHole.java"><code>CubbyHole</code></a> object, and prints the
+generated number. To make the synchronization problem more
+interesting, the <code>Producer</code> sleeps for a random amount of time between 0 and
+100 milliseconds before repeating the number generating cycle:
+<blockquote>
+<pre>
+public class Producer extends Thread {
+    private CubbyHole cubbyhole;
+    private int number;
+
+    public Producer(CubbyHole c, int number) {
+        cubbyhole = c;
+        this.number = number;
+    }
+
+    public void run() {
+        for (int i = 0; i &lt; 10; i++) {
+            cubbyhole.put(i);
+            System.out.println(&quot;Producer #&quot; + this.number + &quot; put: &quot; + i);
+            try {
+                sleep((int)(Math.random() * 100));
+            } catch (InterruptedException e) { }
+        }
+    }
+}
+</pre>
+</blockquote>
+The <a href=http://docs.rinet.ru/Jtuta/essential/threads/example/Consumer.java><code>Consumer</code></a>, being ravenous,
+consumes all integers from the <code>CubbyHole</code> (the exact same object into
+which the <code>Producer</code> put the integers in the first place) as quickly
+as they become available.
+<blockquote>
+<pre>
+public class Consumer extends Thread {
+    private CubbyHole cubbyhole;
+    private int number;
+
+    public Consumer(CubbyHole c, int number) {
+        cubbyhole = c;
+        this.number = number;
+    }
+
+    public void run() {
+        int value = 0;
+        for (int i = 0; i &lt; 10; i++) {
+            value = cubbyhole.get();
+            System.out.println(&quot;Consumer #&quot; + this.number + &quot; got: &quot; + value);
+        }
+    }
+}
+
+</pre>
+</blockquote>
+
+The <code>Producer</code> and <code>Consumer</code> in this example share data through
+a common <code>CubbyHole</code> object. And you will note
+that neither the <code>Producer</code> nor the <code>Consumer</code> makes any effort whatsoever
+to ensure that the <code>Consumer</code> is getting each value produced once
+and only once. The synchronization between these two threads actually
+occurs at a lower level, within the <code>get</code> and <code>put</code>
+methods of the <code>CubbyHole</code> object. However, let's assume for a moment that
+these two threads make no arrangements for synchronization and talk about
+the potential problems that might arise in that situation.
+
+<p>
+One problem arises when the <code>Producer</code> is quicker than the <code>Consumer</code> and
+generates two numbers before the <code>Consumer</code> has a chance to consume the
+first one. Thus the <code>Consumer</code> would skip a number. Part of the output
+might look like this:
+<blockquote>
+<pre>
+    . . .
+
+Consumer #1 got: 3
+Producer #1 put: 4
+Producer #1 put: 5
+Consumer #1 got: 5
+
+    . . .
+</pre>
+</blockquote>
+Another problem that might arise is when the <code>Consumer</code> is quicker than
+the <code>Producer</code> and consumes the same value twice. In this situation, the <code>Consumer</code>
+would print the same value twice and might produce output that looked like this:
+<blockquote>
+<pre>
+    . . .
+
+Producer #1 put: 4
+Consumer #1 got: 4
+Consumer #1 got: 4
+Producer #1 put: 5
+
+    . . .
+</pre>
+</blockquote>
+Either way, the result is wrong. You want the <code>Consumer</code> to get each
+integer produced by the <code>Producer</code> exactly once.
+Problems such as those just described are called <em>race conditions</em>.
+They arise from multiple, asynchronously executing threads trying to
+access a single object at the same time and getting the wrong result.
+
+<p>
+Race conditions in the producer/consumer example are prevented by
+having the storage of a new integer
+into the <code>CubbyHole</code> by the <code>Producer</code>
+be synchronized with the retrieval of an integer
+from the <code>CubbyHole</code> by
+the <code>Consumer</code>.
+The <code>Consumer</code> must consume each integer exactly once.
+<p>
+The activities of the <code>Producer</code> and <code>Consumer</code>
+must be synchronized in two
+ways. First, the two threads must not simultaneously access the
+<code>CubbyHole</code>.
+A Java thread can prevent this from happening by locking an
+object. When an object is locked by one thread and another thread tries
+to call a synchronized method on the same object, the second thread
+will block until the object is unlocked.
+<a href="monitors.html">Locking an Object</a> discusses this.
+<p>
+And second, the two threads must do some simple coordination. That is,
+the <code>Producer</code> must have some way
+to indicate to the <code>Consumer</code> that the
+value is ready and the <code>Consumer</code>
+must have some way to indicate that the
+value has been retrieved.
+The <code>Thread</code> class provides a collection of
+methods--<code>wait</code>, <code>notify</code>,
+and <code>notifyAll</code>--to help threads wait for a
+condition and notify other threads of when that condition changes.
+<a href="waitandnotify.html">
+Using the <code>notifyAll</code> and <code>wait</code> Methods
+</a> has more information.
+
+<h4>The Main Program</h4>
+<blockquote>
+Here's a small stand-alone <a href=http://docs.rinet.ru/Jtuta/essential/threads/example/ProducerConsumerTest.java>Java application</a>
+that creates a <code>CubbyHole</code> object, a <code>Producer</code>, a <code>Consumer</code>, and then starts both the <code>Producer</code>
+and the <code>Consumer</code>.
+<blockquote>
+<pre>
+public class ProducerConsumerTest {
+    public static void main(String[] args) {
+        CubbyHole c = new CubbyHole();
+        Producer p1 = new Producer(c, 1);
+        Consumer c1 = new Consumer(c, 1);
+
+        p1.start();
+        c1.start();
+    }
+}
+</pre>
+</blockquote>
+</blockquote>
+
+<h4>The Output</h4>
+<blockquote>
+Here's the output of ProducerConsumerTest.
+<blockquote>
+<pre>
+Producer #1 put: 0
+Consumer #1 got: 0
+Producer #1 put: 1
+Consumer #1 got: 1
+Producer #1 put: 2
+Consumer #1 got: 2
+Producer #1 put: 3
+Consumer #1 got: 3
+Producer #1 put: 4
+Consumer #1 got: 4
+Producer #1 put: 5
+Consumer #1 got: 5
+Producer #1 put: 6
+Consumer #1 got: 6
+Producer #1 put: 7
+Consumer #1 got: 7
+Producer #1 put: 8
+Consumer #1 got: 8
+Producer #1 put: 9
+Consumer #1 got: 9
+</pre>
+</blockquote>
+
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="multithreaded.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="monitors.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=top border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

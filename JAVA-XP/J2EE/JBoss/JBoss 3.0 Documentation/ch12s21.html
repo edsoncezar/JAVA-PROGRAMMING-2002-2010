@@ -1,0 +1,84 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>ContainerInvoker - Container entry point</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch12.html" title="Chapter 12. Container architecture - design notes"><link rel="previous" href="ch12s17.html" title="JMX - foundation of JBoss infrastructure"><link rel="next" href="ch12s31.html" title="Container"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s17.html"><img src="images\prev.gif" border="0"></a><a href="ch12s31.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e8074"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e8074"></a>ContainerInvoker - Container entry point</h2></div></div><div class="section"><a name="d0e8077"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8077"></a>Introduction</h3></div></div><p>Certainly one of the most important parts of a distributed system
+   is its RPC interface, as well as techniques used in passing that RPC
+   call between different parts of the system.</p><p>The component that plays the role of the container entry point, a 
+"call
+   router", to insides of the container is the<tt>ContainerInvoker</tt>. By closely
+   looking at this entry point to the JBoss container, one would understand
+   the semantics of calls made from clients, client object structure, the
+passing
+   of client calls over the network layer (a.k.a "wire") and unpacking
+   them in a local VM.  Similar semantics are employed in returning the result
+   of the call and how it is handled on the client side.  Also, great attention
+   has to be dedicated to methods employed in bypassing the network layer if
+these
+   calls are made from clients local to the container, i.e intra-VM.</p></div><div class="section"><a name="d0e8087"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8087"></a>ContainerInvoker in focus</h3></div></div><div class="section"><a name="d0e8090"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8090"></a>How are calls passed into a container?</h4></div></div><p>Container invoker utilizes RMI exporting* to make itself
+    available to remote clients. By implementing<tt>ContainerRemote</tt> interface,
+    which in turn extends the familiar <tt>java.rmi.Remote</tt>interface,
+    ContainerInvoker acts as an RMI server object and as such is able to
+    accept calls that come from both remote clients (other JVMs) and
+    from other beans "living" in containers of the same EJB
+    application (within the same JVM).</p></div><div class="section"><a name="d0e8101"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8101"></a>ContainerRemote interface - two flavours of invoke methods</h4></div></div><p>Before going further into the details, let's look closer into
+    <tt>ContainerRemote</tt> interface.  It has two methods,
+    <tt>invoke</tt> and <tt>invokeHome</tt>, each of 
+which
+    has two flavors:</p><p>
+					<pre class="programlisting">public MarshalledObject invoke(MarshalledObject mi)
+throws Exception;</pre>
+				</p><p>
+					<pre class="programlisting">public Object invoke(Object id, Method m, Object[] args,
+                               Transaction tx,
+                               Principal identity,
+                               Object credential )
+      throws Exception;</pre>
+				</p><p>The first accepts only one parameter
+(<tt>MarshalledObject</tt>), while
+    second accepts "regular" java objects. Why is this distinction
+    between the two sets important? </p><p>The distinction exists exactly for the reason that it enables the
+    container to accept both remote and local client calls.  But it is
+important
+    to notice that not only does this design approach enable two different
+    call methodologies, it optimizes them at the same time.</p></div><div class="section"><a name="d0e8132"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8132"></a>Remote call unpacking stage</h4></div></div><p>Remote calls are unpacked from<tt>MarshalledObject</tt>.<tt>MarshalledObject</tt>   contains a byte stream with serialized representation
+   of an object given to its constructor. In our case, this object is
+   <tt>RemoteMethodInvocation</tt>.
+The <tt>RemoteMethodInvocation</tt> instance,
+   created by a remote client proxy, describes all needed attributes
+   of an EJB method call. Some of these attributes, as you
+   may have guessed by now, are the ID of the object, a method to
+   invoke, security credentials, principal of the caller(identity),
+   and a transactional context of the call.</p></div><div class="section"><a name="d0e8149"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8149"></a>MethodInvocation</h4></div></div><p>Upon receving <tt>MarshalledOjbect</tt> from client
+proxy, <tt>ContainerInvoker</tt>   recreates a copy of the original<tt>RemoteMethodInvocation</tt>   object, by deserializing it from the contained byte stream in
+   <tt>MarshalledObject</tt>.<tt>RemoteMethoInvocation</tt> is then converted to
+   <tt>MethodInvocation</tt> and handed off to the
+container.</p></div><div class="section"><a name="d0e8172"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8172"></a>Bean to Bean calls</h4></div></div><p>Local calls coming from clients in the same VM, usually a
+   "bean/bean" method call, are directly handed off to the container.
+   This bypasses the network layer, and serialization/deserialization
+   stage of the call that remote method calls have to go through.</p></div><div class="section"><a name="d0e8177"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8177"></a>Other ContainerInvoker duties</h4></div></div><p>Before forwarding a call to the container,<tt>ContainerInvoker</tt> also
+   resets the call's thread classloader with the specified container
+   classloader, propagates transaction, and security context. </p><p>Another important role played by<tt>ContainerInvoker</tt> is that it
+   provides implementation of <tt>EJBObject</tt> and<tt>EJBHome</tt> parts of container.
+   As mentioned before, <tt>ContainerInvoker</tt> creates<tt>EJBObject</tt> and <tt>EJBHome</tt>   in the form of dynamic proxies.</p><p>For example, an <tt>EntityBean</tt> finder may result
+in a set of primary
+   keys whose EJB-objects should be returned to the client. The
+   <tt>ContainerInvoker</tt> is then responsible for creating<tt>EJBObject</tt>   instances that can be used by the client, as specified in the
+   EJB 1.1 specification. The client must then be able to remotely
+   access the container and actual bean instances through
+   these <tt>EJBObjects</tt>.</p></div><div class="section"><a name="d0e8219"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8219"></a>Why ContainerInvoker if we have container?</h4></div></div><p>One may wonder why there is such a big distinction between
+   container invoker and the container.<tt>ContainerInvoker</tt> also
+   uses the naming tree. Why should the container invoker know
+   anything about the naming tree?  You end up having the container
+   invoker taking care of all the important registrations...</p><p>Wasn't the container responsible for all this crucial work?</p><p>No, this architectural approach was intentional in JBoss. Since
+   different distribution protocols use different naming systems
+   (IIOP would use the CORBA naming system), the only part of the
+   container that knows what naming system to use is the container invoker.
+   Now, if we want to add another/different distribution protocol to JBoss, we
+can
+   simply implement it in the container invoker; everything else stays
+untouched.
+   ContainerInvoker is free to choose which distribution protocol to use
+   to access the container. Valid options would be JRMP, IIOP, or SOAP. The
+default
+   plugin uses the standard RMI protocol JRMP to allow client access to
+   the container. </p><p>*Exporting - making object available to accept incoming calls by
+   listening on specified TCP port</p></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s17.html"><img src="images\prev.gif" border="0"></a><a href="ch12s31.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

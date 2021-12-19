@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="sac" default="ejb-jar" basedir=".">
+   <property environment="env"/>
+   <property file="build.properties"/>
+   <property file="${src.config.dbserver.dir}/${dbserver}.properties"/>
+   <property file="${src.config.appserver.dir}/${appserver}.properties"/>
+
+   <path id="middlegen.class.path">
+      <pathelement path="${database.driver.classpath}"/>
+      <fileset dir="${src.lib.dir}">
+         <include name="${middlegen.lib.dir}/*.jar"/>
+         <include name="${log4j.jar}"/>
+         <include name="${commons-collections.jar}"/>
+         <include name="${velocity.jar}"/>
+      </fileset>
+   </path>
+
+   <path id="compile.class.path">
+      <fileset dir="${appserver.lib.dir}" includes="${appserver.lib.files}"/>
+      <fileset dir="${src.lib.dir}">
+         <include name="${junit.jar}"/>
+      </fileset>
+   </path>
+
+   <path id="xdoclet.class.path">
+      <path refid="compile.class.path"/>
+      <fileset dir="${src.lib.dir}">
+         <include name="${xdoclet.lib.dir}/*.jar"/>
+      </fileset>
+   </path>
+
+   <path id="test.class.path">
+      <path refid="compile.class.path"/>
+      <fileset dir="${jboss.home}/client">
+         <include name="*.jar"/>
+      </fileset>
+      <pathelement location="${build.classes.dir}"/>
+   </path>
+
+   <patternset id="beans.patternset">
+      <include name="**/${ejb-package}/**/*Bean.java"/>
+   </patternset>
+
+   <patternset id="ejb.patternset">
+      <include name="**/common/*"/>
+      <include name="**/${ejb-package}/**/*"/>
+      <include name="**/${interfaces-package}/**/*"/>
+   </patternset>
+
+   <target 
+      name="create-tables" 
+      depends="check-driver-present,panic-if-driver-not-present"
+      description="Create tables"
+      >
+      <echo>Creating tables using URL ${database.url}</echo>
+      <echo>Running script file ${database.script.file}</echo>
+      <mkdir dir="${build.db.dir}"/>
+      <sql
+         classpath="${database.driver.classpath}"
+         driver="${database.driver}"
+         url="${database.url}"
+         userid="${database.userid}"
+         password="${database.password}"
+         src="${database.script.file}"
+         print="true"
+      />
+   </target>
+   <target name="check-driver-present">
+      <available file="${database.driver.file}" type="file" property="driver.present"/>
+   </target>
+   <target name="panic-if-driver-not-present" unless="driver.present">
+      <fail>
+      The JDBC driver you have specified by including one of the files in ${basedir}/config/database
+      doesn't exist. You have to download this driver separately and put it in ${database.driver.file}
+      Please make sure you're using a version that is equal or superior to the one we looked for.
+      If you name the driver jar file differently, please update the database.driver.file property
+      in the ${basedir}/config/database/xxx.xml file accordingly.
+      </fail>
+   </target>
+
+   <target
+      name="force-middlegen"
+      depends="clean, create-tables"
+      >
+      <antcall target="middlegen">
+          <param name="middlegen.run" value="true"/>
+          <param name="middlegen.gui" value="true"/>
+      </antcall>
+   </target>
+   
+   <target 
+      name="middlegen" 
+      description="Run Middlegen" 
+      if="middlegen.run"
+      depends="check-driver-present,panic-if-driver-not-present"
+      >
+      <taskdef
+         name="middlegen"
+         classname="middlegen.MiddlegenTask"
+         classpathref="middlegen.class.path"
+         />
+
+      <middlegen
+         appname="${app.name}"
+         prefsdir="${middlegen.prefsdir}"
+         gui="${middlegen.gui}"
+         databaseurl="${database.url}"
+         initialContextFactory="${java.naming.factory.initial}"
+         providerURL="${java.naming.provider.url}"
+         datasourceJNDIName="${app.name}.database"
+         driver="${database.driver}"
+         username="${database.userid}"
+         password="${database.password}"
+         schema="${database.schema}"
+         >
+         <table name="CENTRAIS_REDES"/>
+         <table name="CLASSES_SERVICOS"/>
+         <table name="COMANDOS"/>
+         <table name="SERVICOS_CENTRAIS_TELEFONICAS"/>
+         <table name="USUARIOS"/>
+         <table name="USUARIOS_CENTRAIS"/>
+         <table name="VERSOES"/>
+         <cmp20
+            destination="${src.java.dir}"
+            package="${app.package.ejb}"
+            interfacepackage="${app.package.interfaces}"
+            pkclass="false"
+            dataobject="true"
+            jndiprefix="${app.name}"
+            viewtype="local"
+            readonly="false"
+            fkcmp="true"
+            guid="false"
+            mergedir="${src.merge.middlegen.dir}"
+            >
+            <jboss/>
+         </cmp20>
+      </middlegen>
+   </target>
+
+   <target 
+      name="ejbdoclet" 
+      depends="middlegen"
+      >
+      <taskdef
+         name="ejbdoclet"
+         classname="xdoclet.modules.ejb.EjbDocletTask"
+         classpathref="xdoclet.class.path"
+         />
+      <ejbdoclet
+         destdir="${build.src.dir}"
+         excludedtags="@version,@author"
+         ejbspec="2.0"
+         mergedir="${src.merge.xdoclet.dir}"
+         >
+         <fileset dir="${src.java.dir}">
+            <patternset refid="beans.patternset"/>
+         </fileset>
+         <packageSubstitution packages="${ejb-package}" substituteWith="${interfaces-package}"/>
+         <dataobject/>
+         <remoteinterface/>
+         <localinterface/>
+         <homeinterface/>
+         <localhomeinterface/>
+         <entitypk/>
+         <entitycmp/>
+         <utilobject cacheHomes="true"/>
+         <deploymentdescriptor
+            xmlencoding="ISO-8859-1"
+            destdir="${build.ejb.META-INF.dir}" 
+            validatexml="true"
+            />
+         <jboss
+            version="3.0"
+            xmlencoding="ISO-8859-1"
+            destDir="${build.ejb.META-INF.dir}" 
+            validateXML="true"
+            datasource="${jboss.datasource}"
+            datasourceMapping="${jboss.datasource.mapping}"
+            createTable="false"
+            />
+      </ejbdoclet>
+   </target>
+   
+   <target name="compile-ejb" depends="ejbdoclet" description="Compile business logic (ejb)">
+      <mkdir dir="${build.classes.dir}"/>
+      <javac
+         destdir="${build.classes.dir}"
+         deprecation="${javac.deprecation}"
+         classpathref="compile.class.path"
+         >
+         <src path="${src.java.dir}"/>
+         <src path="${build.src.dir}"/>
+         <patternset refid="ejb.patternset"/>
+      </javac>
+   </target>
+  
+   <target name="ejb-jar" depends="compile-ejb" description="Make ejb jar file">
+      <mkdir dir="${build.ejb.dir}"/>
+      <jar 
+         jarfile="${build.app-ejb.jar}"
+         >
+         <fileset dir="${build.classes.dir}">
+             <patternset refid="ejb.patternset"/>
+         </fileset>
+         <fileset dir="${build.ejb.dir}" includes="META-INF/**"/>
+      </jar>
+   </target>
+ 
+   <target name="test">
+        <java fork="yes" classname="junit.textui.TestRunner" taskname="junit" failonerror="true">
+            <arg value="paulojeronimo.sac.ejb.SacServicesSessionBeanTest"/>
+            <sysproperty key="java.naming.factory.initial" value="${java.naming.factory.initial}"/>
+            <sysproperty key="java.naming.provider.url" value="${java.naming.provider.url}"/>
+            <sysproperty key="java.naming.factory.url.pkgs" value="${java.naming.factory.url.pkgs}"/>
+            <classpath refid="test.class.path"/>
+        </java>
+   </target>
+
+   <target name="clean" description="Clean all generated stuff">
+      <delete dir="${build.dir}"/>
+      <delete>
+        <fileset dir="${basedir}" includes="velocity.**"/>
+      </delete>
+   </target>
+
+   <target name="clean-middlegen">
+      <delete>
+         <fileset dir="${src.java.dir}/paulojeronimo/sac/ejb">
+            <include name="*.java"/>
+            <exclude name="*SessionBean*.java"/>
+         </fileset>
+      </delete>
+   </target>
+
+   <target name="deploy" depends="ejb-jar">
+      <ant antfile="${src.config.appserver.dir}/${appserver}.xml" target="deploy"/>
+   </target>
+
+   <target name="undeploy">
+      <ant antfile="${src.config.appserver.dir}/${appserver}.xml" target="undeploy"/>
+   </target>
+</project>

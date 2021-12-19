@@ -1,0 +1,264 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Interfacing C/C++ and Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0652-0656.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0662-0666.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-657"><P>Page 657</P></A>
+
+
+<P>before the actual data is read or written. It is possible that the class could have no
+native methods if the functions that access the serial port are part of another Java package.
+</P>
+<P>In the first listing of the Win32sSerialPeer class, a static initializer block is used to
+load the DLL library containing the implementations for the native methods. By using the
+static block, the methods are ensured that the library will exist in memory before any of
+the native methods can be called. If the library is not loaded successfuly when the class
+is loaded, an exception is thrown.
+</P>
+
+<P>Listing 14.42a The Class Win32sSerialPeer: Definition of a Static <BR>
+             Initializer Block
+</P>
+<PRE>
+package SerialDevices;
+import SerialDevices.SerialPeer;
+public class Win32sSerialPeer implements SerialPeer{
+// Static block is used to init
+    // the dynamic library.
+    static{
+        // Load the dynamic library
+        System.loadLibrary(&quot;serialDLL/debug/serial&quot;);
+    }
+</PRE>
+
+<P>Listing 14.42b of the Win32sSerialPeer class defines each of the native methods that is
+to be implemented in C code. These definitions are used by javah to create header and
+stub files.
+</P>
+
+<P>Listing 14.42b The Class Win32sSerialPeer
+</P>
+<PRE>
+native public long openSerialPort(int portID);
+    native public boolean closeSerialPort(long port);
+    native public boolean setBaudRate(long port,int baudRate);
+    native public boolean setStopBits(long port,int stopBits);
+    native public boolean setParity(long port,int parity);
+    native public boolean setDataBits(long port,int dataBits);
+    native public boolean setWaitMask(long port,long mask);
+    native public long commWait(long port);
+    native public int portIn( long port
+                             , byte [] buffer, int numberOfBytesToRead);
+    native public int portOut( long port
+                             , byte [] buffer,int
+                                                                  &Acirc;nNumberOfBytesToWrite);
+}
+</PRE>
+
+<A NAME="PAGENUM-658"><P>Page 658</P></A>
+
+
+
+<H4><A NAME="ch14_ 45">
+Utility Classes in the SerialDevices Package
+</A></H4>
+
+<P>Three particular utility classes and one interface make using serial ports easier.
+</P>
+
+<UL>
+<LI>     The SerialPortMonitor class is used to echo output from the serial input stream
+to interested classes that implement the Observable interface. SerialPortMonitor
+uses the SerialData class to pass data.
+<LI>     The second is the WaitForTokens class, which is used to signal events to
+classes that implement the Action interface. The events that the WaitForTokens waits
+for are tokens or, more explicitly, string patterns. When a pattern is
+found, WaitForToken calls the action() method of registered classes with the ID of
+the token encountered. WaitForToken is useful for tasks such as waiting for
+modem messages, such as CONNECT, OK, ERROR, and so on.
+<LI>     Figure 14.4 shows how all of the classes communicate with the third class,
+ NativeSerial. The data coming in from the serial port is read by the
+Serial-     PortMonitor, which resends a copy of the stream to both the observer in
+Native-     Serial, which echoes it to a TextArea box and to the WaitForToken object,
+which parses the stream. The WaitForToken object, when it sees a token, class
+the action() method of the NativeSerial object, which prints status information to
+the console.
+</UL>
+
+<P>The following utility classes used by the package make the serial device a little easier
+to use. They do not define any native methods and are not used to explicitly control the
+serial port. The classes do enable an application to use the serial port without as much
+coding because similar functions would need to be created to take their place. The main
+purpose of these utilities is to disseminate information coming from the serial port to objects
+and methods that need to be notified of serial input.
+</P>
+
+<B>
+Class SerialPortMonitor
+</B>
+
+<P>This class is a thread that extends Observable in order to pass incoming serial data
+to classes that implement the Observer interface.
+</P>
+
+<P>The SerialPortMonitor waits for the serial port to send data. As each data item arrives,
+the SerialPortMonitor disseminates a copy of the data to each interested function. In
+listing 14.39g, the update() method (the implementation for the Observer interface) is called
+each time data is read from the serial port. The SerialPortMonitor also is used by
+the WaitForTokens class, which is discussed in the next section.
+</P>
+<A NAME="PAGENUM-659"><P>Page 659</P></A>
+
+
+<P>
+<a href="images\ch14fg04.jpg"><img src="images\tn_ch14fg04.jpg"></a><BR>
+Figure 14.4
+The classes used to implement the Peer pattern.<BR>
+</P>
+
+<P>In listing 14.43a, the class constructor is used to create the SerialPortMonitor object that
+is to inform a designated Observer that information is passing through the serial
+interface. The direction of interest, input or output, is specified by static final variables that
+are passed into the constructor and compared later in the run() method. This example
+is limited to monitoring serial input only, but extending it should not be difficult.
+</P>
+
+<P>Listing 14.43a Class SerialPortMonitor: Definition and Class Constructor
+</P>
+<PRE>
+package SerialDevices;
+import java.util.Observable;
+import java.util.Observer;
+import SerialDevices.SerialData;
+import SerialDevices.SerialDevice;
+import SerialDevices.SerialPeer;
+public class SerialPortMonitor extends Observable implements Runnable{
+    private Thread thread;
+    public static final int INPUT  = 1;
+</PRE>
+
+<A NAME="PAGENUM-660"><P>Page 660</P></A>
+
+
+
+<P>Listing 14.43a Continued
+</P>
+<PRE>
+    public static final int OUTPUT = 2;
+    private SerialDevice targetPort;
+    private int direction;
+    public SerialPortMonitor( Observer observer
+                            , SerialDevice targetPort, int direction){
+        this.targetPort = targetPort;
+        this.direction = direction;
+        addObserver(observer);
+        thread = new Thread(this);
+        thread.start();
+    }
+</PRE>
+
+<P>The stop() method in the SerialPortMonitor class is part of the implementation of
+the Runnable interface. Once called, the current object stops concurrent execution.
+</P>
+
+<P>Listing 14.43b Class SerialPortMonitor: The stop() Method
+</P>
+<PRE>
+    public void stop(){
+        System.out.println(&quot;KilledThread!!!!!!!!&quot;);
+        thread.stop();
+    }
+</PRE>
+
+<P>The run() method is the other half of the Runnable interface implementation. The
+run() method is a never-ending loop that constantly checks the state of the serial port
+for incoming data. When data is found, the method notifies observers by first
+calling setChanged() and then notifyObservers(). (Both setChanged() and notifyObservers()
+are methods that were inhereted from the Observable class.) This method continues to
+run until the classes stop() method is called (see listing 14.43c).
+</P>
+
+<P>Listing 14.43c Class SerialPortMonitor: The run() Method
+</P>
+<PRE>
+    public void run(){
+        System.out.println(&quot;Entered run method&quot;);
+        if (direction == INPUT){
+           for(;;){
+                long mask = targetPort.commWait();
+                //long mask = 0;
+</PRE>
+
+<A NAME="PAGENUM-661"><P>Page 661</P></A>
+
+
+<PRE>
+                if ((mask &amp; SerialPeer.ERR) == SerialPeer.ERR){
+                    System.out.println(&quot;Got error!!!!!!!!&quot;);
+                    return;
+                }else{
+                    int amountRead = 1;
+                    while(amountRead != 0){
+                        byte [] buffer = new byte [1];
+                        amountRead = targetPort.portIn(buffer,1);
+                        System.out.println(&quot;Got data&quot;);
+                        setChanged();
+                        notifyObservers( new SerialData(
+                                         buffer,amountRead,mask));
+                    }
+                }
+            }
+        }
+    }
+}
+</PRE>
+<P>
+<B>
+Class WaitForTokens
+</B>
+</P>
+<P>The class WaitForTokens is a standard observer to be used with the
+SerialPortMonitor class. WaitForTokens is used to catch and report instances when specific tokens are
+read from the serial port.
+</P>
+
+<P>This class may be difficult to understand. The class essentially is a token parser that
+must also deal with Data Terminal Equipment (DTE) characters, which are used to insert
+data into serial streams without affecting the normal interpretation of data. DTE data often
+is used in voice modems to distinguish voice input from other signals, such as the tones
+from a telephone touch pad.
+</P>
+
+<P>This class is similar to an Observable class, except that this method lets the user specify
+a trigger and a trigger value to be sent to a specific observer when the token appears,
+which can be very important because some devices controlled via serial communication may
+be quite complex. A voice modem, for example, has dozens of tokens that it may return
+to specify status, data, errors, or progress. Without a class such as this, the alternative
+amount of code could be much greater. You would, for example, require a tokenizer, a
+string-to-token converter, and a mechanism to call methods to replace this class. With this
+class, you need to write only methods that implement the Action interface, as in listing 14.44a.
+</P>
+
+<P><CENTER>
+<a href="0652-0656.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0662-0666.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

@@ -1,0 +1,293 @@
+<html>
+<head>
+<title>Improving the Platform (Ch. 6, Sec. 1) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-six.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Securing Java: Improvements, Solutions, and Snake Oil
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <b>1</b> / <a href="chapter-six-2.html">2</a> / <a href="chapter-six-3.html">3</a> / <a href="chapter-six-4.html">4</a> / <a href="chapter-six-5.html">5</a> / <a href="chapter-six-6.html">6</a><p>
+
+<font size="+2" color="#000000"><b>Section 1 -- Improving the Platform</b></font>
+</td><td width=60 align=center>
+<a href="chapter-six-2.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+Most problems discussed in <a href="..\chapter-four\index.html">Chapter 4</a>, "Malicious Applets: Avoiding a Common Nuisance," and Chapter 5, "Attack Applets: Exploiting Holes in the Security Model," involve specific vulnerabilities that have more to do with the current implementation of Java than with the Java security model itself. There are, however, some general concerns raised by the computer security community regarding Java. Many of these concerns are not new; in fact, we wrote about a majority of these issues in 1996. We discuss what progress has been made since then (if any). This section discusses some of these concerns and how addressing them would improve Java security.<p><br>
+
+
+<center><font size="+1"><b>Language Issues</b></font></center><p>
+
+The first group of issues has to do with the design of Java itself. There are a handful of main language issues to discuss. Note that these are criticisms of the language itself and not criticisms of the current implementation. It may be too late to address these concerns now that the Java ball has been rolling for a couple of years, but these issues still warrant discussion.<p><br>
+
+
+<b>Public Variables</b><br>
+First among the language concerns is the fact that Java allows a kind of variable called a public variable. These variables can be overwritten by a method from any Java class, no matter where the class may have been defined or from where that class may have been loaded. Storing any data in a public variable introduces a security risk.<p>
+
+Public variables are still writable across namespaces. This means that a public variable can be overwritten by an applet that has come across the network. The global nature of public variables opens an entire avenue of attacks.<p><br>
+
+
+<b>Protected Variables</b><br>
+A similar concern is raised by protected variables and classes. The real problem is that the label protected implies more security than it may actually offer. Protected variables and classes can be accessed by the class that created them, the creator's subclasses, and classes in the same Java package. Packages are a bit peculiar in Java (something we discuss later in this chapter). The result is that code can declare itself part of a package and gain access to protected variables. Developers should be aware of this risk and use protected variables sparingly.<p><br>
+
+<b>Packages</b><br>
+A third language issue involves Java's package mechanism. Basically, packages in Java are too weak. A variable or method can be declared as accessible to classes within the current package, but there is no alternative way to control what sorts of other classes can access the variable. It would be better to have more explicit control over who can access variables. The flexibility to choose two of these classes, those four, and one from that other package to make up a new package would make the modularity mechanism much more versatile.<p>
+
+Consider the following: The java.io.File class is dangerous, and untrusted applets have no business accessing it. However, the same File class is required by code in java.lang.ClassLoader in order for the Class Loader to load classes from the local disk. Since java.io.File is needed outside its package, it must be declared public, making it accessible to applets. But making it public introduces a serious security hole. The hole can be plugged by adding a few rules (some code) to the Security Manager (or the Access Controller, as the case may be). As these parts are built by the browser vendor (or some other Java application writer), such a solution is generally not very reasonable.<p>
+
+It would be better to have some way for java.io.File to be accessible to the java.io and java.lang packages, but not to any other code. Doing this would create a stronger package system in Java.<p>
+
+In addition, the way membership in a package is declared is somewhat strange in Java. Most languages with package-like modularity use a single file for each module, outlining which code is in the module and who is allowed to access the module. The owner of a module can then easily control who is allowed to use code and variables in the module. In Java, there is no single declaration of a module or a list of members having access to the module. Instead, each class itself declares which package it belongs to. That means that an external mechanism (such as the Security Manager or the Access Controller) must decide whether partially trusted code should be allowed to declare itself a member of a particular package. Because the package system is more complex than it needs to be, there is more room for error than with a more typical setup.<p><br>
+
+
+<b>Byte Code Representation</b><br>
+The next programming language critique is more abstract: Java's byte code specification is not optimal. As an intermediate representation between the Java source and the machine code of the platform on which Java runs, byte code plays an important role. We believe there are better ways to represent the same sort of platform-independent code.<p>
+
+One construct, called Abstract Syntax Trees (AST), would be easier to type check than existing Java byte code. ASTs would greatly simplify global dataflow analysis, which would speed up the Verifier and reduce the odds of a Verifier bug. That's because the current Verifier must painstakingly deduce information that ASTs have built directly into them. ASTs also have the same semantics as the source languages they represent. That means there is no need to question whether the intermediate representation is more powerful than the source language. By contrast, Java byte code semantics are different from Java source code semantics. Who can guarantee that Java byte code is constrained in similar ways to the Java language itself?<p>
+ 
+If you're at a loss imagining why that matters, consider that some aspects of Java security depend on Java's semantics and not on byte code semantics. Does that mean it may be possible to do things directly in byte code that a Java compiler would, for security reasons (or other good reasons), not allow? Unfortunately, the answer is yes. For details on this issue, see page 196. In any event, since ASTs have a compilation speed (source to AST) comparable to byte code compilation speed (source to byte code), why not use ASTs?<p>
+
+These and other language issues are discussed in greater detail in the Secure Internet Programming team's early paper, "Java Security: From HotJava to Netscape and Beyond" [Dean et al., 1996]. If you are interested in learning more about such things, the article is available on the Web at <a href="http://www.cs.princeton.edu/sip/pub/secure96.html">www.cs.princeton.edu/sip/pub/secure96.html</a>.<p><br>
+
+
+<b>Dynamic Class Loading</b><br>
+Class loading has always been a problematic issue for Java. In fact, even though class loading has been redesigned and supposedly fixed in every successive JDK, each implementation has included at least one serious security flaw. A recent Java security hole, discovered in a beta version of Java 2 in 1998, was yet another problem with class loading (see <a href="..\chapter-five\index.html">Chapter 5</a> for details).<p>
+
+In <a href="..\chapter-two\index.html">Chapter 2</a>, "The Base Java Security Model: The Original Applet Sandbox," where class loaders are introduced and discussed in some detail, we point out that there are really two functions performed by class loaders:
+<OL>
+	<LI>locating and fetching byte code 
+	<LI>managing namespaces.
+</OL>
+
+There is no reason these two capabilities need to be combined into a single class. In fact, some of Java's more serious security holes could have been avoided if class-loading architecture had initially separated the two functions. The culprit in many security problems has been in defining the namespaces seen by different classes and how the namespaces relate to each other.<p>
+
+As the approach to class loading has changed throughout Java's short life, class loading has mutated from a completely extensible architecture (which was dangerous from a security perspective), to a system in which only trusted code could create a Class Loader, and back to a system in which untrusted code might once again be able to safely create a Class Loader (that is, if it follows a stringent set of rules). If you decide to create a Class Loader of your own, it is best to change only those aspects of class loading related to locating and fetching byte code. Avoid changing the namespace structure if at all possible.<p>
+
+For more on the complications of class loading and how to fix them, see Drew Dean's doctoral thesis [Dean, 1998]. As we said before, class loading is a perfect example with which to counter claims that Java's security problems are all related to superficial implementation bugs.<p><br>
+
+
+<center><font size="+1"><b>Can Java Be Proven Correct?</b></font></center><p>
+
+Our previous discussion of ASTs and the current byte code representation leads directly to the next topic: formal verification. That's because any questions of provability are compounded by having two languages with separate semantics to understand (Java source code and Java byte code). Formal verification involves proving, in much the same way that a theorem is proven in mathematics, that a program does what it is supposed to do or that a programming language has certain properties such as type safety. This is a laborious process, to say the least.<p>
+
+There are many sorts of formal analysis Java could undergo. The security model itself (if formalized) could be analyzed. The Java source language could be formalized in a specification, then shown to be valid. The same thing could be done for Java byte code. In addition, a better-specified formal relationship between Java byte code and Java source code could be worked out. The Java VM could also be formally verified.<p>
+
+Computational Logic, Inc. (CLI), Schlumberger, and JavaSoft collaborated in 1997 to create a formal model of a portion of the JVM. The model was built in Common LISP and provided some formal analysis capabilities. The model performs extensive runtime type-safety checks, something that the standard VM does not do (the standard VM relies on the Verifier to perform many type-safety checks instead). CLI focused on Card Java (see Chapter 8, "Java Card Security: How Smart Cards and Java Mix"). It appears that CLI is not planning further formal analysis work. For more information see: <a href="http://www.cli.com/software/djvm/index.html">www.cli.com/software/djvm/index.html</a>.<p><br>
+
+
+<b>Formalizing the Security Model</b><br>
+To this day, Java still has no formal security model. The complete security policy has never been specified at a sufficiently high level for current versions of the language. As a group of security researchers once said, "A program that has not been specified cannot be incorrect; it can only be surprising" [Young, et al., 1995]. It is not possible to determine just what secure means without a creating a formalized policy. Furthermore, a particular implementation of a nonexistent policy cannot be properly verified.<p>
+
+Some progress was made toward this goal in a report commissioned by Sun back in 1996. The report, entitled Security Reference Model for JDK 1.0.2, explained (in informal English) Java's implicit security policy (at least for the base security sandbox described in <a href="..\chapter-two\index.html">Chapter 2</a>) [Erdos, et al., 1996]. The SRM is available through <a href="http://www.javasoft.com/security/SRM.html">www.javasoft.com/security/SRM.html</a>. Creating the SRM was a useful exercise; unfortunately, any utility provided by the SRM was caught in the Internet-time cross fire. The SRM is completely out of date. Given the rigorous security demands of electronic commerce, documents like the SRM should be demanded by organizations using consumerware in their security-critical systems.<p>
+
+Progress on the formalization front has also been made by programming language researchers (see, for example, [Drossopoulou and Eisenbach, 1998; Stata and Abadi, 1998]). Work on the soundness of Java continues.<p><br>
+
+
+<b>Analyzing Java Source</b><br>
+The Java source language is powerful and includes a whole host of features. Only recently has any sort of specification of the language appeared. Given a complete specification of Java source semantics, a formal analysis can be completed. This work is currently under way.<p><br>
+
+
+<b>Analyzing Byte Code</b><br>
+Java byte code plays a critical role in the way Java works. Some progress has been made with regard to formalizing byte code semantics with the release of a specification for the VM [Sun Microsystems, 1996b] (also see [Venners, 1998]). Given a sufficiently detailed specification, it is possible to begin work on proving that the VM and Verifier systems are implemented properly. Preliminary work on testing Verifier implementations has been done by the Kimera Project at the University of Washington (for more on the Kimera effort, see Verifying the Verifier in <a href="..\chapter-five\index.html">Chapter 5</a>).<p><br>
+
+
+<b>Comparing Byte Code and Java Source</b><br>
+Showing how Java byte code behaves in relation to Java source code was impossible without a semantics for both. Now that we have two specifications, we can determine whether or not byte code is more powerful than Java source code. Are there things that you can do with byte code that you can't do through Java source? Unfortunately, the answer is yes. The Princeton team has discovered at least one instance in which it is possible to create byte code for an activity that is not allowed when going through a Java compiler. Other efforts to probe byte code functionality include the University of Washington's Kimera Project and Mark LaDue's malicious applets. Byte code banditry is as potent an approach today as it was in 1996.<p><br>
+
+
+<b>Analyzing the Java VM</b><br>
+One problem affecting formal analysis of Java implementations is the size of the Java system. With tens of thousands of lines of code, Java raises critical assurance flags. Making certain that each of these lines of code does not introduce subtle vulnerabilities requires significant security analysis. Only a bit of this sort of analysis has been performed.<p>
+
+It is beyond today's technical capability to formally verify any piece of code in excess of a few thousand lines. This means that because of its size, Java is not amenable to formal proof of correctness. However, it may well be worth the effort to formally prove some aspects of Java's specification correct. The first targets should probably be the core of the VM and other security-critical pieces of the JDK, such as Class Loaders and Security Managers.<p><br>
+
+
+<center><font size="+1"><b>Software Engineering</b></font></center><p>
+
+Many bugs have been found in various sections of the Java code. It is unlikely that security-critical code is bug free. Security vulnerabilities are often the result of buggy software. It is difficult enough to deal with bugs in standard code; bugs in security-critical code are much more serious.<p>
+
+This problem requires sound software engineering. That Java programs will be built out of prefabricated components will make any security bugs much more serious. Many different sites may end up using such a component that turns out to have a security problem. Not only will people liberally borrow security-impaired code snippets from each other, they will also begin to reuse entire classes of flawed code. Such code flaws will be increasingly difficult to isolate. Perhaps software engineering will develop a new approach that avoids such potential pitfalls. In any case, Java will continue to have an effect on what the future deems state of the art.<p><br>
+
+
+<center><font size="+1"><b>To Log or Not to Log</b></font></center><p>
+
+The next concern involves something very simple: keeping track of what Java does on your machine. One universal capability that computer security experts rely on, no matter what the platform involved, is logging. Often, the only way to reconstruct an intrusion is to carefully and painstakingly read the associated log files. Of course, such detective work is not possible in an environment lacking log files. Logs provide several benefits:
+<UL>
+	<LI>They allow the victim to determine what damage was done.
+	<LI>They provide clues about how to prevent similar attacks.
+	<LI>They provide raw data for many intrusion detection approaches.
+	<LI>They provide evidence for possible legal or administrative proceedings against the perpetrator.
+</UL>
+
+Java still has no logging capability (although as we shall see later in this chapter, a number of add-on products provide this). It is impossible to track which applets were loaded and run, as well as what those applets might have done. The most fundamental things that should be logged are file system and network access. Simply capturing these data would give system and security managers a chance to see what sorts of access were involved in an intrusion. File system access logging alone would help system managers protect files that Java crackers were accessing in their break-in attempts. It would also be good to capture applet byte code for analysis in case an applet ends up doing something hostile. It is often easier to recover from an intrusion if you know what caused it and what happened during the event.<p>
+
+<a href="..\chapter-four\index.html">Chapter 4</a> examines how an applet can delay its processing until a later time. Given that applets can do this, logging becomes even more important. An especially crafty hostile applet can wait until some other Web site becomes the main suspect before doing its dirty work. It won't be surprising if the most hostile applets turn out to be the craftiest. Tracking byte code would give system managers the ability to at least verify the function of each applet that may have been involved in an attack.<p>
+
+One of the lessons emphasized in the book Takedown is that without a log file, it is impossible to prosecute computer criminals [Shimomura and Markoff, 1996]. Without a log file, you have little legal recourse in the event of a system break-in. If your site is hit by an attack applet today, erasing critical information, you can't do anything about it, even if you know the culprit. Applet logging is an essential security feature that should be made available immediately.<p><br>
+
+
+<center><font size="+1"><b>Who Do You Trust?</b></font></center><p>
+
+Early versions of Java were built without technological help for making privilege decisions. Since 1996, things have changed significantly; so much so that this book required a complete revision. <a href="..\chapter-three\index.html">Chapter 3</a>, "Beyond the Sandbox: Signed Code and Java 2," discusses the impact of the new privilege system defined by Java 2 on the Java security situation.<p>
+
+Not only is the VM itself infused with the capability to create and enforce privilege policies, but the very primitives out of which the new system is constructed have been made available to Java developers. Java now includes support for standard cryptographic algorithms, including SHA, MD5, DES (at least in North America), and SSL.<p>
+
+Now what is needed is tools to create and manage security policies that include privilege decisions. Java 2 offers fine-grained access control, but it does not offer a compelling tool for creating, testing, and managing policy (see <a href="..\appdx-c\index.html">Appendix C</a>, "How to Sign Java Code"). Lack of such management tools is likely to slow the adoption of Java 2 functionality in the enterprise.<p><br>
+
+
+<center><font size="+1"><b>Scattershot Security</b></font></center><p>
+
+One of the most common criticisms of early Java security architecture centered on how Java spreads security functionality throughout the code. Unfortunately, the problem of scattershot security has not gone away. Research at Princeton shows that security boundaries (between trusted system code and less-trusted code) are crossed up to 30,000 times per second in a typical applet [Wallach, et al., 1997]. Other evidence can be seen by the effort that Sun undertook when changing the JDK 1.2 API from the beginPrivileged()/endPrivileged() syntax of beta3 to the doPrivileged() syntax of beta4. Over 250 changes were required in the Sun reference VM implementation to make the change.<p>
+
+Reliance on a scattershot architecture means that security depends on many different parts working together properly. There is no centralized security system; no single source for security approval. Java implements security features through dynamic type checking, byte code verification, class-loading restrictions, and runtime checks performed by the Access Controller. Each resides in a different part of the Java environment. Such an architecture depends on too many unrelated functions. If all of the security-critical functions were collected together in one place, that aggregate code could be more easily verified and analyzed. That simple step would satisfy some concerns held by security experts.<p>
+
+Some of Java's security policies are dependent on the Java language itself. This is fine if all Java byte code must be created by a Java compiler, but what guarantees does anyone have that byte code has been generated by a Java compiler that plays by the rules? There are none, nor should there ever be. There are compilers now in existence that turn Ada and C code into Java byte code. To take such third-party byte-code development efforts away by legislating a particular compiler would go against the spirit of the language.<p>
+
+The problem is that the Virtual Machine interpreting Java byte code may allow more functionality than it should. More explicitly, there may be more functionality built in to the byte code than security would dictate (see Figure 6.1). If the Java compiler never creates byte code capable of exploiting such features of the VM, then the architecture would seem to remain safe. Since no one has control over who and what creates Java byte code, system managers should not rely on such a false hope. Someone could write a compiler able to create byte code that seems valid to the VM but breaks rules ordinarily enforced by the Java compiler. Or, someone could create byte code through any number of other means; for example, direct creation with an editor, or creation with a Java byte code assembler (like Jasmin, see <a href="http://www.isbe.ch/ ~wwwinfo/sc/cb/tex/jasmin/guide.html">www.isbe.ch/ ~wwwinfo/sc/cb/tex/jasmin/guide.html</a>).<p>
+
+<center>
+<table border=0 width=259><tr><td>
+<img src="..\images\fig06.01.gif" width=259 height=116 alt="Fig 6.1"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 6.1  If Java byte code is more powerful than Java source code, then the extra functionality in byte code is dangerous.</b></center><br>
+There is some evidence that this is the case.</font>
+</td></tr></table>
+</center>
+<p>
+
+One somewhat inefficient (but interesting) solution to this problem has been suggested by Andrew Appel of Princeton. He suggests checking byte code by first decompiling it to Java source, then recompiling the source to byte code. If a compiler you trust does not complain during recompilation, then the original byte code is equivalent to some Java source program, and hence must obey the rules of the Java language. This process is slow, but in certain security-critical instances it pays to be paranoid.<p><br>
+
+
+<center><font size="+1"><b>Decompiling Java Byte Code</b></font></center><p>
+
+Although decompilation is not a traditional concern of security experts, it does have some interesting twists in Java. It turns out that one of the side effects of Java byte code's clarity is that byte code is very easy to decompile. This means that given a .class file, it is possible to automatically reconstruct reasonable source code. (Of course, it is also possible to decompile x86 object code as well as any other executable code. Java is not alone in its exposure to decompilation.)<p>
+
+The JDK comes with a weak decompiler as one of its standard tools, but much better decompilers are available on the Web. In the early days, the best was the Mocha decompiler, which has since become obsolete. A good decompiler to consider now is the SourceAgain Decompiler from <a href="http://www.ahpah.com/">Ahpah software</a>.<p>
+
+Decompilation is relevant to security for a couple of reasons. The first reason is that businesses interested in using Java as a development language will need to consider the existence of decompilers before they distribute Java .class files. It probably won't be possible to sell something if making knock-offs turns out to be incredibly easy. Fortunately, some companies now distribute Java source code obfuscators (watch out for snake oil solutions in this domain, however). The end result of obfuscation is that although a .class file will decompile into valid Java, that valid Java won't be very readable by humans. One caveat: Obfuscation certainly makes decompilation more difficult, but it won't protect your code against a determined adversary.<p>
+
+Even if your code is subject to decompilation, you can still get some protection by copyrighting the code and legally defending the copyright in court if necessary. This is not an ideal solution, but it's better than nothing.<p>
+
+A closely related issue involves protecting secret or otherwise sensitive information in a piece of mobile code, such as cryptographic keys. A good guideline if you are developing mobile code in Java is not to include any secrets in the code. An applet that carries a password or a crypto key in its code is amenable to hacking. Anyone who runs such code can get access to its secrets. More on this issue can be found in <a href="..\chapter-seven\index.html">Chapter 7</a>, "Java Security Guidelines: Developing and Using Java More Securely."<p>
+
+There is a third security concern related to decompilation. Given a piece of Java source code obtained by decompilation, a cracker can better analyze the program for weaknesses that could be exploited to break it. This would allow an attacker to attack a Java program more intelligently. Applications like Netscape's Java VM are susceptible to this sort of source-related attack. Crackers like to have code to poke around with. Furthermore, an attacker could build a very realistic Trojan Horse program that looks almost exactly like the original. Like its ancient counterpart, a modern Trojan Horse is a program that appears to be one thing at one level, but turns out to breach security at another.<p><br>
+
+
+<center><font size="+1"><b>Trusted Dialogs and Meters</b></font></center><p>
+
+In an earlier chapter, we raised the idea of providing trusted dialog boxes for critical actions like file I/O, or critical measurements such as CPU cycles used. These dialogs would provide an important monitoring and feedback mechanism to Java users.<p>
+
+Providing a trusted set of dialogs (that cannot be spoofed) for things like file access seems like a good idea. However, with any such user interface, one of the key goals must be to minimize user involvement in security. Most users don't read their dialog boxes before they click OK (recall the dancing pigs problem). Sophisticated users should probably have some control over their security policies, but the less intrusive this control is, the better. Management issues like these are taking on more importance as Java security evolves from the base sandbox into the Java 2 model in which security policy plays such a central role. Centralized management is especially appealing at the enterprise level, and much work remains to be done to develop policy management tools and techniques.<p>
+
+Far from being in the way, a set of resource access indicators that cannot be forged would be a welcome addition to Java from nearly every user's perspective. This set of instruments could allow a user to track system resources such as CPU cycles, or microphone use. Some third-party vendors offer monitoring capabilities like the ones mentioned here. What is not yet clear is how well protected against spoofing these meters are. A meter that can be made to display false system information on behalf of an attack applet is potentially more dangerous than having no meter at all.<p><br>
+
+
+<center><font size="+1"><b>Management Tools</b></font></center><p>
+
+Java 2 is not going to be adopted overnight; it is a complicated system, and utilizing it to its full potential will be a complicated undertaking. As we have said before, we think it is likely that signed mobile code and complex security policy will first be adopted for the intranet. Only after organizations and enterprises have their ducks in a row internally will they begin to experiment with complex security policies that make use of the Internet/Web.<p>
+
+A set of tools for creating and managing policy, especially enterprise-wide, would go a long way toward easing the adoption of Java 2. The existing tools being distributed with the JDK are rudimentary at best, and hard problems like identity/certificate management have many remaining open issues. (See Appendix C for details on how to use some of the existing code signing tools.)<p>
+
+The problem of policy management has existed for years in the security community. One characteristic of the problem is that it does not scale well. A tool that may be adequate to managing policy for one browser will probably not work well across a network of hundreds or thousands of machines. This problem crops up in all aspects of security. One common way to get a handle on it is to create a choke point at the perimeter (for example, at the firewall) and instantiate site-wide policy there. Security vendors have been frantically working on policy-management tools for some time, but work remains to be done. Ideally, a site-wide policy could be managed by a powerful tool and would include mobile code policy.<p>
+
+Many security pundits anticipated that by now, a solid public key infrastructure (PKI) would have been put in place; unfortunately, that is not the case. Java 2 would be much easier to adopt if the PKI were already there. As it now stands, delays in PKI placement are likely to hamper systems that rely heavily on code-signing. After all, if you have no idea who is behind an identity, how can you possibly trust them? It is not clear at this point why any particular certificate authority deserves your trust.<p><br>
+
+
+<center><font size="+1"><b>Java Antidotes</b></font></center><p>
+
+As can be seen from the laundry list of high-level concerns, Java security can still be improved in many ways. Some of the most effective antidotes to Java security problems involve addressing the criticisms raised here.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-six-2.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="..\chapter-five\index.html">
+<area shape="RECT" coords="335,9,357,41" href="index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="..\chapter-five\index.html">5</a> -- <a href="index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+

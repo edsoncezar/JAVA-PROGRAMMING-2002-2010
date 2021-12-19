@@ -1,0 +1,2901 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<head>
+  <title>Integrate security infrastructures with JBossSX</title>
+  <meta http-equiv="content-type"
+ content="text/html; charset=windows-1252">
+  <meta name="keywords"
+ content=" JAAS, Security, Login Modules, EJB, J2EE">
+  <meta name="description"
+ content=" 
+The current Enterprise JavaBean and Servlet specifications omit integration between the application server and existing security infrastructures. This article describes how version 3.2.1 of the open source JBoss application server security extension project (JBossSX) uses Java Authentication and Authorization Service (JAAS) login modules as its integration API. JAAS allows for integration without programming, using security infrastructures that use Java Database Connectivity, the lightweight directory access protocol (LDAP), or properties-based login modules bundled with JBoss. For security infrastructures that do not support those access mechanisms, integration entails writing a simple custom login module. (5,900 words)
+ ">
+  <meta name="GOOGLEBOT" content="NOARCHIVE">
+  <style type="text/css">
+            code {font: 110%;}
+            pre {font: 100%;}
+            td {font: 90%;}
+        </style>
+  <script language="JavaScript">
+            <!--
+            function openBrWindow() {
+                win=window.open("http://www.javaworld.com/channel_content/jw-story-feedback.shtml",'Feedback','width=600,height=330,toolbar=no,location=no,directories=no,menubar=no,scrollbars=yes,resizable=yes');
+            }
+            -->
+        </script>
+</head>
+<body style="background-color: rgb(255, 255, 255); color: rgb(0, 0, 0);"
+ topmargin="0" leftmargin="0" rightmargin="0" bottommargin="0"
+ alink="#990033" link="#990033" marginheight="0" marginwidth="0"
+ vlink="#990033">
+<basefont face="verdana, arial, helvetica" size="2"><!--        <table align="center" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <tr valign="top">
+                <td bgcolor="#006699" width="160" align="middle" valign="top">
+                    <table width="160" border="0" cellspacing="0" cellpadding="0" bgcolor="#006699" summary=""> --><!-- #include snippets/jw-search-snippet.txt --><!--     <tr>
+                            <td width="8"><img height=1 alt="" src="http://www.javaworld.com/images/spacer.gif" width=8 ></td>
+                            <td><img height=1 alt="" src="http://www.javaworld.com/images/rule_ltblue.gif" width=144 vspace=2 ><br>
+                                <font face="Verdana,Geneva,Arial,Helvetica,sans-serif" size="1" color="#ffffff"><strong>ARCHIVE</strong></font><br>
+                                <img height=1 alt="" src="http://www.javaworld.com/images/rule_ltblue.gif" width=144 vspace=2 ><br>
+                                <strong><a href="http://www.javaworld.com/channel_content/jw-topical-index.shtml"><font face="Verdana,Geneva,Arial,Helvetica,sans-serif" size="1" color="#ffffff">TOPICAL INDEX</font></a></strong></font><br>--><!-- #include snippets/jw-topical-generic.txt --><!--                         <img height=1 alt="" src="http://www.javaworld.com/images/rule_ltblue.gif" width=144 vspace=2 ><br>
+                                <font face="Verdana,Geneva,Arial,Helvetica,sans-serif" size="1" color="#ffffff"><strong>FREE JAVAWORLD NEWSLETTERS</strong></font><br>
+                                 <img height=1 alt="" src="images/rule_ltblue.gif" width=144 vspace=2 ><br></td>
+                            <td width="8"><img height=1 alt="" src="http://www.javaworld.com/images/spacer.gif" width=8 ></td>
+                        </tr>
+                        <tr valign="bottom">
+                            <td width="8"><img height=1 alt="" src="http://www.javaworld.com/images/spacer.gif" width=8 ></td>
+                            <td> </td>
+                            <td width="8"><img height=8 alt="" src="http://www.javaworld.com/images/c_gryblbottom.gif" width=8 ></td>
+                        </tr>
+                        <tr>
+                            <td width="8" bgcolor="#cccccc"> </td>
+                            <td bgcolor="#cccccc"> </td>
+                            <td width="8" bgcolor="#cccccc"> </td>
+                        </tr>
+                        <tr>
+                       <td width="8" bgcolor="#cccccc"><img height=1 alt="" src="http://www.javaworld.com/images/spacer.gif" width=8 ></td>
+                           <td align="middle" bgcolor="#cccccc">  --><!-- #include snippets/jw-articles-left-ad.txt --><!--      </td>
+                       <td width="8" bgcolor="#cccccc"><img height=8 alt="" src="http://www.javaworld.com/images/spacer.gif" width=8></td>
+                        </tr>
+                        <tr>
+                            <td width="8" bgcolor="#cccccc"> </td>
+                            <td bgcolor="#cccccc"> </td>
+                            <td width="8" bgcolor="#cccccc"> </td>
+                        </tr>
+                        <tr valign="top">
+                            <td width="8"><img height=1 alt="" src="http://www.javaworld.com/images/spacer.gif" width=8 ></td>
+                            <td> </td>
+                            <td width="8"><img height=8 alt="" src="http://www.javaworld.com/images/c_grybltop.gif" width=8 ></td>
+                        </tr>
+                    </table> --><img
+ src="images/spacer.gif" border="0" height="8" width="160"><img alt=""
+ src="images/spacer.gif" height="1" width="8"><!-- ## MAIN CONTENT STARTS HERE ### -->
+<font face="verdana, arial, helvetica" size="2"> </font>
+<p><font face="verdana, arial, helvetica" size="2"> <strong></strong></font></p>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<p><font face="verdana, arial, helvetica" size="2"> </font></p>
+<h1 align="center"><a href="http://www.jboss.com/"><img alt="JBoss Inc."
+ src="images/jboss_inc.gif"
+ style="border: 0px solid ; width: 728px; height: 90px;"></a><br>
+</h1>
+<h1 align="center"><font face="verdana, arial, helvetica" size="2">Integrate
+security infrastructures with JBossSX
+</font></h1>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<h3 align="center"><font face="verdana, arial, helvetica" size="2">JBossSX
+uses JAAS to integrate application servers and security
+infrastructures
+</font></h3>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<font face="verdana, arial, helvetica" size="2"><!--<BLOCKQUOTE><STRONG>Summary</STRONG><BR>--></font>
+<blockquote><font face="verdana, arial, helvetica" size="2"><strong>Summary</strong><br>
+The current Enterprise JavaBean and Servlet specifications omit
+integration between the application server and existing security
+infrastructures. This article describes how version 3.2.x of the open
+source JBoss application server security extension project (JBossSX)
+uses Java Authentication and Authorization Service (JAAS) login modules
+as its integration API. JAAS allows for integration without
+programming, using security infrastructures that use Java Database
+Connectivity, the lightweight directory access protocol (LDAP), or
+properties-based login modules bundled with JBoss. For security
+infrastructures that do not support those access mechanisms,
+integration entails writing a simple custom login module.<br>
+  <br>
+This is a revision of the August 2001 JavaWorld JAAS artible (<a
+ href="http://www.javaworld.com/javaworld/jw-08-2001/jw-0831-jaas.html">http://www.javaworld.com/javaworld/jw-08-2001/jw-0831-jaas.html</a>)
+that has been updated for 3.2.1.<br>
+Revised again for for 3.2.5 on 2004-07-20.<br>
+  <em></em> </font></blockquote>
+<font face="verdana, arial, helvetica" size="2"><!--</BLOCKQUOTE>--> <strong>By
+Scott Stark
+</strong> </font>
+<p><font face="verdana, arial, helvetica" size="2"><img
+ src="images/rule_ltblue.gif" height="2" width="100%"></font></p>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+</font></p>
+<font face="verdana, arial, helvetica" size="2"><!-- #include snippets/jw-articles-336x280.txt -->
+</font>
+<p><font face="verdana, arial, helvetica" size="2"><img
+ src="images/A.gif" alt="A" align="left" height="28" width="30">key
+aspect of the Java 2 Platform, Enterprise Edition (J2EE) component
+models is a simple declarative security model. The Enterprise JavaBean
+(EJB) 2.0 and Servlet 2.3 specifications support a role-based
+declarative security model that externalizes security from application
+logic and decouples the application security roles from the deployment
+environment's security implementation. At the application level, the <code>ejb-jar.xml</code>
+and <code>web.xml</code>
+deployment descriptors define security. Although this model allows for
+an independent, simple specification of the application server's
+security requirements, mapping the application-defined security onto
+the deployment environment security's infrastructure is an
+application-server-specific activity.</font></p>
+<p><font face="verdana, arial, helvetica" size="2">Thus, configuring a
+J2EE application's security requires proprietary application server
+APIs or tools. One such tool is the Java Authentication and
+Authorization Service (JAAS). In this article, I describe how the JBoss
+security extension, JBossSX, uses the standard JAAS to integrate with
+the deployment environment's security infrastructure. By configuring
+the JAAS login modules bundled with JBoss, you can complete the
+integration without custom programming. If the bundled login modules
+don't work with your security infrastructure, you can simply write a
+custom login module that does; I'll show you how in this article.</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The key topics that
+I cover here include:</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li>The J2EE
+declarative security model</li>
+  <li>The key JAAS classes </li>
+  <li>Details of how the JBossSX security manager uses JAAS in its
+implementation of the J2EE declarative security model</li>
+  <li>Details of how you can write a custom JAAS login module for JBoss</li>
+  </font>
+</ul>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<p><font face="verdana, arial, helvetica" size="2">I also include a
+secure
+enterprise application example that demonstrates the declarative
+security model and the configuration of JAAS login modules to integrate
+the deployment environment's security. </font></p>
+<h1>
+J2EE declarative security overview<font face="verdana, arial, helvetica"
+ size="2"><font size="+1"><strong> </strong></font></font></h1>
+<p><font face="verdana, arial, helvetica" size="2">The first step to
+securing a J2EE application is to specify the
+application security requirements via the standard J2EE deployment
+descriptors. You secure access to EJBs and Web components in an
+enterprise application by using the <code>ejb-jar.xml</code> and <code>web.xml</code>
+deployment descriptors. Figures 1 and 2 illustrate the security-related
+elements in the EJB 2.0 and Servlet 2.2 deployment descriptors,
+respectively.
+</font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas1.jpg" target="new_window"><img
+ alt="Figure 1" src="images/jw-0831-jaas1_sml.jpg"
+ style="border: 0px solid ; width: 175px; height: 280px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 1. The EJB 2.0 deployment
+descriptor security elements<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">Together, these
+security elements define the bean author and application assembler's
+view of an enterprise application's security requirements. </font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas2.jpg" target="new_window"><img
+ alt="Figure 2" src="images/jw-0831-jaas2_sml.jpg"
+ style="border: 2px solid ; width: 175px; height: 140px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 2. The Servlet 2.2 deployment
+descriptor security elements<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">So that you'll have
+sufficient background for the example presented later in this article,
+I'll first review the security elements pictured in Figures 1 and 2. </font></p>
+<h2> Enterprise
+beans security references<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">As you can see in
+Figure 1, enterprise beans may declare one or more <code>security-role-ref</code>
+elements. An EJB can access the caller principal and ask if the caller
+belongs to a role by name. The caller principal is obtained from the <code>EJBContext.getCallerPrincipal()</code>
+method as a <code>java.security.Principal</code> instance. Using the <code>EJBContext.isCallerInRole(String)</code>
+method, an EJB checks if a caller is in a role that has been declared
+with a <code>security-role-ref</code> element. The <code>role-name</code>
+element value must link to a security role in the assembly-descriptor
+section of <code>ejb-jar.xml</code> through the <code>role-link</code>
+element. You typically use <code>isCallerInRole()</code> to perform a
+security check that cannot be defined using method permissions. See
+section 21.2.5 of the <a href="#resources">EJB 2.0 Specification</a>
+for more details on accessing the caller's security context. </font></p>
+<h2> Enterprise
+beans security identity<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">Figure 1 also shows
+that enterprise beans can optionally declare a <code>security-identity</code>
+element. New to EJB 2.0 is the ability to specify what identity an EJB
+should use when it invokes methods on other EJBs. The application
+assembler uses the <code>security-identity</code> element to indicate
+that the current caller's identity should be propagated by using a <code>use-caller-identity</code>
+element as <code>security-identity</code>'s value. Alternatively, the
+application assembler can use the <code>run-as</code> element with the
+<code>security-identity</code>'s value as <code>role-name</code> to
+specify that EJB calls are performed with the security role given by
+the <code>role-name</code> value. Note that this does not change the
+caller's identity as seen by <code>EJBContext.getCallerPrincipal()</code>.
+Rather, the caller's security roles are set to the single role
+specified by the <code>run-as/role-name</code> element value. You can
+use a <code>run-as</code>
+identity to keep external clients from accessing internal EJBs. To do
+that, assign the internal EJB method permissions that restrict access
+to a role never assigned to an external client, and use the restricted
+role as the <code>run-as/role-name</code> element value for EJBs that
+use the internal EJB. </font></p>
+<h2> Assembly
+descriptor security roles<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">The security role
+referenced by either <code>security-role-ref</code>
+or <code>security-identity</code>
+elements needs to map to one of the application's declared roles. An
+application assembler defines logical security roles by adding <code>security-role</code>
+elements to the <code>assembly-descriptor</code> element. In JBoss, a <code>security-role</code>
+is only used to map an EJB <code>security-role-ref/role-name</code>
+to the logical role to which the EJB role name refers. The user's
+assigned roles are a dynamic function of the application's security
+manager, as you will see when I discuss the JBossSX implementation.
+JBoss does not require defined <code>security-role</code>s to identify
+method permissions. Therefore, you should specify a <code>security-role</code>
+element for every role used in the <code>method-permission</code>
+element for portability across application servers and for deployment
+descriptor maintenance.</font></p>
+<h2> Assembly
+descriptor method permissions<font face="verdana, arial, helvetica"
+ size="2"><strong> </strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">An application
+assembler can set the roles that are allowed to invoke
+an EJB's home and component interface methods through <code>method-permission</code>
+elements. Each <code>method-permission</code> element contains one or
+more <code>role-name</code> elements that define the logical roles
+allowed access to one or more EJB methods as identified by <code>method</code>
+elements. With EJB 2.0, you can now specify the <code>unchecked</code>
+element instead of the <code>role-name</code>
+element to declare that an authenticated user can access one or more
+methods. In addition, you can declare that no one should have access to
+a method with the <code>exclude-list</code> element. For method
+syntax, see section 21.3.2 of the <a href="#resources">EJB 2.0
+Specification</a>. </font></p>
+<h2> An example
+EJB deployment descriptor<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">The following <code>ejb-jar.xml</code>
+descriptor illustrates the use
+of EJB security elements and is the descriptor used in the article
+example: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&lt;ejb-jar&gt;<br>
+&nbsp;&nbsp; &lt;display-name&gt;SecurityTests&lt;/display-name&gt;<br>
+&nbsp;&nbsp; &lt;enterprise-beans&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A trivial
+stateless session echo bean&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-class&gt;org.jboss.docs.jaas.howto.StatelessSessionBean&lt;/ejb-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;session-type&gt;Stateless&lt;/session-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;transaction-type&gt;Container&lt;/transaction-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-name&gt;ejb/PrivateSession&lt;/ejb-ref-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-link&gt;PrivateSession&lt;/ejb-link&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-identity&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;run-as&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;InternalUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/run-as&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-identity&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/session&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A trivial
+stateful session echo bean&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PrivateSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-class&gt;org.jboss.docs.jaas.howto.StatefulSessionBean&lt;/ejb-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;session-type&gt;Stateful&lt;/session-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;transaction-type&gt;Container&lt;/transaction-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/session&gt;<br>
+&nbsp;&nbsp; &lt;/enterprise-beans&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;assembly-descriptor&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Coder&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Echo&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;InternalUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Echo&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;*&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;InternalUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PrivateSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;*&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Coder&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;create&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;remove&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;unchecked/&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;noop&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;exclude-list&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;Methods that
+cannot be used in this<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+deployment&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;restricted&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/exclude-list&gt;<br>
+&nbsp;&nbsp; &lt;/assembly-descriptor&gt;<br>
+&lt;/ejb-jar&gt;<br>
+</font></p>
+<h2> Web
+application security constraints<font face="verdana, arial, helvetica"
+ size="2"><strong> </strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">In a Web
+application, security is defined by the roles allowed access
+to content; a URL pattern identifies the protected content. For
+example, the <code>web.xml</code> descriptor fragment below indicates
+that any URL lying under the Web application's <code>/restricted</code>
+path requires an <code>AuthorizedUser</code> role: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&lt;web-app&gt;<br>
+...<br>
+&nbsp;&nbsp; &lt;security-constraint&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;web-resource-collection&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;web-resource-name&gt;Secure
+Content&lt;/web-resource-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;url-pattern&gt;/restricted/*&lt;/ url-pattern&gt;&lt;/<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;web-resource-collection&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;auth-constraint&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;AuthorizedUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/auth-constraint&gt;<br>
+&nbsp;&nbsp; &lt;/security-constraint&gt;<br>
+...<br>
+&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;description&gt;The role
+required to access restricted content&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;role-name&gt;AuthorizedUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp; &lt;/security-role&gt;<br>
+&lt;/web-app&gt;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The <code>security-role-ref</code>
+and <code>security-role</code> elements are equivalent to their EJB
+counterparts.<!-- break --> </font></p>
+<h1>
+Specify the security domain in JBoss<font
+ face="verdana, arial, helvetica" size="2"><font size="+1"><strong> </strong></font></font></h1>
+<p><font face="verdana, arial, helvetica" size="2">The J2EE security
+elements I have covered describe only the security
+requirements from the application's perspective. Since J2EE security
+elements declare logical roles, the application deployer maps the roles
+from the application domain onto the deployment environment. The EJB
+specification omits these application-server-specific details. In
+JBoss, mapping the application roles onto the deployment environment
+entails specifying a security manager that implements the J2EE security
+model. Figure 3 shows the JBoss-specific EJB and Web application
+deployment descriptor's security-related elements.
+</font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas3.jpg" target="new_window"><img
+ alt="Figure 3" src="images/jw-0831-jaas3_sml.jpg"
+ style="border: 0px solid ; width: 175px; height: 268px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 3. The JBoss-specific EJB and
+Web deployment descriptor security elements<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">Use the <code>security-domain</code>
+element to identify the Java Naming and Directory Interface (JNDI) name
+of the security manager interface implementation that JBoss uses for
+the EJB and Web containers. You may specify <code>security-domain</code>
+as an EJB-level element to only set security for one or more EJBs when <code>security-domain</code>
+is not a top-level element, or when <code>security-domain</code> is a
+top-level element and you want to override it. The <code>security-proxy</code>
+element identifies a custom security interceptor that allows
+per-request security checks outside the scope of the EJB declarative
+security model without embedding security logic into the EJB
+implementation. I won't go into detail about that JBoss-specific
+feature, as this article focuses on using JAAS to implement the
+standard declarative security model. </font></p>
+<p><font face="verdana, arial, helvetica" size="2">A JBoss security
+manager implementation requires the <code>org.jboss.security.EJBSecurityManager</code>
+and <code>org.jboss.security.RealmMapping</code> interfaces presented
+in Figure 4. </font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas4.gif" target="new_window"><img
+ alt="Figure 4" src="images/jw-0831-jaas4_sml.gif"
+ style="border: 2px solid ; width: 200px; height: 125px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 4. JBoss security manager
+interfaces<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">For the remainder of
+this article, I focus on the JBossSX <code>org.jboss.security.plugins.JaasSecurityManager</code>,
+a JAAS-based implementation of the security manager interfaces. But
+first, I'll present a brief introduction to JAAS.</font></p>
+<h1>
+What is JAAS?<font face="verdana, arial, helvetica" size="2"><font
+ size="+1"><strong> </strong></font></font></h1>
+<p><font face="verdana, arial, helvetica" size="2">The JAAS 1.0 API
+consists of a set of Java packages for the user
+authentication and authorization. It implements a Java version of the
+standard Pluggable Authentication Module (<a href="#resources">PAM</a>)
+framework and compatibly extends the Java 2 Platform's access control
+architecture to support user-based authorization. JAAS was first
+released as an extension package for JDK 1.3 and is bundled with the
+current JDK 1.4 beta. As the JBossSX framework only uses the
+authentication aspect of JAAS to implement the declarative-role-based
+J2EE security model, this introduction focuses only on that topic. For
+a more comprehensive overview, see the JAAS material in <a
+ href="#resources">Resources</a>. I took much of this section's
+material from the <a href="#resources">JAAS 1.0 Developers Guide</a>. </font></p>
+<p><font face="verdana, arial, helvetica" size="2">JAAS authentication
+is
+performed in a pluggable fashion. This permits Java applications to
+remain independent from underlying authentication technologies and
+allows the JBossSX security manager to work in different security
+infrastructures. Integration with a security infrastructure can succeed
+without changing the JBossSX security manager. Authentication consists
+of instantiating a <code>LoginContext</code> object, which passes the
+name of a <code>Configuration</code> entry to determine which <code>LoginModule</code>
+will be created. The <code>LoginModule</code>s define the
+authentication technology. <code>LoginModule</code>s often use a
+username and password to verify identity, but any form of identity and
+identity verification will work. </font></p>
+<h2> The JAAS Core Classes<font face="verdana, arial, helvetica"
+ size="2"><strong> </strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">The JAAS core
+classes break down into three categories: <em>common,
+authentication,</em> and <em>authorization.</em>
+The list below presents the common and authentication classes, since
+the JBossSX functionality covered in this article uses only these
+classes.</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li>Common classes:
+    <ul>
+      <li><code><strong>Subject</strong></code> (<code>javax.security.auth.Subject</code>)</li>
+      <li><code><strong>Principal</strong></code> (<code>java.security.Principal</code>)
+      </li>
+    </ul>
+  </li>
+  <li>Authentication classes:
+    <ul>
+      <li><code><strong>Callback</strong></code> (<code>javax.security.auth.callback.Callback</code>)</li>
+      <li><code><strong>CallbackHandler </strong></code>(<code>javax.security.auth.callback.CallbackHandler</code>)</li>
+      <li><code><strong>Configuration</strong></code> (<code>javax.security.auth.login.Configuration</code>)</li>
+      <li><code><strong>LoginContext</strong></code> (<code>javax.security.auth.login.LoginContext</code>)</li>
+      <li><code><strong>LoginModule</strong></code> (<code>javax.security.auth.spi.LoginModule</code>)</li>
+    </ul>
+  </li>
+  </font>
+</ul>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<h3> Subject and
+Principal<font face="verdana, arial, helvetica" size="2"><strong> </strong></font></h3>
+<p><font face="verdana, arial, helvetica" size="2">To authorize access
+to resources, applications first need to
+authenticate the request's source. The JAAS framework defines the term <code>Subject</code>
+to represent the request's source. <code>Subject</code>
+is the key JAAS class; it represents information for a single entity,
+such as a person or service. It encompasses the entity's principals,
+public credentials, and private credentials. The JAAS APIs use the
+existing Java 2 <code>java.security.Principal</code> interface to
+represent a principal.</font></p>
+<p><font face="verdana, arial, helvetica" size="2">Once authenticated,
+a <code>Subject</code> is populated with associated identities, or <code>Principal</code>s.
+A <code>Subject</code> may have many <code>Principal</code>s. For
+example, a person may have a name <code>Principal</code> (John Doe)
+and a social security number <code>Principal</code> (123-45-6789),
+both of which help distinguish it from other <code>Subject</code>s. To
+retrieve the <code>Principal</code>s associated with a <code>Subject</code>,
+two methods are available: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp; public Set getPrincipals();<br>
+&nbsp;&nbsp;&nbsp;&nbsp; public Set getPrincipals(Class c);<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The first method
+returns all <code>Principal</code>s contained in the <code>Subject</code>.
+The second method only returns those <code>Principal</code>s that are
+instances of <code>Class c</code> or <code>Class c</code>'s
+subclasses. An empty set will return if the <code>Subject</code> has
+no associated <code>Principal</code>s. Note that the <code>java.security.acl.Group</code>
+interface is a subinterface of <code>java.security.Principal</code>,
+and so an instance in the <code>Principal</code>s set may represent a
+logical grouping of other principals or groups of principals. </font></p>
+<h3>
+Authentication classes<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h3>
+<p><font face="verdana, arial, helvetica" size="2">The following steps
+will authenticate a <code>Subject</code>:</font></p>
+<ol>
+  <font face="verdana, arial, helvetica" size="2"> <li>An application
+instantiates a <code>LoginContext</code>. </li>
+  </font> <li><font face="verdana, arial, helvetica" size="2">The <code>LoginContext</code>
+consults a <code>Configuration</code> to load all the <code>LoginModules</code>
+configured for that application.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The application
+invokes the <code>LoginContext</code>'s login method. </font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The login method
+invokes all the loaded <code>LoginModule</code>s. Each <code>LoginModule</code>
+attempts to authenticate the <code>Subject</code>. Upon success, <code>LoginModule</code>s
+associate relevant <code>Principal</code>s and credentials with the <code>Subject</code>.
+    </font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The <code>LoginContext</code>
+returns the authentication status to the application. </font></li>
+  <li><font face="verdana, arial, helvetica" size="2">If authentication
+succeeds, the application retrieves the authenticated <code>Subject</code>
+from the <code>LoginContext</code>. </font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font>
+</ol>
+<p><font face="verdana, arial, helvetica" size="2">The <code>LoginContext</code>
+class provides the basic methods for authenticating <code>Subject</code>s
+and offers a way to develop an application independent of the
+underlying authentication technology. The <code>LoginContext</code>
+consults a <code>Configuration</code> to determine the authentication
+services -- or <code>LoginModule</code>s -- configured for a
+particular application. Therefore, you can plug in different <code>LoginModule</code>s
+under an application without changing the application itself.</font></p>
+<p><font face="verdana, arial, helvetica" size="2">All <code>LoginContext</code>
+constructors share a common parameter: <code>name</code>. The <code>LoginContext</code>
+uses <code>name</code> to index the login <code>Configuration</code>.
+Actual authentication occurs with a call to the following method: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp; public void login() throws LoginException;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">When <code>login()</code>
+invokes, all the configured <code>LoginModule</code>s'
+respective login methods invoke to perform authentication. If
+authentication succeeds, the following method can retrieve the
+authenticated <code>Subject</code> (which may now hold <code>Principal</code>s,
+public credentials, and private credentials):
+<code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;public Subject getSubject();<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">To log out a <code>Subject</code>
+and remove its authenticated <code>Principal</code>s and credentials,
+use the method below:
+<code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp; public void logout() throws LoginException;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The following code
+sample demonstrates the calls necessary to authenticate a <code>Subject</code>
+using the <code>LoginModule</code>s configured under the name <code>jwdomain</code>:
+<code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp; // let the LoginContext instantiate a new
+Subject<br>
+&nbsp;&nbsp;&nbsp;&nbsp; LoginContext lc = new LoginContext("jwdomain");<br>
+&nbsp;&nbsp;&nbsp;&nbsp; try<br>
+&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // authenticate the
+Subject<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; lc.login();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("authentication successful");<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // get the
+authenticated Subject<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Subject subject =
+lc.getSubject();<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ...<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // all finished --
+logout<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; lc.logout();<br>
+&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+&nbsp;&nbsp;&nbsp;&nbsp; catch (LoginException le)<br>
+&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("authentication unsuccessful");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; le.printStackTrace();<br>
+&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">With the <code>LoginModule</code>
+interface, developers can implement different authentication
+technologies that can be plugged under an application. For example, one
+<code>LoginModule</code> may perform username/password-based
+authentication, while others may interface to hardware devices such as
+smart card readers or biometric authenticators. To instantiate a <code>LoginModule</code>,
+a <code>LoginContext</code> expects each <code>LoginModule</code> to
+provide a public constructor that takes no arguments. Then, to
+initialize a <code>LoginModule</code> with the relevant information, a
+<code>LoginContext</code> calls the <code>LoginModule</code>'s <code>initialize()</code>
+method. The <code>subject</code> argument is guaranteed to be nonnull.
+The signature of the <code>initialize()</code> method is: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp;void initialize(Subject subject,
+CallbackHandler callbackHandler,<br>
+Map sharedState, Map options);<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The <code>login()</code>
+method starts authentication; its signature is:
+<code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boolean login() throws
+LoginException;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">An example method
+implementation might prompt the user for a username and password, and
+then verify the information against data stored in a naming service
+such as NIS or LDAP. Alternative implementations might interface to
+smart cards and biometric devices or simply extract user information
+from the underlying operating system. The validation of user identity
+by each <code>LoginModule</code> is considered Phase 1 of JAAS
+authentication. Authentication completes when the <code>LoginContext</code>
+calls: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boolean commit() throws
+LoginException;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">If Phase 1 succeeds,
+then the <code>commit()</code> method continues with Phase 2:
+associating relevant <code>Principal</code>s, public credentials, or
+private credentials with the <code>Subject</code>. If Phase 1 fails,
+then <code>boolean commit() throws LoginException;</code> removes any
+previously stored authentication state, such as usernames or passwords.</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The following method
+halts authentication: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp; boolean abort() throws LoginException;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">Typical
+implementations of that method also clean up previously stored
+authentication state. </font></p>
+<p><font face="verdana, arial, helvetica" size="2">The following method
+logs out a <code>Subject</code>:
+<code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp; boolean logout() throws LoginException;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">That method removes
+the <code>Principal</code>s and credentials originally associated with
+the <code>Subject</code> during the commit operation. Credentials
+should be destroyed upon removal. </font></p>
+<p><font face="verdana, arial, helvetica" size="2">When a <code>LoginModule</code>
+must communicate with the user to obtain authentication information, it
+uses a <code>CallbackHandler</code>. Applications implement the <code>CallbackHandler</code>
+interface and pass it to the <code>LoginContext</code>, which forwards
+it directly to the underlying <code>LoginModules</code>. <code>LoginModule</code>s
+use the <code>CallbackHandler</code>
+both to gather input from users (such as a password or smart-card PIN
+number) and to supply information to users (such as status
+information). By allowing the application to specify the <code>CallbackHandler</code>,
+underlying <code>LoginModule</code>s remain independent from the
+different ways applications interact with users. For example, a <code>CallbackHandler</code>'s
+implementation for a GUI application might display a window to solicit
+user input. On the other hand, a <code>CallbackHandler</code>'s
+implementation for a non-GUI environment, such as an application
+server, might simply obtain credential information using an application
+server API. The <code>CallbackHandler</code> interface has one method
+to implement: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;void handle(Callback[] callbacks)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws
+java.io.IOException, UnsupportedCallbackException;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The last
+authentication class I will cover is the <code>Callback</code>
+interface. It is a tagging interface that features several
+implementations, including <code>NameCallback</code> and <code>PasswordCallback</code>.
+<code>LoginModule</code>s use a <code>Callback</code> to request
+information required by the authentication mechanism the <code>LoginModule</code>
+encapsulates. </font></p>
+<p><code><font face="verdana, arial, helvetica" size="2">LoginModule</font></code><font
+ face="verdana, arial, helvetica" size="2">s pass an array of <code>Callback</code>s
+directly to the <code>CallbackHandler</code>'s handle method during
+the authentication's login phase.<!-- break --> </font></p>
+<h1>
+Inside the JBossSX JaasSecurityManager<font
+ face="verdana, arial, helvetica" size="2"><font size="+1"><strong> </strong></font></font></h1>
+<p><font face="verdana, arial, helvetica" size="2">Now let's return to
+the JBossSX security manager implementation. I'll
+start with an overview of how the JBoss security components interact.
+Figure 5 shows the main components and how the security domain assigned
+in the JBoss EJB and Web deployment descriptors ties them together.
+</font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas5.gif" target="new_window"><img
+ alt="Figure 5" src="images/jw-0831-jaas5_sml.gif"
+ style="border: 2px solid ; width: 175px; height: 309px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 5. Security component
+interaction overview<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">Figure 5 depicts an
+enterprise application that contains both EJBs and Web content secured
+under the security domain <code>jwdomain</code>.
+The EJB and Web containers have a request interceptor architecture that
+includes a security interceptor, which enforces the container security
+model. At deployment time, the security domain in the <code>jboss.xml</code>
+and <code>jboss-web.xml</code>
+descriptors is used to obtain the security manager instance associated
+with the container and used by the security interceptor. When a secured
+component is requested, the security interceptor delegates security
+checks to the security manager instance associated with the container. </font></p>
+<p><font face="verdana, arial, helvetica" size="2">For the JBossSX
+default security manager implementation, shown in Figure 5 as the <code>JaasSecurityMgr</code>
+component, security checks are based on the information associated with
+the <code>javax.security.auth.Subject</code> instance. That instance
+results from executing the JAAS login modules configured under the name
+matching the <code>security-domain</code> element value. We will drill
+into the <code>JaasSecurityManager</code> implementation and its use
+of JAAS in the following sections. </font></p>
+<h2> The JAAS in
+JaasSecurityManager<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">The default JBossSX
+security manager implementation <code>org.jboss.security.plugins.JaasSecurityManager</code>
+uses the JAAS packages to implement its behavior. In particular, its
+behavior derives from the login module (<code>javax.security.auth.spi.LoginModule</code>)
+whose configuration entry name matches the security domain to which the
+<code>JaasSecurityManager</code>
+has been assigned. The login module implements the security domain's
+principal authentication and role-mapping behavior. Hence, you can use
+the <code>JaasSecurityManager</code> across different security domains
+simply by plugging in different login module configurations for the
+domains. </font></p>
+<h2> The
+security check<font face="verdana, arial, helvetica" size="2"><strong> </strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">Consider a client
+that invokes a method on an EJB configured to use a <code>JaasSecurityManager</code>
+instance for security. Figure 6 illustrates some components involved in
+the security check; the security check's key steps are outlined below
+the figure.
+</font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas6.gif" target="new_window"><img
+ alt="Figure 6" src="images/jw-0831-jaas6_sml.gif"
+ style="border: 2px solid ; width: 175px; height: 247px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 6. EJB access authentication
+procedure<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<ol>
+  <font face="verdana, arial, helvetica" size="2"> <li>The
+client first has to perform a JAAS login to establish the principal and
+credentials for authentication, which is how clients establish their
+login identities in JBoss. Support for presenting the login information
+via the JNDI <code>InitialContext</code> properties is not provided. A
+JAAS login entails creating a <code>javax.security.auth.login.LoginContext</code>
+instance and passing the configuration's name to use. In Figure 6, the
+configuration name is <em>other</em>.
+This one-time login associates the login principal and credentials with
+all subsequent EJB method invocations. Note that the process might not
+authenticate the user. The nature of the client-side login depends on
+the login module configuration that the client uses. In Figure 6, the <em>other</em>
+client-side login configuration entry is set up to use the <code>ClientLoginModule</code>
+(<code>org.jboss.security.ClientLoginModule</code>);
+that module does not perform client-side authentication, but simply
+binds the username and password to the JBoss EJB invocation layer for
+later authentication on the server.</li>
+  </font> <li><font face="verdana, arial, helvetica" size="2">Later,
+the
+client obtains an EJB's home interface and attempts to create a bean,
+resulting in a home interface method invocation sent to the JBoss
+server. The invocation includes the method arguments passed by the
+client along with the user identity and credentials from the
+client-side JAAS login.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">On the server
+side, the security check first requires authentication of the user
+invoking the call, which, as on the client side, involves a JAAS login.
+The security domain under which the EJB is secured determines the
+choice of login modules. The security domain's name is used as the
+login configuration entry name passed to the <code>LoginContext</code>
+constructor. In Figure 6, the EJB security domain is <code>jwdomain</code>.
+If the JAAS login authenticates the user, a JAAS <code>Subject</code>
+is created that contains the following in its <code>PrincipalsSet</code>:</font>
+    <ul>
+      <font face="verdana, arial, helvetica" size="2"> <li>A <code>java.security.Principal</code>
+that corresponds to the client identity.</li>
+      </font> <li><font face="verdana, arial, helvetica" size="2">A <code>java.security.acl.Group</code>
+named <code>Roles</code> that contains the role names from the
+application domain to which the user has been assigned. <code>org.jboss.security.SimplePrincipal</code>
+objects are used to represent the role names; <code>SimplePrincipal</code>
+is a simple string-based implementation of <code>Principal</code>.
+These roles are used to validate the roles assigned to methods in <code>ejb-jar.xml</code>
+and the <code>EJBContext.isCallerInRole(String)</code> method.</font></li>
+      <li><font face="verdana, arial, helvetica" size="2">An optional <code>java.security.acl.Group</code>
+named <code>CallerPrincipal</code>, which contains a single <code>org.jboss.security.SimplePrincipal</code>
+that corresponds to the identity of the application domain's caller.
+The <code>CallerPrincipal</code> sole group member is the value
+returned by the <code>EJBContext.getCallerPrincipal()</code> method.
+The purpose of this mapping is to allow a <code>Principal</code> known
+in the deployment security environment to map to a <code>Principal</code>
+with a name known to the application. In the absence of a <code>CallerPrincipal</code>
+mapping the deployment security environment, <code>Principal</code>
+returns.</font></li>
+      <font face="verdana, arial, helvetica" size="2"> </font>
+    </ul>
+    <font face="verdana, arial, helvetica" size="2"> </font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The final step
+of the security check is to verify the authenticated user has
+permission to invoke the requested method. Doing this requires the
+following steps:</font>
+    <ol>
+      <font face="verdana, arial, helvetica" size="2"> <li>Obtain the
+names of the roles allowed to access the EJB method from the EJB
+container. The names are <code>ejb-jar.xml</code> descriptor <code>role-name</code>
+elements of all <code>method-permission</code> elements containing the
+invoked method. </li>
+      </font> <li><font face="verdana, arial, helvetica" size="2">If
+no roles
+have been assigned, then access to the method is denied. Otherwise, the
+        <code>JaasSecurityManager.doesUserHaveRole(Principal, Set)</code>
+method invokes to see if the caller principal has one of the assigned
+role names. The method iterates through the role names and checks if
+the user <code>javax.security.auth.Subject</code>'s <code>Roles</code>
+group contains a <code>SimplePrincipal</code> with the assigned role
+name. Access is allowed if any role name is a member of the <code>Roles</code>
+group; access is denied if none of the role names are members.</font></li>
+      <li><font face="verdana, arial, helvetica" size="2">If the EJB
+was
+configured with a custom security proxy, the method invocation is
+delegated to it. If the security proxy wants to deny access to the
+caller, it will throw a <code>SecurityException</code>. If no <code>SecurityException</code>
+is thrown, access to the EJB method is allowed; the <code>SecurityInterceptor</code>
+passes the method invocation to the next container interceptor.</font></li>
+      <font face="verdana, arial, helvetica" size="2"> </font>
+    </ol>
+    <font face="verdana, arial, helvetica" size="2"> </font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font>
+</ol>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<p><font face="verdana, arial, helvetica" size="2">Note that you can
+configure the <code>JaasSecurityManager</code>
+to use a cache of authentication information so that a JAAS login is
+not performed on every method invocation. If no cache is specified in
+the <code>JaasSecurityManager</code>'s configuration, a timed cache is
+used by default.<!-- break --> </font></p>
+<h2>
+JBossSX custom login modules<font face="verdana, arial, helvetica"
+ size="2"><font size="+1"><strong> </strong></font></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">As shown above, the
+JBossSX security manager relies on the JAAS login
+modules for a security domain for authentication and authorization. The
+security manager authorizes users with the information stored in the <code>Subject</code>.
+If the <code>LoginModule</code>s that ship with the JBoss server do
+not integrate into your existing security infrastructure, you can write
+a custom <code>LoginModule</code> that does. Writing a custom login
+module entails mapping your security infrastructure information onto a <code>javax.security.auth.Subject</code>
+using the usage pattern expected by JBossSX. </font></p>
+<h3> JBossSX
+Subject usage patterns<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h3>
+<p><font face="verdana, arial, helvetica" size="2">The JBossSX security
+manager inside the JBoss application server
+executes the login modules used by a security domain. Since these
+modules run inside the JBoss server, they are called <em>server-side
+login modules.</em> When you write a custom <code>LoginModule</code>,
+you write a server-side login module. To understand how server-side
+login modules are used in JBoss, you need to understand the JAAS <code>Subject</code>
+class's information storage features. You can obtain security
+information associated with a <code>Subject</code> in six ways:</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li><code>java.util.Set
+getPrincipals()</code></li>
+  <li><code>java.util.Set getPrincipals(java.lang.Class c)</code></li>
+  <li><code>java.util.Set getPrivateCredentials()</code></li>
+  <li><code>java.util.Set getPrivateCredentials(java.lang.Class c)</code></li>
+  <li><code>java.util.Set getPublicCredentials()</code></li>
+  <li><code>java.util.Set getPublicCredentials(java.lang.Class c)</code></li>
+  </font>
+</ul>
+<p><font face="verdana, arial, helvetica" size="2">For <code>Subject</code>
+identities and roles, JBossSX has selected the most natural choice: the
+<code>PrincipalsSet</code> obtained via <code>getPrincipals()</code>
+and <code>getPrincipals(java.lang.Class)</code>. The usage pattern
+follows:</font></p>
+<p><font face="verdana, arial, helvetica" size="2">User identities
+(username, social security number, employee ID, and so on) are stored
+as <code>java.security.Principal</code> objects in the <code>Subject
+Principals</code> set. The assigned user roles are also stored in the <code>Principal</code>s
+set, but in named role sets using <code>java.security.acl.Group</code>
+instances. The <code>Group</code> interface -- a collection of <code>Principal</code>s
+and/or <code>Group</code>s -- is a subinterface of <code>java.security.Principal</code>.
+Any number of role sets can be assigned to a <code>Subject</code>.
+Currently, the JBossSX framework uses two well-known role sets: <code>Roles</code>
+and <code>CallerPrincipal</code>. The <code>Roles</code> set is the <code>Principal</code>
+set for the named roles as known in the application domain under which
+the <code>Subject</code> has been authenticated. This role set is used
+by methods like the <code>EJBContext.isCallerInRole(String)</code>,
+which EJBs use to see if the current caller belongs to the named
+application domain role. The security interceptor logic that performs
+method permission checks also uses the role set. The <code>CallerPrincipal</code>
+role set consists of the single <code>Principal</code> identity
+assigned to the user in the application domain. The <code>EJBContext.getCallerPrincipal()</code>
+method uses <code>CallerPrincipal</code>
+to allow the application domain to map from the operation environment
+identity to a user identity suitable for the application. If a <code>Subject</code>
+does not have a <code>CallerPrincipal</code> role set, the application
+identity is the operational environment identity.
+</font></p>
+<h3> Support for
+the Subject usage pattern<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h3>
+<p><font face="verdana, arial, helvetica" size="2">To simplify correct
+implementation of the <code>Subject</code>
+usage patterns described in the preceding section, JBossSX includes an
+abstract login module that handles the population of the authenticated <code>Subject</code>
+with a template pattern. The <code>org.jboss.security.auth.spi.AbstractLoginModule</code>
+class provides concrete implementations of the <code>javax.security.auth.spi.LoginModule</code>
+interface and offers abstract methods for the key tasks specific to an
+operation environment security infrastructure. The key details of the
+class are: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+package org.jboss.security.auth.spi;<br>
+<br>
+/** This class implements the common functionality required for a JAAS<br>
+server-side LoginModule and implements the JBossSX standard Subject
+usage<br>
+pattern of storing identities and roles. Subclass this module to create
+your<br>
+own custom LoginModule and override the login(), getRoleSets(), and
+getIdentity()<br>
+methods.<br>
+*/<br>
+public abstract class AbstractServerLoginModule<br>
+&nbsp;&nbsp;&nbsp;&nbsp; implements javax.security.auth.spi.LoginModule<br>
+{<br>
+&nbsp;&nbsp;&nbsp;&nbsp; protected Subject subject;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; protected CallbackHandler callbackHandler;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; protected Map sharedState;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; protected Map options;<br>
+<br>
+...<br>
+&nbsp;&nbsp;&nbsp;&nbsp; /** Initialize the login module. This stores
+the subject, callbackHandler<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; and sharedState, and
+options for the login session. Subclasses should override<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if they need to
+process their own options. A call to super.initialize(...)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; must be made in the
+case of an override.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @param subject, the Subject to update after a
+successful login.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @param callbackHandler, the CallbackHandler
+that will be used to obtain the<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; the user identity and
+credentials.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @param sharedState, a Map shared between all
+configured login module instances<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @param options,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; @option
+password-stacking: if true, the login identity will be taken from the<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+javax.security.auth.login.name value of the sharedState map, and<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; the proof of identity
+from the javax.security.auth.login.password<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; value of the
+sharedState map.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+&nbsp;&nbsp;&nbsp;&nbsp; public void initialize(Subject subject,
+CallbackHandler callbackHandler,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map sharedState, Map
+options)<br>
+&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
+&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; /** Looks for javax.security.auth.login.name
+and javax.security.auth.login.password<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; values in the
+sharedState map if the useFirstPass option was true and returns<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; true if they exist. If
+they do not or are null, this method returns false.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Subclasses should
+override to perform the required credential validation steps.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+&nbsp;&nbsp;&nbsp;&nbsp; public boolean login() throws LoginException<br>
+&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
+&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; /** Overridden by subclasses to return the
+Principal that corresponds to<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;the user primary identity.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+&nbsp;&nbsp;&nbsp;&nbsp; abstract protected Principal getIdentity();<br>
+&nbsp;&nbsp;&nbsp;&nbsp; /** Overridden by subclasses to return the
+Groups that correspond <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; to the role sets
+assigned to the user. Subclasses should create at<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; least a Group named
+"Roles" that contains the roles assigned to the user.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; A second common group
+is "CallerPrincipal," which provides the application<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; identity of the user
+rather than the security domain identity.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @return Group[] containing the sets of roles <br>
+&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+&nbsp;&nbsp;&nbsp;&nbsp; abstract protected Group[] getRoleSets()
+throws LoginException;<br>
+<br>
+}<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">As an alternate base
+login module, the <code>UsernamePasswordLoginModule</code> further
+simplifies custom login module implementation by using the string-based
+username as the user identity and the <code>char[]</code> password as
+the authentication credential. It also maps anonymous users (indicated
+by a null username and password) to a <code>Principal</code>. You
+would typically support anonymous users by setting the <code>Principal</code>
+that <code>EJBContext.getCallerPrincipal()</code> returns when an
+unsecure servlet or JavaServer Page (JSP) calls an EJB. The key methods
+of <code>UsernamePasswordLoginModule</code> are: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+package org.jboss.security.auth.spi;<br>
+<br>
+/** An abstract subclass of AbstractServerLoginModule that imposes a<br>
+&nbsp;&nbsp;an identity == String username, credentials == String
+password view on<br>
+&nbsp;&nbsp;the login process. Subclasses override the
+getUsersPassword()<br>
+&nbsp;&nbsp;and getUsersRoles() methods to return the expected password
+and roles<br>
+&nbsp;&nbsp;for the user.<br>
+&nbsp;&nbsp;*/<br>
+public abstract class UsernamePasswordLoginModule<br>
+&nbsp;&nbsp;&nbsp;&nbsp; extends AbstractServerLoginModule<br>
+{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;/** The login identity */<br>
+&nbsp;&nbsp;&nbsp;&nbsp;private Principal identity;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;/** The proof of login identity */<br>
+&nbsp;&nbsp;&nbsp;&nbsp;private char[] credential;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;/** The principal to use when a null username
+and password are seen */<br>
+&nbsp;&nbsp;&nbsp;&nbsp;private Principal unauthenticatedIdentity;<br>
+<br>
+...<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;/** Override the superclass method to look for
+an unauthenticatedIdentity<br>
+&nbsp;&nbsp;&nbsp;&nbsp; property. This method first invokes the super
+version.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @param options,<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @option unauthenticatedIdentity: the name of
+the principal to assign<br>
+&nbsp;&nbsp;&nbsp;&nbsp; and authenticate when a null username and
+password are seen.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+&nbsp;&nbsp;&nbsp;&nbsp;public void initialize(Subject subject,
+CallbackHandler callbackHandler,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Map sharedState, Map options)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; super.initialize(subject,
+callbackHandler, sharedState, options);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Check for
+unauthenticatedIdentity option.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; String name = (String)
+options.get("unauthenticatedIdentity");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if( name != null )<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;unauthenticatedIdentity
+= new SimplePrincipal(name);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+...<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;/** A hook that allows subclasses to change the
+validation of the input<br>
+&nbsp;&nbsp;&nbsp;&nbsp; password against the expected password. This
+version checks that<br>
+&nbsp;&nbsp;&nbsp;&nbsp; neither inputPassword or expectedPassword are
+null and that <br>
+&nbsp;&nbsp;&nbsp;&nbsp; inputPassword.equals(expectedPassword) is true;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @return true if the inputPassword is valid,
+false otherwise.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+&nbsp;&nbsp;&nbsp;&nbsp;protected boolean validatePassword(String
+inputPassword, String expectedPassword)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if( inputPassword == null ||
+expectedPassword == null )<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+false;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return
+inputPassword.equals(expectedPassword);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;/** Get the expected password for the current
+username available via<br>
+&nbsp;&nbsp;&nbsp;&nbsp; the getUsername() method. This is called from
+within the login()<br>
+&nbsp;&nbsp;&nbsp;&nbsp; method after the CallbackHandler has returned
+the username and<br>
+&nbsp;&nbsp;&nbsp;&nbsp; candidate password.<br>
+&nbsp;&nbsp;&nbsp;&nbsp; @return the valid password String<br>
+&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+&nbsp;&nbsp;&nbsp;&nbsp;abstract protected String getUsersPassword()
+throws LoginException;<br>
+}<br>
+</font></p>
+<h3> Write a
+custom login module<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h3>
+<p><font face="verdana, arial, helvetica" size="2">When writing a
+custom login module that integrates with your security
+infrastructure, you should start by subclassing <code>org.jboss.security.auth.spi.AbstractLoginModule</code>
+or one of its subclasses to ensure that your login module provides the
+authenticated <code>Principal</code> information in the form expected
+by the JBossSX security manager. When subclassing the <code>AbstractLoginModule</code>,
+you need to override:</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li><code>void
+initialize(Subject, CallbackHandler, Map, Map)</code> if you have
+custom options to parse.</li>
+  </font> <li><code><font face="verdana, arial, helvetica" size="2">boolean
+login()</font></code><font face="verdana, arial, helvetica" size="2">
+to perform the authentication activity.</font></li>
+  <li><code><font face="verdana, arial, helvetica" size="2">Principal
+getIdentity()</font></code><font face="verdana, arial, helvetica"
+ size="2"> to return the <code>Principal</code> object for the user
+authenticated by the <code>log()</code> step.</font></li>
+  <li><code><font face="verdana, arial, helvetica" size="2">Group[]
+getRoleSets()</font></code><font face="verdana, arial, helvetica"
+ size="2"> to return at least a <code>Group</code> named <code>Roles</code>
+that contains the roles assigned to the <code>Principal</code>
+authenticated during <code>login()</code>. A second common group is <code>CallerPrincipal</code>;
+it provides, if necessary, the user's application identity rather than
+the security domain identity.</font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font>
+</ul>
+<p><font face="verdana, arial, helvetica" size="2">When subclassing the
+<code> UsernamePasswordLoginModule</code>, a subclass of <code>AbstractLoginModule</code>,
+write:</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li><code>void
+initialize(Subject, CallbackHandler, Map, Map)</code> if you have
+custom options to parse.</li>
+  </font> <li><code><font face="verdana, arial, helvetica" size="2">String
+getUsersPassword()</font></code><font face="verdana, arial, helvetica"
+ size="2"> to return the expected password for the current username
+available via the <code>getUsername()</code> method. The <code>getUsersPassword()
+    </code> method is called from within <code>login()</code> after
+the <code>CallbackHandler</code> returns the username and candidate
+password. </font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font> <li><code><font
+ face="verdana, arial, helvetica" size="2">Group[]
+getRoleSets()</font></code><font face="verdana, arial, helvetica"
+ size="2"> to return at least a <code>Group</code> named <code>Roles</code>
+that contains the roles assigned to the <code>Principal</code>
+authenticated during <code>login()</code>. A second group <code>CallerPrincipal</code>
+provides, if necessary, the user's application identity instead of the
+security domain identity.</font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font>
+</ul>
+<font face="verdana, arial, helvetica" size="2"><!-- break --> </font>
+<h1>An
+example<font face="verdana, arial, helvetica" size="2"><font size="+1"><strong>
+</strong></font></font></h1>
+<p><font face="verdana, arial, helvetica" size="2">Want to see the
+security features in action? The source code for the
+example is included in the article archive in the jw-0831-jaas/example
+directory and I'll walk you through it. You will set up and
+deploy the example to a JBoss/Tomcat 3.2.1 bundle. You'll also look at
+the application from the secure and unsecured servlet accessing a
+secured EJB to demonstrate many of the security features presented in
+this article. To deploy the example application:</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li>You need the
+Ant build tool. If you don't already have it, see the <a
+ href="#AntHome">Ant homepage</a>. I am using 1.5.4.<br>
+  </li>
+  </font> <li><font face="verdana, arial, helvetica" size="2">Next,
+download
+the JBoss/Tomcat 3.2.3 bundle from <a href="#JBossOnSourceforge">SourceForge</a>
+and unarchive it. At the time of this writing, the current JBoss/Tomcat
+bundle is<code></code> <a
+ href="http://prdownloads.sourceforge.net/jboss/jboss-3.2.3.zip?download">jboss-3.2.3.zip</a>
+and it unarchives
+to create a <code><span style="font-family: verdana,arial,helvetica;">jboss-3.2.3</span></code>
+directory.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The examples are
+located in the jw-0831-jaas/example subdirectory of this archive.</font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font> <li><font
+ face="verdana, arial, helvetica" size="2">Edit the <code>jboss.dist</code>
+property that specifies the JBoss/Tomcat bundle location in the <code>build.xml</code>
+file, or override the property on the command line to Ant by creating
+an <code>ant.properties</code> file in the examples root directory.
+The default location is <code>/tmp/</code></font><font
+ face="verdana, arial, helvetica" size="2"><code><span
+ style="font-family: verdana,arial,helvetica;">jboss-3.2.3</span></code></font><font
+ face="verdana, arial, helvetica" size="2"><code></code>, so
+if you unarchive the JBoss/Tomcat bundle in your <code>/tmp</code>
+directory, you're ready to go.</font></li>
+  <font face="verdana, arial, helvetica" size="2"> <li>Build and
+deploy the example ears by running Ant within the example directory.
+Your output should look something like this: <code></code>
+    <p><br>
+[starksm@dedicated74 example]$ ant<br>
+Buildfile: build.xml<br>
+    <br>
+validate:<br>
+    <br>
+fail_if_not_valid:<br>
+    <br>
+init:<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [echo] Using jboss.dist=/tmp/jboss-3.2.3<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [echo] Using
+classpath=/tmp/jboss-3.2.3/client/jbossall-client.jar:/tmp/jboss-3.2.3/server/default/lib/javax.servlet.jar:/tmp/jaashowto/example/output/classes<br>
+    <br>
+compile:<br>
+&nbsp;&nbsp;&nbsp; [mkdir] Created dir:
+/tmp/jaashowto/example/output/classes<br>
+&nbsp;&nbsp;&nbsp; [javac] Compiling 7 source files to
+/tmp/jaashowto/example/output/classes<br>
+    <br>
+jar1:<br>
+&nbsp;&nbsp;&nbsp; [mkdir] Created dir:
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [jar] Building jar:
+/tmp/jaashowto/example/output/ssbean1.jar<br>
+    <br>
+war1:<br>
+&nbsp;&nbsp;&nbsp; [mkdir] Created dir:
+/tmp/jaashowto/example/output/web/WEB-INF/classes/org/jboss/docs/jaas/howto<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/web/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/web/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/web/WEB-INF/classes/org/jboss/docs/jaas/howto<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [jar] Building jar:
+/tmp/jaashowto/example/output/tutorial1.war<br>
+    <br>
+ear1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [jar] Building jar:
+/tmp/jaashowto/example/output/tutorial1.ear<br>
+    <br>
+jar2:<br>
+&nbsp;&nbsp; [delete] Deleting directory
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp; [mkdir] Created dir:
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [jar] Building jar:
+/tmp/jaashowto/example/output/ssbean2.jar<br>
+    <br>
+war2:<br>
+&nbsp;&nbsp; [delete] Deleting directory
+/tmp/jaashowto/example/output/web<br>
+&nbsp;&nbsp;&nbsp; [mkdir] Created dir:
+/tmp/jaashowto/example/output/web/WEB-INF/classes/org/jboss/docs/jaas/howto<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/web/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/web/WEB-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/web/WEB-INF/classes/org/jboss/docs/jaas/howto<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [jar] Building jar:
+/tmp/jaashowto/example/output/tutorial2.war<br>
+    <br>
+ear2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jaashowto/example/output/META-INF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [jar] Building jar:
+/tmp/jaashowto/example/output/tutorial2.ear<br>
+    <br>
+ears:<br>
+&nbsp;&nbsp;&nbsp; [mkdir] Created dir:
+/tmp/jboss-3.2.3/server/jaas_howto<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 130 files to
+/tmp/jboss-3.2.3/server/jaas_howto<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jboss-3.2.3/server/jaas_howto/conf<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jboss-3.2.3/server/jaas_howto/deploy<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [copy] Copying 1 file to
+/tmp/jboss-3.2.3/server/jaas_howto/deploy<br>
+    <br>
+BUILD SUCCESSFUL<br>
+Total time: 4 secondsTotal time: 2 seconds</p>
+  </li>
+  <li>
+    <p>If you see something similar to this: <code></code></p>
+    <p><br>
+[starksm@banshee example]$ ant<br>
+Buildfile: build.xml<br>
+    <br>
+validate:<br>
+    <br>
+fail_if_not_valid:<br>
+    <br>
+BUILD FAILED<br>
+file:/tmp/jaashowto/example/build.xml:28:
+jboss.dist=/tmp/jboss-3.2.3 is not a valid JBoss dist directory<br>
+    <br>
+    </p>
+    <p>you need to correct the <code>jboss.dist</code> property's
+value
+in the Ant <code>build.xml</code> file in the example directory as
+indicated in the previous step. </p>
+  </li>
+&lt;&gt;Now start the JBoss server with the <code>jaas_howto</code>
+configuration, which contains the JAAS login configuration file and was
+created by the Ant build process. To start JBoss, go to the <code>jboss-3.2.3/bin</code>
+directory and execute the <code>run.sh</code> or <code>run.bat</code>
+script as appropriate for your operating system, passing in the <code>jaas_howto
+  </code>config name. Here's an example from a Linux system with key
+output <em>emphasized:</em> <code></code> &lt;&gt;<br>
+  <em><br>
+  </em><span style="font-style: italic;">[starksm@dedicated74 bin]$
+./run.sh -c jaas_howto</span><br>
+================================================================================<br>
+  <br>
+&nbsp; JBoss Bootstrap Environment<br>
+  <br>
+&nbsp; JBOSS_HOME: /tmp/jboss-3.2.3<br>
+  <br>
+&nbsp; JAVA: /usr/java/j2sdk1.4.2_04/bin/java<br>
+  <br>
+&nbsp; JAVA_OPTS: -server -Dprogram.name=run.sh<br>
+  <br>
+&nbsp; CLASSPATH:
+/tmp/jboss-3.2.3/bin/run.jar:/usr/java/j2sdk1.4.2_04/lib/tools.jar<br>
+  <br>
+================================================================================<br>
+  <br>
+23:19:41,847 INFO&nbsp; [Server] Starting JBoss (MX MicroKernel)...<br>
+23:19:41,849 INFO&nbsp; [Server] Release ID: JBoss [WonderLand] 3.2.3
+(build: CVSTag=JBoss_3_2_3 date=200311301445)<br>
+23:19:41,850 INFO&nbsp; [Server] Home Dir: /tmp/jboss-3.2.3<br>
+23:19:41,850 INFO&nbsp; [Server] Home URL: file:/tmp/jboss-3.2.3/<br>
+23:19:41,850 INFO&nbsp; [Server] Library URL: file:/tmp/jboss-3.2.3/lib/<br>
+23:19:41,851 INFO&nbsp; [Server] Patch URL: null<br>
+23:19:41,852 INFO&nbsp; [Server] Server Name: jaas_howto<br>
+23:19:41,852 INFO&nbsp; [Server] Server Home Dir:
+/tmp/jboss-3.2.3/server/jaas_howto<br>
+23:19:41,852 INFO&nbsp; [Server] Server Home URL:
+file:/tmp/jboss-3.2.3/server/jaas_howto/<br>
+23:19:41,853 INFO&nbsp; [Server] Server Data Dir:
+/tmp/jboss-3.2.3/server/jaas_howto/data<br>
+23:19:41,853 INFO&nbsp; [Server] Server Temp Dir:
+/tmp/jboss-3.2.3/server/jaas_howto/tmp<br>
+23:19:41,854 INFO&nbsp; [Server] Server Config URL:
+file:/tmp/jboss-3.2.3/server/jaas_howto/conf/<br>
+23:19:41,854 INFO&nbsp; [Server] Server Library URL:
+file:/tmp/jboss-3.2.3/server/jaas_howto/lib/<br>
+23:19:41,854 INFO&nbsp; [Server] Root Deployment Filename:
+jboss-service.xml<br>
+23:19:41,860 INFO&nbsp; [Server] Starting General Purpose Architecture
+(GPA)...<br>
+23:19:42,276 INFO&nbsp; [ServerInfo] Java version: 1.4.2_04,Sun
+Microsystems Inc.<br>
+23:19:42,276 INFO&nbsp; [ServerInfo] Java VM: Java HotSpot(TM) Server
+VM 1.4.2_04-b05,Sun Microsystems Inc.<br>
+23:19:42,276 INFO&nbsp; [ServerInfo] OS-System: Linux 2.4.20-9smp,i386<br>
+23:19:42,323 INFO&nbsp; [ServiceController] Controller MBean online<br>
+23:19:42,417 INFO&nbsp; [MainDeployer] Started
+jboss.system:service=MainDeployer<br>
+...<br>
+  <em><br>
+23:20:00,702 INFO&nbsp; [MainDeployer] Starting deployment of package:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial1.ear<br>
+23:20:00,704 INFO&nbsp; [EARDeployer] Init J2EE application:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial1.ear<br>
+23:20:01,478 INFO&nbsp; [EjbModule] Deploying PublicSession<br>
+23:20:01,579 INFO&nbsp; [JaasSecurityManagerService] Created
+securityMgr=org.jboss.security.plugins.JaasSecurityManager@490342<br>
+23:20:01,580 INFO&nbsp; [JaasSecurityManagerService] setCachePolicy,
+c=org.jboss.util.TimedCachePolicy@1751a9e<br>
+23:20:01,581 INFO&nbsp; [JaasSecurityManagerService] Added example1,
+org.jboss.security.plugins.SecurityDomainContext@126ba64 to map<br>
+23:20:01,688 INFO&nbsp; [EjbModule] Deploying PrivateSession<br>
+23:20:01,934 INFO&nbsp; [StatelessSessionInstancePool] Started
+jboss.j2ee:jndiName=example1/PublicSession,plugin=pool,service=EJB<br>
+23:20:01,935 INFO&nbsp; [StatelessSessionContainer] Started
+jboss.j2ee:jndiName=example1/PublicSession,service=EJB<br>
+23:20:01,945 INFO&nbsp; [StatefulSessionInstancePool] Started
+jboss.j2ee:jndiName=example1/PrivateSession,plugin=pool,service=EJB<br>
+23:20:01,945 INFO&nbsp; [StatefulSessionFilePersistenceManager] Started
+null<br>
+23:20:01,945 INFO&nbsp; [StatefulSessionContainer] Started
+jboss.j2ee:jndiName=example1/PrivateSession,service=EJB<br>
+23:20:01,946 INFO&nbsp; [EjbModule] Started
+jboss.j2ee:module=ssbean1.jar,service=EjbModule<br>
+23:20:01,946 INFO&nbsp; [EJBDeployer] Deployed:
+file:/tmp/jboss-3.2.3/server/jaas_howto/tmp/deploy/tmp29859tutorial1.ear-contents/ssbean1.jar<br>
+23:20:02,144 INFO&nbsp; [EmbeddedTomcatService] deploy,
+ctxPath=/jaas-example1,
+warUrl=file:/tmp/jboss-3.2.3/server/jaas_howto/tmp/deploy/tmp29859tutorial1.ear-contents/tutorial1.war/<br>
+23:20:02,475 INFO&nbsp; [Engine]
+SingleSignOnContextConfig[/jaas-example1]: Added certificates -&gt;
+request attribute Valve<br>
+23:20:02,476 INFO&nbsp; [Engine]
+SingleSignOnContextConfig[/jaas-example1]: Configured an authenticator
+for method BASIC<br>
+23:20:02,502 WARN&nbsp; [EmbeddedTomcatService] Unable to invoke
+setDelegate on class
+loader:org.jboss.web.tomcat.tc4.WebCtxLoader$ENCLoader@a937cd<br>
+23:20:02,502 INFO&nbsp; [Engine] StandardManager[/jaas-example1]:
+Seeding random number generator class java.security.SecureRandom<br>
+23:20:02,503 INFO&nbsp; [Engine] StandardManager[/jaas-example1]:
+Seeding of random number generator has been completed<br>
+23:20:02,504 INFO&nbsp; [Engine]
+StandardWrapper[/jaas-example1:default]: Loading container servlet
+default<br>
+23:20:02,505 INFO&nbsp; [Engine]
+StandardWrapper[/jaas-example1:invoker]: Loading container servlet
+invoker<br>
+23:20:03,020 INFO&nbsp; [EARDeployer] Started J2EE application:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial1.ear<br>
+23:20:03,020 INFO&nbsp; [MainDeployer] Deployed package:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial1.ear<br>
+23:20:03,021 INFO&nbsp; [MainDeployer] Starting deployment of package:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial2.ear<br>
+23:20:03,022 INFO&nbsp; [EARDeployer] Init J2EE application:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial2.ear<br>
+23:20:03,387 INFO&nbsp; [EjbModule] Deploying PublicSession<br>
+23:20:03,408 INFO&nbsp; [JaasSecurityManagerService] Created
+securityMgr=org.jboss.security.plugins.JaasSecurityManager@a6d35<br>
+23:20:03,409 INFO&nbsp; [JaasSecurityManagerService] setCachePolicy,
+c=org.jboss.util.TimedCachePolicy@87d472<br>
+23:20:03,409 INFO&nbsp; [JaasSecurityManagerService] Added example2,
+org.jboss.security.plugins.SecurityDomainContext@18ca663 to map<br>
+23:20:03,413 INFO&nbsp; [EjbModule] Deploying PrivateSession<br>
+23:20:03,449 INFO&nbsp; [StatelessSessionInstancePool] Started
+jboss.j2ee:jndiName=example2/PublicSession,plugin=pool,service=EJB<br>
+23:20:03,449 INFO&nbsp; [StatelessSessionContainer] Started
+jboss.j2ee:jndiName=example2/PublicSession,service=EJB<br>
+23:20:03,461 INFO&nbsp; [StatefulSessionInstancePool] Started
+jboss.j2ee:jndiName=example2/PrivateSession,plugin=pool,service=EJB<br>
+23:20:03,462 INFO&nbsp; [StatefulSessionFilePersistenceManager] Started
+null<br>
+23:20:03,462 INFO&nbsp; [StatefulSessionContainer] Started
+jboss.j2ee:jndiName=example2/PrivateSession,service=EJB<br>
+23:20:03,462 INFO&nbsp; [EjbModule] Started
+jboss.j2ee:module=ssbean2.jar,service=EjbModule<br>
+23:20:03,463 INFO&nbsp; [EJBDeployer] Deployed:
+file:/tmp/jboss-3.2.3/server/jaas_howto/tmp/deploy/tmp29860tutorial2.ear-contents/ssbean2.jar<br>
+23:20:03,614 INFO&nbsp; [EmbeddedTomcatService] deploy,
+ctxPath=/jaas-example2,
+warUrl=file:/tmp/jboss-3.2.3/server/jaas_howto/tmp/deploy/tmp29860tutorial2.ear-contents/tutorial2.war/<br>
+23:20:04,011 INFO&nbsp; [Engine]
+SingleSignOnContextConfig[/jaas-example2]: Added certificates -&gt;
+request attribute Valve<br>
+23:20:04,011 INFO&nbsp; [Engine]
+SingleSignOnContextConfig[/jaas-example2]: Configured an authenticator
+for method BASIC<br>
+23:20:04,034 WARN&nbsp; [EmbeddedTomcatService] Unable to invoke
+setDelegate on class
+loader:org.jboss.web.tomcat.tc4.WebCtxLoader$ENCLoader@2264da<br>
+23:20:04,034 INFO&nbsp; [Engine] StandardManager[/jaas-example2]:
+Seeding random number generator class java.security.SecureRandom<br>
+23:20:04,035 INFO&nbsp; [Engine] StandardManager[/jaas-example2]:
+Seeding of random number generator has been completed<br>
+23:20:04,037 INFO&nbsp; [Engine]
+StandardWrapper[/jaas-example2:default]: Loading container servlet
+default<br>
+23:20:04,038 INFO&nbsp; [Engine]
+StandardWrapper[/jaas-example2:invoker]: Loading container servlet
+invoker<br>
+23:20:04,520 INFO&nbsp; [EARDeployer] Started J2EE application:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial2.ear<br>
+23:20:04,521 INFO&nbsp; [MainDeployer] Deployed package:
+file:/tmp/jboss-3.2.3/server/jaas_howto/deploy/tutorial2.ear<br>
+  </em>...<br>
+23:20:04,805 INFO&nbsp; [Server] JBoss (MX MicroKernel) [3.2.3 (build:
+CVSTag=JBoss_3_2_3 date=200311301445)] Started in 22s:945ms <li>
+    <p> </p>
+    <br>
+  </li>
+  </font>
+</ul>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<h2> The
+tutorial1.ear contents<font face="verdana, arial, helvetica" size="2"><strong>
+</strong></font></h2>
+<p><font face="verdana, arial, helvetica" size="2"><code>tutorial1.ear</code>
+consists of a single Webpage, a secured
+servlet, an unsecured servlet, and two secured stateless session beans.
+As the servlet and session bean code is trivial, I'll leave its
+inspection as an exercise for you. The interesting aspect of the
+example is the deployment descriptors' security-related elements and
+the configuration of the JAAS login module associated with the security
+domain. <code>tutorial1.ear</code>'s contents are shown below with the
+security-related files <em><span style="font-weight: bold;">emphasized</span>:</em>
+<code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+tutorial1.ear <br>
++ META-INF<br>
+|-- MANIFEST.MF<br>
+|-- application.xml<br>
++ ssbean1.jar<br>
+|-- + META-INF<br>
+<span style="font-weight: bold;">|----- </span><em
+ style="font-weight: bold;">ejb-jar.xml</em><br
+ style="font-weight: bold;">
+<span style="font-weight: bold;">|----- </span><em
+ style="font-weight: bold;">jboss.xml</em><br style="font-weight: bold;">
+|-- + org/jboss/docs/jaas/howto<br>
+|----- Session.class<br>
+|----- SessionHome.class<br>
+|----- PrivateSessionBean.class<br>
+|----- PublicSessionBean.class<br>
+<span style="font-weight: bold;">|-- </span><em
+ style="font-weight: bold;">roles.properties</em><br
+ style="font-weight: bold;">
+<span style="font-weight: bold;">|-- </span><em
+ style="font-weight: bold;">users.properties</em><br
+ style="font-weight: bold;">
++ tutorial1.war<br>
+|-- + WEB-INF<br>
+<span style="font-weight: bold;">|----- </span><em
+ style="font-weight: bold;">web.xml</em><br style="font-weight: bold;">
+<span style="font-weight: bold;">|----- </span><em
+ style="font-weight: bold;">jboss-web.xml</em><br>
+|----+ classes/org/jboss/docs/jaas/howto<br>
+|------ EJBServlet.class<br>
+|-- index.html<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">We'll look at each
+file in turn.<span style="font-style: italic;"><span
+ style="font-weight: bold;"><br>
+</span></span></font></p>
+<h3>The
+tutorial1.ear/ssbean1.jar/META-INF/ejb-jar.xml descriptor</h3>
+<p><font face="verdana, arial, helvetica" size="2">The following <code>ejb-jar.xml</code>
+deployment descriptor declares
+the tutorial EJBs and their security requirements: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&lt;?xml version = "1.0" encoding = "UTF-8"?&gt;<br>
+&lt;!DOCTYPE ejb-jar<br>
+&nbsp;&nbsp; PUBLIC "-//Sun Microsystems, Inc.//DTD Enterprise
+JavaBeans 1.1//EN"<br>
+&nbsp;&nbsp; "http://java.sun.com/dtd/ejb-jar_2_0.dtd"&gt;<br>
+<br>
+&lt;ejb-jar&gt;<br>
+&nbsp;&nbsp; &lt;display-name&gt;SecurityTests&lt;/display-name&gt;<br>
+&nbsp;&nbsp; &lt;enterprise-beans&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A trivial
+stateless session echo bean&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-class&gt;org.jboss.docs.jaas.howto.PublicSessionBean&lt;/ejb-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;session-type&gt;Stateless&lt;/session-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;transaction-type&gt;Container&lt;/transaction-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-name&gt;ejb/PrivateSession&lt;/ejb-ref-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-link&gt;PrivateSession&lt;/ejb-link&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;EchoUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-link&gt;Echo&lt;/role-link&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-identity&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;run-as&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;InternalUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/run-as&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-identity&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/session&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A trivial
+stateful session echo bean&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PrivateSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-class&gt;org.jboss.docs.jaas.howto.PrivateSessionBean&lt;/ejb-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;session-type&gt;Stateful&lt;/session-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;transaction-type&gt;Container&lt;/transaction-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;InternalUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-link&gt;InternalUser&lt;/role-link&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/session&gt;<br>
+&nbsp;&nbsp; &lt;/enterprise-beans&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;assembly-descriptor&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Coder&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Echo&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;InternalUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/security-role&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Echo&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;*&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;InternalUser&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PrivateSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;*&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Coder&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;create&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;remove&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;method-permission&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;unchecked/&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;noop&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method-permission&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;exclude-list&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;Methods that
+cannot be used in this<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+deployment&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;method-name&gt;restricted&lt;/method-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/exclude-list&gt;<br>
+&nbsp;&nbsp; &lt;/assembly-descriptor&gt;<br>
+&lt;/ejb-jar&gt;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">Items of note
+include:</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li>The <code>security-role-ref</code>
+element is where the <code>PublicSession</code> bean declares an <code>EchoUser</code>
+role name, which links to the <code>Echo</code> role name. That
+element indicates that the <code>PublicSession</code> bean queries the
+    <code>EJBContext.isCallerInRole</code> with a <code>EchoUser</code>
+role name string.</li>
+  </font> <li><font face="verdana, arial, helvetica" size="2">The <code>security-identity/run-as/role-name
+InternalUser</code> declaration indicates that a principal with a role
+named <code>InternalUser</code> handles any EJB calls made by the <code>PublicSession</code>
+bean. </font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The <code>PrivateSession</code>
+bean declares an <code>InternalUser</code> role name to indicate that
+the bean queries the <code>EJBContext.isCallerInRole</code> with an <code>InternalUser</code>
+role name string.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">In the <code>assembly-descriptor</code>
+section, logical roles of <code>Echo</code>, <code>Coder</code>, and <code>InternalUser</code>
+are declared using <code>security-role</code> elements.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The <code>Echo</code>
+role receives permission to access any method in the <code>PublicSession</code>
+bean in the first <code>method-permission</code> element.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The <code>InternalUser</code>
+role receives permission to access any <code>PrivateSession</code>
+bean method in the second <code>method-permission</code> element.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The fourth <code>method-permission</code>
+element indicates that any authenticated user can call the <code>PublicSession
+noop</code> method with the <code>unchecked</code> element instead of
+a <code>role-name</code> element.</font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font> <li><font
+ face="verdana, arial, helvetica" size="2">The <code>exclude-list</code>
+element declares that no one can call the <code>PublicSession</code>
+restricted method.</font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font>
+</ul>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<h3>The
+tutorial1.ear/ssbean1.jar/META-INF/jboss.xml descriptor</h3>
+<font face="verdana, arial, helvetica" size="2">The code below is the
+JBoss-server-specific EJB deployment descriptor: <code></code></font>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;<br>
+<br>
+&lt;jboss&gt;<br>
+&nbsp;&nbsp; &lt;!-- All bean containers use this security manager by
+default --&gt;<br>
+&nbsp;&nbsp;
+&lt;security-domain&gt;java:/jaas/example1&lt;/security-domain&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;enterprise-beans&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PublicSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;jndi-name&gt;example1/PublicSession&lt;/jndi-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/session&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;session&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-name&gt;PrivateSession&lt;/ejb-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;jndi-name&gt;example1/PrivateSession&lt;/jndi-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp; &lt;/session&gt;<br>
+&nbsp;&nbsp; &lt;/enterprise-beans&gt;<br>
+<br>
+&lt;/jboss&gt;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">This descriptor
+indicates that the security manager located at the JNDI name <code>java:/jaas/example1</code>
+secures all EJBs in the <code>ssbean1.jar</code>. The JNDI name's
+final component (<code>example1</code>) determines which login modules
+are associated with the security domain. </font></p>
+<h3>The
+tutorial1.ear/ssbean1.jar/roles.properties, users.properties files</h3>
+<p><font face="verdana, arial, helvetica" size="2">The <code>org.jboss.security.auth.spi.UsersRolesLoginModule</code>
+custom JAAS login module shipped with the JBossSX framework uses the <code>roles.properties</code>
+and <code>users.properties</code>
+files. This simple login module uses Java properties format files for
+mapping usernames to passwords and usernames to roles names. The <code>roles.properties</code>
+file maps a username to one or more role names using the format <code>username[.RoleGroup]=role1_name[,role2_name,...]</code>.
+A <code>RoleGroup</code> names the <code>Group</code> that will be
+created to hold given roles. With no specified <code>RoleGroup</code>,
+it defaults to <code>Roles</code>. Here's the <code>roles.properties</code>
+file for the example: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+# roles.properties<br>
+java=Echo<br>
+duke=Java,Coder<br>
+java.CallerPrincipal=caller_java<br>
+duke.CallerPrincipal=caller_duke<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The code above maps
+the username <code>java</code> to the role name <code>Echo</code>
+under the <code><em>Roles</em> RoleGroup</code>, and the role name <code>caller_java</code>
+under the <code><em>CallerPrincipal</em> RoleGroup</code>. The <code>users.properties</code>
+file maps a username to a user password. Here's the <code>users.properties</code>
+file for the example: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+# users.properties<br>
+java=echoman<br>
+duke=javaman<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The above code maps
+the username <code>java</code> to the password <code>echoman</code>.<br>
+</font></p>
+<h3>The
+tutorial1.ear/tutorial1.war/WEB-INF/web.xml descriptor</h3>
+<p><font face="verdana, arial, helvetica" size="2">The following <code>web.xml</code>
+deployment descriptor declares the
+tutorial servlets and their EJB references and security requirements: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;<br>
+&lt;!DOCTYPE web-app<br>
+&nbsp;&nbsp; PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application
+2.2//EN"<br>
+&nbsp;&nbsp; "http://java.sun.com/j2ee/dtds/web-app_2_2.dtd"&gt;<br>
+<br>
+&lt;web-app&gt;<br>
+&nbsp;&nbsp; &lt;!-- ### Filters --&gt;<br>
+&nbsp;&nbsp; &lt;filter&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;filter-name&gt;JaasLoginFilter&lt;/filter-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A filter that does a
+JAAS login to establish the<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; identity to use for subsequent ejb calls.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;filter-class&gt;org.jboss.docs.jaas.howto.JaasLoginFilter&lt;/filter-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;init-param&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;param-name&gt;configName&lt;/param-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;param-value&gt;client-login&lt;/param-value&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/init-param&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;init-param&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;param-name&gt;username&lt;/param-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;param-value&gt;java&lt;/param-value&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/init-param&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;init-param&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;param-name&gt;password&lt;/param-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;param-value&gt;echoman&lt;/param-value&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/init-param&gt;<br>
+&nbsp;&nbsp; &lt;/filter&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;filter-mapping&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;filter-name&gt;JaasLoginFilter&lt;/filter-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;url-pattern&gt;/UnsecureServletWithLogin/*&lt;/url-pattern&gt;<br>
+&nbsp;&nbsp; &lt;/filter-mapping&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;!-- ### Servlets --&gt;<br>
+&nbsp;&nbsp; &lt;servlet&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-name&gt;SecureServlet&lt;/servlet-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-class&gt;org.jboss.docs.jaas.howto.EJBServlet&lt;/servlet-class&gt;<br>
+&nbsp;&nbsp; &lt;/servlet&gt;<br>
+&nbsp;&nbsp; &lt;servlet&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-name&gt;UnsecureServlet&lt;/servlet-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-class&gt;org.jboss.docs.jaas.howto.EJBServlet&lt;/servlet-class&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;run-as&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;The
+anoymous user role&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;nobody&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/run-as&gt;<br>
+&nbsp;&nbsp; &lt;/servlet&gt;<br>
+&nbsp;&nbsp; &lt;servlet&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-name&gt;UnsecureServletWithLogin&lt;/servlet-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A servlet whose
+mapping does not exist under the /restricted<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; context that &lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-class&gt;org.jboss.docs.jaas.howto.EJBServlet&lt;/servlet-class&gt;<br>
+&nbsp;&nbsp; &lt;/servlet&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;servlet-mapping&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-name&gt;SecureServlet&lt;/servlet-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;url-pattern&gt;/restricted/SecureServlet&lt;/url-pattern&gt;<br>
+&nbsp;&nbsp; &lt;/servlet-mapping&gt;<br>
+&nbsp;&nbsp; &lt;servlet-mapping&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-name&gt;UnsecureServlet&lt;/servlet-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;url-pattern&gt;/UnsecureServlet&lt;/url-pattern&gt;<br>
+&nbsp;&nbsp; &lt;/servlet-mapping&gt;<br>
+&nbsp;&nbsp; &lt;servlet-mapping&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;servlet-name&gt;UnsecureServletWithLogin&lt;/servlet-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;url-pattern&gt;/UnsecureServletWithLogin&lt;/url-pattern&gt;<br>
+&nbsp;&nbsp; &lt;/servlet-mapping&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;!-- ### Security --&gt;<br>
+&nbsp;&nbsp; &lt;security-constraint&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;web-resource-collection&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;web-resource-name&gt;Restricted&lt;/web-resource-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;description&gt;Declarative security tests&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;url-pattern&gt;/restricted/*&lt;/url-pattern&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;http-method&gt;HEAD&lt;/http-method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;http-method&gt;GET&lt;/http-method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;http-method&gt;POST&lt;/http-method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;http-method&gt;PUT&lt;/http-method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;http-method&gt;DELETE&lt;/http-method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/web-resource-collection&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;auth-constraint&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;role-name&gt;Echo&lt;/role-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/auth-constraint&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;user-data-constraint&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;no
+description&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;transport-guarantee&gt;NONE&lt;/transport-guarantee&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/user-data-constraint&gt;<br>
+&nbsp;&nbsp; &lt;/security-constraint&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;login-config&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;auth-method&gt;BASIC&lt;/auth-method&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;realm-name&gt;JAAS Tutorial
+Servlets&lt;/realm-name&gt;<br>
+&nbsp;&nbsp; &lt;/login-config&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A user allowed to
+invoke echo methods&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;role-name&gt;Echo&lt;/role-name&gt;<br>
+&nbsp;&nbsp; &lt;/security-role&gt;<br>
+&nbsp;&nbsp; &lt;security-role&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;description&gt;A user with no
+permissions&lt;/description&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;role-name&gt;nobody&lt;/role-name&gt;<br>
+&nbsp;&nbsp; &lt;/security-role&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;!-- ### EJB References (java:comp/env/ejb) --&gt;<br>
+&nbsp;&nbsp; &lt;ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-name&gt;ejb/SecuredEJB&lt;/ejb-ref-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp; &lt;/ejb-ref&gt;<br>
+&nbsp;&nbsp; &lt;ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-name&gt;ejb/PrivateEJB&lt;/ejb-ref-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;home&gt;org.jboss.docs.jaas.howto.SessionHome&lt;/home&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;remote&gt;org.jboss.docs.jaas.howto.Session&lt;/remote&gt;<br>
+&nbsp;&nbsp; &lt;/ejb-ref&gt;<br>
+<br>
+&lt;/web-app&gt; <br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The security items
+of note include:</font></p>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"> <li>The <code>security-constraint/web-resource-collection/url-pattern</code>
+element declaration indicates that all content under <code>/restricted</code>
+must be secured for the indicated HTTP methods.</li>
+  </font> <li><font face="verdana, arial, helvetica" size="2">The <code>auth-constraint/role-name</code>
+element indicates that only users with an <code>Echo</code> role can
+access the content under <code>/restricted</code>.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The <code>login-config/auth-method</code>
+element with the <code>BASIC</code> value indicates that <code>BASIC
+HTTP</code> authorization will authenticate users attempting to access
+content under <code>/restricted</code>.</font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font> <li><font
+ face="verdana, arial, helvetica" size="2">The <code>SecureServlet</code>
+requires authenticated access, since its <code>servlet-mapping/url-pattern</code>
+element is under the <code>/restricted</code> path.</font></li>
+  <li><font face="verdana, arial, helvetica" size="2">The
+    <code>JaasLoginFilter</code> servlet filter does a JAAS login to
+establish the
+caller identity given the the filter's username/passowrd init-param
+values using the JAAS login module configuration named by the
+configName init-param.<br>
+    </font></li>
+  <font face="verdana, arial, helvetica" size="2"> </font>
+</ul>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<h3>The
+tutorial1.ear/tutorial1.war/WEB-INF/jboss-web.xml descriptor</h3>
+<font face="verdana, arial, helvetica" size="2">Here is the
+JBoss-server-specific Web application deployment
+descriptor: <code></code></font>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;<br>
+<br>
+&lt;jboss-web&gt;<br>
+&nbsp;&nbsp;
+&lt;security-domain&gt;java:/jaas/example1&lt;/security-domain&gt;<br>
+<br>
+&nbsp;&nbsp; &lt;ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-name&gt;ejb/SecuredEJB&lt;/ejb-ref-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;jndi-name&gt;example1/PublicSession&lt;/jndi-name&gt;<br>
+&nbsp;&nbsp; &lt;/ejb-ref&gt;<br>
+&nbsp;&nbsp; &lt;ejb-ref&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;ejb-ref-name&gt;ejb/PrivateEJB&lt;/ejb-ref-name&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;jndi-name&gt;example1/PrivateSession&lt;/jndi-name&gt;<br>
+&nbsp;&nbsp; &lt;/ejb-ref&gt;<br>
+&lt;/jboss-web&gt; <br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">This code indicates
+that the security manager located at the JNDI name <code>java:/jaas/example1</code>
+handles security for all secured Web content. Since the <code>security-domain</code>
+element matches that used by the <code>jboss.xml</code> deployment
+descriptor, the same security manager secures the ear EJBs and Web
+content.<span style="font-style: italic;"><span
+ style="font-weight: bold;"><br>
+</span></span></font></p>
+<h3>The
+jboss-3.2.3/server/jaas_howto/conf/login-config.xml login
+configuration file</h3>
+<p><font face="verdana, arial, helvetica" size="2">The final
+security-related file is outside of <code>tutorial1.ear</code>.
+The <code>login-config.xml</code>
+file in the JBoss server configuration directory is the JAAS login
+configuration file. That file consists of named login configuration
+entries. Here's the version of <code>login-config.xml</code> that we
+will use
+for the tutorial: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+&lt;!-- The JBoss server side JAAS login config file for the examples
+--&gt;<br>
+&lt;policy&gt;</font></p>
+<p><font face="verdana, arial, helvetica" size="2">&nbsp;&nbsp;&nbsp;
+&lt;!-- Used by clients within the application server VM such as<br>
+&nbsp;&nbsp;&nbsp; mbeans and servlets that access EJBs.<br>
+&nbsp;&nbsp;&nbsp; --&gt;<br>
+&nbsp;&nbsp;&nbsp; &lt;application-policy name = "client-login"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;authentication&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;login-module
+code = "org.jboss.security.ClientLoginModule"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+flag = "required"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;/login-module&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/authentication&gt;<br>
+&nbsp;&nbsp;&nbsp; &lt;/application-policy&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp; &lt;application-policy name = "example1"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;authentication&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp; &lt;!--
+A properties file LoginModule that supports CallerPrincipal mapping<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; --&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;login-module
+code = "org.jboss.security.auth.spi.UsersRolesLoginModule"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+flag = "required"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;/login-module&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/authentication&gt;<br>
+&nbsp;&nbsp;&nbsp; &lt;/application-policy&gt;<br>
+<br>
+&nbsp;&nbsp;&nbsp; &lt;application-policy name = "example2"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;authentication&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &lt;!-- A JDBC
+based LoginModule<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; LoginModule options:<br>
+</font><font face="verdana, arial, helvetica" size="2">&nbsp; &nbsp;
+&nbsp; &nbsp; &nbsp; </font><font face="verdana, arial, helvetica"
+ size="2">&nbsp;&nbsp;&nbsp; dsJndiName: The name of the DataSource of
+the database containing the Principals, Roles tables<br>
+</font><font face="verdana, arial, helvetica" size="2">&nbsp; &nbsp;
+&nbsp; &nbsp; &nbsp; </font><font face="verdana, arial, helvetica"
+ size="2">&nbsp;&nbsp;&nbsp; principalsQuery: The prepared statement
+query equivalent to:<br>
+</font><font face="verdana, arial, helvetica" size="2">&nbsp; &nbsp;
+&nbsp; &nbsp; &nbsp; </font><font face="verdana, arial, helvetica"
+ size="2">&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; "select Password from
+Principals where PrincipalID=?"<br>
+</font><font face="verdana, arial, helvetica" size="2">&nbsp; &nbsp;
+&nbsp; &nbsp; &nbsp; </font><font face="verdana, arial, helvetica"
+ size="2">&nbsp;&nbsp;&nbsp; rolesQuery: The prepared statement query
+equivalent to:<br>
+</font><font face="verdana, arial, helvetica" size="2">&nbsp; &nbsp;
+&nbsp; &nbsp; &nbsp; </font><font face="verdana, arial, helvetica"
+ size="2">&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; "select Role, RoleGroup
+from Roles where PrincipalID=?"<br>
+</font><font face="verdana, arial, helvetica" size="2">&nbsp; &nbsp;
+&nbsp; &nbsp; &nbsp;&nbsp;</font><font face="verdana, arial, helvetica"
+ size="2"> --&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;login-module
+code = "org.jboss.security.auth.spi.DatabaseServerLoginModule"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+flag = "required"&gt;<br>
+&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp; &lt;module-option name =
+"dsJndiName"&gt;java:/DefaultDS&lt;/module-option&gt;<br>
+&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp; &lt;module-option name =
+"principalsQuery"&gt;select Password from Principals where
+PrincipalID=?&lt;/module-option&gt;<br>
+&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp; &lt;module-option name =
+"rolesQuery"&gt;select Role, RoleGroup from Roles where
+PrincipalID=?&lt;/module-option&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;/login-module&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/authentication&gt;<br>
+&nbsp;&nbsp;&nbsp; &lt;/application-policy&gt;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">&nbsp;&nbsp;&nbsp;
+&lt;!-- The security domain for the HSQLDB --&gt;<br>
+&nbsp;&nbsp;&nbsp; &lt;application-policy name = "HsqlDbRealm"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;authentication&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;login-module
+code = "org.jboss.resource.security.ConfiguredIdentityLoginModule"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+flag = "required"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;module-option name = "principal"&gt;sa&lt;/module-option&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;module-option name = "userName"&gt;sa&lt;/module-option&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;module-option name = "password"&gt;&lt;/module-option&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;module-option name =
+"managedConnectionFactoryName"&gt;jboss.jca:service=LocalTxCM,name=DefaultDS&lt;/module-option&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&lt;/login-module&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &lt;/authentication&gt;<br>
+&nbsp;&nbsp;&nbsp; &lt;/application-policy&gt;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">&lt;/policy&gt;<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">In the example file
+above, there are three entries, <code>example1</code>, <code>example2</code>
+and </font><code><font face="verdana, arial, helvetica" size="2">HsqlDbRealm</font></code><font
+ face="verdana, arial, helvetica" size="2">.
+The <code>example1</code> entry contains a single login module whose
+class name is <code>org.jboss.security.auth.spi.UsersRolesLoginModule</code>,
+which is required for successful authentication. The
+UsersRolesLoginModule login module uses the users.properties and
+roles.properties files included in the ear as discussed earlier. The
+example2 entry contains a single login module whose class name is </font><code><font
+ face="verdana, arial, helvetica" size="2">org.jboss.security.auth.spi.DatabaseServerLoginModule</font></code><font
+ face="verdana, arial, helvetica" size="2">. The </font><code><font
+ face="verdana, arial, helvetica" size="2">DatabaseServerLoginModule</font></code>
+configuration includes three login module options:<br>
+</p>
+<ul>
+  <li>dsJndiName: gives the JNDI name of the javax.sql.DataSource
+binding for the database to use</li>
+  <li>principalsQuery: the sql query used to obtain the principal,
+password value<br>
+  </li>
+  <li><font face="verdana, arial, helvetica" size="2">rolesQuery: the
+sql query used to obtain the princpal to role, role group name mapping.
+The role group name for the declarative roles must be 'Roles'. <br>
+    </font></li>
+</ul>
+<font face="verdana, arial, helvetica" size="2">The </font><font
+ face="verdana, arial, helvetica" size="2"><code>HsqlDbRealm</code>
+configuration defines how access to database connections are
+authorized. This configuration specifies that a fixed username and
+password are used by the JCA connection pools.<br>
+<br>
+</font>
+<h2>Test the
+tutorial1.ear deployment from Web Client</h2>
+<p><font face="verdana, arial, helvetica" size="2">The example's final
+step is to test that the security constraints do in
+fact work. If your browser runs on the same host as the JBoss server,
+launch your Web browser and open the Web application <code>index.html</code>
+file located at <a
+ href="http://localhost:8080/jaas-example1/index.html"><code>http://localhost:8080/jaas-example1/index.html</code></a>.
+Figure 7 shows what the Webpage should look like. Each link is a test
+case, with the expected result shown as <code>[PASS]</code> or <code>[FAIL]</code>
+based on the specified security. We'll walk through links 1 and 4 to
+verify both a passing and failing test.
+</font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas7.gif" target="new_window"><img
+ alt="Figure 7" src="images/jw-0831-jaas7.gif"
+ style="border: 0px solid ; width: 715px; height: 645px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 7. The tutorial1.ear index.html
+page<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">The first link
+corresponds to the call sequence illustrated in Figure 8. Each access
+or method invocation lists the role that the caller must possess for
+the access to be granted.
+</font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a href="images/jw-0831-jaas8.gif"><img alt="Figure 8"
+ src="images/jw-0831-jaas8_sml.gif"
+ style="border: 2px solid ; width: 225px; height: 125px;"></a><br>
+      </p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 8. The tutorial1.ear index.html
+page<br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">Traverse Link 1 to
+invoke the <code>SecureServlet</code> and enter <em>java</em> for the
+username and <em>echoman</em> as the password in the login dialog.
+Figure 9 shows the browser result. </font></p>
+<p>
+<table align="center" border="0" cellpadding="5">
+  <tbody>
+    <tr>
+      <td>
+      <center>
+      <p><a
+ href="http://www.devworld.com/microsites/javaworld/legacy/jw-08-2001/images/jw-0831-jaas9.gif"
+ target="new_window"><img alt="" src="images/jw-0831-jaas9.gif"
+ style="border: 0px solid ; width: 403px; height: 113px;" vspace="3"></a></p>
+      <p><br>
+      <font size="-1"><strong></strong></font></p>
+      <p><font size="-1"><strong>Figure 9. The expected browser result <br>
+Click on thumbnail to view full-size image. </strong></font></p>
+      </center>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+<p><font face="verdana, arial, helvetica" size="2">The JBoss server
+console should display the following output: <code></code></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+<samp>16:09:15,431 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:
+Security checking request GET /jaas-example1/restricted/SecureServlet<br>
+16:09:15,441 INFO&nbsp; [Engine]
+Authenticator[/jaas-example1]:&nbsp;&nbsp; Checking constraint
+'SecurityConstraint [Restricted]' against GET /restricted/SecureServlet
+--&gt; true<br>
+16:09:15,461 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Subject to constraint SecurityConstraint [Restricted]<br>
+16:09:15,481 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Calling checkUserData()<br>
+16:09:15,491 INFO&nbsp; [Engine]
+Authenticator[/jaas-example1]:&nbsp;&nbsp; User data constraint has no
+restrictions<br>
+16:09:15,511 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Calling authenticate()<br>
+16:09:15,711 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Failed authenticate() test<br>
+16:09:20,108 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:
+Security checking request GET /jaas-example1/restricted/SecureServlet<br>
+16:09:20,128 INFO&nbsp; [Engine]
+Authenticator[/jaas-example1]:&nbsp;&nbsp; Checking constraint
+'SecurityConstraint [Restricted]' against GET /restricted/SecureServlet
+--&gt; true<br>
+16:09:20,148 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Subject to constraint SecurityConstraint [Restricted]<br>
+16:09:20,168 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Calling checkUserData()<br>
+16:09:20,178 INFO&nbsp; [Engine]
+Authenticator[/jaas-example1]:&nbsp;&nbsp; User data constraint has no
+restrictions<br>
+16:09:20,188 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Calling authenticate()<br>
+16:09:20,228 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:
+Authenticated 'java' with type 'BASIC'<br>
+16:09:20,238 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Calling accessControl()<br>
+16:09:20,258 INFO&nbsp; [Engine] Authenticator[/jaas-example1]:&nbsp;
+Successfully passed all security constraints<br>
+16:09:20,268 INFO&nbsp; [Engine] StandardContext[/jaas-example1]:
+Mapping contextPath='/jaas-example1' wi<br>
+th requestURI='/jaas-example1/restricted/SecureServlet' and
+relativeURI='/restricted/SecureServlet'<br>
+16:09:20,288 INFO&nbsp; [Engine]
+StandardContext[/jaas-example1]:&nbsp;&nbsp; Trying exact match<br>
+16:09:20,298 INFO&nbsp; [Engine] StandardContext[/jaas-example1]:&nbsp;
+Mapped to servlet 'SecureServlet' with servlet path
+'/restricted/SecureServlet' and path info 'null' and update=true<br>
+16:09:20,398 INFO&nbsp; [STDOUT] PublicSessionBean.ejbCreate() called<br>
+16:09:20,408 INFO&nbsp; [STDOUT] PublicSessionBean.echo, arg=Hello<br>
+</samp><samp>16:09:20,418 INFO&nbsp; [STDOUT] PublicSessionBean.echo,
+callerPrincipal=caller_java<br>
+16:09:20,428 INFO&nbsp; [STDOUT] PublicSessionBean.echo,
+isCallerInRole('EchoUser')=true<br>
+16:09:20,438 INFO&nbsp; [STDOUT] PrivateSessionBean.ejbCreate() called<br>
+16:09:20,448 INFO&nbsp; [STDOUT] PublicSessionBean.echo, created
+PrivateSession<br>
+16:09:20,458 INFO&nbsp; [STDOUT] PrivateSessionBean.echo, arg=Hello<br>
+16:09:20,468 INFO&nbsp; [STDOUT] PrivateSessionBean.echo,
+callerPrincipal=caller_java<br>
+16:09:20,478 INFO&nbsp; [STDOUT] PrivateSessionBean.echo,
+isCallerInRole('InternalUser')=false</samp><br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The first </font><code><font
+ face="verdana, arial, helvetica" size="2">Failed authenticate() test</font></code><font
+ face="verdana, arial, helvetica" size="2"><code>.</code>
+line results because Tomcat tried to determine whether the servlet
+request had a remote user associated with it. That caused a query to
+the security manager with a null username and password, because the
+browser was not asked to provide any login information. The null
+username and password is rejected and this results in a 401 error which
+causes the browser to display the basic auth login dialog. The
+following&nbsp;<code></code></font><code><font
+ face="verdana, arial, helvetica" size="2">Authenticated 'java' with
+type 'BASIC'</font></code><font face="verdana, arial, helvetica"
+ size="2"><code></code> line is the result of the <code>HTTP
+BASIC</code> authorization login.</font></p>
+<p><font face="verdana, arial, helvetica" size="2">Note that <code>PrivateSessionBean.echo()</code>
+method's check to see if the caller has the <code>InternalUser</code>
+role returns false. This seemingly incorrect result is in accord with
+our interpretation of the <a href="#EJB20Spec">EJB 2.0 spec</a>,
+which states on page 439: </font></p>
+<blockquote><font face="verdana, arial, helvetica" size="2"> Note that <code>isCallerInRole(String
+roleName)</code>
+tests the principal that represents the caller of the enterprise bean,
+not the principal that corresponds to the run-as security identity for
+the bean, if any. </font></blockquote>
+<font face="verdana, arial, helvetica" size="2"> Now follow Link 4 to
+try to access the <code>PrivateSession</code> bean's echo method from
+the <code>SecureServlet</code>. That should fail, since only the <code>PublicSession</code>
+has been configured to run as the <code>InternalUser</code> role. You
+should see a 500 error and a root cause exception with the message: <code></code></font>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+java.lang.SecurityException: Insufficient method permissions,
+principal=java, method=create, interface=HOME,
+requiredRoles=[InternalUser], principalRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.SecurityInterceptor.checkSecurityAssociation(SecurityInterceptor.java:214)<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">This message
+verifies that the <code>method-permission</code> element, which
+required a <code>InternalUser</code> role, is enforced.<br>
+</font></p>
+<p><font face="verdana, arial, helvetica" size="2">The links under the
+'JBoss Unsecured Servlet with JAAS Login filter to EJB Tests' heading
+are to the UnsecureServletWithLogin mapping of the EJBServlet. These
+mappings use the JaasLoginFilter to perform a JAAS login at that start
+of the request using a username of java and a password of echoman, and
+a logout when the request completes.&nbsp;</font></p>
+<h2>Test the
+tutorial1.ear deployment from Java Client</h2>
+<h2><font face="verdana, arial, helvetica" size="2"><em><strong></strong></em></font></h2>
+<p><font face="verdana, arial, helvetica" size="2">There are three Ant
+targets for running test of a Java client accessing the session EJB:</font></p>
+<ol>
+  <li><font face="verdana, arial, helvetica" size="2">example1-test0
+this tests access with a valid username and password with a user who
+can access the PublicSession bean.<br>
+    </font></li>
+  <li><font face="verdana, arial, helvetica" size="2">example1-test1
+this tests access with a valid username and password with a user who
+does not have the correct roles to access the PublicSession bean.<br>
+    </font></li>
+  <li><font face="verdana, arial, helvetica" size="2">example1-test2
+this tests access with an invalid password.</font></li>
+</ol>
+<font face="verdana, arial, helvetica" size="2">All testcases run the
+org.jboss.docs.jaas.howto.SessionClient which does a JAAS login, and
+then creates a PublicSession instance and invokes the echo method on
+it. Next the SessionClient attempts to create an instance of the
+PrivateSession and asserts that this fails. The core code is shown here:<br>
+<code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; try<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; AppCallbackHandler
+handler = new AppCallbackHandler(name, password);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; LoginContext lc = new
+LoginContext("TestClient", handler);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("Created LoginContext");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; lc.login();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; catch (LoginException le)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("Login failed");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; le.printStackTrace();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; try<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; InitialContext
+iniContext = new InitialContext();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; SessionHome home =
+(SessionHome) iniContext.lookup(example + "/PublicSession");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("Found PublicSession home");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Session bean =
+home.create();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("Created PublicSession");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("Bean.echo('Hello') -&gt; " + bean.echo("Hello"));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; bean.remove();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; catch (Exception e)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; e.printStackTrace();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; try<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; InitialContext
+iniContext = new InitialContext();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; SessionHome home =
+(SessionHome) iniContext.lookup(example + "/PrivateSession");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("Found PrivateSession home");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Session bean =
+home.create();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; throw new
+IllegalStateException("Was able to create PrivateSession");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; catch (Exception e)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println("Failed to create PrivateSession as expected");<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }</code><br>
+</font>
+<h3>example1-test0</h3>
+The test example1-test0 accesses the PublicSession bean with a valid
+username and password with a user with the correct permissions. The
+expected client side output is shown here:<br>
+<br>
+<samp>[starksm@dedicated74 example]$ ant example1-test0<br>
+Buildfile: build.xml<br>
+<br>
+example1-test0:<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [echo] Using jboss.dist=/tmp/jboss-3.2.3<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [echo] Using
+classpath=/tmp/jboss-3.2.3/client/jbossall-client.jar:/tmp/jboss-3.2.3/server/default/lib/javax.servlet.jar:/tmp/jaashowto/example/output/classes<br>
+<br>
+compile:<br>
+<br>
+client-test0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [java] +++ Running SessionClient with
+username=java, password=echoman, example=example1<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [java] Created LoginContext<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [java] Found PublicSession home<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [java] Created PublicSession<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [java] Bean.echo('Hello') -&gt; Hello<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [java] Found PrivateSession home<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [java] Failed to create PrivateSession as
+expected<br>
+<br>
+BUILD SUCCESSFUL<br>
+</samp><br>
+The corresponding server side console output is:<br>
+<samp><br>
+07:41:47,762 INFO&nbsp; [STDOUT] PublicSessionBean.echo, arg=Hello<br>
+23:23:09,120 INFO&nbsp; [STDOUT] PublicSessionBean.ejbCreate() called<br>
+23:23:09,123 INFO&nbsp; [STDOUT] PublicSessionBean.echo, arg=Hello<br>
+23:23:09,124 INFO&nbsp; [STDOUT] PublicSessionBean.echo,
+callerPrincipal=caller_java<br>
+23:23:09,125 INFO&nbsp; [STDOUT] PublicSessionBean.echo,
+isCallerInRole('EchoUser')=true<br>
+23:23:09,131 INFO&nbsp; [STDOUT] PrivateSessionBean.ejbCreate() called<br>
+23:23:09,134 INFO&nbsp; [STDOUT] PublicSessionBean.echo, created
+PrivateSession<br>
+23:23:09,143 INFO&nbsp; [STDOUT] PrivateSessionBean.echo, arg=Hello<br>
+23:23:09,144 INFO&nbsp; [STDOUT] PrivateSessionBean.echo,
+callerPrincipal=caller_java<br>
+23:23:09,144 INFO&nbsp; [STDOUT] PrivateSessionBean.echo,
+isCallerInRole('InternalUser')=false<br>
+23:23:09,171 ERROR [SecurityInterceptor] Insufficient method
+permissions, principal=java, method=create, interface=HOME,
+requiredRoles=[InternalUser], principalRoles=[Echo]<br>
+23:23:09,175 ERROR [LogInterceptor] EJBException, causedBy:<br>
+java.lang.SecurityException: Insufficient method permissions,
+principal=java, method=create, interface=HOME,
+requiredRoles=[InternalUser], principalRoles=[Echo]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.SecurityInterceptor.checkSecurityAssociation(SecurityInterceptor.java:229)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.SecurityInterceptor.invokeHome(SecurityInterceptor.java:81)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.resource.connectionmanager.CachedConnectionInterceptor.invokeHome(CachedConnectionInterceptor.java:214)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.StatefulSessionInstanceInterceptor.invokeHome(StatefulSessionInstanceInterceptor.java:126)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.AbstractTxInterceptor.invokeNext(AbstractTxInterceptor.java:88)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.TxInterceptorCMT.runWithTransactions(TxInterceptorCMT.java:267)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.TxInterceptorCMT.invokeHome(TxInterceptorCMT.java:98)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.LogInterceptor.invokeHome(LogInterceptor.java:120)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.plugins.ProxyFactoryFinderInterceptor.invokeHome(ProxyFactoryFinderInterceptor.java:93)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.StatefulSessionContainer.internalInvokeHome(StatefulSessionContainer.java:404)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.ejb.Container.invoke(Container.java:720)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:39)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:25)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+java.lang.reflect.Method.invoke(Method.java:324)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.mx.capability.ReflectedMBeanDispatcher.invoke(ReflectedMBeanDispatcher.java:284)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.mx.server.MBeanServerImpl.invoke(MBeanServerImpl.java:546)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+org.jboss.invocation.jrmp.server.JRMPInvoker.invoke(JRMPInvoker.java:367)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:39)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:25)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+java.lang.reflect.Method.invoke(Method.java:324)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:261)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.rmi.transport.Transport$1.run(Transport.java:148)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+java.security.AccessController.doPrivileged(Native Method)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.rmi.transport.Transport.serviceCall(Transport.java:144)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:460)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:701)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; at
+java.lang.Thread.run(Thread.java:534)<br>
+</samp><br>
+<h3>Exploring</h3>
+<p>I encourage you to
+try the additional test cases in the tutorial1.ear
+example and investigate the second example, tutorial2.ear,
+which was created and deployed during the examples build. The
+tutorial2.ear
+example differs from tutorial1.ear only in its choice of
+security domain name and thus login module configuration. tutorial2.ear
+uses a Java Database Connectivity-based login module to demonstrate how
+to access security information from a database. The entry point for the
+tutorial2 web application is<font face="verdana, arial, helvetica"
+ size="2"> <a href="http://localhost:8080/jaas-example2/index.html">http://localhost:8080/jaas-example2/index.html</a>.<br>
+</font></p>
+<blockquote><span style="font-weight: bold;"></span><span
+ style="font-weight: bold;">Note 1</span>: Before you can use
+the tutorial2 web application successfully
+you must create the password and roles database. To do this, run the
+buildDB ant target with JBoss running the jaas_howto configuration. The
+JBoss
+server must NOT be running because the HSQLDB embedded database bundled
+with JBoss is configured to use a file only mode and the file would be
+locked if JBoss was running. Running the buildDB target
+should result in:<br>
+  <br>
+  <samp>[starksm@banshee example]$ ant buildDB<br>
+Buildfile: build.xml<br>
+  <br>
+validate:<br>
+  <br>
+fail_if_not_valid:<br>
+  <br>
+init:<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [echo] Using jboss.dist=/tmp/jboss-3.2.3<br>
+&nbsp;&nbsp;&nbsp;&nbsp; [echo] Using
+classpath=/tmp/jboss-3.2.3/client/jbossall-client.jar:/tmp/jboss-3.2.3/server/default/lib/javax.servlet.jar:/tmp/jaashowto/example/output/classes<br>
+  <br>
+compile:<br>
+  <br>
+buildDB:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [sql] Executing commands<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [sql] 11 of 11 SQL statements executed
+successfully<br>
+  <br>
+BUILD SUCCESSFUL</samp><br>
+</blockquote>
+<br>
+<p><font face="verdana, arial, helvetica" size="2"><font size="+1"><strong>
+Secure your J2EE apps </strong></font><br>
+Although the mapping of application security roles onto a application
+server deployment environment is currently a nonportable,
+application-server-specific task, this article has demonstrated how the
+standard JAAS security could be used to implement the J2EE declarative
+security model using a simple <code>Subject</code>-based
+usage pattern. Hopefully, future versions of J2EE will extend the
+portability of security closer to the deployment layer using similar
+techniques based on JAAS or equivalent standards-based APIs. This
+article has peered into the JBossSX security manager implementation of
+the J2EE declarative security model used by the JBoss EJB and Web
+containers. It focused on how the JAAS login modules configured for a
+security domain provide the security information via a <code>Subject</code>
+usage pattern. I also covered the steps required to create a custom
+login module for security infrastructures not supported by bundled
+JBossSX login modules. With this information, you can secure your
+enterprise applications either by configuring the login modules bundled
+with JBoss or by writing your own. <img src="images/jw-dingbat.gif"
+ height="12" width="22"></font></p>
+<p><font face="verdana, arial, helvetica" size="2"><br>
+</font></p>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<p><font face="verdana, arial, helvetica" size="2"><strong>About the
+author</strong><br>
+Scott Stark currently serves
+as
+the lead developer for the JBossSX security extension framework and CTO
+of the <a href="http://www.jboss.org">JBoss Group</a>.
+He has a Ph.D. in chemical engineering; the field where he started
+working with parallel/distributed computing on machines like the BBN
+TC2000 and CM2. Scott has been doing distributed computing for more
+than 10 years, using a number of languages and paradigms. His Java
+experience includes more than four years of work in the technologies
+that make up the J2EE platform. <br>
+</font></p>
+<font face="verdana, arial, helvetica" size="2"> </font>
+<ul>
+  <font face="verdana, arial, helvetica" size="2"><a name="resources"></a><strong>Resources</strong>
+  <br>
+  <br>
+  <li> The EJB 2.0 Specification provides the guidelines that any
+EJB 2.0-compliant application server must follow<a name="EJB20Spec"></a>:
+    <br>
+    <a href="http://java.sun.com/products/ejb/docs.html">http://java.sun.com/products/ejb/docs.html
+    </a><br>
+  </li>
+  <li> You will find a complete listing of the Java Authentication and
+Authorization Service (JAAS) documents at the JAAS homepage: <br>
+    <a name="JAASDocs"></a><a
+ href="http://java.sun.com/products/jaas/index-10.html">http://java.sun.com/products/jaas/index-10.html
+    </a><br>
+  </li>
+  <li> Java Authentication and Authorization Service (JAAS) 1.0
+Developer's Guide: <br>
+    <a href="http://java.sun.com/security/jaas/doc/api.html">http://java.sun.com/security/jaas/doc/api.html
+    </a><br>
+  </li>
+  <li> "PAM: Making Login Services Independent of Authentication
+Technologies," Vipin Samar and Charlie Lai (Java.sun.com): <br>
+    <a href="http://java.sun.com/security/jaas/doc/pam.html">http://java.sun.com/security/jaas/doc/pam.html
+    </a><br>
+  </li>
+  <li> You will find details of the JBossSX architecture in this online
+documentation: <br>
+    <a
+ href="http://www.jboss.org/index.html?module=html&amp;op=userdisplay&amp;id=docs/index">http://www.jboss.org/index.html?module=html&amp;op=userdisplay&amp;id=docs/index
+    </a><br>
+  </li>
+  <li> Ant is a Java-based build tool used by many open source Java
+projects: <br>
+    <a name="AntHome"> </a><a
+ href="http://jakarta.apache.org/ant/index.html">http://jakarta.apache.org/ant/index.html
+    </a><br>
+  </li>
+  <li> "Automate Your Build Process Using Java and Ant," Michael
+Cymerman (<em>JavaWorld,</em> October 2000): <br>
+    <a name="Ant"> </a><a
+ href="http://www.javaworld.com/javaworld/jw-10-2000/jw-1020-ant.html">http://www.javaworld.com/javaworld/jw-10-2000/jw-1020-ant.html
+    </a><br>
+  </li>
+  <li> "Benefit from Platform-Independent Builds," Sanjay Mahapatra (<em>JavaWorld,</em>
+August 2000): <br>
+    <a
+ href="http://www.javaworld.com/javaworld/jw-08-2000/jw-0804-builds.html">http://www.javaworld.com/javaworld/jw-08-2000/jw-0804-builds.html
+    </a><br>
+  </li>
+  <li> The JBoss project code is housed at Sourceforge. You can obtain
+JBoss releases from the Files section of the project page: <br>
+    <a name="JBossOnSourceforge"> </a><a
+ href="http://sourceforge.net/projects/jboss">http://sourceforge.net/projects/jboss
+    </a><br>
+  </li>
+  <li> For more articles on <strong>Java Security,</strong> browse our
+Topical Index: <br>
+    <a
+ href="http://www.javaworld.com/channel_content/jw-security-index.shtml">http://www.javaworld.com/channel_content/jw-security-index.shtml
+    </a><br>
+  </li>
+  <li> To read more about <strong>Enterprise JavaBeans,</strong>
+browse our Topical Index: <br>
+    <a
+ href="http://www.javaworld.com/channel_content/jw-ejbs-index.shtml">http://www.javaworld.com/channel_content/jw-ejbs-index.shtml
+    </a><br>
+  </li>
+  <li>Sign up for the <em>JavaWorld This Week</em> free weekly email
+newsletter to learn what's new on <em>JavaWorld</em>: <br>
+    <a href="http://www.idg.net/jw-subscribe">http://www.idg.net/jw-subscribe
+    </a><br>
+You'll find a wealth of IT-related articles from our sister
+publications at <a href="http://www.idg.net/jump?id=1100">IDG.net</a> </li>
+  </font>
+</ul>
+<font face="verdana, arial, helvetica" size="2"><br>
+</font>
+<font face="verdana, arial, helvetica" size="2"><!-- REPLACE SIDEBAR --></font><!-- ## MAIN CONTENT ENDS HERE ### --><img
+ src="images/spacer.gif" border="0" height="1" width="8"><!-- USA JavaWorld.com Pixel --><a
+ href="http://ad.doubleclick.net/jump/idg.pixel.usa.jw/5.31.01usajw;sz=1x1;ord=539279?"><img
+ src="images/5.gif" border="0" height="1" width="1"></a><!--TOP_BANNER--><layer
+ src="http://ad.doubleclick.net/adl/idg.us.idgnet.javaworld/articles;pos=top;sz=468x60;tile=1;ord=539279?"
+ width="468" height="60" visibility="hidden"
+ onload="moveToAbsolute(layer1.pageX,layer1.pageY);clip.height=60;clip.width=468;visibility='show';"></layer><!--125x125--><!--SKYSCRAPER--><layer
+ src="http://ad.doubleclick.net/adl/idg.us.idgnet.javaworld/articles;pos=skyscraper;sz=120x600;tile=3;ord=539279?"
+ width="120" height="600" visibility="hidden"
+ onload="moveToAbsolute(layer3.pageX,layer3.pageY);clip.height=600;clip.width=120;visibility='show';"></layer><!--BOTTOM_BANNER--><layer
+ src="http://ad.doubleclick.net/adl/idg.us.idgnet.javaworld/articles;pos=bottom;sz=468x60;tile=4;ord=539279?"
+ width="468" height="60" visibility="hidden"
+ onload="moveToAbsolute(layer4.pageX,layer4.pageY);clip.height=60;clip.width=468;visibility='show';"></layer><!--Big AD--><layer
+ src="http://ad.doubleclick.net/adl/idg.us.idgnet.javaworld/articles;pos=rectangle;sz=336x280;tile=5;ord=539279"
+ width="336" height="280" visibility="hidden"
+ onload="moveToAbsolute(layer5.pageX,layer5.pageY);clip.height=280;clip.width=336;visibility='show';"></layer><!-- stories1.idg.net --><!-- DOCID 683017 --><!-- EX: 951984000 -->
+</body>
+</html>

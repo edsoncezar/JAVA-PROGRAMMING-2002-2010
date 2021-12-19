@@ -1,0 +1,300 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Setting Privileges for Extensions</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="sealing.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=bottom border=0 alt="The Extension Mechanism | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Making Extensions Secure</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Setting Privileges for Extensions
+</h2>
+<p>
+<blockquote>
+
+
+If a <a href="..\..\essential\system\security.html">security manager</a> 
+is in force, the following conditions must be met to 
+enable any software, including extension software, to perform 
+security-sensitive operations:
+<ul>
+<li>The security-sensitive code in the extension must be wrapped 
+in a <code>PrivilegedAction</code> object.
+<li>The security policy implemented by the security manager must 
+grant the appropriate permission to the extension. By default, 
+installed extensions are granted all security permissions as if 
+they were part of the core platform API. The permissions 
+granted by the security policy apply only to code wrapped in the 
+<code>PrivilegedAction</code> instance.
+</ul>
+<p>
+Let's look at each of these conditions in a little more detail, with 
+some examples.
+<p>
+<h3>Using the PrivilegedAction Class</h3>
+<blockquote>
+Suppose that you want to modify the <code>RectangleArea</code> class in the 
+extension example of the previous 
+lesson to write rectangle areas to a file rather than to 
+stdout.  Writing to a file, however, is a security-sensitive 
+operation, so if your software is going to be running under a 
+security manager, you'll need to mark your code as being privileged. 
+There are two steps you need to take to do so:
+<ol>
+<li>You need to place code that performs security-sensitive operations 
+within the <code>run</code> method of an object of type 
+<code>java.security.PrivilegedAction</code>.
+<li>You must use that <code>PrivilegedAction</code> object as the 
+argument in a call to the <code>doPrivileged</code> method of 
+<code>java.security.AccessController</code>.
+</ol>
+<p>
+If we apply those guidelines to the <code>RectangleArea</code> class, 
+our class definition would look something like this:
+<blockquote>
+<pre>
+import java.io.*;
+import java.security.*;
+
+public final class RectangleArea {
+    public static void writeArea(final java.awt.Rectangle r) {
+        AccessController.doPrivileged(new PrivilegedAction() {
+	    public Object run() {
+	        try { 
+		    int area = r.width * r.height;
+		    FileWriter fw = new FileWriter("/tmp/AreaOutput");
+		    fw.write("The rectangle's area is " + area);
+		    fw.flush();
+		    fw.close();
+	        } catch(IOException ioe) {
+		    System.err.println(ioe);
+	        }
+	        return null;
+	    }
+        });
+    }
+}
+</pre></blockquote>
+<p>
+The single method in this class, <code>writeArea</code>, computes the 
+area of a rectangle, and writes the area to a file called 
+<code>AreaOutput</code> in the <code>/tmp</code> directory.
+<p>
+The security-sensitive statements dealing with the output file are 
+placed within the <code>run</code> method of a new instance of 
+<code>PrivilegedAction</code>. (Note that <code>run</code> requires that an 
+<code>Object</code> instance be returned. The returned object can be 
+<code>null</code>.) The new <code>PrivilegedAction</code> 
+instance is then passed as an argument in a call to 
+<code>AccessController.doPrivileged</code>. 
+
+<p>
+For more information about using <code>doPrivileged</code>, see 
+<a href="http://java.sun.com/products/jdk/1.2/docs/guide/security/doprivileged.html">New API for Privileged Blocks</a> in the 
+JDK<font size="-2"><sup>TM</sup></font> documentation.
+
+<p>
+Wrapping security-sensitive code in a <code>PrivilegedAction</code> 
+object in this 
+manner is the first requirement for enabling an extension to perform 
+security-sensitive operations. 
+The second requirement is: getting the security manager 
+to grant the privileged code the appropriate permissions.
+</blockquote>
+
+<h3>Specifying Permissions with the Security Policy</h3>
+<blockquote>
+The security policy in force at runtime is specified by a 
+<em>policy file</em>.  The default  
+policy is set by the file <code>lib/security/java.policy</code> in 
+the JRE software.
+<p>
+The policy file assigns security privileges to software by using 
+<em>grant</em> entries. The policy file can contain any number of 
+grant entries. The default policy file has 
+this grant entry for installed extensions:
+<blockquote>
+<pre>
+grant codeBase "file:${java.home}/lib/ext/" {
+    permission java.security.AllPermission;
+};
+</pre></blockquote>
+This entry specifies that files at the location 
+<code>file:${java.home}/lib/ext/</code> are to be granted the permission called 
+<code>java.security.AllPermission</code>. (Note that in the Java 1.2  
+Java platform, <code>java.home</code> refers to the <code>jre</code> directory.) 
+It's not too hard to guess that <code>java.security.AllPermission</code> 
+grants installed extensions all the security privileges that it's possible 
+to grant. 
+<p>
+By default, then, installed extensions have no security restrictions.  
+Extension software can perform security-sensitive operations as if there were 
+no security manager installed, provided that security-sensitive code 
+is contained in an instance of <code>PrivilegedAction</code> passed as an 
+argument in a <code>doPrivileged</code> call. 
+<p>
+To limit the privileges granted to extensions, you need to 
+modify the policy file. To deny all privileges to all extensions, 
+you could simply remove the above grant entry.
+<p>
+Not all permissions are as comprehensive as the 
+<code>java.security.AllPermissions</code> granted by default. After 
+deleting the default grant entry, you can enter a new grant entry 
+for one or more of the following limited permissions:
+<ul> 
+<li><code>java.awt.<b>AWTPermission</b></code>
+<li><code>java.io.<b>FilePermission</b></code>
+<li><code>java.net.<b>NetPermission</b></code> 
+<li><code>java.util.<b>PropertyPermission</b></code>
+<li><code>java.lang.reflect.<b>ReflectPermission</b></code>
+<li><code>java.lang.<b>RuntimePermission</b></code>
+<li><code>java.security.<b>SecurityPermission</b></code>
+<li><code>java.io.<b>SerializablePermission</b></code>
+<li><code>java.net.<b>SocketPermission</b></code>
+</ul>
+<p>
+The <a href="http://java.sun.com/products/jdk/1.2/docs/guide/security/permissions.html">Policy Permissions</a> file in the JDK documentation provides 
+details about each of these permissions. Let's look at just one, 
+<code>java.io.FilePermission</code>, as an example.
+<p>
+The only permission that the <code>RectangleArea.writeArea</code> method 
+really needs is the permission to write to a file. Assuming that the 
+<code>RectangleArea</code> class is bundled in the file 
+<code>area.jar</code>, you could grant write privileges by adding 
+this entry to the policy file:
+<blockquote>
+<pre>
+grant codeBase "file:${java.home}/lib/ext/area.jar" {
+    permission java.io.FilePermission "/tmp/*", "write";  
+};
+</pre></blockquote>
+The <code>codeBase&nbsp;"file:${java.home}/lib/ext/area.jar"</code> part 
+of this 
+entry guarantees that any permissions specified by this entry will 
+apply only to your JAR file.  The <code>java.io.FilePermission</code> 
+permits access to files.  The first string argument, <code>"/tmp/*"</code>, 
+indicates that <code>area.jar</code> is being granted permission to 
+access all files in the <code>/tmp</code> directory.  The second argument indicates that the file 
+access being granted is only for writing. (Other choices for the 
+second argument are <code>"read"</code>, <code>"delete"</code>, and 
+<code>"execute"</code>.)
+</blockquote>
+
+<h3>Signing Extensions</h3>
+<blockquote>
+You can use the policy file to place additional restrictions on 
+the permissions granted to extensions by requiring them to be signed 
+by a trusted entity.
+(For a review of signing and verifying JAR files, 
+see the <a href="..\..\jar\sign\index.html">JAR File Format</a> 
+trail in this tutorial.) 
+<p>
+To allow signature verification of extensions or other software in 
+conjunction with granting permissions, the 
+policy file must contain a <em>keystore entry</em>. The keystore entry 
+specifies which keystore is to be used in the verification.  Keystore entries 
+have the form
+<blockquote>
+<pre>
+kestore "<i>keystore_url</i>";
+</pre></blockquote>
+The URL <em>keystore_url</em> is either an absolute or relative. If it's 
+relative, the URL is relative to the location of 
+the policy file.
+<p>
+To indicate that an extension must be signed in order to be granted 
+security privileges, you use the <code>signedBy</code> field. For example, 
+the following entry indicates that the extension <code>area.jar</code> is 
+to be granted write privileges only if it is signed by the users identified 
+in the keystore by the aliases Robert and Rita:
+<blockquote>
+<pre>
+grant signedBy "Robert,Rita", codeBase "file:${java.home}/lib/ext/area.jar" {
+    permission java.io.FilePermission "*", "write";  
+};
+</pre></blockquote>
+If the <code>codeBase</code> field is omitted, as in the following "grant", 
+the permissions are granted to <em>any</em> software, including 
+installed or download extensions, that are signed by "Robert" or "Rita":
+<blockquote>
+<pre>
+grant signedBy "Robert,Rita" {
+    permission java.io.FilePermission "*", "write";  
+};
+</pre></blockquote>
+
+<p>
+For further details about the policy file format, see section 3.3.1 of 
+the <a href="http://java.sun.com/products/jdk/1.2/docs/guide/security/spec/security-spec.doc3.html#20131">Security Architecture Specification</a> in the 
+JDK documentation.
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="sealing.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=top border=0 alt="The Extension Mechanism | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Making Extensions Secure</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

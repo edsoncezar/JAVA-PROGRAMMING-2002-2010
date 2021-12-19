@@ -1,0 +1,151 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:What Is Server-Side Scripting?</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="09-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="09-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H3><A NAME="Heading4"></A><FONT COLOR="#000077">JavaServer Pages</FONT></H3>
+<P>A JavaServer Page processes Java code embedded in an HTML document and returns results to the browser. You may have noticed that many of the Java technologies and standards provided by Sun duplicate the functionality of technologies found in other environments. Often, these Java solutions improve on the other technologies, but the ultimate objective is to provide a seamless Java solution for all development needs. JavaServer Pages closely duplicate the functionality of Server-Side JavaScript from Netscape and even more closely resemble Active Server Pages from Microsoft. At the same time, JavaServer Pages leverage all of the advantages of Java programming, including garbage collections and the enterprise technologies discussed in this book.
+</P>
+<P>The first example in this chapter described a simple HR system that may use CGI to process the results of a form. In order to do this with CGI, you need to write a CGI script that reads the request from the browser and then generates a set of HTML tags and dynamic values coming from a data source. This requires that the presentation of the data be embedded in the logic for validating the id/password and accessing the database. This design is hard to support and maintain and makes it difficult for graphic designers and page layout experts to work on these pages. This section and Chapter 10, &#147;Creating JavaServer Pages,&#148; look at how you can use JavaServer Pages to easily integrate Java programming logic with HTML layout for presentation of data. You create these scripted pages using a file format similar to HTML, called JHTML.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading5"></A><FONT COLOR="#000077">Using JHTML</FONT></H4>
+<P>Developing enterprise applications that leverage Web technologies requires you to make many design decisions. One of the decisions you need to make is how to most effectively separate the presentation of your application from the business logic. This is an important design consideration for simplifying the support and maintenance of your application. Sun introduced JavaServer Pages to aid in this task.
+</P>
+<P>JavaServer Pages are a relatively new standard. However, JSP is already entering a second generation. The first generation of JavaServer Pages, called JHTML, uses a technique called <I>page compilation.</I> The process is as follows:</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Create an HTML file with Java code embedded between &ltjava&gt HTML tags.
+<DD><B>2.</B>&nbsp;&nbsp;Save the files with the extension .jhtml.
+<DD><B>3.</B>&nbsp;&nbsp;In the case of the Java Web Server, when the Web client requests this file, the server sends the file to the PageCompileServlet that is a part of the package com.sun.server.webserver. The Servlet uses this .jhtml file as a template and generates a servlet that outputs the HTML in your file, plus it executes the Java code between the &ltjava&gt&lt/java&gt tags.
+<DD><B>4.</B>&nbsp;&nbsp;From then on, whenever a client requests the .jhtml file, the new servlet is sent the request and responds accordingly.
+</DL>
+<P>If you change the .jhtml file, the servlet is recompiled automatically on the next request.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>For the examples in this chapter, the Java Web Server from Sun is used. A trial version of this server is available at <A HREF="http://java.sun.com/">http://java.sun.com</A> under the products directory. If you would like to try out these examples, download the trial version and follow the setup instructions after you install it. Put your .jhtml files in the public_html directory under the Java Web Server directory to access them from a browser.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>Here is an example .jhtml file:
+</P>
+<PRE>
+&ltHTML&gt
+&ltHEAD&gt
+&ltTITLE&gtSample1 JHTML File&lt/TITLE&gt
+&lt/HEAD&gt
+
+&ltBODY&gt
+Hello
+<B>&ltjava&gt
+    String name;
+    if ((name = request.getParameter(&#147;name&#148;)) != null)
+        out.print(name);
+&lt/java&gt</B>
+
+&lt!--
+    Note that for simplicity, the form calls the same file
+    with the value for the name text field filled in.
+--&gt
+&ltFORM METHOD=POST ACTION=&#147;sample1.jhtml&#148;&gt
+  Enter your name and press submit
+  &ltINPUT TYPE=TEXT NAME=name&gt
+  &ltBR&gt&ltBR&gt&ltINPUT TYPE=SUBMIT&gt
+&lt/FORM&gt
+<B>&ltjava&gt
+    for(int i=1;i&lt6; i&#43;&#43;)
+        out.print(&#147;&ltH&#148;&#43; i &#43;&#147;&gt Heading &#148; &#43; i );
+&lt/java&gt</B>
+
+&lt/BODY&gt
+&lt/HTML&gt
+</PRE>
+<P>Figure 9.5 illustrates what this file looks like before and after submitting a name.
+</P>
+<P>The first time that the file sample1.jhtml is requested, the PageCompilation servlet is called by the Java Web Server, and it generates and compiles a servlet called _sample1.java. The resulting _sample1.class file is stored by default in a directory called pagecompilation. The servlet is called from then on whenever a request for the sample1.jhtml file is made. If the .jhtml file is changed, the whole process is repeated. The advantage of this model is that the servlet does not need to be recompiled every time it is requested. Here is what the sample1.java file would look like:</P>
+<P><A NAME="Fig5"></A><A HREF="images\09-05.jpg"><IMG SRC="images\09-05t.jpg"></A>
+<BR><A HREF="images\09-05.jpg"><FONT COLOR="#000077"><B>Figure 9.5</B></FONT></A>&nbsp;&nbsp;Submitting a request for sample1.jhtml.</P>
+<PRE>
+package pagecompile;
+
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import com.sun.server.webserver.pagecompile.filecache.*;
+import com.sun.server.webserver.pagecompile.ParamsHttpServletRequest;
+import com.sun.server.webserver.pagecompile.*;
+
+public class _sample1
+extends HttpServlet{
+
+//-------------------------------
+  static {
+  }
+
+  //-------------- The service method
+  public void service (HttpServletRequest request,
+                         HttpServletResponse response)
+      throws ServletException, IOException
+  {
+    ServletOutputStream out = response.getOutputStream ();
+    ByteFileData __fileData = null;
+    try {
+      __fileData = (ByteFileData) ServletUtil.getJHtmlSource(this,
+&#147;F:\\JAVA\\JWS\\BIN\\..\\public_html\\sample1.jhtml&#148;, null,
+904548732000L);
+      if (__fileData == null) throw new ServletException(&#147;FileChanged&#148;);
+
+      /*** lines: 1-8 */
+      __fileData.writeBytes (0, 78, out);
+
+    <B>String name;
+    if ((name = request.getParameter(&#147;name&#148;)) != null)
+        out.print(name);</B>
+      /*** lines: 12-12 */
+      __fileData.writeBytes (183, 143, out);
+      out.print(ServletUtil.encodeURL (request, response, &#147;sample1.jhtml&#148;));
+      /*** lines: 12-21 */
+      __fileData.writeBytes (339, 107, out);
+
+
+    <B>for(int i=1;i&lt6; i&#43;&#43;)
+        out.print(&#147;&ltH&#148;&#43; i &#43;&#147;&gt Heading &#148; &#43; i );</B>
+      /*** lines: 25-27 */
+      __fileData.writeBytes (531, 18, out);
+    }
+    finally {
+      if (__fileData != null) __fileData.close();
+    }
+  }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="09-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="09-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

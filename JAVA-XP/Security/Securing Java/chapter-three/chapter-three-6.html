@@ -1,0 +1,175 @@
+<html>
+<head>
+<title>Access Control and Stack Inspection (Ch. 3, Sec. 6) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-three.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-three-5.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Beyond the Sandbox: Signed Code and Java 2
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-three-1.html">1</a> / <a href="chapter-three-3.html">2</a> / <a href="chapter-three-4.html">3</a> / <a href="chapter-three-5.html">4</a> / <a href="chapter-three-5.html">5</a> / <b>6</b> / <a href="chapter-three-7.html">7</a> / <a href="chapter-three-8.html">8</a><p>
+
+<font size="+2" color="#000000"><b>Section 6 -- Access Control and Stack Inspection</b></font>
+</td><td width=60 align=center>
+<a href="chapter-three-7.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+The idea of access control is not a new one in computer security. For decades, researchers have built on the fundamental concept of grouping and permissions. The idea is to define a logical system in which entities known as principals (often corresponding one to one with code owned by users or groups of users) are authorized to access a number of particular protected objects (often system resources such as files). To make this less esoteric, consider that the familiar JDK 1.0.2 Java sandbox is a primitive kind of access control. In the default case, applets (which serve as principals in our example) are allowed to access all objects inside the sandbox, but none outside the sandbox.<p>
+
+So what we're talking about here is a way of setting up logical groupings. Then we can start talking about separating groups from each other and granting groups particular permissions. Security is all about separation. Readers familiar with the Unix or NT file system will see clear similarities to the notion of user IDs and file permissions.<p>
+
+Sometimes a Java application (like, say, a Web browser) needs to run untrusted code within itself. In this case, Java system libraries need some way of distinguishing between calls originating in untrusted code and calls originating from the trusted application itself. Clearly, the calls originating in untrusted code need to be restricted to prevent hostile activities. By contrast, calls originating in the application itself should be allowed to proceed (as long as they follow any security rules that the operating system mandates). The question is, how can we implement a system that does this?<p>
+
+Java implements such a system by allowing security-checking code to examine the runtime stack for frames executing untrusted code. Each thread of execution has its own runtime stack (see Figure 3.5). Security decisions can be made with reference to this check. This is called stack inspection [Wallach, et al., 1997]. All the major vendors have adopted stack inspection to meet the demand for more flexible security policies than those originally allowed under the old sandbox model. Stack inspection is used by Netscape Navigator 4.0, Microsoft Internet Explorer 4.0, and Sun Microsystems' Java 2. (Interestingly, Java is thus the most widespread use of stack inspection for security ever. You can think of it as a very big security-critical experiment.)<p>
+
+<center>
+<table border=0 width=161><tr><td>
+<img src="..\images\fig03.05.gif" width=161 height=141 alt="Fig 3.5"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 3.5  Each Java program thread includes a runtime stack that tracks method calls.</b></center><br>
+The purpose of the stack is to keep track of which method calls which other method in order to be able to return to the appropriate program location when an invoked method has finished its work. The stack grows and shrinks during typical program operation. Java 2 inspects the stack in order to make access control decisions. In this example, each stack frame includes both a method call and a trust label (T for trusted, U for untrusted).
+</font>
+</td></tr></table>
+</center>
+<p><br>
+
+
+<center><font size="+1"><b>Simple Stack Inspection</b></font></center><p>
+
+Netscape 3.0's stack-inspection-based model (and every other black-and-white security model) is a simple access control system with two principals: system and untrusted. Just to keep things simple, the only privilege available is full.<p>
+
+In this model, every stack frame is labeled with a principal (system if the frame is executing code that is part of the VM or the built-in libraries and untrusted otherwise). Each stack frame also includes a flag that specifies whether privilege is full. A system class can set this flag, thus enabling its privilege. This need only be done when something dangerous must occur-something that not every piece of code should be allowed to do. Untrusted code is not allowed to set the flag. Whenever a stack frame completes its work, its flag (if it has one) disappears.<p>
+
+Every method about to do something potentially dangerous is forced to submit to a stack inspection. The stack inspection is used to decide whether the dangerous activity should be allowed. The stack inspection algorithm searches the frames on the caller's stack in sequence from the newest to the oldest. If the search encounters an untrusted stack frame (which as we know can never get a privilege flag) the search terminates, access is forbidden, and an exception is thrown. The search also terminates if a system stack frame with a privilege flag is encountered. In this case, access is allowed (see Figure 3.6).<p>
+
+<center>
+<table border=0 width=375><tr><td>
+<img src="..\images\fig03.06.gif" width=375 height=125 alt="Fig 3.6"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 3.6  Two examples of simple stack inspection.</b></center><br>
+Each stack is made of frames with three parts: a privilege flag (where full privilege is denoted by an X), a principal entry (untrusted or system), and a method. In STACK A, an untrusted applet is attempting to use the url.open() method to access a file in the browser's cache. The VM makes a decision regarding whether to set the privilege flag (which it does) by looking at the parameters in the actual method invocation. Since the file in this case is a cache file, access is allowed. In short, a system-level method is doing something potentially-dangerous on the behalf of untrusted code. In STACK B, an untrusted applet is also attempting to use the url.open() method, however in this case, the file argument is not a browser cache file but a normal file in the filesystem. Untrusted code is not allowed to do this, so the privilege flag is not set by the VM and access is denied.
+</font>
+</td></tr></table>
+</center>
+<p>
+
+
+<center><font size="+1"><b>Real Stack Inspection</b></font></center><p>
+
+The simple example of stack inspection just given is only powerful enough to implement black-and-white trust models. Code is either fully trusted (and granted full permission at the same level as the application) or untrusted (and allowed no permission to carry out dangerous operations). However, what we want is the ability to create a shades-of-gray trust model. How can we do that?<p>
+
+It turns out that if we generalize the simple model we get what we need. The first step is to add the ability to have multiple principals. Then we need to have many more specific permissions than full. These two capabilities allow us to have a complex system in which different principals can have different degrees of permission in (and hence, access to) the system.<p>
+
+Research into stack inspection shows that four basic primitives are all that are required to implement a real stack inspection system. In particular, see Dan Wallach's Ph.D. thesis at Princeton and the paper Understanding Java Stack Inspection [Wallach and Felten, 1998]. Each of the major vendors uses different names for these primitives, but they all boil down to the same four essential operations (all explained more fully in the following discussions):<p>
+
+<center><table border=0 width=85%><tr><td>
+<pre>
+enablePrivilege()
+disablePrivilege()
+checkPrivilege()
+revertPrivilege()
+</pre>
+</td></tr></table></center>
+<p>
+
+Some resources such as the file system or network sockets need to be protected from use (and possible abuse) by untrusted code. These resources are protected by permissions. Before code (trusted or otherwise) is allowed access to one of these resources, say, R, the system must make sure to call checkPrivilege<sup>(R)</sup>.<p>
+
+If you recall our discussion of the Security Manager from the previous chapter, you'll remember that the Java libraries are set up in such a way that dangerous operations must go through a Security Manager check before they can occur. As we said, the Java API provides all calls necessary to implement a virtual OS, thus making isolation of all required security checks possible within the API. When a dangerous call is made to the Java API, the Security Manager is queried by the code defining the base classes. The checkPrivilege() method is used to help make behind-the-scenes access control decisions in a very similar fashion. To achieve backwards compatibility, the Security Manager can be implemented using the four stack inspection primitives.<p>
+
+When code wants to make use of some resource R, it must first call enablePrivilege(R). When this method is invoked, a check of local policy occurs that determines whether the caller is permitted to use R. If the use is permitted, the current stack frame is annotated with an enabled-privilege(R) mark. This allows the code to use the resource normally.<p>
+
+Permission to use the resource does not last forever; if it did, the system would not work. There are two ways in which the privilege annotation is discarded. One way is for the call to return. In this case, the annotation is discarded along with the stack frame. The second way is for the code to make an explicit call to revertPrivilege(R) or disablePrivilege(R). The latter call creates a stack annotation that can hide an earlier enabled privilege. The former simply removes annotations from the current stack frame.<p>
+
+All three major Java vendors implement a very similar (and simple) stack inspection algorithm. A generalization of this algorithm, after Wallach, is shown in Listing 3.1 [Wallach and Felten, 1998].<p>
+
+The algorithm searches stack frames on the caller's stack in order from newest to oldest. If the search finds a stack frame with the appropriate enabled-privilege annotation, it terminates, allowing access. If the search finds a stack frame that is forbidden from accessing the target by local policy, or has explicitly disabled its privileges, the search terminates, forbidding access.<p>
+
+It may seem strange that the vendors take different actions when the search reaches the end of the stack without meeting any of the conditions (sometimes called falling off the end of the stack). Netscape denies permission, while both Microsoft and Sun allow permission. This difference has to do with backward compatibility. The Netscape choice causes legacy code to be treated like an old-fashioned applet, and confined to the sandbox. The Microsoft/Sun choice allows a signed Java application to use its privileges even without explicitly marking its stack frames, thus making it easy to migrate existing applications. Since Netscape did not support applications, they felt no need to follow the Microsoft/Sun approach and instead chose the more conservative course of denying permission. For more implementation detail on the three vendors' different code signing schemes, see <a href="..\appdx-c\index.html">Appendix C</a>.<p><br>
+
+
+<center><font size="+1"><b>Formalizing Stack Inspection</b></font></center><p>
+
+Members of Princeton's Secure Internet Programming team (in particular, Dan Wallach and Edward Felten) have created a formal model of Java's stack inspection system in a belief logic known as ABPL (designed by Abadi, Burrows, Lampson, and Plotkin) [Abadi, et al., 1993]. Using the model, the Princeton team demonstrates how Java's access control decisions correspond to proving statements in ABPL. Besides putting Java's stack inspection system on solid theoretical footing, the work demonstrates a very efficient way to implement stack inspection systems as pushdown automata using security-passing style. Interested readers should see [Wallach and Felten, 1998], which is available through the Princeton Web site at <a href="http://cs.princeton.edu/sip/pub/oakland98.html">cs.princeton.edu/sip/pub/oakland98.html</a>. A more recent paper on how to implement stack inspection more efficiently is also available on the Princeton site.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-three-5.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-three-7.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="..\chapter-five\index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="..\chapter-five\index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helve

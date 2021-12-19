@@ -1,0 +1,216 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0522-0525.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0529-0532.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-526"><P>Page 526</P></A>
+
+
+
+<P>Listing 13.18 Continued
+</P>
+<PRE>
+public final void setPriority(int newPriority)
+        throws IllegalArgumentException;
+
+//Return a Thread's current priority.
+public final int getPriority();
+</PRE>
+
+<H4><A NAME="ch13_ 21">
+Scheduling Threads
+</A></H4>
+
+<P>The scheduler is not required to choose the thread with the highest priority for
+execution, but it usually does. When several Threads have the same (highest) priority, the
+scheduler chooses one at random. If the chosen Thread is implementation-dependent, then
+the scheduler is not required to allocate processor time fairly among competing Threads.
+In general, processor-intensive Threads with higher priorities should call yield()
+frequently (discussed later in the section on preemptive scheduling).
+This method causes a thread to give up the processor and allows
+the scheduler to consider giving lower-priority Threads a share
+of processor time.
+</P>
+
+<B>
+Preemptive Scheduling
+</B>
+
+<P>Calling setPriority() for another Thread object can have
+another unexpected effect. If the new priority is greater than that of
+the currently executing thread, then the current thread stops
+executing (is &quot;de-scheduled&quot;), and the thread, which now has the
+higher priority, is scheduled. This is called
+preemptive scheduling (the higher-priority thread &quot;preempts&quot; the lower-priority one).
+</P>
+
+<P>Priority setting is often used with a preemptive scheduler to
+improve response times to asynchronous events. For example, if an
+application contains a thread to perform lengthy
+computation-intensive work and contains another thread to handle GUI interaction with
+a user, the computation thread is normally set at a lower priority
+than the GUI thread. This enables the GUI thread to respond quickly
+to user actions by preempting the computation thread.
+</P>
+
+<P>Five events might cause the scheduler to deschedule the
+current thread and schedule another thread:
+</P>
+
+<UL>
+<LI>          The current thread reaches the dead state (stop() is called
+or run() exits).
+</UL>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+In some cases, the scheduler may choose lower-priority
+Threads for execution if higher- priority Threads
+have had exclusive use of the processor for too long. Thread
+priority can therefore be used only to bias the scheduler to
+favor some Threads and cannot guarantee a certain order
+of execution. However, a Java implementation isn't required to do
+this and so, conversely, unless higher-priority threads spend
+some time suspended, lower-priority threads may get no
+processor time at all.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<A NAME="PAGENUM-527"><P>Page 527</P></A>
+
+
+<UL>
+
+<LI>          The current thread becomes suspended, possibly because it  calls
+suspend(), sleep(), or another method that suspends the thread. It's likely, for example,
+that many of the methods in the java.io classes will suspend a thread while I/O is
+being performed.
+<LI>          Another thread with a higher priority becomes eligible (preempted) because it
+just had its priority increased, was suspended, and has now re-entered the
+running state, or has just been started.
+<LI>     The thread calls the yield() method, which requests the scheduler to deschedule
+the current thread and schedule another. This method is often used in
+computation-intensive code to ensure a fairer allocation of processor time. If no other thread
+is eligible for execution, the current thread is rescheduled.
+<LI>     In some implementations, the time allotted to the thread expires. On such
+time-slicing systems, a thread is forcibly descheduled by the scheduler in favor
+of another when a certain time limit is reached.
+</UL>
+
+<B>
+Yielding
+</B>
+
+<P>The yield() method is defined in listing 13.19. Note that it's static, so Thread.yield()
+can be called from any code, not just from within a run() method. As was stated previously
+in the section on scheduling threads, calling yield() causes a currently executing thread
+to relinquish the processor and allows the scheduler to consider other threads for
+execution. On a non-time-sliced system, threads that perform no sleep() calls and are not
+suspended by any other operations should periodically call yield() to ensure that the scheduler has
+an opportunity to share the processor time between all eligible threads.
+</P>
+
+<P>Listing 13.19 The java.lang.Thread yield() Method
+</P>
+<PRE>
+//Relinquish execution to other eligible threads.
+public static void yield();
+</PRE>
+
+<P>You should always remember that your classes might be used in many different
+situations. Assuming a class contains a processor-intensive method that might tie up the CPU for
+a long time, you should include yield() calls in that code so that if the class is used in
+a multithreaded Java program, the method won't hog the processor.
+</P>
+
+<P>The Java Language Specification does not
+require that time-slicing is implemented. Most run() methods that contain long loops should therefore contain yield() calls, so that
+non-time-slicing implementations ultimately share time more effectively. The loop in the
+run() method of FileChecksum might therefore be as it is in listing 13.20.
+</P>
+
+<A NAME="PAGENUM-528"><P>Page 528</P></A>
+
+
+
+<P>Listing 13.20 The FileChecksum run() Method Incorporating yield()
+</P>
+<PRE>
+        //Loop through all of the bytes in the file
+        //and generate a checksum.
+        try {
+                for(int i=0; i&lt;length; i++) {
+                        //if the flag is set, exit the
+                        //loop (and the run() method).
+                        if(stopFlag)
+                                break;
+                        sum += (long)fis.read();
+                        //yield every 256 bytes.
+                        if(i % 256)
+                                thread.yield();
+                }
+        }
+</PRE>
+
+<P>Even non-multithreaded applications may benefit from calling yield(). The Java
+VM garbage collector (gc) is sometimes run as a low-priority Thread, thus using any
+spare time (when all other threads are suspended) for garbage collection. In a
+single-threaded application that never calls yield() and creates many temporary objects, the gc
+thread might not be scheduled until the VM runs out of memory and forces the garbage
+collector to free up space. In such a situation, memory usage increases throughout the run time
+of the application, which may cause excessive paging and slow the whole system.
+When garbage collection is eventually forced to occur, the application may appear to freeze for
+a while as many objects are discarded and the memory is reorganized.
+</P>
+
+<P>It's good programming practice to assume that your objects will be used as part of
+a multithreaded application. Insert calls to yield() in time-consuming loops or other operations.
+</P>
+
+<P>Most of the threading examples discussed so far have covered threads that start,
+perform some processing, and then stop when complete. However, it's sometimes necessary
+to create threads that aren't intended ever to stop. Java provides support for this with
+daemon threads, discussed next.
+</P>
+
+<H3><A NAME="ch13_ 22">
+Daemons
+</A></H3>
+
+<P>With a simple single-threaded application, it's easy to determine when the Java
+VM exits&#151;when main() is complete. However, if main() creates and starts one or more
+Thread objects and then exits, other threads will continue running. The Java VM will not exit
+until all those threads have also stopped.
+</P>
+
+<P><CENTER>
+<a href="0522-0525.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0529-0532.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

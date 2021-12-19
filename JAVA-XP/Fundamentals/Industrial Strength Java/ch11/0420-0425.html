@@ -1,0 +1,806 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0415-0419.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0426-0430.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-420"><P>Page 420</P></A>
+
+
+
+
+
+
+
+<B>
+
+Sending Message Content
+
+</B>
+
+
+
+<P>After sending the HELO, enter the mail mode by sending a MAIL FROM: command
+
+with the sender's mail address. In SMTP, &lt; and &gt; brackets surround mail addresses, as in
+
+the example, &lt;smith@xyz.com&gt;. Next, send the recipient's addresses, followed by the
+
+actual message content. After receiving the complete message, the server returns its
+
+response. Finish the transfer by sending a QUIT command:
+
+</P>
+
+
+
+
+<PRE>
+
+      out.println(&quot;MAIL FROM:&lt;&quot; + from + &quot;&gt;&quot;);
+
+      checkResponse(&quot;250&quot;, &quot;MAIL FROM: &quot;);
+
+
+
+      sendRecipients();
+
+      sendData();
+
+      out.println(&quot;QUIT&quot;);
+
+      checkResponse(&quot;221&quot;, &quot;QUIT &quot;);
+
+      out.close();
+
+    }
+
+    catch (IOException e) {
+
+      s.close();
+
+      throw e;
+
+    }
+
+    }
+
+  }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Verifying Response Codes
+
+</B>
+
+</P>
+
+
+
+<P>Use checkResponse() to verify the reception to the expected three-digit reply code.
+
+This method also handles the multi-line response format. If the response does not match,
+
+the system throws an exception:
+
+</P>
+
+
+<PRE>
+
+    protected void checkResponse(String resp, String msg) throws
+
+         &Acirc;IOException {
+
+    String str = in.readLine();
+
+    if (!str.startsWith(resp)) {
+
+      throw new SMTPErrorException(msg + str);
+
+      }
+
+    while (str.startsWith(resp + `-'))
+
+      str = in.readLine();
+
+    }
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-421"><P>Page 421</P></A>
+
+
+
+
+
+
+
+<B>
+
+Addressing E-mail Recipients
+
+</B>
+
+
+
+<P>SMTPMessage accepts a comma-separated list of recipient e-mail addresses. Two
+
+address forms are accepted: the specific &quot;user@host.net&quot; and the personalized form with a
+
+text string (usually the user's name), followed by the actual Internet address in angle
+
+brackets. Extract each Internet mail address from the string, and send it to the server, one per
+
+RCPT command. Follow this format: RCPT TO:&lt;someone@xxx.org&gt;. The server
+
+acknowledges each recipient individually, so you loop until the complete string is processed:
+
+</P>
+
+
+
+
+<PRE>
+
+    protected void sendRecipients() throws IOException {
+
+    int currIndex = 0;
+
+    try {
+
+      while (to.length() &gt; currIndex) {
+
+        String rcpt;
+
+        int endIndex = to.indexOf(`,', currIndex);
+
+        if (endIndex == -1)
+
+          endIndex = to.length();
+
+        rcpt = to.substring(currIndex, endIndex);
+
+        currIndex = endIndex + 1;
+
+        int start = rcpt.indexOf(`&lt;`);
+
+        if (start &gt;= 0)
+
+          rcpt = rcpt.substring(start + 1, rcpt.indexOf(`&gt;'));
+
+        rcpt = rcpt.trim();
+
+        out.println(&quot;RCPT TO:&lt;&quot; + rcpt + &quot;&gt;&quot;);
+
+        checkResponse(&quot;250&quot;, &quot;RCPT TO: &quot;);
+
+      }
+
+    }
+
+    catch (SMTPErrorException e) {
+
+      System.out.println(e);
+
+      throw new UnknownUserException();
+
+    }
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Formatting and Sending SMTP Messages
+
+</B>
+
+</P>
+
+
+
+<P>After identifying all the recipients, send the DATA command. You assemble the
+
+message header from its component fields for such information as date, from, and to, and
+
+separate the header from the message body with a blank line. RFC822 defines the detailed
+
+syntax of Internet mail messages. If a text body is supplied, add an extra &quot;.&quot; to the
+
+start of any line that begins with a &quot;.&quot; to prevent a false end-of-message indication. Finally, mark
+
+the end of the message with a line that contains only a &quot;.&quot;, which is the string &quot;.\r\n&quot;. After
+
+the
+
+</P>
+
+
+
+<A NAME="PAGENUM-422"><P>Page 422</P></A>
+
+
+
+
+
+
+
+<P>server reads the sequence &quot;\r\n.\r\n&quot;, it delivers the message to the indicated maildrops
+
+and returns a response code. The method to format and send an SMTP message follows:
+
+</P>
+
+
+
+
+<PRE>
+
+    protected void sendData() throws IOException {
+
+    out.println(&quot;DATA&quot;);
+
+    checkResponse(&quot;354&quot;, &quot;DATA: &quot;);
+
+    out.setLinemode(false);
+
+    out.println(&quot;Date: &quot; + new InetDate());
+
+    out.println(&quot;From: &quot; + from);
+
+    out.println(&quot;To: &quot; + to);
+
+    if (subject != null)
+
+      out.println(&quot;Subject: &quot; + subject);
+
+    if (header != null)
+
+      out.println(header);
+
+    out.println();
+
+
+
+    if (body != null) {
+
+      StringBuffer buf = new StringBuffer(body.length());
+
+      int first = 0;
+
+      int last;
+
+      while ((last = body.indexOf(&quot;\n.&quot;, first)) != -1) {
+
+        buf.append(body.substring(first, last) + &quot;\n..&quot;);
+
+        first = last + 2;
+
+      }
+
+      if (first &gt; 0) {
+
+        buf.append(body.substring(first));
+
+        out.print(buf.toString());
+
+      }
+
+      else
+
+        out.print(body);
+
+    }
+
+    out.println();
+
+    out.println(&quot;.&quot;);
+
+    out.flush();
+
+    checkResponse(&quot;250&quot;, &quot;message: &quot;);
+
+    out.setLinemode(true);
+
+    }
+
+</PRE>
+
+
+<P>
+
+
+
+<B>
+
+Defining Exceptions
+
+</B>
+
+</P>
+
+
+
+<P>Define the following two new exceptions that relate directly to SMTP processing:
+
+</P>
+
+
+
+
+<PRE>
+
+  class UnknownUserException extends IOException {
+
+    UnknownUserException() {
+
+    }
+
+
+
+    UnknownUserException(String msg) {
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-423"><P>Page 423</P></A>
+
+
+
+
+
+
+<PRE>
+
+    super(msg);
+
+    }
+
+  }
+
+
+
+  class SMTPErrorException extends IOException {
+
+    SMTPErrorException() {
+
+    }
+
+
+
+    SMTPErrorException(String msg) {
+
+    super(msg);
+
+    }
+
+  }
+
+</PRE>
+
+
+
+
+<H4><A NAME="ch11_ 31">
+
+SMTP Applet Client
+
+</A></H4>
+
+
+
+<P>You can use SMTPMessage for several aspects of your web page. Here, you build
+
+an applet that sends comments back to you through e-mail. To use this applet, you
+
+must define the recipient address in your code or web page. Replace the string
+
+&quot;me@there.com&quot; with your actual e-mail address:
+
+</P>
+
+
+
+
+<PRE>
+
+  public class SMTPApplet extends Applet {
+
+    TextField fromLine;
+
+    TextField toLine;
+
+    TextArea body;
+
+
+
+    public static final String MAILBOX = &quot;me@there.com&quot;;
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Basic Interface Layout
+
+</B>
+
+</P>
+
+
+
+<P>In init(), you create a simple BorderLayout panel with a text line asking for user
+
+comments, a TextArea to accept typing, and a &quot;Send&quot; button. Figure 11.7 shows the results
+
+of the code.
+
+</P>
+
+
+
+
+<PRE>
+
+    public void init() {
+
+    setLayout(new BorderLayout());
+
+    add(&quot;North&quot;, new Label(&quot;Please enter your comments:&quot;));
+
+    body = new TextArea(15, 40);
+
+    add(&quot;Center&quot;, body);
+
+    Panel p = new Panel();
+
+    p.setLayout(new BorderLayout());
+
+    p.add(&quot;East&quot;, new Button(&quot;Send&quot;));
+
+    add(&quot;South&quot;,p);
+
+    show();
+
+    }
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-424"><P>Page 424</P></A>
+
+
+
+
+
+
+
+<P><a href="images\ch11fg07.jpg"><img src="images\tn_ch11fg07.jpg"></a><BR>
+
+Figure 11.7
+
+The resultant dialog box.
+
+</P>
+
+
+
+<B>
+
+Handling Message Submission
+
+</B>
+
+
+
+<P>You provide a standard action() method to handle the button press. When the user
+
+clicks on &quot;Send,&quot; you create a new SMTPMessage, set its to/from fields, and call
+
+submit(). Because sending the message can demand some time, you should consider creating a
+
+new thread solely to call submit() and allow the main user interface thread to continue.
+
+The basic action() method follows:
+
+</P>
+
+
+
+
+<PRE>
+
+    public boolean action(Event e, Object arg) {
+
+    if (e.target instanceof Button) {
+
+      String what = (String)arg;
+
+      if (what.equals(&quot;Send&quot;)) {
+
+        try {
+
+          SMTPMessage msg = new SMTPMessage(getCodeBase().getHost());
+
+          msg.setFrom(&quot;applet@thishost.net&quot;);
+
+          msg.setTo(MAILBOX);
+
+          msg.setBody(body.getText());
+
+          msg.submit();
+
+        }
+
+        catch (Exception ex) {
+
+          System.out.println(ex);
+
+        }
+
+        return true;
+
+      }
+
+    }
+
+    return super.action(e, arg);
+
+    }
+
+  }
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-425"><P>Page 425</P></A>
+
+
+
+
+
+
+
+<H4><A NAME="ch11_ 32">
+
+SMTPHandler
+
+</A></H4>
+
+
+
+<P>Now build the SMTP server side, starting with its factory
+
+object. Because the SMTP handlers must access the MailDomain,
+
+the MailDomain object is passed into the factory and stored for
+
+use when creating handler objects. This factory definition assigns
+
+SMTP to port 25 by default:
+
+</P>
+
+
+
+
+<PRE>
+
+ public class SMTPFactory extends ClientHandlerFactory
+
+  {
+
+     MailDomain domain;
+
+
+
+     public SMTPFactory(MailDomain domain, int port) {
+
+     this.domain = domain;
+
+     this.port = port;
+
+     }
+
+
+
+     public SMTPFactory(MailDomain domain) {
+
+     this(domain, 25);
+
+     }
+
+
+
+     String getName() {
+
+     return &quot;SMTP&quot;;
+
+     }
+
+
+
+     ClientHandler createClientHandler(Socket
+
+     &Acirc;connection) {
+
+     return new SMTPHandler(connection, domain);
+
+     }
+
+   }
+
+</PRE>
+
+
+<P>
+
+
+
+<B>
+
+Creating Command Keyword Tables
+
+</B>
+
+</P>
+
+
+
+<P>The SMTP handler itself subclasses from ClientHandler and contains a static
+
+command keyword table:
+
+</P>
+
+<P>
+
+
+
+<CENTER>
+
+<TABLE BGCOLOR="#FFFF99">
+
+<TR><TD><B>
+
+NOTE
+
+</B></TD></TR>
+
+<TR><TD>
+
+<BLOCKQUOTE>
+
+If your computer runs an SMTP server on port 25, the call
+
+to create the ServerSocket fails. Only one program
+
+can access a server sock-     et at a time. If you
+
+use a Unix computer, you also might not have privileges to use
+
+a well-known socket&#151;multiuser operating systems
+
+generally protect the well-known sockets in order to keep
+
+users from replacing a stan-     dard server with
+
+their own version. In either case, you can test your server by
+
+chang-     ing the factory to use a different port
+
+num-     ber outside the pro-tected range. Generally, this port
+
+number is greater than 1024.
+
+</BLOCKQUOTE></TD></TR>
+
+</TABLE></CENTER>
+
+</P>
+
+
+<PRE>
+
+  class SMTPHandler extends ClientHandler {
+
+    MailDomain domain;
+
+    CommandInputStream in = null;
+
+    InetOutputStream out;
+
+
+
+    private final static String keywordList[] = {
+
+    &quot;RCPT&quot;, &quot;MAIL&quot;, &quot;DATA&quot;, &quot;HELO&quot;, &quot;QUIT&quot;, &quot;RSET&quot;,&quot;NOOP&quot;
+
+    };
+
+
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<P><CENTER>
+
+<a href="0415-0419.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0426-0430.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

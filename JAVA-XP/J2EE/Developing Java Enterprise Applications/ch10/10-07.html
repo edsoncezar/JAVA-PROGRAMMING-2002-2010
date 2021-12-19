@@ -1,0 +1,201 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Creating JavaServer Pages</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="10-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="10-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The AdLinkRotator servlet sends an IMG tag to the client. The servlet does not assign a response type or encoding, nor does it create a full HTML page to return. This is the responsibility of the JSP, not the helper servlet. The AdLinkRotator servlet, listed in the following code, is based on the one in Chapter 7 but has been updated for use as a helper rather than for use by direct access. It reads a directory for available ads, based on the configuration, and rotates through these ads for each request.
+</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class AdLinkRotatorServlet extends GenericServlet 
+implements SingleThreadModel
+{
+    Vector imageFiles;
+    int curIndex;
+    String imageURL;
+    
+    public void init(ServletConfig config) throws ServletException
+    {
+        String imageDirName;
+        File imageDir=null;
+        String[] files;
+        int i,max;
+        File curFile;
+        
+        super.init(config);
+        
+        imageFiles = new Vector();
+        
+        imageDirName = getInitParameter(&#147;imagedir&#148;);
+        imageURL = getInitParameter(&#147;imageroot&#148;);
+        
+        if(imageDirName != null) 
+                imageDir = new File(imageDirName);
+        
+        if((imageDir!=null) 
+              &amp&amp imageDir.exists() &amp&amp imageDir.isDirectory())
+        {
+            files = imageDir.list();
+            
+            max = files.length;
+            
+            for(i=0;i&ltmax;i&#43;&#43;)
+            {
+                curFile = new File(imageDir,files[i]);
+                imageFiles.addElement(curFile);
+            }
+        }
+        else
+        {
+            log(&#147;Cannot find image dir: &#148;&#43;imageDirName);
+        }
+    }
+    
+    public void service(ServletRequest request,
+                        ServletResponse response)
+                        throws IOException,ServletException
+    {
+        File curFile;
+        String fileName;
+        ServletOutputStream out=null;
+        
+        out = response.getOutputStream();
+        
+        int len = imageFiles.size();
+        if(len&gt0)
+        {
+            curFile = (File) imageFiles.elementAt(curIndex);        
+            fileName = curFile.getName();
+        
+            <B>out.print(&#147;&ltIMG SRC=&#148;);
+            out.print(imageURL);
+            out.print(&#147;/&#148;);
+            out.print(fileName);
+            out.println(&#147;&gt&#148;);</B>
+        
+            curIndex= (curIndex&#43;1)%len;
+        }
+        else
+        {
+            out.println(&#147;No Ads Today!&#148;);
+        }
+    }
+}
+</PRE>
+<P>Perhaps the most important point about this example is that the servlet defines a service method, as expected. The servlet tag in the JSP initiates contact through this method rather than a special one. If possible, the page will try to reuse an existing instance of the servlet. Depending on the Web server, this may or may not work, because it is based on the servlet context. If an existing servlet cannot be found, a new one is created and used instead.
+</P>
+<H3><A NAME="Heading13"></A><FONT COLOR="#000077">Handling Interrupts</FONT></H3>
+<P>Users will often interrupt large pages using the Stop button on their browser. In this case, the servlet that is handling the user request receives an IOException message. You can handle this exception in your JSP as well. In general, when the user requests that the page terminate, the servlet&#146;s best response is to clean up any resources that were created for the client, such as network connections.
+</P>
+<P>The following example demonstrates how you can use try-catch to handle the users&#146; termination of a request. It is also important in this type of page to include regular calls to flush, to make sure that the server is not buffering the reply. If you do buffer the reply, clients may not see any response, before or after they press the Stop button. This is a simple example that displays a series of numbers &#147;sleeping&#148; between each number.</P>
+<PRE>
+&ltjava&gt
+<B>try
+{</B>
+&lt/java&gt
+
+&ltHTML&gt
+&ltHEAD&gt
+&ltTITLE&gt
+Handling Stop
+&lt/TITLE&gt
+&lt/HEAD&gt
+&ltBODY&gt
+&ltjava&gt
+    
+    int i,max;
+    
+    max = 1000;
+    
+    for(i=0;i&ltmax;i&#43;&#43;)
+    {
+&lt/java&gt
+Number &ltjava&gtout.println(i);&lt/java&gt.&ltBR&gt
+&ltjava&gt
+
+        <B>out.flush();</B>
+
+        //sleep a second to slow the loop down
+        try
+        {
+            Thread.sleep(1000);
+        }
+        catch(InterruptedException ex)
+        {
+        }
+    }
+&lt/java&gt
+&lt/BODY&gt
+&lt/HTML&gt
+
+&ltjava&gt
+<B>}
+catch(IOException exp)
+{
+    
+}</B>
+&lt/java&gt
+</PRE>
+<P>The entire page is wrapped in a try-catch to ensure that as soon HTML begins to return, we are ready to handle the user termination. Thread.sleep is also used to make the counting take longer; in this case, it is necessary to catch InterruptedException for the sleep statement, but IOExceptions are let through to the outer try-catch block. When users access this page, they see a growing list of numbers and an error message when the transfer is interrupted. An example of this page being interrupted is shown in Figure 10.10.
+</P>
+<P>Using this technique, regular Java exception handling can provide a mechanism for handling Web client interrupts. JSP provides a great blend of HTML layout options with the enterprise-class programming technologies of Java.</P>
+<H3><A NAME="Heading14"></A><FONT COLOR="#000077">A Preview of the New JSP Standard</FONT></H3>
+<P>Although the JSP standard is not completed, we were able to get a preview release to discuss here. This discussion is by no means complete, but it should provide a good starting point if you decide to update your JHTML files to JSP.
+</P>
+<P><A NAME="Fig10"></A><A HREF="images\10-10.jpg"><IMG SRC="images\10-10t.jpg"></A>
+<BR><A HREF="images\10-10.jpg"><FONT COLOR="#000077"><B>Figure 10.10</B></FONT></A>&nbsp;&nbsp;Interrupting a page.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>This section is based on preview code and should not be used as the basis for production implementations.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>The most notable difference between the upcoming standard and JHTML is a change in file extension from .jhtml to .jsp. The second most noticeable difference is the change in the tags. JSP uses a format similar to Active Server Pages by creating tags of the form &lt% ... %&gt. This specific tag is used in place of the &ltjava type=code&gt and &lt/java&gt tags. For example, you can write:
+</P>
+<PRE>
+&lt%
+int i=1;
+%&gt
+</PRE>
+<P>instead of
+</P>
+<PRE>
+&ltjava&gt
+int i=1;
+&lt/java&gt
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="10-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="10-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

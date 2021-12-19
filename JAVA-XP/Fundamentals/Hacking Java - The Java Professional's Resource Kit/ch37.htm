@@ -1,0 +1,1550 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 37 -- Creating Multi-User Programs in Java</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter 37</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Creating Multi-User Programs in
+Java</FONT></H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#DesigningMultiUserApplications">
+Designing Multi-User Applications</A>
+<LI><A HREF="#AddingSocketBasedAccesstoMultiUserApplications">
+Adding Socket-Based Access to Multi-User Applications</A>
+<UL>
+<LI><A HREF="#CreatingaSocketBasedServer">
+ Creating a Socket-Based Server</A>
+<LI><A HREF="#SendingMessagesoverSockets">
+Sending Messages over Sockets</A>
+</UL>
+<LI><A HREF="#OtherIssuesWhenDealingwithSockets">
+Other Issues When Dealing with Sockets</A>
+<LI><A HREF="#AddingRMIAccesstoMultiUserApplications">
+Adding RMI Access to Multi-User Applications</A>
+</UL>
+
+<HR>
+<P>
+One thing that attracts thousands of people to the Internet is
+its interactive nature. The popularity of multi-user chat programs
+like IRC and various multi-user games like MUDs (Multi-User Domain/Dungeon/Dimension)
+illustrates that fact very clearly.
+<P>
+In the beginning, multi-user programs were all text-based. There
+are many early multi-user programs that predate the Internet.
+Many multi-user programs are still text-based, but they are beginning
+to get graphical front ends (another form of encapsulation!).
+<P>
+Other programs have grown out of single-user versions. Game manufacturers,
+for instance, have begun to support Internet connections. This
+allows game users to play against each other over the Internet.
+<P>
+Java adds something that these off-the-shelf games don't really
+have. You can download a Java game and play it on any Java-enabled
+platform immediately. You can even create a game server that manages
+the connections between players. Whenever you add new games to
+the server, the players download new Java applets that present
+the user interface for the new games.
+<P>
+The multi-user paradigm isn't restricted to games, of course.
+You can set up various kinds of collaborative applications, so
+people can solve problems and complete tasks from separate parts
+of the world.
+<H2><A NAME="DesigningMultiUserApplications"><FONT SIZE=5 COLOR=#FF0000>
+Designing Multi-User Applications</FONT></A></H2>
+<P>
+A multi-user application is a slight variation on the typical
+client/server application. The only difference is that information
+passes from one client through the server to other clients. On
+a typical client/server application, information flows only from
+the client to the server and back. Figure 37.1 illustrates this
+difference.
+<P>
+<A HREF="f37-1.gif"><B>Figure 37.1 : </B><I>Information f. between users a multi-user
+application</I>.</A>
+<P>
+When you design a multi-user application, you should try to ignore
+the network if possible. You can't fully discount the network,
+of course. You have to remember that there is a high amount of
+overhead between the client and the server. You want to minimize
+the number of interactions between the client and server.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If your server needs to invoke methods in the client, define the client as an interface. This allows you to implement the client side in different ways, while not tying the server to a particular set of client implementations.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+When you create your application, you first create the server,
+and a client interface if needed. Next, you create encapsulations
+for the various network protocols and remote object systems you
+want to support. Figure 37.2 shows an example configuration, where
+the server can be accessed through TCP sockets and RMI.
+<P>
+<A HREF="f37-2.gif"><B>Figure 37.2 : </B><I>Through encapsulation, your application
+can support multiple protocols</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+As far as the server is concerned, the networking protocol is the user interface for the server. You are really just following the principle of separating the application from the user interface.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Listing 37.1 shows a server for a simple chat system. The server
+relays chat messages to the other users, and notifies the users
+whenever a new client enters the system or an existing client
+leaves.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.1&nbsp;&nbsp;Source Code for </B><TT><B>ChatServer.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.server;
+
+import java.util.Vector;
+import java.util.Hashtable;
+import java.util.Enumeration;
+
+// This is a simple chat application. It allows clients to enroll
+// under a particular name, and send messages to each other.
+// Messages are sent to the client via the ChatClient interface.
+
+public class ChatServer
+{
+// clients is a table that maps a client name to a ChatClient 
+// interface
+     protected Hashtable clients;
+
+     public ChatServer()
+     {
+          clients = new Hashtable();
+     }
+
+// Add client adds a new client to the system and tells the other
+// clients about the new client.
+
+     public synchronized void addClient(String name, 
+ChatClient client)
+     {
+
+// If the client picks a name that is already here, 
+// disconnect the new client, let the old one keep its name.
+
+          if (clients.get(name) != null) {
+               client.disconnect();
+               return;
+          }
+
+// Add the new client to the table
+          clients.put(name, client);
+
+// Tell the other clients about this new client
+          sendEnterMessage(name);
+     }
+     
+     public synchronized void removeClient(String name)
+     {
+          ChatClient client = (ChatClient) clients.get(name);
+          if (client != null) {
+               clients.remove(name);
+               sendLeaveMessage(name);
+          }
+     }
+
+// removeClient removes a client from the chat system and tells
+// the other clients about it.
+
+     public synchronized void removeClient(ChatClient client)
+     {
+
+// We remove by ChatClient, not by name. We have to enumerate through
+// all the clients to find out the name of this client.
+
+          Enumeration e = clients.keys();
+
+          while (e.hasMoreElements()) {
+               String key = (String) e.nextElement();
+
+// If we found the right name for this client, remove them and
+// tell everyone about it.
+               if (clients.get(key) == client) {
+                    clients.remove(key);
+                    sendLeaveMessage(key);
+               }
+          }
+     }
+
+// sendChat is called by a client to send a message to the 
+// other clients
+
+     public synchronized void sendChat(String name, String message)
+     {
+          Enumeration e = clients.elements();
+
+// Enumerate through all the clients and send them the chat message
+// Note that this will send a message back to the original 
+// sender, too.
+
+          while (e.hasMoreElements()) {
+               ChatClient client = (ChatClient) e.nextElement();
+
+               client.incomingChat(name, message);
+          }
+     }
+
+// sendEnterMessage tells all the clients when a new client 
+// has arrived
+
+     public synchronized void sendEnterMessage(String name)
+     {
+          Enumeration e = clients.elements();
+
+// Enumerate through all the clients and tell them about 
+// the new client
+
+          while (e.hasMoreElements()) {
+               ChatClient client = (ChatClient) e.nextElement();
+
+               client.userHasEntered(name);
+          }
+     }
+
+// sendLeaveMessage tells all the clients that a client has left
+
+     public synchronized void sendLeaveMessage(String name)
+     {
+          Enumeration e = clients.elements();
+
+// Enumerate through all the clients and tell them who left
+
+          while (e.hasMoreElements()) {
+               ChatClient client = (ChatClient) e.nextElement();
+
+               client.userHasLeft(name);
+          }
+     }
+
+// getUserList returns a list of all the users on the system
+
+     public synchronized String[] getUserList()
+     {
+          Enumeration e = clients.keys();
+
+// Create an array to hold the user names
+          String[] nameList = new String[clients.size()];
+
+// Copy the user names into the nameList array
+          int i = 0;
+          while (e.hasMoreElements()) {
+              nameList[i++] = (String) e.nextElement();
+          }
+
+// Return the name list
+          return nameList;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Since this server needs to invoke methods on the client, it defines
+a <TT>ChatClient</TT> interface that
+all clients to this system must implement. Listing 37.2 shows
+this <TT>ChatClient</TT> interface.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.2&nbsp;&nbsp;Source Code for </B><TT><B>ChatClient.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.server;
+
+public interface ChatClient
+{
+     public void incomingChat(String who, String chat);
+     public void userHasEntered(String who);
+     public void userHasLeft(String who);
+
+     public void disconnect();
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Again, it is important to note that there is no mention of a specific
+networking protocol. These two classes represent the core application.
+If you design all your applications this way, you will have no
+trouble adding other ways to access your application.
+<H2><A NAME="AddingSocketBasedAccesstoMultiUserApplications"><FONT SIZE=5 COLOR=#FF0000>
+Adding Socket-Based Access to Multi-User Applications</FONT></A></H2>
+<P>
+Once you have created an application, you can put a socket-based
+front end on it, allowing clients to access it over the network.
+Sockets are a low-level means of communication, and are simple
+to set up. Sockets are good for sending streams of bytes over
+the network. For sending messages, however, you have to do a bit
+more work.
+<P>
+It is very easy to create a socket-based server. First, you create
+a <TT>ServerSocket</TT> object that
+listens for incoming connections. Next, you use the <TT>accept</TT>
+method to wait for incoming connections. The <TT>accept</TT>
+method returns an instance of a <TT>Socket</TT>
+class, which represents the connection to the new client. After
+that, you can use <TT>getInputStream</TT>
+and <TT>getOutputStream</TT> to get
+streams to reading from and writing to the new client.
+<H3><A NAME="CreatingaSocketBasedServer">
+ Creating a Socket-Based Server</A></H3>
+<P>
+The socket-based server is a separate class from the original
+application class. The socket server is just a setup-man. It accepts
+new socket connections and then creates objects that interact
+with the real application and pass the results back to the socket-based
+client. The socket-based server itself never interacts with the
+application server.
+<P>
+Figure 37.3 illustrates a socket-based client connecting to the
+socket server.
+<P>
+<A HREF="f37-3.gif"><B>Figure 37.3 : </B><I>A socket-based client connects to the socket
+server</I>.</A>
+<P>
+Next, the server creates a socket-based client object, which implements
+the application's client interface. The socket server also tells
+the new client object where to find the application object. Figure
+37.4 illustrates this step.
+<P>
+<A HREF="f37-4.gif"><B>Figure 37.4 : </B><I>The socket server creates a socket-based
+client object to handle the connection</I>.</A>
+<P>
+Finally, the socket-based client object interacts with the application,
+passing information over the socket connection to the user on
+the other end. Figure 37.5 shows this interaction.
+<P>
+<A HREF="f37-5.gif"><B>Figure 37.5 : </B><I>The socket-based client communicates directly
+with the application</I>.</A>
+<P>
+Listing 37.3 shows a very basic TCP socket server that creates
+client objects to do the real dirty work.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.3&nbsp;&nbsp;Source Code for </B><TT><B>TCPChatServer.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.tcp.server;
+
+import java.net.*;
+import java.io.*;
+
+import chat.server.*;
+
+// This class implements a simple TCP server that listens
+// for incoming connections. It creates a TCPChatClient object
+// to handle the actual connection.
+
+public class TCPChatServer extends Object implements Runnable
+{
+// serverSocket is the socket we are listening on
+     protected ServerSocket serverSocket;
+
+// server is a reference to the application object, which we
+// pass to the TCPChatClients
+
+     protected ChatServer server;
+     protected Thread myThread;
+
+     public TCPChatServer(ChatServer server, int port)	
+     throws IOException
+     {
+          serverSocket = new ServerSocket(port);
+
+          this.server = server;
+     }
+
+     public void run()
+     {
+          while (true) {
+               try {
+// Accept a new connection
+                    Socket newConn = serverSocket.accept();
+
+// Create a client to handle the connection
+                    TCPChatClient newClient = new TCPChatClient(
+                         server, newConn);
+
+// Start the client (it's runnable)
+                    newClient.start();
+
+               } catch (Exception e) {
+               }
+          }
+     }
+
+     public void start()
+     {
+          myThread = new Thread(this);
+          myThread.start();
+     }
+
+     public void stop()
+     {
+          myThread.stop();
+          myThread = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="SendingMessagesoverSockets">
+Sending Messages over Sockets</A></H3>
+<P>
+The client handler is where the real work is done. Sending messages
+over a TCP socket is a tricky matter. There are no message boundaries
+in TCP; it's just a stream of bytes. This means that if you write
+50 bytes to the stream, the program on the other end might read
+it as two groups of 25 bytes, or 50 single bytes.
+<P>
+There are two ways to approach this problem. One way is to have
+the client and server know what kind of data is being sent at
+any time and have them read that correct number of bytes. Typically,
+you would send a message type followed by the message bytes. The
+program reading the information would determine the length and
+content of the data based on the message type.
+<P>
+The other solution is to put a message length in front of any
+message you send over the socket. For example, if you want to
+send 223 bytes, you write out 223 as a 4-byte integer value, followed
+by the 223 bytes of data. The program on the other end reads the
+4-byte length and then sees that the length is 223 bytes.
+<P>
+There are advantages and disadvantages to each approach. When
+you send messages as arrays of bytes, you have to take the extra
+step of putting the data into the array, rather than writing it
+directly to the socket. If you determine the length of the data
+based on context, you have to ensure that both ends of the connection
+are using the exact same format. In other words, if one side sends
+a message containing an integer and a string, the other side had
+better be expecting an integer and a string. If you send a message
+type that the other side doesn't understand, it can never recover.
+It has no idea how many bytes there are in the message data.
+<P>
+The <TT>TCPChatClient</TT> shown in
+Listing 37.4 combines both of these methods. It sends a 4-byte
+message type, followed by the data length, and then the data.
+It uses <TT>DataInputStream</TT> and
+<TT>DataOutputStream</TT> filters
+on top of the socket connections so it can write different data
+types easily. The <TT>TCPChatClient</TT>
+class implements the <TT>ChatClient</TT>
+interface that the <TT>ChatServer</TT>
+class uses to send a message to a particular client. For each
+different protocol you support in a chat server, you will have
+a different class that implements the <TT>ChatClient</TT>
+interface.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.4&nbsp;&nbsp;Source Code for </B><TT><B>TCPChatClient.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.tcp.server;
+
+import java.io.*;
+import java.net.*;
+
+import chat.server.*;
+import chat.tcp.common.TCPChatMessageTypes;
+
+// This class acts like a client of the ChatServer application. It
+// translates messages from a TCP socket into requests for the chat
+// server, and translates method invocations from the server into
+// TCP messages.
+
+public class TCPChatClient extends Object 
+implements ChatClient, Runnable
+{
+// server is the ChatServer application we are a client of
+     protected ChatServer server;
+
+// clientSock is the socket connection to the user
+     protected Socket clientSock;
+
+// inStream and outStream are Data streams for the socket. This allows
+// us to send information in forms other than an array of bytes
+
+     protected DataInputStream inStream;
+     protected DataOutputStream outStream;
+
+// clientName is the name the user wants to be known by
+     protected String clientName;
+
+     protected Thread myThread;
+
+     public TCPChatClient(ChatServer server, Socket clientSock)
+     throws IOException
+     {
+          this.server = server;
+          this.clientSock = clientSock;
+
+// get data streams to the socket
+
+          inStream = new DataInputStream(
+               clientSock.getInputStream());
+
+          outStream = new DataOutputStream(
+               clientSock.getOutputStream());
+
+// The first thing that the user sends us is 
+// the name they want to use
+          clientName = inStream.readUTF();
+
+// Add ourself to the server application
+          server.addClient(clientName, this);
+     }
+
+// The next few methods implement a really simple messaging protocol:
+// 4 byte Integer message type
+// 4 byte message length
+// &lt;message length&gt; bytes of data
+
+// userHasEntered is called by the server whenever there's a new user
+// the data part of the message is just the name of the user who has
+// entered.
+
+     public void userHasEntered(String who)
+     {
+          try {
+// Write the message type
+               outStream.writeInt(TCPChatMessageTypes.ENTER);
+// Write the message length
+               outStream.writeInt(who.length());
+// Write the user's name
+               outStream.writeBytes(who);
+          } catch (Exception e) {
+               server.removeClient(this);
+          }
+     }
+
+// userHasLeft is called by the server whenever there's a new user
+// the data part of the message is just the name of the user who has
+// left.
+     public void userHasLeft(String who)
+     {
+          try {
+               outStream.writeInt(TCPChatMessageTypes.LEAVE);
+               outStream.writeInt(who.length());
+               outStream.writeBytes(who);
+          } catch (Exception e) {
+               server.removeClient(this);
+          }
+     }
+
+// incomingChat is called by the server whenever someone sends a message.
+// The data part of the message has three parts:
+// the length of the name of the person sending the message (the
+// length value itself is a 4-byte integer)
+// the name of the person sending the message
+// the chat message
+
+     public void incomingChat(String who, String chat)
+     {
+          try {
+               outStream.writeInt(TCPChatMessageTypes.CHAT);
+               outStream.writeInt(who.length() + chat.length() + 4);
+               outStream.writeInt(who.length());
+               outStream.writeBytes(who);
+               outStream.writeBytes(chat);
+          } catch (Exception e) {
+               server.removeClient(this);
+          }
+     }
+
+// disconnect is called by the server when the client has 
+// been disconnected from the server. We just close down the
+// socket and stop this thread.
+
+     public void disconnect()
+     {
+          try {
+               clientSock.close();
+          } catch (Exception e) {
+          }
+          stop();
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The rest of the <TT>TCPChatClient</TT>
+class deals with messages coming in from the client. The <TT>run</TT>
+method reads in an integer message type as the first part of the
+message. It then calls an appropriate method to handle the rest
+of the message. The <TT>handleChatMessage</TT>
+method reads an incoming chat message and passes it on to the
+server to be distributed to the rest of the clients. Because this
+protocol is extremely simple, there are no other message types
+defined. 
+<P>
+Because you may want to add protocol types at some point, the
+server should be able to receive messages it does not understand
+without completely dying. In this case, because the length of
+the message is always sent after the message type, the <TT>skipMessage</TT>
+method can read in and then ignore any message that the server
+doesn't understand. You should always provide some sort of safety
+mechanism like this. Someone may take this server and really expand
+it and then write a nice client for it. If that client then accesses
+an original version of the server, it should still be able to
+safely use the original version without the server dying.
+<P>
+If you decide to change the contents of a particular message,
+you should assign that message a new message type and continue
+to support the old type. If you added a date field to the incoming
+chat message, you can't expect all the clients to suddenly support
+the new field. You should be able to handle incoming chat messages
+with or without the date field. One of the best ways to handle
+this is by adding a second message type.
+<P>
+Version numbers are another common device used for handling multiple
+formats for a particular message. When the client connects to
+the server, it tells the server which version of the messaging
+protocol it uses. If it uses version 2, for instance, it will
+be sending a date field in every chat message, while version 1
+clients don't send the date field (see Listing 37.5).
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.5&nbsp;&nbsp;Source Code for </B><TT><B>TCPChatClient.java</B></TT><B>
+(continued)<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// handleChatMessage reads an incoming chat message from the user and
+// sends it to the server. The data part of the message is just the
+// chat message itself.
+
+     public void handleChatMessage()
+     throws IOException
+     {
+// Get the message length
+          int length = inStream.readInt();
+          byte[] chatChars = new byte[length];
+
+// Read the chat message
+          inStream.readFully(chatChars);
+
+          String message = new String(chatChars, 0);
+
+// Send the chat message to the server
+          server.sendChat(clientName, message);
+     }
+
+// If we get a message we don't understand, skip over it. That's
+// why we have the message length as part of the protocol.
+
+     public void skipMessage()
+     throws IOException
+     {
+          int length = inStream.readInt();
+          inStream.skipBytes(length);
+     }
+
+     public void run()
+     {
+          while (true) {
+               try {
+
+// Read the type of the next message
+                    int messageType = inStream.readInt();
+
+                    switch (messageType) {
+
+// If it's a chat message, read it
+                         case TCPChatMessageTypes.CHAT:
+                              handleChatMessage();
+                              break;
+
+// For any messages whose type we don't understand, skip the message
+                         default:
+                              skipMessage();
+                              return;
+                    }
+               } catch (Exception e) {
+                    server.removeClient(clientName);
+                    return;
+               }
+ }
+     }
+     public void start()
+     {
+          myThread = new Thread(this);
+          myThread.start();
+     }
+
+     public void stop()
+     {
+          myThread.stop();
+          myThread = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>TCPChatClient</TT> class uses
+message types defined in an interface called <TT>TCPChatMessageTypes</TT>,
+which is shown in Listing 37.6.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.6&nbsp;&nbsp;Source Code for </B><TT><B>TCPChatMessageTypes.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.tcp.common;
+
+public interface TCPChatMessageTypes
+{
+     public static final int CHAT = 1;
+     public static final int ENTER = 2;
+     public static final int LEAVE = 3;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The user-side client program is pretty simple to write. It needs
+to connect to the <TT>TCPChatClient</TT>
+and pass chat messages to it. It must also read any messages sent
+by the server. Since the user-side client is reading from two
+different places, it needs at least two threads. The <TT>RunTCPClient</TT>
+class, shown in Listing 37.7, uses a second class called <TT>TCPChatReader</TT>
+to read messages coming from the <TT>TCPChatServer</TT>.
+The <TT>TCPChatReader</TT> class calls
+methods in <TT>RunTCPClient</TT> to
+actually display the results of a message from the server. In
+this simple example, the <TT>RunTCPClient</TT>
+class just prints the messages to <TT>System.out</TT>.
+If you were making a chat applet, however, you would display incoming
+messages differently. You could still use the <TT>TCPChatReader</TT>
+with a chat applet.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.7&nbsp;&nbsp;Source Code for </B><TT><B>RunTCPClient.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.net.*;
+import java.io.*;
+
+import chat.server.*;
+import chat.tcp.common.TCPChatMessageTypes;
+import chat.tcp.client.*;
+
+// Class is a client for the TCPChatServer object. It reads chat
+// messages from System.in and relays them to the chat server.
+// It displays any information coming back from the chat server.
+
+public class RunTCPClient extends Object implements ChatClient
+{
+     public RunTCPClient()
+     {
+     }
+
+// Display a message when there's a new user
+     public void userHasEntered(String who)
+     {
+          System.out.println(&quot;--- &quot;+who+&quot; has just entered ---&quot;);
+     }
+     
+// Display a message when someone exits
+     public void userHasLeft(String who)
+     {
+          System.out.println(&quot;--- &quot;+who+&quot; has just left ---&quot;);
+     }
+     
+// Display a chat message
+     public void incomingChat(String who, String chat)
+     {
+          System.out.println(&quot;&lt;&quot;+who+&quot;&gt; &quot;+chat);
+     }
+
+     public void disconnect()
+     {
+          System.out.println(&quot;Chat server connection closed.&quot;);
+          System.exit(0);
+     }
+
+     public static void main(String args[])
+     {
+          int port = 4321;
+
+// Allow the port to be set from the command line (-Dport=4567)
+
+          String portStr = System.getProperty(&quot;port&quot;);
+          if (portStr != null) {
+               try {
+                    port = Integer.parseInt(portStr);
+               } catch (Exception ignore) {
+               }
+          }
+
+// Allow the server's host name to be specified on the command
+// line (-Dhost=myhost.com)
+
+          String hostName = System.getProperty(&quot;host&quot;);
+          if (hostName == null) hostName = &quot;localhost&quot;;
+
+Listing 37.7&nbsp;&nbsp;Continued
+          try {
+
+
+// Connect to the TCPChatServer program
+
+               Socket clientSocket = new Socket(hostName, port);
+
+               DataOutputStream chatOutputStream =
+                    new DataOutputStream(
+                         clientSocket.getOutputStream());
+                    
+               DataInputStream chatInputStream =
+                    new DataInputStream(
+                         clientSocket.getInputStream());
+                    
+               DataInputStream userInputStream =
+                    new DataInputStream(System.in);
+
+               System.out.println(&quot;Connected to chat server!&quot;);
+// Prompt the user for a name
+               System.out.print(&quot;What name do you want to use? &quot;);
+               System.out.flush();
+
+               String myName = userInputStream.readLine();
+
+// Send the name to the server
+               chatOutputStream.writeUTF(myName);
+
+               RunTCPClient thisClient = new RunTCPClient();
+
+// Start up a reader thread that reads messages from the server
+               TCPChatReader reader = new TCPChatReader(
+                    thisClient, chatInputStream);
+
+               reader.start();
+
+// Read input from System.in
+
+               while (true) {
+
+                    String chatLine = userInputStream.readLine();
+
+                    sendChat(chatOutputStream, chatLine);
+
+               }
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception:&quot;);
+               e.printStackTrace();
+               System.exit(1);
+          }
+     }
+
+// sendChat sends a chat message to the TCPChatServer program
+
+     public static void sendChat(DataOutputStream outStream, 
+String line)
+     throws IOException
+     {
+          outStream.writeInt(TCPChatMessageTypes.CHAT);
+          outStream.writeInt(line.length());
+          outStream.writeBytes(line);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>TCPChatReader</TT> class reads
+messages from the chat server. Rather than display the messages
+itself, it invokes methods in another object. This enables you
+to customize the display of information without changing the <TT>TCPChatReader</TT>
+class. Listing 37.8 shows the <TT>TCPChatReader</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.8&nbsp;&nbsp;Source Code for </B><TT><B>TCPChatReader.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.tcp.client;
+
+import java.io.*;
+
+import chat.server.*;
+import chat.tcp.common.TCPChatMessageTypes;
+
+// This class sets up a thread that reads messages from the
+// TCPChatServer and then invokes methods in an object
+// implementing the ChatClient interface.
+
+public class TCPChatReader extends Object implements Runnable
+{
+     protected ChatClient client;
+     protected DataInputStream inStream;
+     protected Thread myThread;
+
+     public TCPChatReader(ChatClient client, 
+DataInputStream inStream)
+     {
+          this.client = client;
+          this.inStream = inStream;
+     }
+
+     public void run()
+     {
+          while (true) {
+              try {
+                    int messageType = inStream.readInt();
+
+// Look at the message type and call the appropriate method to
+// read the message.
+
+                    switch (messageType) {
+                         case TCPChatMessageTypes.CHAT:
+                             readChat();
+                              break;
+
+                         case TCPChatMessageTypes.ENTER:
+                              readEnter();
+                              break;
+
+                         case TCPChatMessageTypes.LEAVE:
+                              readLeave();
+                              break;
+
+                         default:
+                              skipMessage();
+                              break;
+                    }
+               } catch (Exception e) {
+                    client.disconnect();
+               }
+          }
+     }
+
+     public void start()
+     {
+          myThread = new Thread(this);
+          myThread.start();
+     }
+
+     public void stop()
+     {
+          myThread.stop();
+          myThread = null;
+     }
+
+// readChat has the toughest job in reading the message, and it's not
+// really that tough. The message length is the total length of the
+// bytes sent. It is followed by the length of the name of the person
+// sending the chat, and then the name itself. This method has to
+// compute the length of the chat string by subtracting the length of
+// the name, and 4 bytes for the name length.
+
+     public void readChat()
+     throws IOException
+     {
+// Get the total message length
+          int length = inStream.readInt();
+
+// Get the length of the name of the person sending the chat
+          int whoLength = inStream.readInt();
+
+// Compute the length of the chat, subtract the length of the name,
+// and 4 bytes for the length that was sent.
+
+          int chatLength = length - whoLength - 4;
+
+// Read in the name of the person sending the chat
+          byte[] whoBytes = new byte[whoLength];
+          inStream.readFully(whoBytes);
+          String whoString = new String(whoBytes, 0);
+
+// Read in the chat
+          byte[] chatBytes = new byte[chatLength];
+          inStream.readFully(chatBytes);
+          String chatString = new String(chatBytes, 0);
+
+// Pass the chat to the object that will display it
+
+          client.incomingChat(whoString, chatString);
+     }
+
+     public void readEnter()
+     throws IOException
+     {
+          int length = inStream.readInt();
+          byte[] whoBytes = new byte[length];
+          inStream.readFully(whoBytes);
+
+          String whoString = new String(whoBytes, 0);
+
+          client.userHasEntered(whoString);
+     }
+
+     public void readLeave()
+     throws IOException
+     {
+          int length = inStream.readInt();
+          byte[] whoBytes = new byte[length];
+          inStream.readFully(whoBytes);
+
+          String whoString = new String(whoBytes, 0);
+
+          client.userHasLeft(whoString);
+     }
+
+     public void skipMessage()
+     throws IOException
+     {
+          int length = inStream.readInt();
+          inStream.skipBytes(length);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="OtherIssuesWhenDealingwithSockets"><FONT SIZE=5 COLOR=#FF0000>
+Other Issues When Dealing with Sockets</FONT></A></H2>
+<P>
+When you write socket-based servers, you have to take care of
+all the problems that RMI and CORBA normally take care of. For
+instance, if a client has a very slow network link, you may have
+threads that start blocking when trying to write to the client.
+This can cause the server to appear hung for some users.
+<P>
+Just as you created a thread to read from a client, you can create
+a thread to write to a client. You can then create a pipe stream
+for sending data to the write thread. The write thread would read
+data from the pipe and write it to the client's socket connection.
+<P>
+You also have the problem of deciding when a user's connection
+is hung. Usually when a client disappears, the socket connection
+closes. Sometimes, however, the network never receives a message
+to close down the connection. You may be queuing up data for a
+client that will never read it.
+<P>
+One way to solve this problem is to keep track of how long a write
+thread has been trying to write data to a client. The write thread
+sets a flag indicating that it is trying to write and stores the
+current time before calling the <TT>write</TT>
+method. You then create a thread that runs in the background checking
+all the write threads. If it finds a thread that is trying to
+write and it has been trying to write for a certain time period
+(maybe 10-15 minutes), it closes down the connection to the client.
+<H2><A NAME="AddingRMIAccesstoMultiUserApplications"><FONT SIZE=5 COLOR=#FF0000>
+Adding RMI Access to Multi-User Applications</FONT></A></H2>
+<P>
+You don't have to implement too many complex client/server applications
+using sockets before you wish for something better. It is a huge
+hassle to send messages over a socket manually. You must either
+write some libraries to help you, or better yet, use a system
+that takes care of messaging for you. RMI and CORBA fit this bill
+perfectly.
+<P>
+When you create server encapsulations with RMI and CORBA, you
+have to set things up a little differently. The TCP server created
+client objects that actually handled the connection. In this design,
+the TCP server is acting like a factory; it produces the objects
+that handle the connections. The factory model for a TCP server
+is somewhat automatic, because the <TT>ServerSocket</TT>
+class behaves like a factory of <TT>Socket</TT>
+objects.
+<P>
+When you establish a connection using RMI or CORBA, you connect
+directly to an object. There is no new object created on the server
+side. This makes it a little more difficult to create multiple-client
+objects. You can solve this pretty easily by creating an object
+that creates connection handling objects. A client would enroll
+to this factor object, as illustrated in Figure 37.6.
+<P>
+<A HREF="f37-6.gif"><B>Figure 37.6 : </B><I>The client enrolls to the factory object</I>.</A>
+<P>
+The factory object then creates a new connection handling object
+and passes the enrolled client a reference to the new connection
+handler. The client and the connection handler now communicate
+directly; the factory object is no longer involved. Figure 37.7
+illustrates this relationship.
+<P>
+<A HREF="f37-7.gif"><B>Figure 37.7 : </B><I>The factory creates a connection handler
+object that communicates with the client</I>.</A>
+<P>
+Listing 37.9 shows an RMI interface definition for a simple factory
+object.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.9&nbsp;&nbsp;Source Code for </B><TT><B>RMIChatEnrol.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.rmi;
+
+public interface RMIChatEnrol extends java.rmi.Remote
+{
+     public RMIChatServer enrol(String name, RMIChatClient client)
+          throws java.rmi.RemoteException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 37.10 shows the RMI implementation for this factory. It
+simply identifies itself <BR>
+to the RMI registry (the RMI naming service) and then creates
+new <TT>RMIChatServerImpl</TT> objects
+in response to an enroll request from a client.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.10&nbsp;&nbsp;Source Code for </B><TT><B>RMIChatEnrolImpl.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.rmi;
+
+import java.rmi.server.UnicastRemoteServer;
+import java.rmi.server.StubSecurityManager;
+
+import chat.server.*;
+
+// This class is a factory for RMIChatServerImpl objects. Whenever
+// a client enrolls, it creates a new RMIChatServerImpl and returns
+// it to the client.
+
+public class RMIChatEnrolImpl extends UnicastRemoteServer
+     implements RMIChatEnrol
+{
+     ChatServer server;
+
+     public RMIChatEnrolImpl(ChatServer server)
+     throws Exception
+     {
+          this.server = server;
+
+// Find out what name this object should use in the RMI registry
+          String name = System.getProperty(&quot;rmiName&quot;, &quot;chat&quot;);
+
+// Identify this object to the registry
+          java.rmi.Naming.rebind(&quot;chat&quot;, this);
+     }
+
+     public RMIChatServer enrol(String name, RMIChatClient client)
+     throws java.rmi.RemoteException
+     {
+// Create a new RMIChatServerImpl and return it to the client
+          return new RMIChatServerImpl(server, name, client);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Once the connection handler is created, it needs to be able to
+communicate with the client, and the client needs to communicate
+back. Under RMI, this requires two more interfaces. Listing 37.11
+shows the <TT>RMIChatClient</TT> interface,
+which is implemented by the client. The connection handler calls
+methods in <TT>RMIChatClient</TT>
+in response to method calls from the chat application.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.11&nbsp;&nbsp;Source Code for </B><TT><B>RMIChatClient.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.rmi;
+
+public interface RMIChatClient extends java.rmi.Remote
+{
+     public void incomingChat(String who, String chat)
+          throws java.rmi.RemoteException;
+
+     public void userHasEntered(String who)
+          throws java.rmi.RemoteException;
+     
+     public void userHasLeft(String who)
+          throws java.rmi.RemoteException;
+     
+     public void disconnect()
+          throws java.rmi.RemoteException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>RMIChatServer</TT> interface
+is implemented by the connection handler. The client invokes the
+<TT>sendChat</TT> method in this interface
+to send a chat message to the chat application. Listing 37.12
+shows the <TT>RMIChatServer</TT> interface.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.12&nbsp;&nbsp;Source Code for </B><TT><B>RMIChatServer.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.rmi;
+
+public interface RMIChatServer extends java.rmi.Remote
+{
+     public void sendChat(String chat) 
+throws java.rmi.RemoteException;
+     public void disconnect() throws java.rmi.RemoteException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Unlike the complex <TT>TCPChatClient</TT>
+class, the <TT>RMIChatServerImpl</TT>
+class is extremely straightforward. It doesn't have to cram messages
+down a socket, and it doesn't have to interpret any data. All
+it does is invoke methods on the remote client or on the chat
+application. Listing 37.13 shows the <TT>RMIChatServerImpl</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.13&nbsp;&nbsp;Source Code for </B><TT><B>RMIChatServerImpl.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package chat.rmi;
+
+import java.rmi.server.UnicastRemoteServer;
+import java.rmi.server.StubSecurityManager;
+
+import chat.server.*;
+
+// This class is actually an RMI encapsulation for the
+// ChatClient interface. It implements the methods in the
+// ChatClient interface and invokes the corresponding method
+// in the RMIChatClient interface.
+
+// It also handles messages coming from the client. When the
+// sendChat method is invoked via RMI, it turns around and
+// invokes sendChat in the chat application.
+
+public class RMIChatServerImpl extends UnicastRemoteServer
+     implements RMIChatServer, ChatClient
+{
+     protected ChatServer server;
+     protected String name;
+     protected RMIChatClient client;
+
+     public RMIChatServerImpl(ChatServer server, String name,
+          RMIChatClient client)
+     throws java.rmi.RemoteException
+     {
+          this.server = server;
+          this.name = name;
+          this.client = client;
+
+          server.addClient(name, this);
+     }
+
+     public void incomingChat(String who, String chat)
+     {
+          try {
+               client.incomingChat(who, chat);
+          } catch (Exception e) {
+               try {
+                    client.disconnect();
+               } catch (Exception ignore) {
+               }
+               server.removeClient(name);
+               client = null;
+          }
+     }
+
+     public void userHasEntered(String who)
+     {
+          try {
+               client.userHasEntered(who);
+          } catch (Exception e) {
+               try {
+                    client.disconnect();
+               } catch (Exception ignore) {
+               }
+               server.removeClient(name);
+               client = null;
+          }
+     }
+
+     public void userHasLeft(String who)
+     {
+          try {
+               client.userHasLeft(who);
+          } catch (Exception e) {
+               try {
+                    client.disconnect();
+               } catch (Exception ignore) {
+               }
+               server.removeClient(name);
+               client = null;
+          }
+     }
+
+     public void disconnect()
+     {
+          try {
+               client.disconnect();
+          } catch (Exception ignore) {
+          }
+          server.removeClient(name);
+          client = null;
+     }
+
+     public void sendChat(String chat)
+          throws java.rmi.RemoteException
+     {
+          server.sendChat(name, chat);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The actual client program that you run is very simple, too. Unlike
+the TCP program, it doesn't need to spawn a separate thread, since
+RMI is running as a separate thread. The program can concentrate
+on reading input from the user. Listing 37.14 shows the <TT>RMIChatClientImpl</TT>
+object, which is the actual application that a user would run.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.14&nbsp;&nbsp;Source Code for </B><TT><B>RMIChatClientImpl.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.net.*;
+import java.io.*;
+
+import java.rmi.server.UnicastRemoteServer;
+import java.rmi.server.StubSecurityManager;
+
+import chat.server.*;
+import chat.rmi.*;
+
+// This class is an RMI client for the chat application
+
+public class RMIChatClientImpl extends UnicastRemoteServer
+implements RMIChatClient
+{
+     public RMIChatClientImpl()
+     throws java.rmi.RemoteException
+     {
+     }
+
+// The following 4 methods are callbacks from the 
+// RMIChatServerImpl class.
+
+     public void userHasEntered(String who)
+     throws java.rmi.RemoteException
+     {
+          System.out.println(&quot;--- &quot;+who+&quot; has just entered ---&quot;);
+     }
+     
+     public void userHasLeft(String who)
+     throws java.rmi.RemoteException
+     {
+          System.out.println(&quot;--- &quot;+who+&quot; has just left ---&quot;);
+     }
+     
+     public void incomingChat(String who, String chat)
+     throws java.rmi.RemoteException
+     {
+          System.out.println(&quot;&lt;&quot;+who+&quot;&gt; &quot;+chat);
+     }
+
+     public void disconnect()
+     throws java.rmi.RemoteException
+     {
+          System.out.println(&quot;Chat server connection closed.&quot;);
+          System.exit(0);
+     }
+
+     public static void main(String args[])
+     {
+// Get the name of the enroll factory
+
+          String chatName = System.getProperty(&quot;rmiName&quot;, &quot;chat&quot;);
+
+// Must have a stub security manager!
+          System.setSecurityManager(new StubSecurityManager());
+
+          try {
+
+// Get the name the user wants to use
+               System.out.print(&quot;What name do you want to use? &quot;);
+
+               System.out.flush();
+
+               DataInputStream userInputStream =
+                    new DataInputStream(System.in);
+
+               String myName = userInputStream.readLine();
+
+// Create an instance of this object to receive callbacks
+               RMIChatClient thisClient = new RMIChatClientImpl();
+
+// Locate the RMIChatEnrol object
+               RMIChatEnrol enrol = (RMIChatEnrol)
+                    java.rmi.Naming.lookup(chatName);
+
+// Enrol to the chat system
+               RMIChatServer server = enrol.enrol(myName, thisClient);
+
+// Free up the enrol object, we don't need it any more
+               enrol = null;
+
+// Read lines from the user and pass them to the server
+
+               while (true) {
+
+                    String chatLine = userInputStream.readLine();
+
+                    server.sendChat(chatLine);
+
+               }
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception:&quot;);
+               e.printStackTrace();
+               System.exit(1);
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+All you need now is a class to start up the chat application and
+set up the TCP and RMI front ends for the application. Because
+the application implementation is separate from the networking
+protocols, you can run both TCP and RMI interfaces to a single
+chat application. This means that RMI users and TCP users can
+talk together. Listing 37.15 shows the <TT>RunServer</TT>
+class that starts up everything.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 37.15&nbsp;&nbsp;Source Code for </B><TT><B>RunServer.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import chat.tcp.server.TCPChatServer;
+import chat.server.ChatServer;
+import chat.rmi.*;
+
+import java.rmi.server.StubSecurityManager;
+
+// This class starts up the chat application and the TCP and RMI
+// front ends.
+
+public class RunServer
+{
+     public static void main(String[] args)
+     {
+          try {
+
+// Start the chat application
+               ChatServer server = new ChatServer();
+
+               int port = 4321;
+
+               String portStr = System.getProperty(&quot;port&quot;);
+               if (portStr != null) {
+                    try {
+                         port = Integer.parseInt(portStr);
+                    } catch (Exception ignore) {
+                    }
+               }
+
+               System.setSecurityManager(new StubSecurityManager());
+
+// Start the RMI server
+               RMIChatEnrol rmiEnrol = new RMIChatEnrolImpl(
+                    server);
+
+// Start the TCP server
+               TCPChatServer tcpServer = new TCPChatServer(
+                    server, port);
+
+               tcpServer.start();
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception starting up:&quot;);
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+You should be able to use these classes as a starting point for
+any multi-user application you want to write. Always remember,
+however, to keep the application separated from the network protocols.
+<HR>
+
+<CENTER><P><A HREF="ch36.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch38.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

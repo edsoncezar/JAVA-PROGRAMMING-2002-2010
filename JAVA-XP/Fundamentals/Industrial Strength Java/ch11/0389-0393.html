@@ -1,0 +1,642 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0384-0388.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0394-0398.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-389"><P>Page 389</P></A>
+
+
+
+
+
+
+
+<P>These situations are shown in figure 11.4. In (a), the client crashes (or communication
+
+is broken) during a transaction and the server's TCP detects the failure and eventually
+
+aborts the connection. In (b), the failure is transactional after the server has sent the response
+
+and is waiting for the next request. In this case, the server waits forever for the next request.<BR>
+
+</P>
+
+
+
+<P><a href="images\ch11fg04.jpg"><img src="images\tn_ch11fg04.jpg"></a><BR>
+
+Figure 11.4
+
+Connection failure modes.
+
+</P>
+
+
+
+<H4><A NAME="ch11_ 11">
+
+Implementing TimeoutInputStream
+
+</A></H4>
+
+
+
+<P>During the creation of a new TimeoutInputStream instance, the system remembers
+
+the current thread as the owner of the stream. Only the owner of the stream blocks waiting
+
+for input, and you interrupt this thread when the timeout expires. You can add this new
+
+stream instance to the static list of instances maintained by the class. Your
+
+TimeoutInputStream subclasses InputStream, as illustrated in this code:
+
+</P>
+
+
+<PRE>
+
+public class TimeoutInputStream extends InputStream {
+
+    static Vector instanceList = new Vector();
+
+
+
+    InputStream in;
+
+    long lastActive;
+
+    Thread owner;
+
+
+
+    public TimeoutInputStream(InputStream in) {
+
+    this.in = in;
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-390"><P>Page 390</P></A>
+
+
+
+
+
+
+<PRE>
+
+    lastActive = 0;
+
+    owner = Thread.currentThread();
+
+    instanceList.addElement(this);
+
+    }
+
+</PRE>
+
+
+
+
+<P>You provide methods to read and change the lastActive variable, as shown in the
+
+following listing.
+
+</P>
+
+
+<PRE>
+
+protected void setLastActive(long time) {
+
+    lastActive = time;
+
+    }
+
+
+
+    protected long getLastActive() {
+
+    return lastActive;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Resetting Timeout
+
+</B>
+
+</P>
+
+
+
+<P>Override all data handling methods to clear the lastActive variable and reset the
+
+timeout mechanism when a read operation successfully completes, as shown here:
+
+</P>
+
+
+<PRE>
+
+    public int read() throws IOException {
+
+    int rtn = in.read();
+
+    lastActive = 0;
+
+    return rtn;
+
+    }
+
+
+
+    public int read(byte b[], int off, int len) throws IOException {
+
+    int rtn = in.read(b, off, len);
+
+    lastActive = 0;
+
+    return rtn;
+
+    }
+
+
+
+    public long skip(long n) throws IOException {
+
+    long rtn = in.skip(n);
+
+    lastActive = 0;
+
+    return rtn;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Providing Access to Non-data Handling Methods
+
+</B>
+
+</P>
+
+
+
+<P>You also provide pass-through methods that make the various non-data handling
+
+methods of the encapsulated stream available, as shown in the following listing.
+
+</P>
+
+
+
+
+
+<A NAME="PAGENUM-391"><P>Page 391</P></A>
+
+
+
+
+
+
+<PRE>
+
+    public int available() throws IOException {
+
+    return in.available();
+
+    }
+
+
+
+    public synchronized void mark(int readlimit) {
+
+    in.mark(readlimit);
+
+    }
+
+
+
+    public synchronized void reset() throws IOException {
+
+    in.reset();
+
+    }
+
+
+
+    public boolean markSupported() {
+
+    return in.markSupported();
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Closing the TimeoutInputStream
+
+</B>
+
+</P>
+
+<P>When closing the stream, you remove it from the list of streams monitored for activity:
+
+</P>
+
+
+<PRE>
+
+   public void close() throws IOException {
+
+    in.close();
+
+    lastActive = 0;
+
+    owner = null;
+
+    instanceList.removeElement(this);
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Interrupting the Blocked Thread
+
+</B>
+
+</P>
+
+<P>Finally, you provide an abort() method, which is called when the system detects a
+
+timeout. Because Java 1.0 does not implement thread interrupt, the only other option for
+
+interrupting a thread blocked on input is to kill the thread and close the stream. This releases
+
+any allocated operating system resources:
+
+</P>
+
+
+
+
+<PRE>
+
+   protected void abort() {
+
+    try {
+
+      if (owner != null) {
+
+        owner.stop();
+
+        close();
+
+      }
+
+    }
+
+    catch (Exception e) {
+
+    }
+
+    }
+
+
+
+  }
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-392"><P>Page 392</P></A>
+
+
+
+
+
+
+
+<P>If your handler must perform some clean-up, you can catch ThreadDeath; remember
+
+to throw it again, or the thread will never really die.
+
+</P>
+
+
+
+<H4><A NAME="ch11_ 12">
+
+Implementing the StreamMonitor
+
+</A></H4>
+
+
+
+<P>In addition to the mechanism built into TimeoutInputStream to detect input inactivity,
+
+you must add a separate thread to actually monitor the streams. A StreamMonitor
+
+accomplishes this task.
+
+</P>
+
+
+
+<P>Create the StreamMonitor instance in a high-level thread, generally the Main thread,
+
+to monitor the TimeoutInputStream instances. Specifically, to have permission to
+
+interrupt the blocked thread, the StreamMonitor thread must be a member of the ThreadGroup
+
+of the thread blocked for input. It also can be a member of any parent ThreadGroup. If
+
+you create the StreamMonitor either in the main() routine or inside the Server,
+
+the StreamMonitor always has permission to do its job.
+
+</P>
+
+
+
+<P>StreamMonitor subclasses Thread; its default behavior runs every 60 seconds and
+
+aborts any stream idle for more than about 5 minutes. These values are representative of
+
+those useful for most TCP-based services:
+
+</P>
+
+
+<PRE>
+
+  class StreamMonitor extends Thread {
+
+    static long timeout = 5*60*1000;
+
+    final static long runInterval = 60*1000;
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Initializing the StreamMonitor
+
+</B>
+
+</P>
+
+
+
+<P>Because the StreamMonitor operates as a background support thread, you must
+
+indicate that it is a daemon thread and set its priority below normal client handling. You
+
+automatically start it in its constructor:
+
+</P>
+
+
+<PRE>
+
+   public StreamMonitor() {
+
+    super(&quot;StreamMonitor&quot;);
+
+    setPriority(Thread.NORM_PRIORITY - 1);
+
+    setDaemon(true);
+
+    this.start();
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Determining Timeout Intervals
+
+</B>
+
+</P>
+
+
+
+<P>StreamMonitor processing is simple: The monitor sleeps most of the time and
+
+wakes periodically to scan the list of instances maintained by TimeoutInputStream as a
+
+static class variable. If a stream's lastActive value is 0, recent activity has occurred&#151;
+
+set lastActive to the current time. If the lastActive is non-zero, compute the elapsed time
+
+and
+
+</P>
+
+
+
+
+
+<A NAME="PAGENUM-393"><P>Page 393</P></A>
+
+
+
+
+
+
+
+<P>decide whether the timeout interval has expired. When the timeout interval expires,
+
+call abort() on the stream:
+
+</P>
+
+
+<PRE>
+
+    public void run() {
+
+    while (true) {
+
+      try {
+
+        Enumeration enum = null;
+
+        sleep(runInterval);
+
+        long currTime = System.currentTimeMillis();
+
+        enum = TimeoutInputStream.instanceList.elements();
+
+        while (enum.hasMoreElements()) {
+
+          TimeoutInputStream stream =
+
+                     &Acirc;(TimeoutInputStream)(enum.nextElement());
+
+          long lastActive = stream.getLastActive();
+
+          if (lastActive == 0)
+
+            stream.setLastActive(currTime);
+
+          else if ((currTime - lastActive) &gt; timeout)
+
+            stream.abort();
+
+        }
+
+      }
+
+      catch (InterruptedException e) {
+
+        System.out.println(e);
+
+      }
+
+    }
+
+    }
+
+
+
+  }
+
+</PRE>
+
+
+
+
+<P>Note that calling abort() produces a call to close(). This removes the stream from
+
+the TimeoutInputStream instance list. The standard Java enumerators do not handle the
+
+case of removing elements from the underlying list correctly: The enumerator skips over
+
+the next element. Time outs should be infrequent occurrences, however, so you can ignore
+
+this situation and not implement a Vector enumerator.
+
+</P>
+
+
+
+<H3><A NAME="ch11_ 13">
+
+CommandInputStream
+
+</A></H3>
+
+
+
+<P>A significant part of the effort in coding a server relates to parsing commands and
+
+their arguments. The CommandInputStream works like a tokenizer. Its only difference is
+
+that instead of returning strings, CommandInputStream returns integer values that
+
+represent the command strings. When you create a CommandInputStream, you assign it either a
+
+pre-built keyword table or an ordered list of keyword strings. When
+
+CommandInputStream recognizes a keyword, it returns the index into this list. As usual, negative values
+
+indicate situations such as end-of-line and end-of-file:
+
+</P>
+
+
+
+<P><CENTER>
+
+<a href="0384-0388.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0394-0398.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

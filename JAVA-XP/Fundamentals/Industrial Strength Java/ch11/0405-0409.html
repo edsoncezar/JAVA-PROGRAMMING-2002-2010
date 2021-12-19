@@ -1,0 +1,721 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0399-0404.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0410-0414.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-405"><P>Page 405</P></A>
+
+
+
+
+
+
+
+
+
+<P>Both the request and the response headers can contain modifiers
+
+or additional information fields. The format involves
+
+keyword/value pairs, one per line, with the keyword separated from the
+
+value information by a colon.
+
+</P>
+
+
+
+<P>The HTTP protocol handler is an abstract subclass of
+
+ClientHandler. This handler supports only the three most common commands:
+
+GET, HEAD, and POST.
+
+</P>
+
+
+
+
+<PRE>
+
+  abstract class HTTPHandler extends ClientHandler {
+
+    CommandInputStream in;
+
+    InetOutputStream out;
+
+
+
+    private final static String keywordList[] = {
+
+    &quot;GET&quot;, &quot;POST&quot;, &quot;HEAD&quot;
+
+    };
+
+
+
+    static KeywordTable keywordTable =
+
+            &Acirc;CommandInputStream.createKeywordTable(keywordList);
+
+
+
+    private final static int CMD_GET = 0;
+
+    private final static int CMD_POST = 1;
+
+    private final static int CMD_HEAD = 2;
+
+
+
+    private final static String delimiters = &quot;
+
+         &Acirc;\t\r\n&quot;;
+
+
+
+    public HTTPHandler(Socket connection) {
+
+    super(connection);
+
+    }
+
+</PRE>
+
+
+
+
+<H4><A NAME="ch11_ 23">
+
+Servicing HTTP Connections
+
+</A></H4>
+
+
+
+<P>Create the command input and output streams, and then read the HTTP request. For
+
+this simple HTTP server, ignore the other attributes of the request and call a handler
+
+method specific to each of the supported commands:
+
+</P>
+
+
+
+
+<PRE>
+
+    public void run() {
+
+    try {
+
+      in = new CommandInputStream(connection.getInputStream(),
+
+            &Acirc;keywordTable, delimiters);
+
+      out = new InetOutputStream(connection.getOutputStream(), false);
+
+      int cmd = in.nextCommand();
+
+</PRE>
+
+
+<BR><BR>
+
+<P>
+
+
+
+<CENTER>
+
+<TABLE BGCOLOR="#FFFF99">
+
+<TR><TD><B>
+
+NOTE
+
+</B></TD></TR>
+
+<TR><TD>
+
+<BLOCKQUOTE>
+
+The style of the HTTP request and reply header
+
+appears vaguely familiar because HTTP follows the approach used
+
+in e-mail headers. An Internet e-mail header consists of a
+
+sequence of lines, each of which contains a keyword, colon,
+
+and information associated with the keyword. Some keywords for
+
+e-mail, for example, include &quot;From:&quot;, &quot;Sender:&quot;, and
+
+&quot;In-reply-to:&quot;. Common HTTP keywords include
+
+&quot;content-type:&quot;, &quot;last-
+
+modified:&quot;, and &quot;server:&quot;.
+
+</BLOCKQUOTE></TD></TR>
+
+</TABLE></CENTER>
+
+</P>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-406"><P>Page 406</P></A>
+
+
+
+
+
+
+<PRE>
+
+      String arg = in.nextArg();
+
+      switch (cmd) {
+
+        case CMD_GET:  handleGET(arg);
+
+                       break;
+
+        case CMD_POST: handlePOST(arg);
+
+                       break;
+
+        case CMD_HEAD: handleHEAD(arg);
+
+                       break;
+
+        default:       handleOther();
+
+      }
+
+    }
+
+    catch (Exception e) {
+
+      ServerLog.out.println(e);
+
+    }
+
+    finally {
+
+      try {
+
+        out.close();
+
+      }
+
+      catch (IOException e) {
+
+      }
+
+    }
+
+    }
+
+</PRE>
+
+
+
+
+<H4><A NAME="ch11_ 24">
+
+Handling HTTP Requests
+
+</A></H4>
+
+
+
+<P>If your subclass does not override a particular command method, the system returns
+
+a standard &quot;not implemented&quot; response. Because you normally expect multiline
+
+responses, the InetOutputStream appears in multiline mode that requires you to flush() the output:
+
+</P>
+
+
+
+
+
+
+<PRE>
+
+    void handleGET(String arg) throws IOException {
+
+    out.println(&quot;HTTP/1.0 501 method not implemented&quot;);
+
+    out.println();
+
+    out.flush();
+
+    }
+
+
+
+    void handleHEAD(String arg) throws IOException {
+
+    out.println(&quot;HTTP/1.0 501 method not implemented&quot;);
+
+    out.println();
+
+    out.flush();
+
+    }
+
+
+
+    void handlePOST(String arg) throws IOException {
+
+    out.println(&quot;HTTP/1.0 501 method not implemented&quot;);
+
+    out.println();
+
+
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-407"><P>Page 407</P></A>
+
+
+
+
+
+
+<PRE>
+
+
+
+
+
+    out.flush();
+
+    }
+
+
+
+    void handleOther() throws IOException {
+
+    out.println(&quot;HTTP/1.0 400 Bad request&quot;);
+
+    out.println();
+
+    out.flush();
+
+    }
+
+
+
+  }
+
+</PRE>
+
+
+
+
+<H3><A NAME="ch11_ 25">
+
+Mail Storage Abstractions
+
+</A></H3>
+
+
+
+<P>Storage of e-mail ranks as a key component of your server. Two separate servers,
+
+SMTP and POP, interact with the e-mail store, so you must produce a common abstraction
+
+to isolate both services from the details of mail storage. The top-level class,
+
+MailDomain, produces abstract mail interactions for a community of users. You create a Maildrop
+
+class to manage the temporary storage on the mail server for a given user. (Maildrop
+
+distinguishes the temporary server storage of mail from the permanent storage in mail boxes
+
+on the client computers.)
+
+</P>
+
+
+
+<H4><A NAME="ch11_ 26">
+
+MailDomain Class
+
+</A></H4>
+
+
+
+<P>The highest level abstraction, MailDomain, has both a name (its SMTP host name) and
+
+a set of users. Your SMTP and POP servers call the MailDomain object to validate
+
+recipient addresses, check passwords, and access a user's Maildrops. Information about users,
+
+such as their password, must be persistent. The Properties class provides both the persistent
+
+and quick access using hashing techniques, so you can implement the MailDomain by using
+
+a Properties object.
+
+</P>
+
+
+
+<B>
+
+Mail Domain Properties File
+
+</B>
+
+
+
+<P>Use the user name as the key to the Properties table; the return value string contains
+
+the user's password, Maildrop file name, and any other necessary information. A &quot;|&quot;
+
+character separates the fields. Meanwhile, the special user name DOMAIN.NAME stores the
+
+DNS name of the host. A sample MailDomain file follows:
+
+</P>
+
+
+
+<A NAME="PAGENUM-408"><P>Page 408</P></A>
+
+
+
+
+
+
+<PRE>
+
+  DOMAIN.NAME=yourhost.com
+
+  Joe=bluesky|/etc/mb/joe
+
+  Sue=redwood|/etc/mb/sue
+
+</PRE>
+
+
+
+
+<P>In this example, Joe's password is &quot;bluesky,&quot; and Sue's mail is stored in &quot;/etc/mb/sue.&quot;
+
+</P>
+
+
+
+<P>In a complete production system, you must include ways to add a new user, delete a
+
+user, and change a user's password. For added security, you can store a one-way cipher of
+
+the password rather than plain text. In future Java releases, you also can use the new
+
+built-in security services to authenticate users. For this example, the operator must manually
+
+edit the Properties file.
+
+</P>
+
+
+
+<B>
+
+Implementing the MailDomain Class
+
+</B>
+
+
+
+<P>You create a new MailDomain instance with the file name of its properties file.
+
+The constructor loads the properties table from the file and determines the domain name:
+
+</P>
+
+
+
+
+<PRE>
+
+  public class MailDomain {
+
+    Properties p;
+
+    String domainName;
+
+
+
+    MailDomain(String fname) throws IOException {
+
+    p = new Properties();
+
+    p.load(new FileInputStream(fname));
+
+    domainName = p.getProperty(&quot;DOMAIN.NAME&quot;);
+
+    if (domainName == null)
+
+      throw new IOException(&quot;domain name property missing&quot;);
+
+    System.out.println(&quot;Domain name is &quot; + domainName);
+
+    }
+
+
+
+    String domainName() {
+
+    return domainName;
+
+    }
+
+</PRE>
+
+
+
+
+<P>For larger systems, when it is not practical to load all user information into memory,
+
+you can change the implementation to access user information stored as a file. To provide
+
+this flexibility in implementation, MailDomain includes a Properties object rather
+
+than subclassing from Properties.
+
+</P>
+
+
+
+<B>
+
+Validating the User
+
+</B>
+
+
+
+
+
+<P>The MailDomain provides methods to validate a user for receipt of mail, to check a
+
+user's password for login, and to create the Maildrop object that provides access to the
+
+user's
+
+</P>
+
+
+
+<A NAME="PAGENUM-409"><P>Page 409</P></A>
+
+
+
+
+
+
+
+<P>temporary mail store. To validate a mailbox name, first check the domain name and
+
+then verify the user:
+
+</P>
+
+
+
+
+<PRE>
+
+    boolean validateUser(String rcpt) {
+
+    if (rcpt.endsWith(&quot;@&quot; + domainName)) {
+
+      String user = rcpt.substring(0, rcpt.length() -
+
+      &Acirc;domainName.length() -1);
+
+      return p.getProperty(user) != null;
+
+      }
+
+    return false;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Verifying User Password
+
+</B>
+
+</P>
+
+
+
+<P>The &quot;|&quot; characters separate items in the user's properties string. The user's
+
+password appears as the first item in the list:
+
+</P>
+
+
+<PRE>
+
+    boolean checkPassword(String user, String passwd) {
+
+    String userInfo = p.getProperty(user);
+
+    return (userInfo != null) ? userInfo.startsWith(passwd + &quot;|&quot;) :
+
+       &Acirc;false;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Opening the MailDrop File
+
+</B>
+
+</P>
+
+
+
+<P>Mail handling software calls getMaildrop()for the mail store abstraction for the
+
+indicated user. The domain properties file retrieves Information about the user's mail drop to
+
+create the Maildrop:
+
+</P>
+
+
+
+
+<PRE>
+
+    Maildrop getMaildrop(String user) throws IOException {
+
+    String userInfo = p.getProperty(user);
+
+    String mdfile = userInfo.substring(userInfo.indexOf(`|') + 1,
+
+         &Acirc;userInfo.length());
+
+    return Maildrop.getMaildrop(mdfile);
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Writing E-Mail to Maildrops
+
+</B>
+
+</P>
+
+
+
+<P>Finally, the MailDomain manages the process of writing a received message to the
+
+user's Maildrop. For each recipient, extract the local maildrop name, obtain its Maildrop
+
+object, and deliver the message. You can catch all exceptions and return false on any error.
+
+An additional try/finally block appears around md.deliverMsg() to guarantee
+
+Maildrop release-*
+
+</P>
+
+
+
+<P><CENTER>
+
+<a href="0399-0404.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0410-0414.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

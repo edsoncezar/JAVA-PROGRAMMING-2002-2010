@@ -1,0 +1,356 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0426-0430.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0437-0441.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-431"><P>Page 431</P></A>
+
+
+
+<P>In a typical scenario, the client follows these steps:
+</P>
+
+<OL>
+<LI>          Log in to the server by sending a USER and PASS commands.
+<LI>     Determine the number of waiting messages by using the STAT command.
+<LI>     Retrieve each message using RETR and then mark the message for deletion
+using DELE.
+<LI>     Exit and delete the message by using the QUIT command.
+</OL>
+
+<P>A typical POP session is shown in figure 11.8 where the user logs in and retrieves
+one message.
+</P>
+
+<P><a href="images\ch11fg08.jpg"><img src="images\tn_ch11fg08.jpg"></a><BR>
+Figure 11.8
+POP3 packet exchanges to retrieve and delete
+one message.
+</P>
+
+<H4><A NAME="ch11_ 34">
+POP3HandlerFactory Class
+</A></H4>
+
+<P>You provide the usual factory to create the POP handler on the standard well-known
+port of 110. For an intranet server, modify the factory to place additional restrictions on
+the client. For example, you can allow access to your POP server only from your
+own networks. This factory accepts connections from any clients and depends on the
+password facility to keep mail private:
+</P>
+
+<A NAME="PAGENUM-432"><P>Page 432</P></A>
+
+
+<PRE>
+  public class POP3HandlerFactory extends ClientHandlerFactory {
+    MailDomain domain;
+
+    public POP3HandlerFactory(MailDomain domain) {
+    this.domain = domain;
+    }
+
+    int serverPort() {
+    return 110;
+    }
+
+    String getName() {
+    return &quot;POP&quot;;
+    }
+
+    ClientHandler createClientHandler(Socket connection) {
+    return new POP3Handler(connection, domain);
+    }
+  }
+</PRE>
+
+<H4><A NAME="ch11_ 35">
+POP3Handler Class
+</A></H4>
+
+<P>Your POP3 handler supports only the minimum required commands for a POP server.
+The handler does not support the use of the server as a semi-permanent mailbox. The
+POP3 handler subclasses ClientHandler and initializes its static keyword table for
+command parsing:
+</P>
+<PRE>
+  class POP3Handler extends ClientHandler {
+    CommandInputStream in;
+    InetOutputStream out;
+    MailDomain domain;
+    Maildrop md;
+
+    private final static String keywordList[] = {
+    &quot;STAT&quot;, &quot;LIST&quot;, &quot;RETR&quot;, &quot;DELE&quot;, &quot;QUIT&quot;, &quot;RSET&quot;, &quot;NOOP&quot;, &quot;USER&quot;,
+       &Acirc;&quot;PASS&quot;
+    };
+
+    static KeywordTable keywordTable =
+         &Acirc;CommandInputStream.createKeywordTable(keywordList);
+
+    private final static int CMD_STAT = 0;
+    private final static int CMD_LIST = 1;
+</PRE>
+
+<A NAME="PAGENUM-433"><P>Page 433</P></A>
+
+
+<PRE>
+    private final static int CMD_RETR = 2;
+    private final static int CMD_DELE = 3;
+    private final static int CMD_QUIT = 4;
+    private final static int CMD_RSET = 5;
+    private final static int CMD_NOOP = 6;
+    private final static int CMD_USER = 7;
+    private final static int CMD_PASS = 8;
+
+    private final static String delimiters = &quot; \t\r\n&quot;;
+
+    public POP3Handler(Socket connection, MailDomain domain) {
+    super(connection);
+    this.domain = domain;
+    }
+</PRE>
+<P>
+
+<B>
+Opening POP3 Session
+</B>
+</P>
+
+<P>In your run() method, you create your input and output streams and then send a
+&quot;+OK&quot; response to the client. The client responds with USER and PASS commands to
+authenticate access to the maildrop:
+</P>
+
+<PRE>
+    public void run() {
+    try {
+      in = new CommandInputStream(connection.getInputStream(),
+            &Acirc;keywordTable, delimiters);
+      out = new InetOutputStream(connection.getOutputStream(), true);
+
+      out.println(&quot;+OK ready&quot;);
+      if (in.nextCommand() != CMD_USER) {
+        out.println(&quot;-ERR&quot;);
+        return;
+      }
+      String user = in.nextArg();
+      out.println(&quot;+OK&quot;);
+      if (in.nextCommand() != CMD_PASS) {
+        out.println(&quot;-ERR must enter password&quot;);
+        return;
+      }
+      String passwd = in.hasMoreArgs() ? in.nextArg() : &quot;&quot;;
+      if (!domain.checkPassword(user, passwd)) {
+        out.println(&quot;-ERR invalid login&quot;);
+        return;
+      }
+</PRE>
+
+<A NAME="PAGENUM-434"><P>Page 434</P></A>
+
+
+
+<B>
+Providing Maildrop Access
+</B>
+
+<P>After checking the password, obtain the user's Maildrop and lock it. If the Maildrop
+is involved in another POP session, the lock() call returns false, and you respond
+with &quot;mailbox busy.&quot; After the user logs onto the POP3 server, call handleCommands()
+to provide access to the maildrop. Use the &quot;finally&quot; clause to ensure that you release
+the maildrop if you terminate abnormally:
+</P>
+<PRE>
+      md = domain.getMaildrop(user);
+      if (!md.lock()) {
+        out.println(&quot;-ERR mailbox busy&quot;);
+        return;
+      }
+      out.println(&quot;+OK&quot;);
+
+      handleCommands();
+    }
+    catch (Exception e) {
+      System.out.println(e);
+    }
+    finally {
+      if (md != null)
+        md.release();
+      try {
+        out.close();
+      }
+      catch (IOException e) {
+      }
+    }
+    }
+</PRE>
+
+<P>
+<B>
+Handling POP Commands
+</B>
+</P>
+
+<P>After the user logs onto the POP3 server, you can read a command, execute it and
+loop until the user issues a QUIT command. Call handler methods for all non-trivial
+command processing:
+</P>
+
+<PRE>
+    void handleCommands() throws Exception {
+    try {
+      boolean done = false;
+      while (!done) {
+        int cmd = in.nextCommand();
+        switch (cmd) {
+          case CMD_STAT:
+            handleSTAT();
+            break;
+</PRE>
+
+<A NAME="PAGENUM-435"><P>Page 435</P></A>
+
+
+<PRE>
+         case CMD_LIST:
+            handleLIST();
+            break;
+
+          case CMD_RETR:
+            handleRETR();
+            break;
+
+          case CMD_DELE:
+            handleDELE();
+            break;
+
+          case CMD_RSET:
+            md.reset();
+            break;
+
+          case CMD_NOOP:
+            out.println(&quot;+OK&quot;);
+            break;
+
+          case CMD_QUIT:
+            done = true;
+            break;
+
+          default:
+            out.println(&quot;-ERR bad command&quot;);
+        }
+      }
+      out.println(&quot;+OK&quot;);
+      md.update();
+    }
+    catch (Exception e) {
+      md.unlock();
+      throw e;
+    }
+    }
+</PRE>
+<P>
+<B>
+Determining Maildrop Information
+</B>
+</P>
+
+<P>In response to the STAT command, return the number of messages waiting in the
+maildrop and the total number of characters in those messages:
+</P>
+
+<PRE>
+    void handleSTAT() throws IOException {
+    out.println(&quot;+OK &quot; + md.count() + &quot; &quot; + md.maildropLength());
+    }
+</PRE>
+
+<A NAME="PAGENUM-436"><P>Page 436</P></A>
+
+
+
+<B>
+Determining Message Length
+</B>
+
+<P>The client uses the LIST command to obtain the length of a given message, or a
+message-by-message indication of the size of each message in the maildrop. You only include
+those messages not marked for deletion. In POP, multiline responses are terminated by a
+line containing only a &quot;.&quot;. Because the other lines of the response never start with a &quot;.&quot;, it is
+not necessary to check for doubling of an initial &quot;.&quot;:
+</P>
+
+<PRE>
+    void handleLIST() throws IOException {
+    int count = md.count();
+    if (in.hasMoreArgs()) {
+      int id = Integer.parseInt(in.nextArg());
+      if ((id &lt;= count) &amp;&amp; md.msgDeleted[id - 1]) {
+        out.println(&quot;+OK&quot;);
+        out.println(&quot;&quot; + id + &quot; &quot; + md.messageLength(id - 1));
+        out.println(&quot;.&quot;);
+      }
+      else
+        out.println(&quot;-ERR invalid msg number&quot;);
+    }
+    else {
+      out.println(&quot;+OK&quot;);
+      for (int i = 0; i &lt; count; i++) {
+        if (!md.msgDeleted[i])
+          out.println(&quot;&quot; + (i+1) + &quot; &quot; +  md.messageLength(i));
+      }
+      out.println(&quot;.&quot;);
+    }
+    }
+</PRE>
+
+<P>
+<B>
+Retrieving Messages
+</B>
+</P>
+
+<P>In response to a RETR command, return the indicated message. POP numbers
+messages waiting in the maildrop starting from 1. Because you expect the message to
+constitute many, switch the output steam to manual flush. Afterwards, restore the output to
+line mode. As with SMTP, you must insert an extra &quot;.&quot; in front of any line that starts with a
+&quot;.&quot;. This code appears similar to that found in SMTPMessage:
+</P>
+
+<PRE>
+    void handleRETR() throws IOException {
+    int cnt;
+    int i = Integer.parseInt(in.nextArg()) - 1;
+    out.setLinemode(false);
+    out.println(&quot;+OK&quot;);
+    InputStream in = md.getMessage(i);
+    byte buf[] = new byte[1024];
+    while ((cnt = in.read(buf)) &gt; 0) {
+</PRE>
+
+
+<P><CENTER>
+<a href="0426-0430.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0437-0441.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

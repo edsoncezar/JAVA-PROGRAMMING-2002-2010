@@ -1,0 +1,946 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 3 -- Exploiting the Network</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 3</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Exploiting the Network</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#RetrievingDataUsingURLs" >Retrieving Data Using URLs</A>
+<LI><A HREF="#PostingDatatoaURL" >Posting Data to a URL</A>
+<LI><A HREF="#CommunicationUsingSockets" >Communication Using Sockets</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+Because Java applets are usually prohibited from accessing files
+or other resources on the system where they are running, it's
+sometimes difficult to find really useful tasks for applets to
+do. However, one useful thing that applets can do is access the
+network. While interacting with a user, applets can retrieve new
+data from the network or request information from the user and
+return that information to the server. There may still be some
+restrictions; for example, Netscape Navigator currently permits
+an applet to communicate only with the host from which it was
+loaded. Nevertheless, with the proper support on the server, an
+applet can get anything it needs from the network.
+<P>
+Additionally, the built-in networking support in the Java library
+makes exploiting the network easy. This chapter explains several
+ways to access the network from applets.
+<H2><A NAME="RetrievingDataUsingURLs"><FONT SIZE=5 COLOR=#FF0000>Retrieving
+Data Using URLs</FONT></A></H2>
+<P>
+One of the nicest aspects of the core Java library is that it
+provides built-in classes for using the Internet and the World
+Wide Web. The URL class and its associated classes are particularly
+useful, because they provide a simplified, high-level interface
+to common network operations, especially document retrieval.
+<P>
+A <I>Universal Resource Locator </I>(<I>URL</I>) can be used to
+fetch a document of some sort-text, HTML, image, video, audio,
+or some other type of document, such as a Java class file. The
+Java library makes it extremely easy to fetch a document from
+the network using a URL.
+<H3>Retrieving Typed Data Objects</H3>
+<P>
+Here's a short code fragment that shows how to fetch one document
+using a URL:
+<BLOCKQUOTE>
+<TT>URL home = new URL(&quot;http://www.utdallas.edu/~glv/&quot;);
+<BR>
+Object page = home.getContent();</TT>
+</BLOCKQUOTE>
+<P>
+That's actually all there is to it (under some circumstances),
+although there is usually a little more error handling to do.
+There are certainly other options that you can use if you want,
+but it's nice to know that the basics of parsing the URL, finding
+the remote host, opening the connection, initializing the protocol,
+requesting the appropriate document, and reading it into a local
+buffer are all taken care of by the Java library.
+<P>
+There are actually several ways to create a new URL object, using
+different types of information:
+<UL>
+<LI><TT>URL(String spec)</TT> is the
+simple way, in which the single parameter is a URL string.
+<LI><TT>URL(URL context, String spec)</TT>
+creates a new URL relative to an existing URL specified by the
+<TT>context</TT> parameter. The constructor
+is smart enough to recognize when the <TT>spec</TT>
+parameter is an absolute URL; it ignores the context <TT>parameter</TT>
+in that case.
+<LI><TT>URL(String protocol, String host,
+String file)</TT> enables you to specify each of the three
+main parts of a URL independently.
+<LI><TT>URL(String protocol, String host,
+int port, String file)</TT> is just like the previous constructor,
+except that it also enables you to explicitly specify a port number
+on the host. Usually, the port number is implied by the protocol
+name.
+</UL>
+<P>
+You will probably use the first method frequently, the second
+less often, and the last two methods rarely. Why go to the trouble
+of parsing a URL into its constituent parts when the URL class
+will do it for you?
+<P>
+When you create a URL object, it doesn't open a network connection
+automatically. That doesn't happen until the object needs to open
+the connection to satisfy some other request. For example, in
+the previous code fragment, the URL object connected to host <TT>www.utdallas.edu</TT>
+when the <TT>getContent</TT> call
+was made.
+<P>
+You might be wondering how to use the document once you fetch
+it, because the <TT>page</TT> variable
+in the example was declared as an <TT>Object</TT>.
+The actual type of object that is returned is determined by the
+data format of the document. If the URL points to an image in
+GIF format, for example, the object returned will be an <TT>Image</TT>
+object. Usually, when you retrieve a URL, you will have some idea
+of what kind of object you will get. (If you're interested in
+the details of how the mechanism works, it's explained in <A HREF="ch17.htm" >Chapter 17</A>,
+&quot;Network-Extensible Applications with Factory Objects.&quot;)
+<H3>Accessing the Raw URL Stream</H3>
+<P>
+If you don't want to get the entire contents of the document all
+at once, or if you want to operate on the raw byte stream, there
+is another method. Instead of calling <TT>getContent</TT>,
+you can arrange to read the data yourself. The <TT>openStream</TT>
+method returns an instance of <TT>InputStream</TT>
+from which you can read the document a byte at a time if that
+suits your needs. By the time the <TT>openStream</TT>
+method returns, the protocol has been initialized, and the desired
+document has been requested; the first byte you read from the
+input stream will be the first byte of the document.
+<P>
+Actually, a lot of the work for handling URLs is done behind the
+scenes by a <TT>URLConnection</TT>
+object. In fact, when you ask for the input stream, the URL object
+simply asks its <TT>URLConnection</TT>
+object for the input stream and returns it to you. If you need
+to, you can get a direct handle to the <TT>URLConnection</TT>
+object associated with a particular URL object by calling the
+<TT>openConnection</TT> method.
+<P>
+Why would you want to have direct access to the connection object?
+You might want to learn some additional information about the
+document-not just the document contents. The <TT>URLConnection</TT>
+object has several methods that return such information. Here
+are a few that are commonly useful:<p>
+
+<CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 80%>
+<TR><TD WIDTH=241><TT>getContentEncoding</TT>
+</TD><TD WIDTH=330>The data encoding used for transport</TD></TR>
+<TR><TD WIDTH=241><TT>getContentLength</TT>
+</TD><TD WIDTH=330>The length of the document in bytes</TD></TR>
+<TR><TD WIDTH=241><TT>getContentType</TT>
+</TD><TD WIDTH=330>The MIME media type of the document</TD></TR>
+<TR><TD WIDTH=241><TT>getExpiration</TT>
+</TD><TD WIDTH=330>The document expiration time</TD></TR>
+<TR><TD WIDTH=241><TT>getLastModified</TT>
+</TD><TD WIDTH=330>The last-modified date of the document</TD>
+</TR>
+</TABLE></CENTER></CENTER>
+<P>
+<P>
+Some protocols can't provide all those values, and the ones that
+can may not be able to provide them all for every document (for
+instance, not all documents have an expiration time). Therefore,
+you should be prepared to take appropriate default action if a
+particular value is not available.
+<H2><A NAME="PostingDatatoaURL"><FONT SIZE=5 COLOR=#FF0000>Posting
+Data to a URL</FONT></A></H2>
+<P>
+There's another reason you may want to manipulate a <TT>URLConnection</TT>
+object directly: You may want to post data to a URL, rather than
+just fetching a document. Web browsers do this with data from
+online forms, and your applets might use the same mechanism to
+return data to the server after giving the user a chance to supply
+information.
+<P>
+As of this writing, posting is only supported to HTTP URLs. This
+interface will likely be enhanced in the future-the HTTP protocol
+supports two ways of sending data to a URL (&quot;post&quot; and
+&quot;put&quot;), while FTP, for example, supports only one. Currently,
+the Java library sidesteps the issue, supporting just one method
+(&quot;post&quot;). Eventually, some mechanism will be needed
+to enable applets to exert more control over how <TT>URLConnection</TT>
+objects are used for output.
+<P>
+To prepare a URL for output, you first create the URL object just
+as you would if you were retrieving a document. Then, after gaining
+access to the <TT>URLConnection</TT>
+object, you indicate that you intend to use the connection for
+output using the <TT>setDoOutput</TT>
+method:
+<BLOCKQUOTE>
+<TT>URL gather = new URL(&quot;http://www.foo.com/cgi-bin/gather.cgi&quot;);
+<BR>
+URLConnection c = gather.openConnection();<BR>
+c.setDoOutput(true);</TT>
+</BLOCKQUOTE>
+<P>
+Once you finish the preparation, you can get the output stream
+for the connection, write your data to it, and you're done:
+<BLOCKQUOTE>
+<TT>DataOutputStream out = new DataOutputStream(c.getOutputStream());
+<BR>
+out.writeBytes(&quot;name=Bloggs%2C+Joe+David&amp;favoritecolor=blue&quot;);
+<BR>
+out.close();</TT>
+</BLOCKQUOTE>
+<P>
+You might be wondering why the data in the example looks so ugly.
+That's a good question, and the answer has to do with the limitation
+mentioned previously: Using URL objects for <I>output</I> is only
+supported for the HTTP protocol. To be more accurate, version
+1.0 of the Java library really only supports output-mode URL objects
+for posting forms data using HTTP.
+<P>
+For mostly historical reasons, HTTP forms data is returned to
+the server in an encoded format, where spaces are changed to plus
+signs (<TT>+</TT>), line delimiters
+to ampersands (<TT>&amp;</TT>), and
+various other &quot;special&quot; characters are changed to three-letter
+escape sequences. The original data for the previous example,
+before encoding, was the following:
+<BLOCKQUOTE>
+<TT>name=Bloggs, Joe David<BR>
+favoritecolor=blue</TT>
+</BLOCKQUOTE>
+<P>
+If you know enough about HTTP that you are curious about the details
+of what actually gets sent to the HTTP server, here's a transcript
+of what might be sent to <TT>www.foo.com</TT>
+if the example code listed previously were compiled into an application
+and executed:
+<BLOCKQUOTE>
+<TT>POST /cgi-bin/gather.cgi HTTP/1.0<BR>
+User-Agent: Java1.0<BR>
+Referer: <A HREF="http://www.foo.com/cgi-bin/gather.cgi">http://www.foo.com/cgi-bin/gather.cgi</A><BR>
+Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2<BR>
+Content-type: application/x-www-form-urlencoded<BR>
+Content-length: 43<BR>
+<BR>
+name=Bloggs%2C+Joe+David&amp;favoritecolor=blue</TT>
+</BLOCKQUOTE>
+<P>
+Java takes care of building and sending all those protocol headers
+for you, including the <TT>Content-length</TT>
+header, which it calculates automatically. The reason you currently
+can send only forms data is that the Java library assumes that's
+all you will want to send. When you use an HTTP URL object for
+output, the Java library always labels the data you send as encoded
+form data.
+<P>
+Once you send the forms data, how do you read the resulting output
+from the server? The <TT>URLConnection</TT>
+class is designed so that you can use an instance for both output
+and input. It defaults to input-only, and if you turn on output
+mode without explicitly setting input mode as well, input mode
+is turned off. If you do both explicitly, however, you can both
+read and write using a <TT>URLConnection</TT>:
+<BLOCKQUOTE>
+<TT>c.setDoOutput(true);<BR>
+c.setDoInput(true);</TT>
+</BLOCKQUOTE>
+<P>
+The only unfortunate thing is that, although <TT>URLConnection</TT>
+was designed to make such things possible, version 1.0 of the
+Java library doesn't support them properly. As of this writing,
+a bug in the library prevents you from using a single HTTP <TT>URLConnection</TT>
+for both input and output.
+<H2><A NAME="CommunicationUsingSockets"><FONT SIZE=5 COLOR=#FF0000>Communication
+Using Sockets</FONT></A></H2>
+<P>
+Occasionally, you might find that network  communication using
+URLs is too inflexible for your needs. URLs are great for document
+retrieval, but for more complicated tasks it's often easier to
+just open a connection directly to some server and do the protocol
+handling yourself. Applets can use the low-level networking facilities
+of the Java library directly, bypassing the URL-based mechanisms.
+The Java networking support is based on the socket model. Like
+the URL class, Java's <TT>Socket</TT>
+classes are easy to use.
+<P>
+When you create a socket, you supply a host for connection (either
+a <TT>String</TT> containing the hostname
+or an <TT>InetAddress</TT>) and an
+integer port number on that host. Simply creating the object causes
+the connection to be made:
+<BLOCKQUOTE>
+<TT>Socket comm = new Socket(&quot;www.javasoft.com&quot;,
+80);</TT>
+</BLOCKQUOTE>
+<P>
+Either the socket object will successfully create the connection,
+or it will throw an exception.
+<P>
+Once that's done, the <TT>Socket</TT>
+class really has only three interesting methods:
+<p>
+<CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 80%>
+<TR><TD WIDTH=166>
+<TT>close</TT>
+
+</TD><TD WIDTH=258>
+Closes the connection
+
+</TD></TR>
+<TR><TD WIDTH=166>
+<TT>getInputStream</TT>
+
+
+</TD><TD WIDTH=258>
+Gets the input stream for the socket
+
+</TD></TR>
+<TR><TD WIDTH=166>
+<TT>getOutputStream</TT>
+
+
+</TD><TD WIDTH=258>
+Gets the output stream for the socket
+
+</TD></TR>
+</TABLE></CENTER>
+
+<P>
+Using the stream objects, you can read from the socket or write
+to it, communicating with the process on the other end of the
+network connection. As with all <TT>InputStream</TT>
+and <TT>OutputStream</TT> objects,
+you can use any of the filter streams defined in the <TT>java.io
+package</TT> or write your own to help with the I/O you
+need to do. (<A HREF="ch5.htm" >See Chapter 5</A>, &quot;Building
+Special-Purpose I/O Classes,&quot; for more details about stream
+classes.) Once the socket is connected, you can write to it and
+read from it using the same operations you use on files or other
+I/O streams. When you are ready to end the communication, you
+can close the connection.
+<P>
+There's really only one other small detail to know about sockets:
+Each of the constructors can also contain a third parameter in
+addition to the host and port. The extra parameter is a <TT>boolean</TT>
+value that indicates whether you want a stream or a datagram socket.
+If the third parameter is true, the socket is a stream socket
+(the default). If it is false, a datagram socket is created. Stream
+sockets involve a little more overhead than datagram sockets,
+but with a substantial benefit: Stream sockets are reliable. The
+connection might be cut off during use, but as long as it's active,
+bytes are guaranteed to be delivered in the same order they are
+sent. Datagram sockets, on the other hand, are unreliable: Packets
+can be dropped, and the recipient will never know they were sent.
+There are some circumstances where datagram sockets are appropriate,
+but most Java programmers use stream sockets almost exclusively.
+<H3>A Socket Redirection Server</H3>
+<P>
+What can an applet do if its networking access is restricted?
+If it can't access the network at all, it might not be very useful.
+But the more common situation-where an applet is permitted to
+connect back only to the machine from which it was fetched-although
+a little inconvenient, isn't a serious barrier if the proper support
+exists on the source machine.
+<P>
+If you are writing applets that need to connect to other machines
+while they're running and the applets can't get by with connecting
+only to the source machine, you may want to run a relay server.
+The relay server process runs on your Web server, accepts socket
+connections on behalf of your applets, finds out where they really
+want to connect, and then forwards the connections on to the real
+destination. This has disadvantages; for instance, it can increase
+the load on your server machine (and the network nearby) if your
+applets are used frequently. Nevertheless, it is an effective
+way of enabling your applets to get access to data when they are
+not permitted to fetch it directly.
+<P>
+The following three code listings show how to build such a server
+and the applet interface to it. To save space, this implementation
+is quite simple and crude, and could be improved in many ways,
+but it does illustrate the concepts. The listings' weaknesses
+are pointed out along the way, and perhaps you'll be able to improve
+them to suit your needs.
+<H4>The <TT>BouncedSocket</TT> Class
+</H4>
+<P>
+Listing 3.1 shows the <TT>BouncedSocket</TT>
+class, which is a rough replacement for the <TT>Socket</TT>
+class. <TT>Socket</TT> is declared
+<TT>final</TT> in the Java library,
+so this replacement can't be a subclass of the real thing; that's
+unfortunate, because <TT>BouncedSocket</TT>
+would be more useful as a subclass of <TT>Socket</TT>.
+<TT>BouncedSocket</TT> works the same
+way as <TT>Socket</TT>, however, so
+it can be used in the same circumstances.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 3.1. BouncedSocket.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+ * BouncedSocket.java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+1.0 96/03/04 Glenn Vanderburg<BR>
+ */<BR>
+<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.io.*;<BR>
+import java.net.*;<BR>
+<BR>
+/**<BR>
+ * A replacement for the Socket class which redirects through
+a<BR>
+ * SocketBounceServer, to connect to hosts which would otherwise
+<BR>
+ * not be allowed.<BR>
+ *<BR>
+ * @version&nbsp;&nbsp;&nbsp;&nbsp; 1.0, 03 Mar 1996<BR>
+ * @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn Vanderburg
+<BR>
+ */<BR>
+<BR>
+public <BR>
+class BouncedSocket {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The Socket class is final, so unfortunately
+I can't extend it.&nbsp;&nbsp;That<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// means this class can't be used as a
+drop-in replacement.&nbsp;&nbsp;Oh, well.<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The place we *really* want to connect
+to ...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private InetAddress realaddr;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private String realhost;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private int realport;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The real Socket object which we use
+to communicate<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Socket realsock;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public final int DEFAULTSERVERPORT = 12223;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Creates a new BouncedSocket<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;</TT> <TT>*
+@param host The real host that we ultimately want to talk to<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param port The port number on
+host<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param bouncehost The host where
+the SocketBounceServer is running<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* @param bounceport The SocketBounceServer
+port<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;BouncedSocket(String host, int port, String
+bouncehost, int bounceport)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throws
+IOException, UnknownHostException<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;realsock = new
+Socket(bouncehost, bounceport);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DataOutputStream
+out<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+new DataOutputStream(realsock.getOutputStream());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DataInputStream
+in<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+new DataInputStream(realsock.getInputStream());<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeBytes(&quot;Host:
+&quot; + host + &quot;\nPort: &quot; + port + &quot;\n&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.flush();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String ack = in.readLine();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (ack.equals(&quot;UnknownHost\n&quot;))
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new UnknownHostException(host);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else if (ack.startsWith(&quot;IOException:
+&quot;)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new IOException(ack.substring(13));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else if (ack.startsWith(&quot;Connected:
+&quot;)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;realaddr
+= InetAddress.getByName(host);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new IOException(ack);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Gets the address to which the socket
+is connected.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public InetAddress getInetAddress() {
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return realaddr;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Gets the remote port to which
+the socket is connected.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int getPort() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return realport;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Gets the local port to which the
+socket is connected.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int getLocalPort() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return realsock.getLocalPort();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Gets an InputStream for this socket.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public InputStream getInputStream() throws
+IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return realsock.getInputStream();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Gets an OutputStream for this
+socket.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public OutputStream getOutputStream()
+throws IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return realsock.getOutputStream();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Closes the socket.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public synchronized void close() throws
+IOException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;realsock.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* Converts the Socket to a String.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public String toString() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return &quot;BouncedSocket[addr=&quot;
++ realaddr + &quot;,port=&quot; + realport<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;,localport=&quot; + realsock.getLocalPort()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot; via SocketBounceServer, addr=&quot; + realsock.getInetAddress()
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;,port=&quot; + realsock.getPort() + &quot;]&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+A <TT>BouncedSocket</TT> uses a real
+socket to communicate with the server, but it needs extra variables
+to store information about the real goal of the communication.
+Like the real <TT>Socket</TT> class,
+<TT>BouncedSocket</TT> initializes
+the connection when the object is created. It connects to the
+server and uses a very simple protocol to tell the server where
+to connect. The server returns an indicator of the success or
+failure of its own connection attempt. If something went wrong,
+<TT>BouncedSocket</TT> throws an exception;
+otherwise, the constructor returns, and the connection is established.
+<P>
+All the real work of <TT>BouncedSocket</TT>
+is done either in the constructor or by the real <TT>Socket</TT>
+object. The rest of the methods simply supply information about
+the connection or forward socket operations to the real socket.
+<H4>The <TT>SocketBounceServer</TT>
+Class</H4>
+<P>
+Listing 3.2 shows the server side of the operation: the <TT>SocketBounceServer</TT>
+class. This is the simplest part, largely because it uses a helper
+class, <TT>SocketBouncer</TT>, to
+do most of the work.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 3.2. SocketBounceServer.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+ * SocketBounceServer.java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0
+96/03/04 Glenn Vanderburg<BR>
+ */<BR>
+<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.io.IOException;<BR>
+import java.net.*;<BR>
+<BR>
+/**<BR>
+ * A server which forwards socket operations to a host which may
+<BR>
+ * not be accessible to another host.<BR>
+ *<BR>
+ * @version&nbsp;&nbsp;&nbsp;&nbsp; 1.0, 03 Mar 1996<BR>
+ * @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn Vanderburg
+<BR>
+ */<BR>
+<BR>
+public <BR>
+class SocketBounceServer {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static int portnum = 122223;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;main (String args[]) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (args.length
+== 1) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;portnum
+= Integer.valueOf(args[0]).intValue();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ServerSocket
+listener = new ServerSocket(portnum);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+(true) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Socket
+connection = listener.accept();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread
+t = new Thread(new SocketBouncer(connection));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (IOException
+e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.err.println(&quot;IO
+Error creating listening socket on port &quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+portnum);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+<TT>SocketBounceServer</TT> is a stand-alone
+application rather than an applet. It creates a <TT>ServerSocket</TT>
+so that it can camp on a port and wait for clients to connect.
+Each time a connection is accepted, the server simply creates
+a new <TT>SocketBouncer</TT> instance
+to handle that particular connection, starts the <TT>SocketBouncer</TT>
+running in its own thread, and goes back to wait for another connection.
+<H4>The <TT>SocketBouncer</TT> Class
+</H4>
+<P>
+The <TT>SocketBouncer</TT> class is
+the interesting part of the server side. In reality, a single
+<TT>SocketBouncer</TT> instance handles
+the communication in only one direction, and it takes two of them
+to handle one client. The first one is responsible for the rest
+of the connection setup. It must find out from the client which
+machine to connect to, make the new connection, and then create
+the other <TT>SocketBouncer</TT> object
+(also in a separate thread, to avoid deadlocks). Only then can
+it begin forwarding data from the client. Listing 3.3 shows the
+code for <TT>SocketBouncer</TT>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 3.3. SocketBouncer.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+ * SocketBouncer.java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0
+96/03/04 Glenn Vanderburg<BR>
+ */<BR>
+<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.io.*;<BR>
+import java.net.*;<BR>
+<BR>
+/**<BR>
+ * Handles bouncing for one BouncedSocket client, in one direction
+only.<BR>
+ *<BR>
+ * @version&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.0, 03 Mar 1996<BR>
+ * @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn Vanderburg
+<BR>
+ */<BR>
+<BR>
+public <BR>
+class SocketBouncer implements Runnable {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Socket readsock;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Socket writesock;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;SocketBouncer (Socket readsock) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.readsock
+= readsock;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;SocketBouncer (Socket readsock, Socket
+writesock) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.readsock
+= readsock;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.writesock
+= writesock;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;run () {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (writesock
+== null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+host;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+port;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DataInputStream
+in;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DataOutputStream
+out;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in
+= new DataInputStream(readsock.getInputStream());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out
+= new DataOutputStream(readsock.getOutputStream());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+line = in.readLine();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(line.startsWith(&quot;Host: &quot;)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;host
+= line.substring(6);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeBytes(&quot;IOException:
+expecting hostname\n&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.flush();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readsock.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line
+= in.readLine();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(line.startsWith(&quot;Port: &quot;)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;port
+= Integer.valueOf(line.substring(6)).intValue();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeBytes(&quot;IOException:
+expecting port number\n&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.flush();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readsock.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writesock
+= new Socket(host, port);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(UnknownHostException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeBytes(&quot;UnknownHost\n&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+e;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.writeBytes(&quot;Connected:
+&quot; + writesock.getInetAddress()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
++ &quot;\n&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readsock.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(writesock != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writesock.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(Throwable t) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread
+t = new Thread(new SocketBouncer(writesock, readsock));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;InputStream
+in = readsock.getInputStream();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OutputStream
+out = writesock.getOutputStream();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;byte
+b[] = new byte[32768];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+l;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+((l = in.read(b)) &gt; 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.write(b,
+0, l);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (IOException
+e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readsock.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(Throwable t) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+<TT>SocketBouncer</TT> handles the
+server end of the simple protocol that was introduced in <TT>BouncedSocket</TT>.
+That protocol is just one of the weak points of this example implementation.
+It is clumsy, and the error handling is poor. Furthermore, once
+the connection is completely established, there is no way for
+the server to communicate information about error conditions to
+the <TT>BouncedSocket</TT> object
+on the client side so that it can throw an appropriate exception
+there. A more thorough, robust socket proxy protocol would be
+a better choice.
+<P>
+Another weakness is that the example doesn't check for sockets
+that have been idle for a long period of time. If a network connection
+is broken, one or more of the threads in the server might wait
+for a very long time.
+<P>
+In spite of these weaknesses, the example implementation illustrates
+the basic concepts of a connection-forwarding server-possibly
+the solution to your applet's communication needs.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+Applets can use the Java library's networking classes to get help
+from remote servers, allowing them to perform useful tasks. Applets
+can use URLs to fetch resources from standard network servers
+(such as HTTP servers or FTP servers), and the resources can be
+typed media objects or simply streams of character data. In some
+situations, a URL can be used to send information back from the
+applet to the server. For more general client/server interactions,
+the applet can use a socket to perform complicated interactions
+with specialized servers that perform a part of the applet's function.
+<P>
+Current applet security restrictions allow an applet to make network
+connections only to the machine from which the applet was loaded,
+but with the help of a server on that machine, an applet can effectively
+connect to any machine. This chapter contains an example of such
+a socket relay server.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch2.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch4.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

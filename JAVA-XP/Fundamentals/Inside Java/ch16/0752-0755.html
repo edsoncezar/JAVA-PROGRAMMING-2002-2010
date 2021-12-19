@@ -1,0 +1,258 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Remote Method Invocation and Object Serialization:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+<P><CENTER>
+<a href="0746-0751.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0756-0762.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-752"><P>Page 752</P></A>
+
+
+<PRE>
+09   class Planet implements java.io.Serializable
+</PRE>
+
+<P>The Serializable interface has no methods, but its presence enables the class to
+be serialized.
+</P>
+
+<P>The Planet class has three methods&#151;shown in lines 21, 25, and 29 of listing
+16.8&#151;that the client can call to get information about the planet that a given instance represents:
+</P>
+
+<PRE>
+021       public String getName() {
+025       public int getMoons() {
+029       public boolean hasRings() {
+</PRE>
+
+<P>Listing 16.5 shows the client applet that uses the methods of the remote object and
+the Planet objects that it contains. After gaining a reference to the remote object, the
+client attempts to call the getNumPlanets() method of that object in line 37.
+</P>
+
+<PRE>
+37               numPlanets = obj.getNumPlanets();
+</PRE>
+
+<P>The returned number is used in line 47 to build the string that prompts the user to enter
+a planet number.
+</P>
+
+<PRE>
+47           p.add(new Label(&quot;Planet Number 1_&quot; + numPlanets + &quot;:&quot;));
+</PRE>
+
+<P>In line 75 (listing 16.5), the number (decreased by 1) that the user inputs into
+the TextField is passed to the getPlanet() method of the remote object.
+</P>
+
+<PRE>
+75               planet = obj.getPlanet(pnum_1);
+</PRE>
+
+<P>The specified Planet instance is then serialized, marshaled, and sent as a return
+value from the server's VM to the client's VM. In lines 81_86, the methods of that instance
+are called locally to populate the TextArea with information about the planet that
+the instance represents.
+</P>
+
+<PRE>
+81    stats.setText(&quot;Planet Name:     &quot; + planet.getName() + &quot;\r\n&quot;);
+82    stats.appendText(&quot;Number of Moons: &quot; + planet.getMoons() + &quot;\r\n&quot;);
+83    if (planet.hasRings())
+84        stats.appendText(&quot;Has Rings:        Yes&quot;);
+85    else
+86        stats.appendText(&quot;Has Rings:        No&quot;);
+</PRE>
+
+<P>The Java RMI system makes it fairly easy to build Java applications that have
+objects
+</P>
+
+
+<A NAME="PAGENUM-753"><P>Page 753</P></A>
+
+
+<P>
+distributed over more than one Java VM. Object Serialization plays a big role in
+enabling Java RMI.
+</P>
+
+<H3><A NAME="ch16_ 11">
+Understanding and Using Object
+Serialization
+</A></H3>
+
+
+<P><a href="images\ch16fg06.jpg"><img src="images\tn_ch16fg06.jpg"></a><BR>
+Figure 16.6
+PlanetsApplet2 applet display.<BR>
+</P>
+
+
+<P>As you have seen, you can make a class serializable by implementing
+the java.io.Serializable interface. Also, extending a class from one that is serializable
+makes the extended class serializable. This section discusses Object Serialization in more detail.
+</P>
+
+<H4><A NAME="ch16_ 12">
+Purposes for Object Serialization
+</A></H4>
+
+<P>Object Serialization services were created for two main reasons:
+</P>
+
+<UL>
+<LI>          Support for RMI (as already covered).
+<LI>          Object persistence, which is the capability to save objects to a form of
+persistent storage, such as a magnetic disk.
+</UL>
+
+<P>One factor of object serialization that may not be immediately appreciated is that not
+only do the objects explicitly mentioned need to be serialized, but any objects that they
+refer to also must be serialized. Thus, it is not sufficient simply to copy the fields of an
+object for that object to be serialized. Starting with the initial object, it is possible to describe
+all the references with a graph, which, in this case, is a map of the references that
+objects have to one other. The entire graph of objects must be serialized.
+</P>
+
+<P>Suppose that, for example, in the Planets example above, the Planet class contains
+an
+</P>
+<A NAME="PAGENUM-754"><P>Page 754</P></A>
+
+
+<P>
+array of references to objects that each represent a hypothetical Moon class. To
+pass the entire Planet object to the client, it must serialize not only the Planet object, but
+also all the Moon objects that are referenced by the Planet object.
+</P>
+
+<H4><A NAME="ch16_ 13">
+Using Object Serialization for Persistence
+</A></H4>
+
+<P>To provide the necessary functionality, object serialization services have been
+implemented to extend the DataInputStream and DataOutputStream classes from the
+java.io package. Because DataInputStream and DataOutputStream classes can deal only
+with primitive types, two complementary classes have been added: ObjectOutputStream
+and ObjectInputStream. These classes serialize an object or a graph of objects to
+a datastream, and deserialize (reconstruct) an object or a graph of objects from a stream.
+</P>
+
+<P>Although the ObjectInputStream and ObjectOutputStream classes were created mainly
+to support RMI, they also make it easy to add persistence to Java objects. In other
+words, the new classes add the capability for objects to persist beyond a particular
+invocation of the program that creates and uses them. This often means getting objects to
+save themselves to files on a disk and to read themselves back later.
+</P>
+
+<P>The next section builds on the Planets application that we've been working with,
+and illustrates the necessary steps to make the PlanetsImpl class persistent.
+</P>
+
+<H4><A NAME="ch16_ 14">
+The Persistent Planets Application
+</A></H4>
+
+<P>To demonstrate the power and simplicity of serializing objects to disk, the
+PlanetsImpl class will be made persistent. Doing so will make the data available even when the
+server process is stopped and restarted.
+</P>
+
+<P>Some new functionality has been added to the user interface. A new Bump button
+ enables the user to increase the number of moons associated with a given planet.
+When the user presses this button, the following occurs:
+</P>
+
+<UL>
+<LI>          The newly added bumpMoons() method of the Planet object is called to increase
+the number of moons.
+<LI>          The updated Planet object is passed to the newly added
+setPlanet() method of the PlanetsImpl remote object, demonstrating the capability to pass a local object to
+a remote object.
+<LI>          The setPlanet() method calls the newly added
+write() method, which writes all the Planet objects to the disk of the remote server. Note that when the server
+is started, it reads the Planet objects from this file by using a newly added
+read() method.
+<LI>          An event is posted that simulates the Info button being pressed. The
+updated
+</UL>
+
+
+<A NAME="PAGENUM-755"><P>Page 755</P></A>
+
+
+
+<UL>
+number of moons now are immediately visible on the applet's display.
+</UL>
+
+<P>Listings 16.9, 16.10, 16.11, and 16.12 contain the code for this modified Planets
+application. Figure 16.7 shows the applet's display.
+</P>
+
+<P>Listing 16.9
+</P>
+
+<PRE>
+Line==================Java Source=================
+001   //////////
+002   // PlanetsApplet3.java  Applet that demonstrates passing
+003   // and saving/loading serialized objects.
+004   //
+005   // Author: James L. Weaver   JDK version: 1.1 beta
+006   //////////
+007   package chapter16.code.planets_ser;
+008
+009   import java.awt.*;
+010   import java.applet.*;
+011   import java.rmi.*;
+012   import java.awt.event.*;
+013
+014   public class PlanetsApplet3 extends Applet
+015                              implements ActionListener{
+016
+017       TextField planetNum;
+018       Button infoButton, bumpButton;
+019       TextArea stats;
+020
+021       int numPlanets = 0;
+022       String planetName = new String();
+023       int numMoons = 0;
+024       boolean rings = false;
+025
+026       PlanetsInfo obj;
+027       Planet planet = null;
+028       int pnum = 0;
+029
+030       public void init() {
+031           try {
+032               obj = (PlanetsInfo)Naming.lookup(&quot;//&quot; +
+</PRE>
+<PRE>
+                                  						<I>continues</I>
+</PRE>
+<P><CENTER>
+<a href="0746-0751.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0756-0762.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

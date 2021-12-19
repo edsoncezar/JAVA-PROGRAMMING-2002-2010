@@ -1,0 +1,183 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Basic JDBC Programming</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>When the connection is no longer needed, close it. Even though the connection would be collected as garbage, it is important to free connections as soon as possible. Because most databases allow a limited number of connections, the connections are a valuable resource.
+</P>
+<PRE>
+import java.sql.*;
+
+public class ConnectionExample
+{
+    public static void main (String args[])
+    {
+        try
+        {
+<B>            /*
+              Load the class for the driver.
+              Make sure the driver is in your CLASSPATH.
+            */
+            Class.forName(&#147;sun.jdbc.odbc.JdbcOdbcDriver&#148;);</B>
+        } catch (Exception e)
+        {
+            System.out.println(&#147;JDBC&#150;ODBC driver failed to load.&#148;);
+            return;
+        }
+  
+        try
+        {  
+<B>            /*
+               Specify the data source you want to connect to by
+               passing in the URL. If a driver is found that can
+               connect to this data source, you will get a
+               Connection object.
+            */
+            Connection con =
+                DriverManager.getConnection(&#147;jdbc:odbc:Inventory&#148;,
+                                            &#147;&#148;,&#147;&#148;);
+            // When you are done, close the connection.
+            con.close();</B>
+        } catch (Exception e)
+        {
+            System.out.println(e);
+        }
+    }
+}
+</PRE>
+<P><FONT SIZE="+1"><B><I>Connecting with Properties</I></B></FONT></P>
+<P>In the previous example, the driver and data source were &#147;hard&#150;coded&#148; in the code. Although this is a reasonable technique, it misses one of the dynamic features of JDBC. JDBC allows you to determine what data source and driver to use at run time. This could be important for load balancing or for easy configuration and installation of your application in various environments. In order to select a driver and data source dynamically, use a property list loaded from a text file.
+</P>
+<P>Follow these steps to load the text file:</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Open the text file using an InputStream object.
+<DD><B>2.</B>&nbsp;&nbsp;Create a java.util.Properties object.
+<DD><B>3.</B>&nbsp;&nbsp;Use the Properties object load() method to enter the values from the InputStream into the Properties object.
+</DL>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>The name of the property file is arbitrary, as are the keys and values stored. These are all programmer defined.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>In this example, a connection is made to the Inventory data source; however, the driver name and the data source information are stored in a text file called datasource.config instead of hard coding the information in the class file. The text file has the following values:
+</P>
+<PRE>
+datasource.driver=sun.jdbc.odbc.JdbcOdbcDriver
+datasource.protocol=jdbc
+datasource.subprotocol=odbc
+datasource.name=Inventory
+datasource.username=
+datasource.password=
+</PRE>
+<P>The example also uses the ClassLoader method getSystemResourceAsStream to return an InputStream to our datasource.config file. This method searches the entire ClassPath for our file. In most of our examples, we assume &#147;.&#148; is in your ClassPath. If it isn&#146;t, place the datasource.config file in a CLASSPATH directory.
+</P>
+<PRE>
+import java.util.Properties;
+import java.io.InputStream;
+import java.sql.*;
+
+public class PropertyExample
+{
+    public static void main (String args[])
+    {
+        String dsDriver=&#147;&#148;;
+        String dsProtocol=&#147;&#148;;
+        String dsSubprotocol=&#147;&#148;;
+        String dsName=&#147;&#148;;
+        String dsUsername=&#147;&#148;;
+        String dsPassword=&#147;&#148;;
+  
+        try
+        {
+            // Loads the configuration file
+            <B>InputStream is = ClassLoader.getSystemResourceAsStream
+                (&#147;datasource.config&#148;);</B>
+            if(is != null)
+            {
+                Properties p = new Properties();
+                p.load (is);
+                dsDriver = p.getProperty(&#147;datasource.driver&#148;);
+                dsProtocol = p.getProperty(&#147;datasource.protocol&#148;);
+                dsSubprotocol =
+                    p.getProperty(&#147;datasource.subprotocol&#148;);
+                dsName = p.getProperty(&#147;datasource.name&#148;);
+                dsUsername = p.getProperty(&#147;datasource.username&#148;);
+                dsPassword = p.getProperty(&#147;datasource.password&#148;);
+            }
+        } catch (Exception e)
+        {
+            System.out.println(&#147;Unable to read property file&#148;);
+            return;
+        }
+  
+        try
+        {
+            Class.forName(dsDriver);
+        }
+        catch (Exception e)
+        {
+            System.out.println(&#147;Failed to load  driver.&#148;);
+            return;
+        }
+  
+        try
+        {
+            String theURL = dsProtocol&#43;&#147;:&#148;&#43;dsSubprotocol&#43;&#147;:&#148;&#43;dsName;
+<B>            /*
+               Create a connection using the values parsed from
+               the configuration file.
+            */
+             Connection con = DriverManager.getConnection
+                (theURL,dsUsername,dsPassword);</B>
+            if(con != null)
+            {
+                System.out.println(&#147;Successfully connected to &#148; &#43;
+                                   dsName);
+                con.close();
+            }
+         }
+         catch (Exception e)
+         {
+             System.out.println(&#147;Failed to connect: &#148; &#43; e);
+             return;
+         }
+    }
+}
+</PRE>
+<P>Now either open a connection by hard coding the URL components or load them from a configuration file. If you load the values from the property file, you need to realize that these values may be changed, even though the class file does not. This means you should take more precautions in preparing your query by checking the metadata of the connection to verify that the database is appropriate for your query. For example, suppose the name of the database is changed in the property file and you try to query it. If the tables you expect to have in the database aren&#146;t there, your application will fail. Rather than waiting for the application to fail, you could examine the data source first to see what tables are available. We follow this procedure in the next section.
+</P>
+<H3><A NAME="Heading8"></A><FONT COLOR="#000077">Examining a Data Source</FONT></H3>
+<P>Once a connection has been established with a data source, processing of SQL can begin. However, it is often useful to query the data source for information about its structure, capabilities, and limitations. This will enable you to optimize your query and prevent access errors such as trying to retrieve data that doesn&#146;t exist. Before examining the code for this process, let&#146;s view the metadata using a tool called JDBCTest.
+</P>
+<P>JDBCTest is a Java application written by Intersolv that loads and interacts with any JDBC driver. It is a useful tool for looking at your data source and testing your JDBC driver&#146;s capabilities before you actually use it. After examining the data source with JDBCTest, this section walks through an example program that demonstrates how you might do this in your own code.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

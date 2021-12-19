@@ -1,0 +1,1407 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 32 -- Encapsulating Legacy Systems </TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter 32</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Encapsulating Legacy Systems </FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#FocusingonFunctionnotForm">
+Focusing on Function, not Form</A>
+<LI><A HREF="#ProvidingAccesstoNewSystems">
+Providing Access to New Systems</A>
+<LI><A HREF="#UsingCORBAtoOpenUpaClosedSystem">
+Using CORBA to Open Up a Closed System</A>
+<LI><A HREF="#EncapsulatingaTCPIPSystem">
+Encapsulating a TCP/IP System</A>
+<LI><A HREF="#EncapsulatingwithNativeMethodCalls">
+Encapsulating with Native Method Calls</A>
+<UL>
+<LI><A HREF="#WrappingJavaAroundaNativeInterface">
+Wrapping Java Around a Native Interface</A>
+<LI><A HREF="#WritingNativeMethodsinC">
+Writing Native Methods in C</A>
+</UL>
+<LI><A HREF="#EncapsulatingbyEmulatingaUser">
+Encapsulating by Emulating a User</A>
+<LI><A HREF="#GettingAssistancefromtheLegacySystem">
+Getting Assistance from the Legacy System</A>
+<LI><A HREF="#PresentingaDifferentInterface">
+Presenting a Different Interface</A>
+<LI><A HREF="#CombiningMultipleSystems">
+Combining Multiple Systems</A>
+<UL>
+<LI><A HREF="#HandlingDeletionsOriginatingintheLegacySystem">
+Handling Deletions Originating in the Legacy System</A>
+<LI><A HREF="#UsingaTwoPhaseCommitProtocol">
+Using a Two-Phase Commit Protocol</A>
+<LI><A HREF="#ImplementingaTwoPhaseCommit">
+Implementing a Two-Phase Commit</A>
+</UL>
+<LI><A HREF="#SomeRealWorldExamples">
+Some Real-World Examples</A>
+<UL>
+<LI><A HREF="#AnExampleLegacySystem">
+An Example Legacy System</A>
+<LI><A HREF="#CreatingaNewApplicationfortheExistingTerminalBase">
+Creating a New Application for the Existing Terminal Base
+</A>
+<LI><A HREF="#CreatingaNewInterfaceforanExistingApplication">
+Creating a New Interface for an Existing Application</A>
+<LI><A HREF="#ClearingaPathforMigrationofftheLegacySystem">
+Clearing a Path for Migration off the Legacy System</A>
+</UL>
+</ul>
+<HR>
+<P>
+Keeping up with technology is one of the constant problems that
+most businesses face. You buy a top-of-the-line database system
+and a year later, after you've spent considerable time converting
+your organization over to the new database, the database is obsolete.
+If you try to keep your systems on the leading edge all the time,
+you'll probably spend more time and money changing systems than
+you do using them. More likely, you'll keep the old system for
+a long, long time. Most of these older systems are referred to
+as &quot;legacy&quot; systems, and while they may not be on the
+forefront of technology, they are still the lifeblood of many
+businesses.
+<P>
+By the time you decide to switch systems, all your applications
+are so heavily tied to the legacy system that you have to rewrite
+all your applications, making it even more expensive to switch.
+You have to factor these costs into your decision to switch. You
+don't switch just to use new technology. You switch because a
+new system will save you money. If you are more heavily tied to
+the legacy system, you are more willing to keep using it, because
+the cost of switching is more than the cost of maintaining the
+existing system. It is obvious that you could reduce the cost
+of upgrading and changing systems if you could design your applications
+so they weren't as dependent on specific products.
+<P>
+As you design new applications, you don't want your design to
+be constrained by the limits of the current system. Obviously,
+the implementation will have these constraints, but you want to
+leave room to grow. Rather than attacking this problem on a per-application
+basis, take a step back and look at the systems you have today,
+and try to put a prettier face on them.
+<P>
+You can use a technique called encapsulation to make a legacy
+system look like a newer system. There is no magic here, since
+you can't really make the old system work just like a newer one.
+It won't run any faster, or magically perform some new functions.
+What encapsulation does is break your dependence on the exact
+interfaces of the legacy system. For example, suppose you have
+an MVS system from IBM, and if you are at a large corporation,
+you probably do. While MVS is expanding its accessibility, you
+still have some limitations. Suppose, for instance, that you don't
+have an MVS TCP/IP gateway available and you must use IBM's proprietary
+SNA protocol to access MVS. How are you going to write an applet
+to access MVS data? You aren't going to find a copy of the Netscape
+Navigator that comes with SNA built in. What you can do, however,
+is write a program that sits in between MVS and the applet and
+does the necessary translation. Figure 32.1 illustrates an example
+configuration.
+<P>
+<A HREF="f32-1.html"><B>Figure 32.1 : </B><I>An encapsulation program puts a more friendly
+face on a legacy system</I>.</A>
+<H2><A NAME="FocusingonFunctionnotForm"><FONT SIZE=5 COLOR=#FF0000>
+Focusing on Function, not Form</FONT></A></H2>
+<P>
+One of the biggest traps you run into when writing an application
+is focusing only on the exact form of the data you can get or
+the exact commands that you can give to the legacy system. What
+you want to do instead is concentrate on what the legacy system
+actually does.
+<P>
+For example, suppose you have an ordering system and you want
+to create a Java applet that can place orders. Assume that you
+have the following commands on your ordering system:
+<UL>
+<LI><TT>START TRANSACTION &lt;customer ID&gt;</TT>&nbsp;&nbsp;Begins
+the ordering process for a particular customer.
+<LI><TT>LIST PARTS</TT>&nbsp;&nbsp;Gets
+a list of available parts.
+<LI><TT>ORDER &lt;part number&gt; &lt;quantity&gt;</TT>&nbsp;&nbsp;Adds
+a part to the list of parts being ordered.
+<LI><TT>REMOVE &lt;part number&gt;</TT>&nbsp;&nbsp;Removes
+a part number from the current list.
+<LI><TT>END TRANSACTION</TT>&nbsp;&nbsp;Completes
+the order.
+<LI><TT>ABORT TRANSACTION</TT>&nbsp;&nbsp;Cancels
+the order.
+</UL>
+<P>
+As you can see by this set of commands, the ordering system requires
+a high degree of interaction. This set of commands is the &quot;form&quot;
+of the legacy system. Its function is that it creates orders of
+parts for your customers. That may seem like a subtle point, but
+it is very important. One of the reasons we spend so much money
+re-engineering old applications is that they were too heavily
+tied to the form of the legacy system.
+<P>
+If you got a new ordering system, the likelihood of the commands
+being different is fairly high. Most systems use their own set
+of commands. The function should still be the same for a new system,
+however. You'll still be using a system to create orders. If you
+focus on the function of the system and don't worry as much about
+the actual commands, your applications will adapt to new systems
+more readily.
+<P>
+Of course, there is a trade-off here. You have to do a little
+extra work to translate from the legacy system to the application.
+That's where the encapsulation comes in.
+<P>
+You could, for example, create an encapsulation that placed an
+entire order at once. It would have methods to list the available
+parts and place an order. The encapsulation program would translate
+the order placement into the series of commands expected by the
+legacy system. Figure 32.2 illustrates how this might take place.
+<P>
+<A HREF="f32-2.html"><B>Figure 32.2 : </B><I>An encapsulation can present an interface
+different from the legacy system</I>.</A>
+<P>
+This form of encapsulation is actually a design pattern known
+as a &quot;facade.&quot;
+<H2><A NAME="ProvidingAccesstoNewSystems"><FONT SIZE=5 COLOR=#FF0000>
+Providing Access to New Systems</FONT></A></H2>
+<P>
+One of the reasons you encapsulate legacy systems is that you
+want to move to a more modern computing platform. Sometimes the
+move is on the server side, and sometimes the move is on the client
+side. For instance, you may want to keep your old mainframe, but
+upgrade some or all of your workstations to inexpensive Web terminals.
+Sometimes you want to upgrade the central server or mainframe,
+but you can't afford to upgrade all your terminals out in the
+field.
+<P>
+You can often use encapsulation to facilitate a system upgrade.
+For instance, an airline has a large network of very old terminals,
+the kind you see every day at the airport. These terminals are
+connected via a network to a group of mainframes. Now, you realize
+that it is much more cost effective to develop applications on
+a UNIX or NT system. In fact, many of your users already have
+workstations that support a nice graphical interface. Unfortunately,
+you still have to support the users out in the field, with their
+old-fashioned terminals. Do you develop your new application on
+the old mainframe, or do you aim for the new technology? Figure
+32.3 illustrates this dilemma.
+<P>
+<A HREF="f32-3.html"><B>Figure 32.3 : </B><I>It is difficult to decide whether to extend
+the legacy system, or put an application on a new system</I>.</A>
+<P>
+Ideally, the answer to this problem is that you aim for the new
+technology. Wherever you have to use your legacy technology, encapsulate
+it and put a pretty face on it.
+<P>
+The practice of separating the application from the user interface
+is really going to shine for you when you have to deal with legacy
+systems. If you design your application as you would like it to
+be, rather than constrain it by the way things are, you can make
+the existing system fit.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+While &quot;vision&quot; is an overused term these days, you need vision when you design applications. You need to be able to look beyond what you have right now and see where you want to be, then work toward that goal. You'll never escape the legacy 
+system if you keep designing it into your new applications.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+You design your application the way you want, then adapt the legacy
+systems to fit your application, not vice versa. For example,
+suppose you design a new e-mail system using Java for both the
+client and server. Figure 32.4 illustrates a possible configuration.
+<P>
+<A HREF="f32-4.html"><B>Figure 32.4 : </B><I>A Java e-mail system</I>.</A>
+<P>
+Now that you have your application designed, you concentrate on
+encapsulating the legacy system to fit into the new application
+structure. In the case of the e-mail system, you may want to allow
+the old legacy terminals to access the system. You create an object
+or a server that looks like a legacy host to the terminals, but
+looks like a client to the e-mail system. This object would translate
+the new-user interface into something the legacy terminals understand.
+Figure 32.5 shows an example of this.
+<P>
+<A HREF="f32-5.html"><B>Figure 32.5 : </B><I>You can translate a new-user interface
+into something a legacy terminal understands</I>.</A>
+<P>
+You could take a different approach with the new application.
+Suppose you want to use the existing e-mail application on the
+legacy system. Maybe it is too expensive or difficult to get the
+legacy terminals to access the new e-mail application. You could
+create an object that translates the old e-mail interface into
+something that looks like the new application, as far as the clients
+are concerned. Figure 32.6 illustrates this configuration.
+<P>
+<A HREF="f32-6.html"><B>Figure 32.6 : </B><I>You can translate a legacy interface into
+something newer clients can deal with</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+In both of the previous examples, the encapsulation was based on the clear separation between the application and user interface. Once you separate them, you can translate different application interfaces and user interfaces into something that fits your 
+design.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="UsingCORBAtoOpenUpaClosedSystem"><FONT SIZE=5 COLOR=#FF0000>
+Using CORBA to Open Up a Closed System</FONT></A></H2>
+<P>
+Once you come up with a way to get data out of your legacy system,
+you should make it available to other applications using a mechanism
+that is likely to be supported by many systems. CORBA is a reasonable
+choice for this, since it is a well-known standard that has been
+growing in popularity for the last few years. Even if Java's popularity
+suddenly wanes in favor of something else, you still have a CORBA
+interface that you could access from other languages.
+<P>
+Figure 32.7 shows some of the ways you can access a legacy system
+if the encapsulation provides a CORBA interface.
+<P>
+<A HREF="f32-7.html"><B>Figure 32.7 : </B><I>CORBA expands the accessibility of an encapsulated
+system</I>.</A>
+<H2><A NAME="EncapsulatingaTCPIPSystem"><FONT SIZE=5 COLOR=#FF0000>
+Encapsulating a TCP/IP System</FONT></A></H2>
+<P>
+If your legacy system can be accessed over the network via TCP/IP,
+it will be easy for you to access the legacy system. This doesn't
+mean that it will be easy to write the encapsulation. You may
+wonder why you even need extra code to encapsulate the system
+when an applet could make a TCP/IP connection straight to the
+legacy system (assuming the security restrictions didn't get in
+the way). Remember that you aren't just encapsulating the access
+to the system, you are encapsulating the functions it provides.
+<P>
+You don't want to tie your applet to the specific interface provided
+by the legacy system. This way, if you upgrade the legacy system,
+you change only the encapsulation, but the applets that talk to
+the encapsulation don't need to change.
+<H2><A NAME="EncapsulatingwithNativeMethodCalls"><FONT SIZE=5 COLOR=#FF0000>
+Encapsulating with Native Method Calls</FONT></A></H2>
+<P>
+Even if your legacy system can run Java, you may still need to
+create an encapsulation layer. Java may not be able to access
+the applications running on the legacy system. You can create
+native methods to handle these situations.
+<P>
+You also may need native methods if you have a special interface
+card or special interface software to access your legacy system.
+For example, many IBM systems can only be accessed using the SNA
+networking protocol. You occasionally need a special interface
+card to talk to these systems, but many times you just need special
+networking drivers. Either way, you need a native method to access
+the special card or drivers.
+<P>
+Figure 32.8 illustrates a typical native method encapsulation.
+<P>
+<A HREF="f32-8.html"><B>Figure 32.8 : </B><I>You often need native methods to access
+a legacy system</I>.</A>
+<H3><A NAME="WrappingJavaAroundaNativeInterface">
+Wrapping Java Around a Native Interface</A></H3>
+<P>
+Suppose your ordering system came with a C library that let you
+perform all the functions you needed. You could start and end
+transactions, get a parts list, and add and remove parts from
+an order. You could create a Java class to access the C library
+via native method calls.
+<P>
+Listing 32.1 shows a Java interface to the ordering system, with
+native method calls to the C library.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 32.1&nbsp;&nbsp;Source Code for </B><TT><B>Ordering.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package ordering;
+
+// this class provides an interface to an ordering system. It makes
+// calls to native C methods which take care of accessing the real
+// system.
+
+public class Ordering extends Object
+{
+// transactionID is the transaction id returned by the C interface
+// to the ordering system. Each call to the ordering system must
+// be accompanied by the transaction ID.
+
+     int transactionID;
+
+// Create an instance of an Ordering object, which begins an ordering
+// transaction.
+
+     public Ordering(String customerId)
+     throws OrderingException
+     {
+          transactionID = startTransaction(customerId);
+     }
+
+// Add a part to the current order
+
+     public void orderPart(String partNumber, int quantity)
+     throws OrderingException
+     {
+          orderPart(transactionID, partNumber, quantity);
+     }
+
+// remove a part from the current order
+
+     public void removePart(String partNumber)
+     throws OrderingException
+     {
+          removePart(transactionID, partNumber);
+     }
+
+// finish the order
+
+     public void endTransaction()
+     throws OrderingException
+     {
+          endTransaction(transactionID);
+     }
+
+// abort the order
+
+     public void abortTransaction()
+     throws OrderingException
+     {
+          abortTransaction(transactionID);
+     }
+
+// These methods are implemented in a local DLL
+
+     protected native int startTransaction(String customerId)
+          throws OrderingException;
+
+     public native static String[] listParts();
+
+     protected native void orderPart(int txnID, String partNumber,
+          int quantity) throws OrderingException;
+
+     protected native void removePart(int txnID, String partNumber)
+          throws OrderingException;
+
+     protected native void endTransaction(int txnID)
+          throws OrderingException;
+
+     protected native void abortTransaction(int txnID)
+          throws OrderingException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The methods in the <TT>Ordering</TT> class are not quite a straight pass-through to the real ordering system. Rather, it provides a slightly higher level of abstraction. It considers an <TT>Ordering</TT> object to be a transaction, and hides the 
+transaction ID from the users of the Java class. You will find that many C libraries return information that you must use for future function calls. You don't actually use the information. Instead, since the library has no way of grouping method calls and 
+
+data together, like an object does, the library makes you handle the data and forces you to pass it to whatever functions need it. When you design a Java interface to a native library, keep information like this hidden within the Java class. Don't let the 
+
+public methods pass back anything that isn't useful.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="WritingNativeMethodsinC">
+Writing Native Methods in C</A></H3>
+<P>
+Once you have defined a Java class with native methods, you must
+write the native methods yourself. You can't simply call any arbitrary
+C function from Java, you almost always have to create a C function
+that calls the real function you want.
+<P>
+The reason you can't call any arbitrary C function is that native
+Java methods must conform to a strict naming scheme that combines
+the method name, the Java class name, and the package name. For
+example, the declaration for the native C <TT>endTransaction</TT>
+method would look like this:
+<BLOCKQUOTE>
+<PRE>
+void ordering_Ordering_endTransaction(
+      struct Hordering_Ordering *thisPtr, long txnID)
+</PRE>
+</BLOCKQUOTE>
+<P>
+Java always passes a &quot;this&quot; pointer to its native methods,
+which precludes the use of calling any old C function as a native
+method. Typically, your native methods will turn around and call
+other C functions, however.
+<P>
+For instance, your <TT>ordering_Ordering_endTransaction
+</TT>function would probably call the <TT>endTransaction</TT>
+function in the C library that came with your ordering system.
+<P>
+When you create a Java class with native methods, you have to
+generate a special header file that contains declarations for
+the C implementation. You create the header using the <TT>javah</TT>
+command. Once the <TT>Ordering</TT>
+class has been compiled in Java, you issue the following command:
+<BLOCKQUOTE>
+<PRE>
+javah ordering.Ordering</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+This will generate a header file called <TT>ordering_Ordering.h</TT>.
+Next, you must generate a set of stubs, which Java uses to invoke
+your native methods. You also use the <TT>javah</TT>
+command for this, but you must include the <TT>-stubs</TT>
+option:
+<BLOCKQUOTE>
+<PRE>
+javah -stubs ordering.Ordering</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+This will create a C file called <TT>ordering_Ordering.c</TT>.
+You must compile and link this file into a shared library, along
+with your native methods. Listing 32.2 shows a skeletal implementation
+of the native methods for the Ordering class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 32.2&nbsp;&nbsp;Source Code for </B><TT><B>orderingImpl.c
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+#include &quot;ordering_Ordering.h&quot;
+
+/* This is an absolutely skeletal implementation of the
+   native methods for the Ordering class. The only method
+   that does anything is the listParts method, which returns
+   an array of strings. The rest of the methods are dummies.
+*/
+
+int nextId = 1;          /* For returning different transaction ID's */
+
+/* parts is a list of values that will be returned in listParts */
+
+char *parts[] = {
+     &quot;12345 Widget&quot;,
+     &quot;23456 Deluxe Widget&quot;,
+     &quot;55534 Thing&quot;,
+     &quot;30038 Zippy&quot;
+};
+
+struct Hjava_lang_String;
+long ordering_Ordering_startTransaction(struct Hordering_Ordering *thisPtr,
+     struct Hjava_lang_String *customerId)
+{
+     return nextId++;
+}
+
+HArrayOfString *ordering_Ordering_listParts(struct Hordering_Ordering *thisPtr)
+{
+     HArrayOfString *retval;
+     ClassArrayOfString *strs;
+     int i;
+
+/* Create an array of strings that will contain 4 strings */
+     retval = (HArrayOfString *) ArrayAlloc(T_CLASS, 4);
+     
+/* If we couldn't allocate the memory, throw a Java exception */
+     if (retval == NULL) {
+         SignalError(EE(), &quot;java/lang/OutOfMemoryException&quot;, NULL);
+         return NULL;
+     }
+     
+/* ArrayAlloc allocated an array of objects, this call makes it an
+   array of strings */
+
+    unhand(retval)-&gt;body[4] = (HString *)
+        FindClass(EE(), &quot;java/lang/String&quot;, TRUE);
+     
+/* Get a pointer to the array of strings */
+     strs = unhand(retval);
+
+/* Fill the array of strings with Java strings */
+
+     for (i=0; i &lt; 4; i++) {
+          strs-&gt;body[i] = makeJavaString(parts[i], strlen(parts[i]));
+     }
+
+     return retval;
+}
+
+void ordering_Ordering_orderPart(struct Hordering_Ordering *thisPtr,
+     long txnID, struct Hjava_lang_String *part, long quantity)
+{
+}
+
+void ordering_Ordering_removePart(struct Hordering_Ordering *thisPtr,
+     long txnID, struct Hjava_lang_String *part)
+{
+}
+
+void ordering_Ordering_endTransaction(struct Hordering_Ordering *thisPtr,
+     long txnID)
+{
+}
+
+void ordering_Ordering_abortTransaction(struct Hordering_Ordering *thisPtr,
+     long txnID)
+{
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The skeletal implementation in Listing 32.2 doesn't interface
+with a real ordering system. Chances are, a real system wouldn't
+have exactly these methods. For one thing, there are too many
+things left out. However, for the purposes of illustration, assume
+that there really is a system that uses the above methods. Once
+you can access a legacy system, you can change the way it is accessed,
+as you will see later in this chapter in the section titled &quot;Presenting
+a Different Interface.&quot;
+<H2><A NAME="EncapsulatingbyEmulatingaUser"><FONT SIZE=5 COLOR=#FF0000>
+Encapsulating by Emulating a User</FONT></A></H2>
+<P>
+Sometimes, the only way you can access a legacy system is by interacting
+with it as if you were a user. This method is more commonly known
+as &quot;screen-scraping.&quot; You basically parse the individual
+output screens of the legacy application, and generate input to
+it as if you were a user.
+<P>
+This type of encapsulation is often combined with other methods.
+For instance, your legacy system may support TCP/IP, but you have
+to do screen-scraping to get the information from the system,
+as illustrated in Figure 32.9.
+<P>
+<A HREF="f32-9.html"><B>Figure 32.9 : </B><I>Even when a legacy system has TCP/IP, you
+may have to resort to screen-scraping</I>.</A>
+<P>
+Sometimes, the only access you can get with a native method is
+as a terminal to the application, and not directly into the application
+itself.
+<P>
+You may have to sink so low as to connect up via a modem or a
+serial cable to do asynchronous communications. You would almost
+certainly need native methods to do this, although under UNIX,
+you may be able to get away with doing file I/O. Figure 32.10
+illustrates this kind of configuration.
+<P>
+<A HREF="f32-10.html"><B>Figure 32.10: </B><I>Sometimes, the only way to get data from
+a legacy system is via a modem or serial connection</I>.</A>
+<H2><A NAME="GettingAssistancefromtheLegacySystem"><FONT SIZE=5 COLOR=#FF0000>
+Getting Assistance from the Legacy System</FONT></A></H2>
+<P>
+There's no rule that says that the legacy system can't have an
+active role in the encapsulation. Many times, you can add code
+to the legacy system in a few strategic places and open up the
+system to encapsulation. You can often create simple messaging
+protocols to pass data to and from the legacy system without having
+to resort to scraping screens.
+<H2><A NAME="PresentingaDifferentInterface"><FONT SIZE=5 COLOR=#FF0000>
+Presenting a Different Interface</FONT></A></H2>
+<P>
+The remnants of a legacy system can stay around long after the
+system itself is gone. Many times, applications that originally
+interfaced with the legacy system still do things the way the
+legacy system did, even though there is no reason for it.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+This situation occurs outside the computer industry as well. A woman was preparing a ham for a family dinner when her daughter asked her why she cut the end off the ham. The woman replied that her mother always did it. The woman then asked <FONT FACE="I 
+Helvetica Oblique">her</FONT> mother why she always cut the end off the ham. Her mother replied, &quot;So it would fit in the pan.&quot;
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+If you are encapsulating a legacy system, you have the ability
+to change the interface into the system to some degree. If the
+legacy system does something in a strange way, use the encapsulation
+to hide it.
+<P>
+Take the ordering system shown previously, for example. When you
+create an order, you have to begin a transaction, add parts, then
+either end or abort the transaction. Maybe you don't want to work
+that way anymore. You might be better off building an order at
+the client side, then have the client send the entire order, which
+is then fed into the system.
+<P>
+This would be more in line with the way Web services work. You
+try to do everything in one message, since there is no concept
+of a session on a Web server. Of course, designing your system
+to work <I>only</I> as a session-less system may also be a bad
+thing. Do what makes sense for your application.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You can use this technique when writing an application to use an interface that has not yet been completely specified or is changing. You decide on the interface your application will use, and write your application. When the real interface is completed, 
+write an object that translates from one interface to the other.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The ordering system is a good candidate for a different interface.
+You can easily create an object that lets you place orders in
+a single, session-less method call, rather than the group of calls
+in the current interface.
+<P>
+Listing 32.3 shows a simple class with a static method that places
+an order using the <TT>Ordering</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 32.3&nbsp;&nbsp;Source Code for </B><TT><B>Orders.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package ordering;
+
+public class Orders extends Object
+{
+     public static void placeOrder(String customerID,
+          PartOrder[] parts) throws OrderingException
+     {
+          Ordering ordering = new Ordering(customerID);
+
+          for (int i=0; i &lt; parts.length; i++) {
+               ordering.orderPart(parts[i].part,
+                    parts[i].quantity);
+          }
+
+          ordering.endTransaction();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 32.4 shows the <TT>PartOrder</TT>
+class, which encapsulates the information for a single entry in
+the ordering system.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 32.4&nbsp;&nbsp;Source Code for </B><TT><B>PartOrder.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package ordering;
+
+public class PartOrder extends Object
+{
+     public String part;
+     public int quantity;
+
+     public PartOrder()
+     {
+     }
+
+     public PartOrder(String part, int quantity)
+     {
+          this.part = part;
+          this.quantity = quantity;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+As you can see, the <TT>placeOrders</TT>
+method is much easier to use than the regular <TT>Ordering</TT>
+object. In a typical ordering system, this simplified interface
+may be a disadvantage. If this were an airline reservations system,
+you would have to book all your seats at once and hope that no
+one got a seat you wanted before you did. When you have a session-based
+system, you reserve the seats (or the parts) as your transaction
+progresses. If you abort the transaction, the things you have
+reserved get freed up for someone else. You will have to decide
+if you are willing to give up this functionality. It may or may
+not be worth the cost of a simplified interface.
+<H2><A NAME="CombiningMultipleSystems"><FONT SIZE=5 COLOR=#FF0000>
+Combining Multiple Systems</FONT></A></H2>
+<P>
+One of the more interesting aspects of encapsulation is combining
+various pieces to present a single, uniform system. It is a task
+that is both interesting and challenging. A simple example of
+this might be adding additional customer information to a customer
+database. For example, suppose your customer database stored the
+customer's account number, name, shipping address, phone number,
+and fax number. Now, suppose you have created a new shipping system
+that allowed customers to get software from you via ftp. You want
+to add information to the customer database to support this.
+<P>
+If would be nice if you could just add all this information to
+your legacy system, but maybe that wouldn't be the best thing.
+Maybe it is so difficult to get data out of the legacy system
+quickly that your ftp server couldn't service all the requests
+in a reasonable time.
+<P>
+You can create a separate database containing the information
+for the ftp server. Your encapsulation would then store information
+in both the ftp database and the legacy database. Whenever you
+retrieve information, the encapsulation queries both systems for
+the information you need.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Some systems have the ability to maintain information across multiple databases. You should see if your legacy system supports this kind of thing on its own before you attempt to write it yourself. That's a good idea in any situation. A good transaction 
+processing (TP) monitor will also handle this kind of situation.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Figure 32.11 shows an encapsulation that stores data in two places.
+<P>
+<A HREF="f32-11.html"><B>Figure 32.11: </B><I>An encapsulation can make multiple databases
+look like one</I>.</A>
+<P>
+There can be some serious drawbacks to this approach, so you need
+to be very careful if you decide to try it.
+<H3><A NAME="HandlingDeletionsOriginatingintheLegacySystem">
+Handling Deletions Originating in the Legacy System</A></H3>
+<P>
+If the encapsulation provides the only access to the legacy system,
+you can control things a lot more easily. If the legacy system
+is still accessed through some other means, like legacy terminals,
+you can get into some serious synchronization problems. If someone
+removes a customer from the legacy database, the other databases
+don't know about it. If you require all the databases to be in
+absolute synchronization at all times, this can be a major pain.
+<P>
+You can alleviate this problem by always checking with the legacy
+database to make sure a record exists. For instance, suppose you
+removed a customer from the legacy database for some reason, and
+then that customer tried to access the ftp server. Even though
+all the information necessary for the ftp is stored in the other
+database, the encapsulation still checks with the legacy system
+and learns that the customer account is no longer there.
+<P>
+The problem with this kind of approach is that it is slow. The
+other database may be a lot quicker than the legacy system, but
+because you must check with the legacy system each time, you don't
+realize the speed benefit.
+<P>
+If you are willing to accept a small possibility of discrepancies,
+you can remove the speed blockage caused by the legacy system.
+You could run a synchronization program that verified that a particular
+customer was in both databases, and removed any customers from
+the other database when they disappear from the legacy database.
+For a large database, this may be unfeasible.
+<P>
+Some legacy systems keep a transaction log, so you could run a
+synchronization program that looked for deletions in the transaction
+log and perform the deletion on the other database. This is a
+very reasonable solution. You don't have to perform a large number
+of queries to synchronize the database.
+<P>
+If you are only accessing the databases through the encapsulation,
+this problem doesn't occur, because the encapsulation knows whenever
+data is deleted. You may still have some problems if one database
+is down. You may need a two-phase commit protocol.
+<H3><A NAME="UsingaTwoPhaseCommitProtocol">
+Using a Two-Phase Commit Protocol</A></H3>
+<P>
+A two-phase commit protocol allows you to make sure an operation
+can be performed, and then perform it. The idea is that when you
+have an operation that spans multiple databases, you tell each
+database, &quot;This is what I want to do, are you ready to do
+it?&quot; Each database gets ready to perform the operation, or
+replies that it can't. This is the first phase.
+<P>
+The second phase occurs when all of the databases have responded
+that they can perform the operation (most of them have actually
+performed the operation, but not committed it as permanent). You
+now tell the databases to commit the operation. If one of them
+fails at this point, you assume that it will be taken care of
+by the database. In other words, it is the database's responsibility
+to complete the transaction once it has said that it can.
+<P>
+If, during the first phase, any database refuses to perform the
+operation, you tell all the databases to back out of the operation.
+Again, it is the responsibility of the databases to undo whatever
+changes have been made.
+<P>
+If you have a system that supports the two-phase commit protocol,
+chances are you can also find a good TP monitor that will supervise
+the two-phase commit, freeing you from having to write it. If
+you use a TP monitor, you can always use the native method mechanism
+to create a Java interface to the TP monitor.
+<H3><A NAME="ImplementingaTwoPhaseCommit">
+Implementing a Two-Phase Commit</A></H3>
+<P>
+When your system doesn't support a two-phase commit, you can either
+perform a single-phase transaction and log any errors that come
+up, or you can implement your own two-phase commit. Unless you're
+anticipating a large number of failures, you may be better off
+just logging any problems.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Writing your own two-phase commit protocol is decidedly non-trivial. You should have a firm grasp of database techniques before you attempt this.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+When a database system performs a two-phase commit, it writes
+the transaction to a log, then performs the transaction without
+committing it. If the transaction is aborted, it undoes the changes.
+The log is used in case the database fails during the transaction.
+Once the database has responded in the first phase, it must be
+able to either commit or abort the transaction.
+<P>
+Generally, you implement a two-phase commit by saving enough information
+to be able to restore things to the way they were before the transaction,
+then performing the transaction. If the transaction is aborted,
+you put things back the way they were.
+<P>
+If you have a locking mechanism on the legacy system, you should
+use it while waiting for a commit or abort in the second phase.
+If you have performed a change in the first phase and another
+transaction is able to come in and use the changed version of
+the data, you may not be able to back out of the change. If you
+are able to lock the data against changes, this can't happen.
+<H2><A NAME="SomeRealWorldExamples"><FONT SIZE=5 COLOR=#FF0000>
+Some Real-World Examples</FONT></A></H2>
+<P>
+If you've never been through a legacy system migration before,
+you are probably overwhelmed by the number of options and the
+lack of certainty with which they have been presented. Legacy
+system migration is often a difficult struggle. The best thing
+you can do is to approach it with a set of strategies and an open
+mind, and see what comes up.
+<H3><A NAME="AnExampleLegacySystem">
+An Example Legacy System</A></H3>
+<P>
+Suppose you are working with an airline, with a cluster of mainframes,
+a wide-area network, and thousands of old terminals spread all
+over the world. The terminals are connected to the mainframe via
+the wide-area network. Figure 32.12 illustrates this configuration.
+<P>
+<A HREF="f32-12.html"><B>Figure 32.12: </B><I>Many legacy systems have a network, one
+or more mainframes, and a group of terminals</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The following examples are adapted from actual running systems. Your systems may be radically different, but the steps you take are roughly the same.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Since you are probably not familiar with the kind of system normally
+found at an airline, here are thumbnail sketches of the mainframe,
+the WAN, and the terminals.
+<UL>
+<LI>The mainframes run an operating system from IBM called Transaction
+Processing Facility (TPF). It is commonly used by large airlines
+and financial institutions. For this particular site, the only
+connectivity to the mainframes is via thick cables called &quot;channel
+cables.&quot; The channel is like an overgrown two-way parallel
+port. The applications running on the mainframe are very tightly
+intertwined, and generally difficult to maintain.
+<LI>The terminals are very old, rugged terminals that run a proprietary
+airline data protocol that is completely incompatible with modern
+data terminals. These legacy terminals can display only uppercase
+letters, digits, and a small set of other characters. In addition,
+they operate in block mode, as opposed to single-character mode.
+That is, when someone enters data at the terminal, nothing is
+sent until the person presses the &quot;enter&quot; or &quot;send&quot;
+key. The idea of &quot;press any key to continue&quot; is unheard
+of on these terminals. Some users in the corporate offices have
+modern PCs, using special gateways to talk to the legacy mainframe.
+<LI>The wide-area network is a fairly robust packet-switched network
+that speaks the IBM channel protocol and the proprietary terminal
+protocol. In addition, it supports a number of other protocols,
+including the X.25 standard. This network is very modular and
+programmable.
+</UL>
+<H3><A NAME="CreatingaNewApplicationfortheExistingTerminalBase">
+Creating a New Application for the Existing Terminal Base
+</A></H3>
+<P>
+Suppose you want to create a company-wide e-mail system. You are
+faced with a number of choices:
+<UL>
+<LI>You could write the e-mail system on the existing mainframes.
+This would entail great cost and would not provide any neat GUI
+features for the more modern terminals.
+<LI>You could buy an off-the-shelf e-mail system and put PCs out
+in the field to run it. This is probably the first thing many
+people think of. Unfortunately, it may be even more costly than
+implementing the e-mail system in the mainframe. After all, you
+not only have to buy millions of dollars worth of PCs, you also
+have to put in a distributed LAN infrastructure, and possibly
+a new wide-area network to support it.
+<LI>You could write a custom e-mail system on a modern server,
+UNIX or NT, for example, provide full GUI access to the modern
+terminals, and provide an encapsulation for the legacy terminals
+so they can send and receive mail, too.
+</UL>
+<P>
+Assume that you want to save the company millions of dollars and
+create a modern <BR>
+e-mail system while encapsulating the legacy terminals.
+<P>
+In keeping with the philosophy of not letting the legacy system
+drag down your design, you design an e-mail system that allows
+you to send full ASCII text messages, as well as attach binary
+files to the messages.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Hopefully, you considered buying such a product off-the-shelf. There is far too much custom software that needs to be written for you to spend your time writing things that have already been done a million times.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Armed with your new design, you try to determine how to fit the
+legacy terminals into the plan. Normally, you have only the mainframe
+and the terminals to deal with. In this case, however, you have
+a third element-the network. You could place an encapsulation
+in two different places. Figure 32.13 shows a scheme where you
+encapsulate the mail system by making it look like the wide-area
+network to the terminals. The terminals send information to your
+encapsulation thinking it is the wide-area network.
+<P>
+<A HREF="f32-13.html"><B>Figure 32.13: </B><I>You can encapsulate the mail system by
+emulating the netwrok</I>.</A>
+<P>
+Your other option is to make your mail application hook into the
+network and behave like the mainframe. Figure 32.14 illustrates
+this configuration.
+<P>
+<A HREF="f32-14.html"><B>Figure 32.14: </B><I>You can also encapsulate the mail system
+by emulating a mainframe</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+There is a third option, which is using the mainframe as the front-end for the application, and passing data from the mainframe to the application. In this particular solution, however, you want to avoid writing code on the mainframe.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Each choice brings its own problems. If you try to emulate the
+wide-area network, you will probably experience some headaches
+because you'll have to install code wherever the network connects
+to the terminals. In general, you want to hook in at as few places
+as possible, preferably one.
+<P>
+If you try to emulate the mainframe, you want to avoid having
+to set up your own IBM channel and performing the channel protocol.
+If you get desperate, you can operate that way. In this case,
+however, there is a better option.
+<P>
+Recall that the network is highly programmable and supports X.25.
+Also remember that you may often reap huge benefits by adding
+a little code to the legacy system to open it up to your encapsulation.
+By adding some code to the network, you can use X.25 to emulate
+a mainframe rather than using the channel protocol.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The notion of emulating a legacy host is like a reverse screen-scraping. Rather than pulling data off screens generated by a legacy system, you're generating the screens.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Figure 32.15 illustrates this configuration.
+<P>
+<A HREF="f32-15.html"><B>Figure 32.15: </B><I>A little interface code in the network
+makes for a simple encapsulation</I>.</A>
+<P>
+Now that you have a way to emulate a host via X.25, you must decide
+how you will use the X.25 protocol. You will need to use a native
+method call of some sort, or, as an alternative, you can create
+a program in C or C++ that accesses the X.25 line and communicates
+with users of the X.25 line via TCP/IP. In other words, you create
+an X.25 server.
+<P>
+Figure 32.16 shows how a Java program could access an X.25 network
+via this X.25 server.
+<P>
+<A HREF="f32-16.html"><B>Figure 32.16: </B><I>A Java program uses a TCP/IP server to
+access the X.25 network</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+This technique of creating small servers to handle specific interfaces or devices is a reasonable choice for data streams. This is much more efficient than CORBA, since you are just passing large blocks of data without interpreting it. CORBA is much better 
+
+for message-based communications and remote method invocations.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+At this point, you have the connectivity problem solved. You can
+communicate with the network from your Java program, and you will
+be able to exchange whatever information you need in order to
+emulate a mainframe.
+<P>
+Now, you actually implement the encapsulation. The job of the
+encapsulation is to take a command from a legacy terminal and
+turn it into a method invocation in the e-mail system, then gather
+the results and display them in a form that the terminal will
+understand.
+<P>
+The encapsulation acts like a client to the e-mail system and
+like a server to the legacy terminal population. Figure 32.17
+shows the e-mail system with PC-based clients and legacy terminal
+clients.
+<P>
+<A HREF="f32-17.html"><B>Figure 32.17: </B><I>The e-mail system interacts with both
+legacy terminals and PC-based terminals</I>.</A>
+<P>
+As you can see, the e-mail system is not limited by the constraints
+of the legacy terminal population, but it is still able to service
+those terminals. Your e-mail system is able to work in the world
+of distributed clients, where its users may be reading their mail
+from hand-held terminals and other devices.
+<H3><A NAME="CreatingaNewInterfaceforanExistingApplication">
+Creating a New Interface for an Existing Application</A></H3>
+<P>
+Suppose you wanted to create a new interface for a legacy application.
+In this case, assume that you are trying to put a pretty front-end
+on an airline reservation system. Your first task, before you
+even think about connectivity, is designing your reservation system.
+<P>
+Remember, your system doesn't have to work exactly the same way
+that the existing system does. You'll probably want to simplify
+the interface and require as little typing as possible.
+<P>
+This is especially important if your goal is to allow agents at
+the airport to walk around with small hand-held terminals and
+provide assistance to passengers from outside the confines of
+a desk. This allows for more personalized service, and this is
+where you are really going to realize the benefits of Java.
+<P>
+Again, for the sake of simplicity, assume that you have come up
+with a good, user-friendly design. You aren't ready to move the
+airline's reservation off the mainframe, however. So, if anyone
+is going to use your new application, you're going to have to
+encapsulate the existing reservations system and make it look
+like your new application.
+<P>
+Now it's time to look at connectivity. Again, you have the mainframe,
+the network, and the legacy terminals. Start with a simple screen-scraping
+and proceed from there. In other words, the encapsulation is going
+to emulate a terminal. You again have choices for where you put
+your encapsulation:
+<UL>
+<LI>You can create an encapsulation that looks like the wide-area
+network, making the mainframe think it is talking to the network
+when it is really talking to your encapsulation. This would let
+your encapsulation emulate whole groups of terminals at once.
+<LI>You can hook your encapsulation into the network as a terminal,
+or cluster of terminals, using the network's X.25 interface.
+<LI>You can write software to emulate an actual legacy terminal,
+which would be both a huge hassle and a huge waste of time.
+</UL>
+<P>
+The X.25 interface looks like the best candidate here because
+it's cheap and non-proprietary. Plus, you could use the same X.25
+server from the e-mail system to access X.25 from Java.
+<P>
+Figure 32.18 shows the relationship between the encapsulation,
+the X.25 server, and the mainframe.
+<P>
+<A HREF="f32-18.html"><B>Figure 32.18: </B><I>The network's X.25 interface permits easy
+emulation of a legacy terminal</I>.</A>
+<P>
+In a screen-scraping setup, your encapsulation logs on to the
+host system with the same commands that a user would normally
+type. If you are screen-scraping an IBM 3270 application, there's
+good news and bad news. The bad news is that 3270 screens are
+no fun to emulate. The good news is that there are some libraries
+to help you. In the airline example, however, there are no libraries
+to assist you. After all, it's not like there would be a big customer
+base for such a library.
+<P>
+You must figure out what commands you would have to enter on the
+legacy system to perform each task that your new application needs
+to perform. This may involve single commands to the legacy system,
+or it may involve a whole series of commands.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If at all possible, try to minimize the number of extra commands your library has to perform each time. For instance, you don't want it to go through a complete login sequence every time it needs to do commands. Do the minimum number of commands that will 
+
+ensure that your terminal is set up the way you expect.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Once you have your screen-scraping code written, the other side
+of your encapsulation acts like the server for your new application.
+In other words, to the regular clients, it looks like the new
+system. To the legacy system, it looks like a terminal or a group
+of terminals. Figure 32.19 shows this screen-scraping encapsulation.
+<P>
+<A HREF="f32-19.html"><B>Figure 32.19: </B><I>A screen-scraping encapsulation is sometimes
+your only choice</I>.</A>
+<P>
+The screen-scraping method of encapsulation is often useful when
+adding new code to the legacy system is impossible, or cost-prohibitive.
+Screen-scraping is well-suited for rapid prototyping, however.
+You can throw a functioning model together fairly quickly, without
+having to add code to the legacy system.
+<P>
+As a mechanism for a production system, however, screen-scraping
+has some serious drawbacks:
+<UL>
+<LI>If the output for a particular command changes, it could throw
+the screen-scraping code off and give you incorrect results.
+<LI>If the screen-scraper gets out of sync with the host, you
+can get very strange results.
+<LI>Screen-scraping can be very slow, and often performs more
+commands than it needs to.
+</UL>
+<P>
+The nice thing here, however, is that once you have a functioning
+system, you can work on improving it. If you can get raw data
+out of the legacy system, you will be much happier. The trick
+with some systems, like the airline reservation system, is that
+it wasn't built to give out data in a raw form, so you must add
+custom code.
+<P>
+When you want to receive raw data from the legacy system, you
+must decide how the legacy system should deliver the data. The
+channel interface is a very fast interface, but it takes more
+work. If you are in a hurry, you may be better off finding an
+easier solution.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+This reluctance to directly hook up to an IBM channel is specific to the airline reservation system. If you are connecting to a regular SNA host, this is a very viable solution, and there are many software/hardware packages available that do 
+this.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+You also have the option of making some kind of binary data stream
+to a terminal, which would most likely require a lot of cooperation
+from both the legacy system and the network.
+<P>
+The network makes a nice option here. With a little code on the
+reservation system and on the network, you can get data over the
+X.25 interface. The legacy system passes data to the network over
+the channel, and the network hands it to you via the X.25 interface.
+<P>
+Yet again, you have the X.25 server program to keep your Java
+encapsulation from needing any native methods to access X.25.
+Unlike screen-scraping, you don't have to perform a series of
+commands. You can work out a set of messages to be passed between
+the reservation system and your encapsulation. You won't have
+to go through the pain of extracting information from text output
+stream. Instead, the information you need will be laid out in
+specific places in the messages sent from the reservation system.
+<P>
+Figure 32.20 shows how a Java encapsulation program can use X.25
+to exchange binary data with the legacy host.
+<P>
+<A HREF="f32-20.html"><B>Figure 32.20: </B><I>Your encapsulation can exchange binary
+data with the legacy system</I>.</A>
+<P>
+Assuming you have the time and the resources, a direct channel
+connection to the mainframe is the best option in terms of bandwidth.
+When you need such an interface, you may be better off finding
+a firm that specializes in channel communications and getting
+them to write the channel interface code.
+<P>
+Assuming you have a way to speak your system's channel code, you
+should create something similar to the X.25 server. It should
+speak channel protocol on one side and TCP/IP on the other. Again,
+this means that you can connect a Java application to the channel
+gateway with a simple socket instead of creating non-portable
+native methods.
+<P>
+As with the X.25 solution, when passing information over the channel,
+you need to figure out what data your encapsulation needs to send
+and receive, and then add code on the legacy system to handle
+the requests. Figure 32.21 shows a channel-based encapsulation
+configuration.
+<P>
+<A HREF="f32-21.html"><B>Figure 32.21: </B><I>A direct channel connection to a mainframe
+gives you high-speed access to data</I>.</A>
+<H3><A NAME="ClearingaPathforMigrationofftheLegacySystem">
+Clearing a Path for Migration off the Legacy System</A></H3>
+<P>
+When you encapsulate part of a system in order to use newer technology,
+you gain more than just the use of the newer technology. You gain
+a path for migrating off the legacy system.
+<P>
+This whole use of encapsulation boils down to one thing-changing
+a system in pieces rather than tackling the whole thing at once.
+<P>
+Encapsulation helps insulate you from &quot;flash cuts&quot; where
+everyone suddenly switches over to a new system. While there are
+cases when these cuts work, many times you end up switching back
+and forth while all the bugs are worked out. You'll still have
+these situations where you go back and forth, but you don't have
+to switch everything at once.
+<P>
+A typical migration path for upgrading both the legacy system
+and the legacy terminals usually requires at least one encapsulation.
+The kind of encapsulation you use depends on which part you want
+to change first.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+No matter which part of your system you want to change first, the first step in migrating away from the legacy system is always the same. You have to figure out what the new system is going to look like. Until you do that, you can't change a 
+thing.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+When you decide to migrate your terminal population first, you
+must create an encapsulation for the legacy system. You encapsulate
+the part you aren't changing. As shown in Figure 32.22, you first
+encapsulate the legacy system, creating what looks like a server
+for your new application design.
+<P>
+<A HREF="f32-22.html"><B>Figure 32.22: </B><I>When migrating legacy terminals, you first
+encapsulate the legacy system</I>.</A>
+<P>
+Next, you begin to migrate your terminal population over to the
+new application design. Since the old terminals and the new terminals
+are still accessing the same legacy system, you don't run into
+any coordination problems. Figure 32.23 shows how your terminal
+population might look halfway through the migration.
+<P>
+<A HREF="f32-23.html"><B>Figure 32.23: </B><I>New workstations use the encapsulation
+to access the legacy system</I>.</A>
+<P>
+Finally, when all the terminals have been migrated over to the
+new application design, you can create a new server to replace
+the legacy system, as shown in Figure 32.24.
+<P>
+<A HREF="f32-24.html"><B>Figure 32.24: </B><I>Once the legacy terminals are gone, you
+can replace the legacy system</I>.</A>
+<P>
+When you migrate the legacy system first, you encapsulate the
+terminal population first. In other words, you create an encapsulation
+that translates commands from the legacy terminals into commands
+understood by the new application design. Figure 32.25 illustrates
+this encapsulation.
+<P>
+<A HREF="f32-25.html"><B>Figure 32.25: </B><I>A terminal encapsulation allows legacy
+terminals to access the new system</I>.</A>
+<P>
+Once the new system is in place, you can migrate your terminals
+over to the newer terminals. Again, since the new terminals access
+the same system as the old system, you don't have any coordination
+problems-there is only one system running. Figure 32.26 illustrates
+this migration in the process of changing the terminals over.
+<P>
+<A HREF="f32-26.html"><B>Figure 32.26: </B><I>Legacy terminals and new workstations
+access the new system</I>.</A>
+<P>
+Finally, when you have migrated the last terminal over to the
+new application design, you are done.
+<P>
+Legacy system is a lot harder than it sounds. The techniques presented
+in this chapter represent your battle strategy. You use them to
+attack each new legacy system in a different way. Even though
+you have a good strategy, you still have to fight the battle-or
+write the code, in this case. That's where the real fun begins.
+Each system has its own challenges. You may not enjoy it while
+you're doing it, but sometime down the road, you'll enjoy recounting
+all the peculiarities of each system you worked with. They all
+have their own personalities, brought about by years of tweaks
+and changes.
+<P>
+Legacy system migration is crucial to bringing more companies
+onto the Internet and really advancing into the information age.
+Very few companies want to create a new system from scratch just
+so they can be on the Net.
+<HR>
+
+<CENTER><P><A HREF="ch31.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch33.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

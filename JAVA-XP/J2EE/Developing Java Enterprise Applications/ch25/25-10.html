@@ -1,0 +1,176 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Perhaps the most complex action is the purchase one. This action attempts to contact the ShoppingCart EJB and initiate a purchase. Purchasing is a two-step process. First, the servlet creates a list of items to confirm and checks them with the bean before displaying the confirmed items to the shopper. If the shopper confirms the purchase, the confirmed items are bought and the shopper is notified. The first time a purchase request is made, the servlet creates the confirmed item list and stores it in the client session with the name &#147;shoppingcart.itemsToConfirm.&#148; The confirmation page sets the input parameter to confirmed, telling the servlet to perform the purchase. If this flag is set and no items appear in the session for confirmation, the errorMessage is set. The value of this parameter is the contents of a text field that the user fills in with her confirmation ID.
+</P>
+<P>The code for contacting the EJB appears in boldface type in the following sample. To identify the shopping cart, the servlet uses the REMOTE_USER property, if possible. This is set if the user has authenticated with the Web server. Otherwise, the session ID is used.</P>
+<P>The code for outputting the pages also appears in boldface type. In this case, output is managed by other methods discussed later.</P>
+<PRE>
+        else if(&#147;purchase&#148;.equalsIgnoreCase(action))
+         {
+            Hashtable confirmedItems;
+            
+<B>            confirmedItems = (Hashtable)
+               session.getValue(&#147;shoppingcart.itemsToConfirm&#148;);</B>
+                
+            //Try to use the remote user login
+<B>            cartName = request.getRemoteUser();</B>
+        
+            if(cartName == null)
+            {
+                session = request.getSession(true);
+            
+<B>                if(session != null) cartName = session.getId();</B>
+            }
+        
+<B>            if(home == null) findHome();</B>
+        
+            //Get the EJB shopping cart
+            if((home != null)&amp&amp(cartName != null))
+            {            
+                try
+                {
+<B>                    cart = home.create(cartName);</B>
+                }
+                catch(Exception ex)
+                {
+                    //perhaps home is gone, reset
+                    home = null;
+                    ctx = null;
+                
+                    logger.log(ex);
+                }
+            }
+        
+            if(cart == null)
+            {
+                errorMessage = &#147;Unable to load cart.&#148;;
+            }
+            else
+            {
+                logger.log(&#147;Cart: &#148;+cart);
+            }
+            
+            if(request.getParameter(&#147;confirmed&#148;)!=null)
+            {
+                if(confirmedItems == null)
+                {
+                    errorMessage =
+                     &#147;No items confirmed for purchase.&#148;;
+                }
+                else
+                {
+                    String user = request.getParameter(&#147;confirmed&#148;);
+                    doPurchase(confirmedItems,cart,items
+                                    ,user,out,requestURL,referer);
+                    outputCart = false;
+                }
+            }
+            else
+            {
+               outputConfirm(items,cart,session
+                              ,out,requestURL,referer);
+            
+                outputCart = false;
+            }
+        }
+</PRE>
+<P>All other actions are treated as a request to view the cart, as indicated by the trailing else statement.
+</P>
+<PRE>
+        else
+         {
+            //do nothing, just view
+        }
+</PRE>
+<P>Unless the confirm pages, purchase page, or an error occurred, the cart is displayed. If the errorMessage variable is set, a page displaying this message is sent to the client. This check is performed by the following if-else statement:
+</P>
+<PRE>
+        if(outputCart &amp&amp (errorMessage==null))
+         {
+            outputCart(items,out,requestURL,referer);
+        }
+        else if(errorMessage!=null)
+        {
+            outputErrorMessage(out,errorMessage,referer);
+        }
+    }
+</PRE>
+<P>The outputErrorMessage method is used to send an error message to the client. This method takes the PrintWriter, the message, and the URL of the referring page as arguments and outputs HTML.
+</P>
+<PRE>
+    protected void outputErrorMessage(PrintWriter out
+                                         ,String errorMessage
+                                        ,String referer)
+    {
+        out.println(&#147;&ltHTML&gt&#148;);
+        out.println(&#147;&ltHEAD&gt&#148;);
+        out.println(&#147;&ltTITLE&gt&#148;);
+        out.println(&#147;Shopping Cart&#148;);
+        out.println(&#147;&lt/TITLE&gt&#148;);
+        out.println(&#147;&lt/HEAD&gt&#148;);
+        out.println(&#147;&ltBODY TEXT=\&#148;#000000\&#147; BGCOLOR=\&#148;#FFFFFF\&#147;&#148;);
+        out.println(&#147; LINK=\&#148;#FF0000\&#147; VLINK=\&#148;#800080\&#147;&gt&#148;);
+        out.println(&#147;&ltCENTER&gt&#148;);
+        out.println(&#147;&ltTABLE WIDTH=500 BORDER=0&gt&#148;);
+        out.println(&#147;&ltTR&gt&#148;);
+        out.println(&#147;&ltTD&gt&#148;);
+        
+        out.println(errorMessage);
+        
+        if((referer!=null)&amp&amp(referer.length()&gt0))
+        {
+            out.print(&#147;&ltCENTER&gt&ltH4&gt&ltA HREF=\&#148;&#147;);
+            out.print(referer);
+            out.print(&#147;\&#148;&gtBack&lt/A&gt&lt/H4&gt&lt/CENTER&gt&#148;);
+        }
+        
+        out.println(&#147;&lt/TD&gt&#148;);
+        out.println(&#147;&lt/TR&gt&#148;);
+        out.println(&#147;&lt/TABLE&gt&#148;);
+        out.println(&#147;&lt/CENTER&gt&#148;);
+        out.println(&#147;&lt/BODY&gt&#148;);
+        out.println(&#147;&lt/HTML&gt&#148;);
+        out.close();
+    }
+</PRE>
+<P>The ouputCart method takes the hash table containing the cart, the PrintWriter, the URL for the servlet, and the URL for the referring page as arguments. This method outputs the cart as a table, pictured in Figure 25.11, with text fields for adjusting the quantity of an item and buttons to initiate an adjustment or deletion. There is also a button to initiate a purchase.
+</P>
+<P><A NAME="Fig11"></A><A HREF="images\25-11.jpg"><IMG SRC="images\25-11t.jpg"></A>
+<BR><A HREF="images\25-11.jpg"><FONT COLOR="#000077"><B>Figure 25.11</B></FONT></A>&nbsp;&nbsp;A shopping cart page.</P>
+<P>As the items are output, a running total of their cost is maintained. This total is displayed in the final row of the table. The actual code for outputting an item is contained in the next method, called outputItem. The requestURL argument is used by this method to assign the ACTION attribute for the forms.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

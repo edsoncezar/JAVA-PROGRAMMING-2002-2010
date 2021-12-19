@@ -1,0 +1,821 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+
+<HEAD>
+<SCRIPT LANGUAGE="JavaScript">
+
+
+<!--
+
+function popUp(pPage) {
+ popUpWin = window.open('','popWin','resizable=yes,scrollbars=no,width=525,height=394');
+ figDoc= popUpWin.document;
+ zhtm= '<HTML><HEAD><TITLE>' + pPage + '</TITLE>';
+ zhtm += '<link rel="stylesheet" href="/includes/stylesheets/ebooks.css"></head>';
+ zhtm += '<BODY bgcolor="#FFFFFF">';
+ zhtm += '<IMG SRC="' + pPage + '">';
+ zhtm += '<P><B>' + pPage + '</B>';
+ zhtm += '</BODY></HTML>';
+ figDoc.write(zhtm);
+ figDoc.close();
+ popUpWin.focus();
+ }
+
+//-->
+
+
+</SCRIPT>
+<link rel="stylesheet" href="http://www.szptt.net.cn/includes/stylesheets/ebooks.css">
+
+        <META NAME="GENERATOR" Content="Symantec Visual Page 1.0.1">
+        <META HTTP-EQUIV="Content-Type" CONTENT="text/html;CHARSET=iso-8859-1">
+        <TITLE>JFC -- Chapter 2 - MVC Architecture </TITLE>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF">
+
+<CENTER>
+<H1><IMG SRC="..\button\sams.gif" BORDER="0"></H1>
+
+<P><A HREF="..\ch01\ch01.htm"><IMG SRC="..\button\previous.gif" BORDER="0"></A>
+<A HREF="..\index.htm"><IMG SRC="..\button\contents.gif" BORDER="0"></A> 
+<A HREF="..\ch03\ch03.htm"><IMG SRC="..\button\next.gif" BORDER="0"></A> 
+
+
+<H1>JFC Unleashed</H1></CENTER>
+<HR>
+
+
+<H1>Chapter&nbsp;2<br>
+MVC Architecture </H1>
+<HR>
+<p>
+
+
+<UL>
+<LI><A HREF="#TheMVCArchitecture">
+The MVC Architecture</A>
+
+<LI><A HREF="#CombinedViewandControlinJFC">
+Combined View and Control in JFC</A>
+<LI><A HREF="#FactoryDesignPattern">
+Factory Design Pattern</A>
+<UL>
+<LI><A HREF="#ParameterizedFactoryPatternExample">
+Parameterized Factory Pattern Example</A>
+</UL>
+<LI><A HREF="#SingletonPattern">
+Singleton Pattern</A>
+<LI><A HREF="#Summary">
+Summary</A>
+</UL>
+
+<HR>
+<P>
+The design of the JFC is built upon a variant of the Model View
+Controller (MVC) architecture. This is not a new architecture
+for software applications, but it is new to the Java graphical
+user interface toolkit. MVC is a well-understood architecture
+that has been used in other programming languages for years. The
+JFC makes extensive use of a couple of design patterns. Understanding
+the architecture and these patterns will enhance your ability
+to build robust JFC applications. 
+<P>
+The JFC can be used like a typical graphical user interface toolkit:
+create and arrange a display's buttons, lists, and so on. If the
+user interacts with the display, the data is queried from the
+view and stored elsewhere in the application. Similarly, if the
+application's data changes, the program queries the data and updates
+the view components. In this scenario, the view contains its own
+copy of the data it displays. The application is responsible for
+keeping the view's data in sync with its internal data representation.
+<P>
+The JFC can be used in this dumb toolkit mode, but by doing so
+you ignore a much more powerful underlying technology called the
+Model View Controller (MVC) architecture. In MVC, the application
+data is contained in the model, one or more views are used to
+present the data to the user, and controls are used to interact
+with the data in the model.
+<P>
+The remainder of this chapter describes the MVC architecture,
+as well as a few other design patterns common in the JFC.
+
+
+<H2><A NAME="TheMVCArchitecture">
+The MVC Architecture</A></H2>
+
+<P>
+The Model View Controller architecture consists of three types
+of classes. The model consists of the application data classes.
+The view consists of the application presentation. The controller
+classes define how user interaction is handled in the application.
+The MVC architecture decouples these functional components, allowing
+for easier reuse of code than in a traditional user interface
+toolkit.
+<P>
+Some communication mechanisms must be provided with the decoupled
+functional entities in the MVC architecture. In the JFC, a subscribe-and-publish
+paradigm is employed. Under this paradigm, objects express interest
+in a data source by subscribing. When the data source changes
+state, a notification is published to the subscribed object. Multiple
+objects can subscribe to the same data source at the same time.
+Similarly, an object can subscribe to multiple data sources. An
+object unsubscribes from a data source when it is no longer interested
+in it. After unsubscribing, the data source will not send additional
+events to the subscriber. The controller objects are used to mutate
+the data sources. The mutation is typically accomplished by calling
+a method on the data model.
+<P>
+The MVC example shown in Figure 2.1 shows that the views have
+subscribed to the model data source. A source of input causes
+the first controller object to send a message that changes the
+data contained in the model. After the model has changed its state,
+it publishes a change message to each of the views that have previously
+subscribed with the model. In this example, the entities that
+subscribe to the model are shown as views.
+<P>
+<A HREF="javascript:popUp('f2-1.gif')"><B>Figure 2.1 :</B> <I>MVC communication example</I>.</A>
+<P>
+However, any type of object can subscribe to receive data change
+messages. For example an object that logs changes to a file could
+subscribe to the data model. It is important to understand that
+the order in which subscribers are notified is undefined. This
+gives models the flexibility to serve subscribers in any way convenient
+for that model. It also prohibits designing views that require
+notifications in a specified order from a single model. If notification
+order is required, subscribers must daisy chain themselves and
+forward the notification in the proper order. This situation is
+depicted in Figure 2.2. Daisy chaining subscribers complicates
+each subscriber. It must be capable of accepting subscription
+requests and publishing messages when they are received.
+<P>
+<A HREF="javascript:popUp('f2-2.gif')"><B>Figure 2.2 :</B> <I>Daisy-chained subscribers</I>.</A>
+<H2><A NAME="CombinedViewandControlinJFC">
+Combined View and Control in JFC</A></H2>
+<P>
+The JFC has taken some liberties in its implementation of the
+MVC architecture. In the JFC, the visual components double as
+both views and controllers. The justification for this design
+is that the visual components interact with the user, and it is
+burdensome to force that component to send a message to a controller
+that forwards the control message to the model. This simplification
+of the architecture leads to more efficient components, but does
+limit flexibility.
+<P>
+The JFC defines a read-only view of the data by defining interfaces
+for each type of data model. Default implementations for each
+model interface are also provided. This allows a view to display
+the contents of any data source that implements the model interface.
+<P>
+Defining the data model as an interface allows the JFC to be more
+efficient than conventional component toolkits. In a conventional
+toolkit, the data is copied into the component for display. This
+requires multiple copies of the same data to be present in the
+application. For example, to populate an AWT <TT>List</TT> component,
+code similar to the following can be used.
+<BLOCKQUOTE>
+<PRE>
+String[] fruits = {  &quot;Apple&quot;, &quot;Banana&quot;, &quot;Orange&quot;, &quot;Pear&quot; } ;
+List list = new List();
+for( int i = 0; i &lt; fruits.length; i++ 
+    list.add( fruits(i));
+</PRE>
+</BLOCKQUOTE>
+<P>
+As seen in this example, the application stores the data to be
+presented in the <TT>List</TT> component in an array. The <TT>List</TT>
+component itself creates additional storage for the data it displays.
+Thus there are two copies of the data structure, one in the application
+and another in the <TT>List</TT> component. If the application's
+data array changes, the <TT>List</TT> will not reflect the change
+unless the application explicitly updates it with the new data.
+This forces the application not only to manage the data, but also
+to keep all views of the data current. This example also suffers
+the inefficiency of the time taken to add each item to the list.
+The <TT>add</TT> method of the <TT>List</TT> class is synchronized,
+which, at the time of this writing, is still a costly operation
+in Java.
+<P>
+When using the JFC, your class containing the data could implement
+the <TT>ListModel</TT> interface. The <TT>ListModel</TT> interface
+provides methods for the view to query the size of the model and
+retrieve items from the model. The previous example for a <TT>List</TT>
+visual component would look like the following in the JFC:
+<BLOCKQUOTE>
+<PRE>
+class TestListModel extends AbstractListModel { 
+    String[] fruits = {  &quot;Apple&quot;, &quot;Banana&quot;, &quot;Orange&quot;, &quot;Pear&quot; } ;    
+    
+    public int getSize() { 
+        return( fruits.length );
+    } 
+
+    public Object getElementAt(int index) { 
+        return( fruits[ index ] );
+    } 
+} 
+
+// Some view needing to display the fruits list.
+ListModel model = new TestListModel();
+JList list = new JList( model );
+</PRE>
+</BLOCKQUOTE>
+<P>
+This example takes advantage of one of the default model implementations:
+the <TT>AbstractListModel</TT> class. Methods to add and remove
+subscription listeners are inherited from the superclass. The
+concrete model class only needs to define the methods to return
+the actual data. The model interfaces, as well as their associated
+abstract and default implementations, will be presented later
+in this book as each component is presented.
+<P>
+For such a trivial example, creating a class to contain the data
+may seem like overkill, and probably is. When the data consists
+of thousands of items, however, the JFC architecture shines. The
+data source can implement multiple model interfaces, allowing
+many view components to present the data with various visual representations.
+Finally, multiple visual components can be developed to read the
+same model. This allows the data to implement fewer model interfaces
+and still be presented with many different visual representations.
+<P>
+When evaluating a toolkit, performance measures such as &quot;How
+long does it take to add ten thousand items to a list?&quot; are
+often considered. These types of measurements for properly written
+JFC applications are irrelevant. The reason for this is that ten
+thousand items are never added to a list. Instead, the data source
+implements the <TT>ListModel</TT> interface and is immediately
+available for display. The difference in these two architectures
+is demonstrated in the following example:
+<BLOCKQUOTE>
+<PRE>
+package com.foley.test;
+
+import java.awt.*;
+
+import javax.swing.*;
+
+/**
+ * A simple example to time adding items to an AWT List and
+ * JFC JList components.
+ *
+ * @author Mike Foley
+ **/
+public class TestList { 
+    
+    /**
+     * Application entry point.
+     * The arguments are not used.
+     *
+     * @param args Command line arguments passed to the application.
+     **/
+    public static void main( String[] args ) { 
+
+        //
+        // Time adding Strings to an AWT List component.
+        //
+        long d = System.currentTimeMillis();
+        List awtList = new List();
+        for( int i = 0; i &lt; 10000; i++ ) { 
+            awtList.add( &quot;Item &quot; + i );
+        } 
+        System.out.println( &quot;AWT time: &quot; + 
+           ( System.currentTimeMillis() - d ) );
+       
+        //
+        // Time creating a ListModel and adding it to
+        // a JList component.
+        //
+        d = System.currentTimeMillis();
+        ListModel model = new AbstractListModel() { 
+            public int getSize() {  return( 10000 ); } 
+            public Object getElementAt( int index ) 
+                {  return( &quot;Item &quot; + index ); } 
+        } ;
+        JList jfcList = new JList( model );
+        System.out.println( &quot;JFC time: &quot; + 
+           (System.currentTimeMillis() - d ) );
+    } 
+} 
+</PRE>
+</BLOCKQUOTE>
+<P>
+When running this example on a 300MHz Pentium II processor computer
+with 128MB of RAM, the AWT <TT>List</TT> creation averaged a whopping
+1.65 seconds while the JFC <TT>JList</TT> creation averaged approximately
+0.015 seconds. The <TT>JList</TT> was two orders of magnitude
+faster. This obviously is a jaded example because the objects
+for the <TT>JList</TT> are lazily created when requested by the
+view. However, it approximates many real-world programming examples
+when the data to be displayed is already in a data structure in
+memory or can be lazily evaluated when, and if, requested. The
+JFC architecture gives the application developer the flexibility
+to store and/or evaluate data in the best way for your particular
+application. It does not force an assumed structure on the data.
+<P>
+It should be pointed out that the JFC contains convenience methods
+for handling simple examples such as that shown previously. The
+most likely manner in which this example would be coded using
+the JFC is as follows:
+<BLOCKQUOTE>
+<PRE>
+String[] fruits = {  &quot;Apple&quot;, &quot;Banana&quot;, &quot;Orange&quot;, &quot;Pear&quot; } ;    
+JList list = new JList( fruits );
+</PRE>
+</BLOCKQUOTE>
+<P>
+In this example, the <TT>JList</TT> class creates an anonymous
+inner class that implements the <TT>ListModel</TT> interface.
+This model, which is hidden from the caller, wraps the array given
+in the <TT>JList</TT> constructor. The inner class is used by
+the list component as the data model.
+<P>
+The previous discussion illustrates the power of the JFC toolkit.
+It can be used as a lightweight viewing engine for any data source,
+or, using default models and convenience methods, it can be used
+like a traditional widget toolkit. Most production applications
+will exhibit examples of both uses of the JFC toolkit.
+<P>
+The JFC provides the <TT>Action</TT> interface to embody elements
+of application behavior. The JFC provides many <TT>Action</TT>-aware
+components that allow an action to be easily tied to a keystroke,
+menu item, or toolbar. If an application or applet is developed
+with actions that define behavior, the actions may be thought
+of as the controllers in the MVC architecture. The <TT>Action</TT>
+interface will be presented in detail in <A HREF="..\ch04\ch04.htm" >Chapter 4</A> &quot;JFC
+Programming Techniques,&quot; and examples of <TT>Action</TT>-aware
+components will be presented throughout this book.
+<H2><A NAME="FactoryDesignPattern">
+Factory Design Pattern</A></H2>
+<P>
+The version of the MVC design pattern implemented in the JFC may
+be the most visible pattern used, but there are others sprinkled
+throughout. The parameterized factory design pattern creates an
+instance of a class depending on the parameter given to the factory.
+This pattern is easily implemented in Java and is used to hide
+specific class details from a <TT>Client</TT> class.
+<P>
+The parameterized factory pattern can be implemented in Java by
+exposing an interface that defines the behavior of classes in
+a package. Then one or more static creation functions are provided
+for clients to obtain instances of classes in the package. Parameters
+passed to one of the construction methods determine which class
+in the package is instantiated. The <TT>Client</TT> class interacts
+with the <TT>Concrete</TT> class returned from the factory creation
+method through the public methods defined in the package's public
+interface(s).
+<H3><A NAME="ParameterizedFactoryPatternExample">
+Parameterized Factory Pattern Example</A></H3>
+<P>
+The following example demonstrates the parameterized factory design
+pattern. The example implements a Reporter package that writes
+messages to either the console or a file. An application uses
+a factory method to obtain a reference to a <TT>Reporter</TT>.
+The client code interacts with the <TT>Reporter</TT> through the
+methods defined in the <TT>Reporter</TT> interface shown here.
+<BLOCKQUOTE>
+<PRE>
+package com.foley.reporter;
+
+import java.io.IOException;
+
+
+/**
+ * The Reporter interface. All types of
+ * Reporters must implement this interface. A client
+ * gets a handle to a Reporter using the ReporterFactory
+ * class.
+ *
+ * @see ReporterFactory
+ * @author Mike Foley
+ **/
+public interface Reporter { 
+     
+    /**
+     * Method to write a message to the reporting system.
+     * A newline is added after the message is written.
+     *
+     * @param message The message to be written.
+     **/
+    public void writeln( String message ) throws IOException;
+    
+    /**
+     * Existing Reporter types.
+     **/
+    static final ReporterType CONSOLE = new ReporterType();
+    static final ReporterType FILE = new ReporterType();
+    
+    
+    /**
+     * Type safe class for reporters.
+     **/
+    final class ReporterType { 
+    } 
+    
+}  // Reporter
+</PRE>
+</BLOCKQUOTE>
+<P>
+In this simple example, the <TT>Reporter</TT> only defines one
+method, <TT>writeln</TT>. Also of interest in the <TT>Reporter</TT>
+interface are the type-safe constants of defined <TT>Reporter</TT>
+types. These types are used in the <TT>ReporterFactory</TT> as
+well as by clients to specify the type of <TT>Reporter</TT> desired.
+<P>
+The <TT>ReporterFactory</TT>, shown next, is used by clients to
+obtain a handle on a <TT>Reporter</TT> of the desired type. The
+static <TT>getReporter</TT> method is passed one of the type-safe
+constants defined in the <TT>Reporter</TT> interface. This value
+is tested, and the proper <TT>Reporter</TT> type is returned to
+the caller. Using the type-safe constants in the <TT>getReporter</TT>
+method allows the compiler to detect improper type requests. This
+would not be possible if an <TT>int</TT> was used for the <TT>Reporter</TT>
+type.
+<P>
+The <TT>ReporterFactory</TT> lazily creates a single <TT>Reporter</TT>
+instance of the proper type when it is requested. Clients requesting
+the <TT>Reporter</TT> share the single instance of the requested
+type. However, this implementation detail is hidden from the client.
+If a separate <TT>FileReporter</TT> is desired for each client,
+this change may be implemented in the factory without altering
+client code.
+<BLOCKQUOTE>
+<PRE>
+package com.foley.reporter;
+
+import java.io.IOException;
+
+
+/**
+ * A factory class to retrieve a Reporter of the specified
+ * type. If additional Reporter types are added to the system,
+ * the factory method must be updated to construct the new types.
+ *
+ * @author Mike Foley
+ **/
+public class ReporterFactory extends Object { 
+ 
+    /**
+     * The shared Reporter instances.
+     * These are lazily created when requested.
+     **/
+    private static ConsoleReporter consoleReporter;
+    private static FileReporter fileReporter;
+    
+    
+    /**
+     * Method to obtain a Reporter.
+     *
+     * @param type The type of Reporter desired.
+     * @return The Reporter of the specified type.
+     * @exception IOException If the Reporter can not be initialized.
+     **/
+    public static Reporter getReporter( Reporter.ReporterType type ) 
+        throws IOException { 
+            
+        if( type == Reporter.CONSOLE ) { 
+            
+            //
+            // Return the console reporter instance.
+            // If this doesn't yet exist, create it.
+            //
+            if( consoleReporter == null )
+                consoleReporter = new ConsoleReporter();
+            return( consoleReporter );
+            
+        }  else if( type == Reporter.FILE ) { 
+            
+            //
+            // Return the file reporter instance.
+            // If this doesn't yet exist, create it.
+            //
+            if( fileReporter == null )
+                fileReporter = new FileReporter();
+            return( fileReporter );
+            
+        } 
+        
+        throw( new RuntimeException( 
+               &quot;A new Reporter type must have been added.&quot; ) );
+        
+    }  // getReporter
+    
+}  // ReporterFactory
+</PRE>
+</BLOCKQUOTE>
+<P>
+The two concrete <TT>Reporter</TT> types are shown next. Each
+class implements the <TT>Reporter</TT> interface, allowing them
+to be returned by the <TT>ReporterFactory</TT>. In the <TT>writeln</TT>
+method, the <TT>ConsoleReporter</TT> simply calls the <TT>System.out.println</TT>
+method to echo the message to the console. The <TT>FileReporter</TT>
+is slightly more complex, as a <TT>File</TT> is created in the
+constructor. The file is written to in the <TT>writeln</TT> method.
+<BLOCKQUOTE>
+<PRE>
+package com.foley.reporter;
+
+
+/**
+ * A Reporter that writes to the console.
+ *
+ * @author Mike Foley
+ **/
+class ConsoleReporter implements Reporter { 
+ 
+    /**
+     * writeln, from Reporter
+     *
+     * Method to write a message to the reporting system.
+     * Write the message to the console.
+     *
+     * @param message The message to be written.
+     **/
+    public synchronized void writeln( String message ) { 
+        System.out.println( message );
+    } 
+    
+}  // ConsoleReporter
+
+
+package com.foley.reporter;
+
+import java.io.File;
+import java.io.DataOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
+
+/**
+ * A Reporter that writes to a file. The file
+ * written to is hard coded to 'Reporter.txt'
+ * in the current directory.
+ *
+ * @author Mike Foley
+ **/
+class FileReporter implements Reporter { 
+ 
+    /**
+     * The file and stream to Report to.
+     **/
+    File outputFile;
+    DataOutputStream outputStream;
+    
+    
+    /**
+     * Construct a FileReporter.
+     *
+     * @exception IOException If the file can not be opened for writing.
+     **/
+    FileReporter() throws IOException { 
+            
+        outputFile = new File( &quot;Reporter.txt&quot; );
+        outputStream = new DataOutputStream( 
+                           new FileOutputStream( outputFile ) );
+    } 
+    
+    
+    /**
+     * writeln, from Reporter
+     *
+     * Method to write a message to the reporting system.
+     * Write the message to the Reporter file.
+     *
+     * @param message The message to be written.
+     * @exception IOException If the message can not be written.
+     **/
+    public synchronized void writeln( String message ) 
+        throws IOException { 
+        outputStream.writeBytes( message + &quot;\ n&quot; );
+    } 
+    
+}  // FileReporter
+</PRE>
+</BLOCKQUOTE>
+<P>
+The classes presented to this point are all contained in the Reporter
+package. Combined, they implement a parameterized factory. The
+last example in this section contains an application to obtain
+a handle to a <TT>Reporter</TT> and write messages to it. The
+application requires a single parameter-the type of <TT>Reporter</TT>
+to create. After testing the command line argument, the <TT>Reporter</TT>
+of the requested type is obtained from the <TT>ReporterFactory</TT>.
+Notice the use of the type-safe constant when requesting the <TT>Reporter</TT>.
+A few messages are written with the desired <TT>Reporter</TT>.
+<P>
+The test application is in a different package than the <TT>Reporter</TT>
+itself. This is common for parameterized factories. The package
+interface and factory are <TT>public</TT>. However, the <TT>Concrete</TT>
+classes that implement the package interface are not <TT>public</TT>.
+Thus, the only methods of these classes exposed to clients are
+those that are defined in the package interface, <TT>Reporter</TT>
+in this example.
+<BLOCKQUOTE>
+<PRE>
+package com.foley.test;
+
+import java.io.IOException;
+
+import com.foley.reporter.Reporter;
+import com.foley.reporter.ReporterFactory;
+
+
+/**
+ * A simple class to test the Reporter package.
+ *
+ * @author Mike Foley
+ **/
+public class TestReporter extends Object { 
+  
+    /**
+     * Create a Reporter of the given type, and echo
+     * a few lines of text to it. The type is determined
+     * by the program argument as follows:
+     *
+     *    file      FileReporter
+     *    console   ConsoleReporter
+     *
+     **/
+    public static void main( String[] args ) { 
+        
+        //
+        // Ensure we have an argument.
+        //
+        if( args.length != 1 ) { 
+            usage();
+            System.exit( -1 );
+        } 
+        
+        //
+        // Create the proper Reporter.
+        //
+        Reporter reporter = null;
+        try { 
+            if( args[0].toLowerCase().equals( &quot;file&quot; ) ) { 
+                reporter = ReporterFactory.getReporter( Reporter.FILE );
+            }  else if( args[0].toLowerCase().equals( &quot;console&quot; ) ) { 
+                reporter = ReporterFactory.getReporter(Reporter.CONSOLE);
+            }  else { 
+                usage();
+                System.exit( -2 );
+            } 
+            
+            reporter.writeln( &quot;This is a simple test of the Reporter&quot; );
+            reporter.writeln( 
+                     &quot;It will be written to a file, or the console&quot; );
+            
+        }  catch( IOException io ) { 
+            System.out.println( &quot;Reporter system error.&quot; );
+            io.printStackTrace();
+            System.exit( -3 );
+        }                             
+    }  // main
+
+
+    /**
+     * Write a simple usage message to the console.
+     **/
+    private static void usage() { 
+        System.out.println( &quot;usage:\ tTestReporter reporterType&quot; );
+        System.out.println( &quot;\ twhere reporterType is console or file&quot; );
+    }  // usage
+    
+}  // TestReporter
+</PRE>
+</BLOCKQUOTE>
+<P>
+An example of the parameterized factory pattern in the JFC is
+the Border package. The Border package defines a <TT>Border</TT>
+interface that specifies the methods all borders must implement.
+The <TT>BorderFactory</TT> class contains public static methods
+for obtaining a handle to concrete borders that can be used for
+the calling class's components.
+<P>
+The Border package in the JFC is not a pure parameterized factory
+pattern. It allows the classes in the Border package to be instantiated
+directly. However, this is discouraged. The reason for this is
+more practical than just the desire for design purity. In some
+situations, borders may be shared among clients. If the <TT>BorderFactory</TT>
+is used to obtain a reference to the desired border, the factory
+can share borders when appropriate. The current implementation
+of the <TT>BorderFactory</TT> class shares <TT>Bevel</TT> and
+<TT>Etched</TT> borders that use the default colors. In the JFC,
+the <TT>BorderFactory</TT> lives in the Swing package instead
+of the Border package.
+<P>
+A complete reference to borders and the <TT>BorderFactory</TT>
+is given in <A HREF="..\ch05\ch05.htm" >Chapter 5</A> &quot;Basic Components.&quot; Borders are
+also used in examples throughout this book.
+<H2><A NAME="SingletonPattern">
+Singleton Pattern</A></H2>
+<P>
+The singleton pattern is a design pattern used to ensure that
+only one instance of a class is instantiated. This single instance
+is shared by any classes requiring its services.
+<P>
+The singleton pattern can be implemented in Java by using a protected,
+or <TT>private</TT>, constructor for a class and a <TT>public</TT>
+access method to obtain a handle to the single instance of the
+class. This is demonstrated with the following simple example:
+<BLOCKQUOTE>
+<PRE>
+public class MySingleTon extends Object { 
+    
+    /**
+     * The reference to the one and only instance
+     * of the mySingleTon class.
+     **/
+    private static MySingleTon mySingleTon = null;
+    
+    /**
+     * Protected constructor ensures that this class,
+     * or subclasses, are the only entities
+     * that can create instances of the class.
+     **/
+    protected MySingleTon() { 
+    } 
+    
+    /**
+     * Public access method.
+     * Lazily create the shared instance of this class.
+     * @return the shared instance of this class.
+     **/
+    public static MySingleTon getMySingleTon() { 
+        if( mySingleTon == null ) { 
+            mySingleTon = new MySingleTon();
+        } 
+        
+        return( mySingleTon );
+    } 
+ 
+    // Public service methods for this class
+    // would follow.
+    //
+    public void doSomething() { 
+    } 
+} 
+</PRE>
+</BLOCKQUOTE>
+<P>
+In this example, the constructor method is protected. This prevents
+multiple instances of the class from being created, but still
+allows the class to be extended. If the class were final, the
+constructor would be <TT>private</TT>. A static <TT>public</TT>
+access method is provided that allows clients to retrieve a handle
+to the shared instance of the class. In this example, the instance
+is lazily evaluated. The shared instance will not be created until
+it is requested. If the shared instance must be created at all
+times, the static initializer method called when the class is
+loaded could be used to create the shared instance. As in any
+other class, <TT>public</TT> methods are provided to operate on
+the singleton instance.
+<P>
+Clients use the singleton instance by first calling the static
+access method to obtain the reference to the instance. Then methods
+can be called on that instance, just as if it had been created
+with the <TT>new</TT> operator. The following example shows how
+a client may use the <TT>MySingleTon</TT> class:
+<BLOCKQUOTE>
+<PRE>
+MySingleTon mySingleTon = MySingleTon.getMySingleTon();
+//
+// Call methods on mySingleTon
+//
+mySingleTon.doSomething();
+</PRE>
+</BLOCKQUOTE>
+<P>
+The JFC contains many examples of singleton classes. Most of them
+are service-type classes. One such example is the <TT>ToolTipManager</TT>
+class. The single instance is retrieved via the <TT>sharedInstance</TT>
+static method. The <TT>ToolTipManager</TT> class is discussed
+in <A HREF="..\ch25\ch25.htm" >Chapter 25</A>, &quot;ToolTips and Debug Graphics.&quot;
+<H2><A NAME="Summary">
+Summary</A></H2>
+<P>
+This chapter introduced the architecture on which the JFC is built.
+The JFC is built on a modified Model View Controller architecture.
+The view and controllers are combined into a single object in
+the JFC. This simplification requires less messaging between objects.
+Specifically, the views do not need to message controllers, who
+in turn message the model in response to user gestures. Instead,
+the view messages the model directly. This simplification reduces
+messaging at the cost of reducing flexibility in the design and
+reuse of controller objects.
+<P>
+The factory and singleton design patterns were introduced in this
+chapter. These design patterns are used throughout the JFC. Having
+an understanding of these patterns will enable you to obtain a
+deeper understanding of the JFC, and it will allow your code to
+build on the JFC architecture and not simply use the toolkit.
+<P>
+<CENTER>
+<HR SIZE=4>
+
+<A HREF="..\ch01\ch01.htm"><IMG SRC="..\button\previous.gif" BORDER="0"></A>
+<A HREF="..\index.htm"><IMG SRC="..\button\contents.gif" BORDER="0"></A> 
+<A HREF="..\ch03\ch03.htm"><IMG SRC="..\button\next.gif" BORDER="0"></A> 
+</p>
+
+<p>&#169; <A HREF="..\copy.htm">Copyright</A>, Macmillan Computer Publishing. All rights reserved.
+</CENTER>
+</BODY>
+</HTML>

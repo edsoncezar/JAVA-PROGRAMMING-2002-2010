@@ -1,0 +1,144 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Introduction to Java RMI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The Java 2 security policy file was updated for this example to allow the server complete freedom. This file, which follows, contains the single permission called AllPermission. Although valid and useful for testing and examples, this permission should be used with extreme care because it bypasses all of the security checks provided by the new Java 2 security API.
+</P>
+<PRE>
+grant
+{
+    permission java.security.AllPermission;
+};
+</PRE>
+<P>The client for this example simply accesses the server and requests 10 objects. The code is similar to the previous examples and is not included here. The ObjectServer interface is also not included, but both are available on the CD-ROM. The important part of this example is to realize what happens when it is run.
+</P>
+<P>The client is run from its own directory and does not have access to the server&#146;s CLASSPATH. As a result, when the client first connects to the server, it needs to find the stub file somewhere other than in its CLASSPATH variable. RMI requests encode the code base in them so that when the server registers with the rmiregistry, the code base URL is included in the binding. When the client wants the stub file, it is given the URL and loads the class file from there. All of this requires that the client has access to the URL and is using a security manager that allows it to load a class that is not in its CLASSPATH.</P>
+<P>Some of the objects returned to the client from the server are instances of classes that the client can load from its CLASSPATH, such as String and Vector. Others, such as ClassOne, require the client to access the code base again. All of this loading is transparent to the client programmer, assuming that the server properly registered the code base and, if a Web server is required, makes the files available there.</P>
+<P>One good way to test your server is to run the rmiregistry without the server files in its CLASSPATH. This causes the registry to use the code base to get to the stub files in the same way as a client. If the server does not have the code base set up properly, it fails to bind to the registry as a result.</P>
+<H3><A NAME="Heading19"></A><FONT COLOR="#000077">Garbage Collection</FONT></H3>
+<P>One common feature that an enterprise server requires is the ability to receive notifications when the client exits or becomes disconnected. To handle this situation, the remote object can implement the java.rmi.server.Unreferenced interface. This interface defines a single method called unreferenced that is sent to the server when no more clients hold references to it. The java.rmi.dgc package defines the interfaces and classes to implement the distributed garbage collection algorithm used to determine when this unreferencing happens.
+</P>
+<P>As a programmer, you have several ways to configure your program to take advantage of the unreferenced notification. By default, you will receive this message when no clients have tried to access the remote object for 10 minutes, when all of the stub files are finalized, or a combination of these two possibilities. You can configure the client time-out by setting the java.rmi.dgc.leaseValue property to the number of milliseconds that the server should wait if there is no response from a client.</P>
+<P>Finally, you can program your clients to initiate the finalize methods on their stub files to ensure that the notification happens as quickly as possible.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>The objects that you bind to the registry will not receive unreferenced as long as they are in the registry, because it holds a reference to them.</FONT><HR>
+</BLOCKQUOTE>
+<P>The following excerpt shows how the server implements unreferenced and can update the time-out property. This code is based on the previous messaging examples, but an object, called ServerServer, is created that hands out MessageServers. This ServerServer is registered in the rmiregistry, but MessageServers is not. As a result, MessageServers is unreferenced, but ServerServer is not.
+</P>
+<PRE>
+package server;
+
+//Imports remoted to save space.
+
+public class ServerServer extends UnicastRemoteObject
+ implements MessageServerServer, Unreferenced
+{
+    public ServerServer() throws RemoteException
+    {
+     super();
+    }
+  
+    public void unreferenced()
+    {
+     System.out.println(&#147;ServerServer unreferenced&#148;
+                    &#43;&#147;, exiting...&#148;);
+     System.exit(0);
+    }
+  
+    public MessageServer getMessageServer()
+     throws RemoteException
+    {
+     return new Server();
+    }
+    public static void main(String[] args)
+    {
+     System.setSecurityManager(new RMISecurityManager());
+     try
+     {
+         MessageServerServer srv = new ServerServer();
+         Properties sysProps;
+       
+         //Update the code base property.
+         <B>sysProps = System.getProperties();
+         sysProps.put(&#147;java.rmi.dgc.leaseValue&#148;
+                 ,new Integer(60*1000));
+         System.setProperties(sysProps);</B>
+     
+         Naming.rebind(MessageServerServer.SERVER_NAME
+                              , srv);
+
+     System.out.println(&#147;Server bound and started&#148;);
+     }
+     catch (Exception e)
+     {
+         System.err.println(&#147;Server exception: &#148;
+                    &#43;  e.getMessage());
+         e.printStackTrace();
+     }
+    }
+}
+</PRE>
+<P>This code is taken from a complete file on the CD-ROM in the chapter_13/garbage_collect example directory. The client for this example, listed in part here, tries to ensure that the stubs are finalized by setting the reference to null and calling System.runFinalization and System.gc.
+</P>
+<PRE>
+MessageServerServer ss;
+MessageServer server;
+       
+ss = (MessageServerServer)
+Naming.lookup(MessageServerServer.SERVER_NAME);
+int i,max = 20;
+       
+for(i=0;i&ltmax;i&#43;&#43;)
+{
+    System.out.println(&#147;Sending: &#148;&#43;i);
+    server = ss.getMessageServer();
+    server.send(name,&#147;message: &#148;&#43;i);
+    server = null;
+       
+    System.gc();
+    System.runFinalization();
+}
+</PRE>
+<P>Again, this is an excerpt from a complete file on the CD-ROM. In general, you will probably want all of your RMI applications to use unreferenced to clean up resources.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Some implementations of RMI may take a long time to call unreferenced due to the easygoing nature of the garbage collector. This is considered a bug and should be fixed in future releases.</FONT><HR>
+</BLOCKQUOTE>
+<P>The next sections look at how RMI can be integrated with HTTP for tunneling through firewalls.
+</P>
+<H3><A NAME="Heading20"></A><FONT COLOR="#000077">RMI and Firewalls</FONT></H3>
+<P>A <I>firewall</I> is a program or machine that prevents certain network connections. RMI is designed to work with firewalls. By default, RMI wants to make a direct connection from the client to the server. Unless the firewall is configured to permit arbitrary connections, making it a pretty bad firewall, it won&#146;t allow default RMI to work.</P>
+<P>However, there is hope. Firewalls are normally used to protect an intranet from the Internet. At the same time, users inside the firewall often need to make some connections outside the firewall. In particular, users often want to browse the Web using HTTP. To support this activity, most firewalls are configured to allow HTTP requests. RMI has been written to support use of HTTP to communicate between the client and server, thus allowing it to &#147;tunnel&#148; through the firewall.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,1142 @@
+<HTML>
+<HEAD>
+<TITLE>Day 17 -- Exceptions</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Day&nbsp;17</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Exceptions</FONT></H1>
+<P>
+<I><B>by Charles L. Perkins and Laura Lemay</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#ExceptionstheOldandConfusingWay">
+Exceptions, the Old and Confusing Way</A>
+<LI><A HREF="#JavaExceptions">
+Java Exceptions</A>
+<LI><A HREF="#ManagingExceptions">
+Managing Exceptions</A>
+<UL>
+<LI><A HREF="#ExceptionConsistencyChecking">
+Exception Consistency Checking</A>
+<LI><A HREF="#ProtectingCodeandCatchingExceptions">
+Protecting Code and Catching Exceptions</A>
+<LI><A HREF="#TheTTFONTSIZEFACECourierfinallyFONTTTFONTSIZEClauseFONT">
+The <TT>finally</TT>
+Clause</FONT></A>
+</UL>
+<LI><A HREF="#DeclaringMethodsThatMightThrowExceptions">
+Declaring Methods That Might Throw Exceptions</A>
+<UL>
+<LI><A HREF="#TheTTFONTSIZEFACECourierthrowsFONTTTFONTSIZEClauseFONT">
+The <TT>throws</TT>
+Clause</FONT></A>
+<LI><A HREF="#WhichExceptionsShouldYouThrow">
+Which Exceptions Should You Throw?</A>
+<LI><A HREF="#PassingOnExceptions">
+Passing On Exceptions</A>
+<LI><A HREF="#TTFONTSIZEFACECourierthrowsFONTTTFONTSIZEandInheritanceFONT">
+<TT>throws</TT>
+and Inheritance</FONT></A>
+</UL>
+<LI><A HREF="#CreatingandThrowingYourOwnExceptions">
+Creating and Throwing Your Own Exceptions</A>
+<UL>
+<LI><A HREF="#ThrowingExceptions">
+Throwing Exceptions</A>
+<LI><A HREF="#CreatingYourOwnExceptions">
+Creating Your Own Exceptions</A>
+<LI><A HREF="#DoingItAllCombiningTTFONTSIZEFACECourierthrowsFONTTTFONTSIZEFONTTTFONTSIZEFACECouriertryFONTTTFONTSIZEandFONTTTFONTSIZEFACECourierthrowFONTTT">
+Doing It All: Combining <TT>throws</TT>,
+</FONT><TT>try</TT>,
+and </FONT><TT>throw</TT></A>
+</UL>
+<LI><A HREF="#WhenandWhenNottoUseExceptions">
+When and When Not to Use Exceptions</A>
+<UL>
+<LI><A HREF="#WhentoUseExceptions">
+When to Use Exceptions</A>
+<LI><A HREF="#WhenNottoUseExceptions">
+When Not to Use Exceptions</A>
+<LI><A HREF="#BadStyleUsingExceptions">
+Bad Style Using Exceptions</A>
+</UL>
+<LI><A HREF="#Summary">
+Summary</A>
+<LI><A HREF="#QampABR">
+Q&amp;A<BR>
+</A>
+</UL>
+
+<HR>
+<P>
+Programmers in any language endeavor to write bug-free programs,
+programs that never crash, programs that can handle any situation
+with grace and that can recover from unusual situations without
+causing the user any undue stress. Good intentions aside, programs
+like this don't exist.
+<P>
+In real programs, errors occur, either because the programmer
+didn't anticipate every situation your code would get into (or
+didn't have the time to test the program enough), or because of
+situations out of the programmer's control-bad data from users,
+corrupt files that don't have the right data in them, network
+connections that don't connect, hardware devices that don't respond,
+sun spots, gremlins, whatever. 
+<P>
+In Java, these sorts of strange events that may cause a program
+to fail are called <I>exceptions</I>. And Java defines a number
+of language features to deal with exceptions, including 
+<UL>
+<LI>How to handle them in your code and recover gracefully from
+potential problems
+<LI>How to tell Java and users of your methods that you're expecting
+a potential exception
+<LI>How to create an exception if you detect one
+<LI>How your code is limited, yet made more robust by them
+</UL>
+<P>
+<I>Exceptions</I> are unusual things that can happen in your Java
+programs outside the normal or desired behavior of that program.
+Exceptions include errors that could be fatal to your program
+but also include other unusual situations. By managing exceptions,
+you can manage errors and possibly work around them.
+<H2><A NAME="ExceptionstheOldandConfusingWay"><FONT SIZE=5 COLOR=#FF0000>
+Exceptions, the Old and Confusing Way</FONT></A></H2>
+<P>
+Programming languages have long labored to solve the following
+common problem:
+<BLOCKQUOTE>
+<PRE>
+int  status = callSomethingThatAlmostAlwaysWorks();
+
+if (status == FUNNY_RETURN_VALUE) {
+    . . .      // something unusual happened, handle it
+    switch(someGlobalErrorIndicator) {
+        . . . // handle more specific problems
+    }
+} else {
+    . . .     // all is well, go your merry way
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+What this bit of code is attempting to do is to run a method that
+should work, but might not for some unusual reason. The status
+might end up being some unusual return value, in which case the
+code attempts to figure out what happened and work around it.
+Somehow this seems like a lot of work to do to handle a rare case.
+And if the function you called returns an <TT>int</TT>
+as part of its normal answer, you'll have to distinguish one special
+integer (<TT>FUNNY_RETURN_VALUE</TT>)
+as an error. Alternatively, you could pass in a special return
+value pointer, or use a global variable to store those errors,
+but then problems arise with keeping track of multiple errors
+with the same bit of code, or of the original error stored in
+the global being overwritten by a new error before you have a
+chance to deal with it.
+<P>
+Once you start creating larger systems, error management can become
+a major problem. Different programmers may use different special
+values for handling errors, and may not document them overly well,
+if at all. You may inconsistently use errors in your own programs.
+Code to manage these kinds of errors can often obscure the original
+intent of the program, making that code difficult to read and
+to maintain. And, finally, if you try dealing with errors in this
+kludgey way, there's no easy way for the compiler to check for
+consistency the way it can check to make sure you called a method
+with the right arguments. 
+<P>
+For all these reasons, Java has exceptions to deal with managing,
+creating, and expecting errors and other unusual situations. Through
+a combination of special language features, consistency checking
+at compile time and a set of extensible exception classes, errors
+and other unusual conditions in Java programs can be much more
+easily managed. Given these features, you can now add a whole
+new dimension to the behavior and design of your classes, of your
+class hierarchy, and of your overall system. Your class and interface
+definitions describe how your program is supposed to behave given
+the best circumstances. By integrating exception handling into
+your program design, you can consistently describe how the program
+will behave when circumstances are not quite as good, and allow
+people who use your classes to know what to expect in those cases.
+<H2><A NAME="JavaExceptions"><FONT SIZE=5 COLOR=#FF0000>
+Java Exceptions</FONT></A></H2>
+<P>
+At this point in the book, chances are you've run into at least
+one Java exception-perhaps you mistyped a method name or made
+a mistake in your code that caused a problem. And chances are
+that your program quit and spewed a bunch of mysterious errors
+to the screen. Those mysterious errors are exceptions. When your
+program quits, it's because an exception was &quot;thrown.&quot;
+Exceptions can be thrown by the system or thrown by you, and they
+can be caught as well (catching an exception involves dealing
+with it so your program doesn't crash. You'll learn more about
+this later). &quot;An exception was thrown&quot; is the proper
+Java terminology for &quot;an error happened.&quot;
+<P>
+Exceptions don't occur, they are <I>thrown</I>. Java throws an
+exception in response to an unusual situation. You can also throw
+your own exceptions, or <I>catch</I> an exception to gracefully
+manage errors.
+<P>
+The heart of the Java exception system is the exception itself.
+Exceptions in Java are actual objects, instances of classes that
+inherit from the class <TT>Throwable</TT>.
+When an exception is thrown, an instance of a <TT>Throwable</TT>
+class is created. Figure 17.1 shows a partial class hierarchy
+for exceptions. 
+<P>
+<A HREF="http://docs.rinet.ru/J21/f17-1.gif"><B>Figure 17.1 : </B><I>The exception class hierarchy</I>.</A>
+<P>
+<TT>Throwable</TT> has two subclasses:
+<TT>Error</TT> and <TT>Exception</TT>.
+Instances of <TT>Error</TT> are internal
+errors in the Java runtime environment (the virtual machine).
+These errors are rare and usually fatal; there's not much you
+can do about them (either to catch them or to throw them yourself),
+but they exist so that Java can use them if it needs to.
+<P>
+The class <TT>Exception</TT> is more
+interesting. Subclasses of <TT>Exception</TT>
+fall into two general groups: 
+<UL>
+<LI>Runtime exceptions (subclasses of the class <TT>RuntimeException</TT>)
+such as <TT>ArrayIndexOutofBounds</TT>,
+<TT>SecurityException</TT>, or <TT>NullPointerException</TT>.
+<LI>Other exceptions such as <TT>EOFException</TT>
+and <TT>MalformedURLException</TT>.
+</UL>
+<P>
+Runtime exceptions usually occur because of code that isn't very
+robust. An <TT>ArrayIndexOutofBounds</TT>
+exception, for example, should never be thrown if you're properly
+checking to make sure your code doesn't extend past the end of
+an array. <TT>NullPointerException</TT>
+exceptions won't happen if you don't try to reference the values
+of a variable that doesn't actually hold an object. If your program
+is causing runtime exceptions under any circumstances whatsoever,
+you should be fixing those problems before you even begin to deal
+with exception management.
+<P>
+The final group of exceptions is the most interesting because
+these are the exceptions that indicate that something very strange
+and out of control is happening. <TT>EOFException</TT>s,
+for example, happen when you're reading from a file and the file
+ends before you expect it to. <TT>MalformedURLException</TT>s
+happen when a URL isn't in the right format (perhaps your user
+typed it wrong). This group includes exceptions that you yourself
+create to signal unusual cases that may occur in your own programs.
+<P>
+Exceptions are arranged in a hierarchy like other classes, where
+the <TT>Exception</TT> superclasses
+are more general errors, and subclasses are more specific errors.
+This organization will become more important to you as you deal
+with exceptions in your own code. 
+<P>
+Most of the exception classes are part of the <TT>java.lang</TT>
+package (including <TT>Throwable</TT>,
+<TT>Exception</TT>, and <TT>RuntimeException</TT>).
+But many of the other packages define other exceptions, and those
+exceptions are used throughout the class library. For example,
+the <TT>java.io</TT> package defines
+a general exception class called <TT>IOException</TT>,
+which is subclassed not only in the <TT>java.io</TT>
+package for input and output exceptions (<TT>EOFException</TT>,
+<TT>FileNotFoundException</TT>), but
+also in the <TT>java.net</TT> classes
+for networking exceptions such as <TT>MalFormedURLException</TT>.
+<H2><A NAME="ManagingExceptions"><FONT SIZE=5 COLOR=#FF0000>
+Managing Exceptions</FONT></A></H2>
+<P>
+So now that you know what an exception is, how do you deal with
+them in your own code? In many cases, the Java compiler enforces
+exception management when you try to use methods that use exceptions;
+you'll need to deal with those exceptions in your own code or
+it simply won't compile. In this section you'll learn about that
+consistency checking and how to use the <TT>try</TT>,
+<TT>catch</TT>, and <TT>finally</TT>
+language keywords to deal with exceptions that may or may not
+occur.
+<H3><A NAME="ExceptionConsistencyChecking">
+Exception Consistency Checking</A></H3>
+<P>
+The more you work with the Java class libraries, the more likely
+it is that you'll run into a compiler error (an exception!) similar
+to this one:
+<BLOCKQUOTE>
+<PRE>
+TestProg.java:32: Exception java.lang.InterruptedException 
+must be caught or it must be declared in the throws clause
+of this method.
+</PRE>
+</BLOCKQUOTE>
+<P>
+What on earth does that mean? In Java, a method can indicate the
+kinds of errors it might possibly throw. For example, methods
+that read from files might potentially throw <TT>IOException</TT>
+errors, so those methods are declared with a special modifier
+that indicates potential errors. When you use those methods in
+your own Java programs, you have to protect your code against
+those exceptions. This rule is enforced by the compiler itself,
+the same way that the compiler checks to make sure that you're
+using methods with the right number of arguments and that all
+your variable types match the thing you're assigning to them.
+<P>
+Why is this check in place? By having methods declare the exceptions
+they throw, and by forcing you to handle those exceptions in some
+way, the potential for fatal errors in a program occurring because
+you simply didn't know they could occur is minimized. You no longer
+have to carefully read the documentation or the code of an object
+you're going to use to make sure you've dealt with all the potential
+problems-Java does the checking for you. And, on the other side,
+if you define your methods so that they indicate the exceptions
+they can throw, then Java can tell users of your objects to handle
+those errors.
+<H3><A NAME="ProtectingCodeandCatchingExceptions">
+Protecting Code and Catching Exceptions</A></H3>
+<P>
+Let's assume that you've been happily coding and during a test
+compile you ran into that exception message. According to the
+message, you have to either catch the error or declare that your
+method throws it. Let's deal with the first case: catching potential
+exceptions.
+<P>
+To catch an exception, you do two things:
+<UL>
+<LI>You protect the code that contains the method that might throw
+an exception inside a <TT>try</TT>
+block.
+<LI>You test for and deal with an exception inside a <TT>catch</TT>
+block.
+</UL>
+<P>
+What <TT>try</TT> and <TT>catch</TT>
+effectively mean is &quot;try this bit of code that might cause
+an exception. If it executes okay, go on with the program. If
+it doesn't, catch the exception and deal with it.&quot;
+<P>
+You've seen <TT>try</TT> and <TT>catch</TT>
+once before, when we dealt with threads. On <A HREF="ch10.htm">Day 10</A>, &quot;Simple
+Animation and Threads,&quot; you learned about an applet that
+created a digital clock, and the animation paused once a second
+using this bit of code:
+<BLOCKQUOTE>
+<PRE>
+try { Thread.sleep(1000) }
+catch (InterruptedException e) {}
+</PRE>
+</BLOCKQUOTE>
+<P>
+While this example uses <TT>try</TT>
+and <TT>catch</TT>, it's not a very
+good use of it. Here, the <TT>Thread.sleep()</TT>
+class method could potentially throw an exception of type <TT>InterruptedException</TT>
+(for when the thread is interrupted from running). So we've put
+the call to <TT>sleep()</TT> inside
+the <TT>try</TT> clause to catch that
+exception if it happens. And inside <TT>catch</TT>
+(inside the parentheses), we indicate that we're specifically
+looking for <TT>InterruptedException</TT>
+exceptions. The problem here is that there isn't anything inside
+the <TT>catch</TT> clause-in other
+words, we'll catch the exception if it happens, but then we'll
+drop it on the floor and pretend we didn't see it. In all but
+the simplest cases (such as this one, where the exception really
+doesn't matter), you're going to want to put something inside
+the braces after <TT>catch</TT> to
+try to do something responsible to clean up after the exception
+happens. 
+<P>
+The part of the <TT>catch</TT> clause
+inside the parentheses is similar to the parameter list of a method
+definition; it contains the class of the exception to be caught
+and a variable name (<TT>e</TT> is
+very commonly used). Inside the body of the catch clause, you
+can then refer to the exception object, for example, to get to
+the detailed error message contained in the <TT>getMessage()</TT>
+method:
+<BLOCKQUOTE>
+<PRE>
+catch (InterruptedException e) {
+    System.out.println(&quot;Ooops.  Error: &quot; + e.getMessage());
+} 
+</PRE>
+</BLOCKQUOTE>
+<P>
+Here's another example. Say you have a program that reads from
+a file. This program most likely uses one of the streams classes
+you'll learn about on <A HREF="ch19.htm">Day 19</A>, &quot;Streams and I/O,&quot; but
+the basic idea here is that you open a connection to a file and
+then use the <TT>read()</TT> method
+to get data from it. What if some strange disk error happens and
+the <TT>read()</TT> method can't read
+anything? What if the file is truncated and has fewer bytes in
+it than you expected? In either of these instances, the <TT>read()</TT>
+method will throw an <TT>IOException</TT>
+which, if you didn't catch it, would cause your program to stop
+executing and possibly crash. By putting your <TT>read()</TT>
+method inside a <TT>try</TT> clause,
+you can then deal gracefully with that error inside <TT>catch</TT>
+to clean up after the error and return to some safe state, to
+patch things up enough to be able to proceed, or, if all else
+fails, to save as much of the current program's state as possible
+and to exit. This example does just that; it tries to read from
+the file, and catches exceptions if they happen:
+<BLOCKQUOTE>
+<PRE>
+try {
+    while (numbytes &lt;= mybuffer.length) {
+        myinputstream.read(mybuffer);
+        numbytes;++
+    }
+} catch (IOException e) {
+  System.out.println(&quot;Ooops, IO Exception.  Only read &quot; + numbytes.&quot;);
+  // other cleanup code
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Here, the &quot;other cleanup code&quot; can be anything you want
+it to be; perhaps you can go on with the program using the partial
+information you got from the file, or perhaps you want to put
+up a dialog saying that the file is corrupt and to let the user
+try to select another file or do some other operation.
+<P>
+Note that because the <TT>Exception</TT>
+classes are organized into hierarchies as other classes are, and
+because of the rule that you can use a subclass anywhere a superclass
+is expected, you can catch &quot;groups&quot; of exceptions and
+handle them with the same <TT>catch</TT>
+code. For example, although there are several different types
+of <TT>IOException</TT>s (<TT>EOFException</TT>,
+<TT>FileNotFoundException</TT>, and
+so on-see the <TT>java.io</TT> package
+for examples), by catching <TT>IOException</TT>
+you also catch instances of any subclass of <TT>IOException</TT>.
+<P>
+What if you do want to catch very different kinds of exceptions
+that aren't related by inheritance? You can use multiple catch
+clauses for a given <TT>try</TT>,
+like this:
+<BLOCKQUOTE>
+<PRE>
+try {
+   // protected code
+} catch (OneKindOfException e) {
+  ...
+} catch (AnotherKindOfException e2) {
+  ....
+} catch (YetAnotherException e3) {
+  ...
+} catch (StilMoreException e4) {
+ ....
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Note that because the scope of local variables inside <TT>catch</TT>
+is the same as the scope of the outer block (the method definition
+or a loop if you're inside one), you'll have to use different
+local variables for each individual <TT>catch</TT>.
+<P>
+Because the first <TT>catch</TT> clause
+that matches is executed, you can build chains such as the following:
+<BLOCKQUOTE>
+<PRE>
+try {
+    someReallyExceptionalMethod();
+} catch (NullPointerException n) {  // a subclass of RuntimeException
+    . . .
+} catch (RuntimeException r) {      // a subclass of Exception
+    . . .
+} catch (IOException i) {           // a subclass of Exception
+    . . .
+} catch (MyFirstException m) {      // our subclass of Exception
+    . . .
+} catch (Exception e) {             // a subclass of Throwable
+    . . .
+} catch (Throwable t) {
+    . . .  // Errors, plus anything not caught above are caught here
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+By listing subclasses before their parent classes, the parent
+catches anything it would normally catch that's also <I>not</I>
+one of the subclasses above it. By juggling chains like these,
+you can express almost any combination of tests.
+<H3><A NAME="TheTTFONTSIZEFACECourierfinallyFONTTTFONTSIZEClauseFONT">
+The <TT>finally</TT>
+Clause</FONT></A></H3>
+<P>
+Suppose there is some action in your code that you absolutely
+must do, no matter what happens, whether an exception is thrown
+or not. Usually, this is to free some external resource after
+acquiring it, to close a file after opening it, or something similar.
+While you could put that action both inside a <TT>catch</TT>
+and outside it, that would be duplicating the same code in two
+different places. Instead, put one copy of that code inside a
+special optional part of the <TT>try...catch</TT>
+clause, called <TT>finally</TT>:
+<BLOCKQUOTE>
+<PRE>
+SomeFileClass  f = new SomeFileClass();
+
+if (f.open(&quot;/a/file/name/path&quot;)) {
+    try {
+        someReallyExceptionalMethod();
+    { catch (IOException e) {
+        // deal with errors
+    } finally {
+        f.close();
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>finally</TT> clause is actually
+useful outside exceptions; you can also use it to execute cleanup
+code after a return, a break, or a continue inside loops. For
+the latter cases, you can use a <TT>try</TT>
+clause with a <TT>finally</TT> but
+without a <TT>catch</TT> clause.
+<P>
+Here's a fairly complex example of how this might work:
+<BLOCKQUOTE>
+<PRE>
+int  mysteriousState = getContext();
+
+while (true) {
+    System.out.print(&quot;Who &quot;);
+    try {
+        System.out.print(&quot;is &quot;);
+        if (mysteriousState == 1)
+            return;
+        System.out.print(&quot;that &quot;);
+        if (mysteriousState == 2)
+            break;
+        System.out.print(&quot;strange &quot;);
+        if (mysteriousState == 3)
+            continue;
+        System.out.print(&quot;but kindly &quot;);
+        if (mysteriousState == 4)
+            throw new UncaughtException();
+        System.out.print(&quot;not at all &quot;);
+    } finally {
+        System.out.print(&quot;amusing man?\n&quot;);
+    }
+    System.out.print(&quot;I'd like to meet the man&quot;);
+}
+System.out.print(&quot;Please tell me.\n&quot;);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Here is the output produced depending on the value of <TT>mysteriousState</TT>:
+<BLOCKQUOTE>
+<PRE>
+1     Who is amusing man? Please tell me.
+2     Who is that amusing man? Please tell me.
+3     Who is that strange amusing man? Who is that strange ....
+4     Who is that strange but kindly amusing man? Please tell me.
+5     Who is that strange but kindly not at all amusing man?
+      I'd like to meet that man. Who is that strange ...<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+In cases <TT>3</TT> and <TT>5</TT>, the output never ends until you quit the program. In <TT>4</TT>, an error message generated by the <TT>UncaughtException</TT> is also printed.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="DeclaringMethodsThatMightThrowExceptions"><FONT SIZE=5 COLOR=#FF0000>
+Declaring Methods That Might Throw Exceptions</FONT></A></H2>
+<P>
+In the previous example you learned how to deal with methods that
+might possibly throw exceptions by protecting code and catching
+any exceptions that occur. The Java compiler will check to make
+sure you've somehow dealt with a method's exceptions-but how did
+it know which exceptions to tell you about in the first place?
+<P>
+The answer is that the original method indicated in its signature
+the exceptions that it might possibly throw. You can use this
+mechanism in your own methods-in fact, it's good style to do so
+to make sure that other users of your classes are alerted to the
+errors your methods may come across. 
+<P>
+To indicate that a method may possibly throw an exception, you
+use a special clause in the method definition called <TT>throws</TT>.
+<H3><A NAME="TheTTFONTSIZEFACECourierthrowsFONTTTFONTSIZEClauseFONT">
+The <TT>throws</TT>
+Clause</FONT></A></H3>
+<P>
+To indicate that some code in the body of your method may throw
+an exception, simply add the <TT>throws</TT>
+keyword after the signature for the method (before the opening
+brace) with the name or names of the exception that your method
+throws:
+<BLOCKQUOTE>
+<PRE>
+public boolean myMethod (int x, int y) throws AnException {
+   ...
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+If your method may possibly throw multiple kinds of exceptions,
+you can put all of them in the <TT>throws</TT>
+clause, separated by commas:
+<BLOCKQUOTE>
+<PRE>
+public boolean myOtherMethod (int x, int y) 
+  throws AnException, AnotherExeption, AThirdException {
+   ...
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Note that as with <TT>catch</TT> you
+can use a superclass of a group of exceptions to indicate that
+your method may throw any subclass of that exception:
+<BLOCKQUOTE>
+<PRE>
+public void YetAnotherMethod() throws IOException { 
+...
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Keep in mind that adding a <TT>throws</TT>
+method to your method definition simply means that the method
+might throw an exception if something goes wrong, not that it
+actually will. The <TT>throws</TT>
+clause simply provides extra information to your method definition
+about potential exceptions and allows Java to make sure that your
+method is being used correctly by other people.
+<P>
+Think of a method's overall description as a contract between
+the designer of that method (or class) and the caller of the method
+(you can be either side of that contract, of course). Usually,
+the description indicates the types of a method's arguments, what
+it returns, and the general semantics of what it normally does.
+Using <TT>throws</TT>, you add information
+about the abnormal things it can do as well. This new part of
+the contract helps to separate and make explicit all the places
+where exceptional conditions should be handled in your program,
+and that makes large-scale design easier.
+<H3><A NAME="WhichExceptionsShouldYouThrow">
+Which Exceptions Should You Throw?</A></H3>
+<P>
+Once you decide to declare that your method might throw an exception,
+you have to decide which exceptions it might throw (and actually
+throw them or call a method that will throw them-you'll learn
+about throwing your own exceptions in the next section). In many
+instances, this will be apparent from the operation of the method
+itself. Perhaps you're creating and throwing your own exceptions,
+in which case you'll know exactly which exceptions to throw.
+<P>
+You don't really have to list all the possible exceptions that
+your method could throw; some exceptions are handled by the runtime
+itself and are so common (well, not common, but ubiquitous) that
+you don't have to deal with them. In particular, exceptions of
+either class <TT>Error</TT> or <TT>RuntimeException</TT>
+(or any of their subclasses) do not have to be listed in your
+<TT>throws</TT> clause. They get special
+treatment because they can occur anywhere within a Java program
+and are usually conditions that you, as the programmer, did not
+directly cause. One good example is <TT>OutOfMemoryError</TT>,
+which can happen anywhere, at any time, and for any number of
+reasons. These two kinds of exceptions are called implicit exceptions,
+and you don't have to worry about them.
+<P>
+<I>Implicit exceptions</I> are exceptions that are subclasses
+of the classes <TT>RuntimeException</TT>
+and <TT>Error</TT>. Implicit exceptions
+are usually thrown by the Java runtime itself. You do not have
+to declare that your method throws them.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You can, of course, choose to list these errors and runtime exceptions in your <TT>throws</TT> clause if you like, but the callers of your methods will not be forced to handle them; only non-runtime exceptions must</FONT> be handled.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+All other exceptions are called explicit exceptions and are potential
+candidates of a <TT>throws</TT> clause
+in your method. 
+<H3><A NAME="PassingOnExceptions">
+Passing On Exceptions</A></H3>
+<P>
+In addition to declaring methods that throw exceptions, there's
+one other instance in which your method definition may include
+a <TT>throws</TT> clause. In this
+case, you want to use a method that throws an exception, but you
+don't want to catch that exception or deal with it. In many cases,
+it might make more sense for the method that calls your method
+to deal with that exception rather than for you to deal with it.
+There's nothing wrong with this; it's a fairly common occurrence
+that you won't actually deal with an exception, but will pass
+it back to the method that calls yours. At any rate, it's a better
+idea to pass on exceptions to calling methods than to catch them
+and ignore them.
+<P>
+Rather than using the <TT>try</TT>
+and <TT>catch</TT> clauses in the
+body of your method, you can declare your method with a <TT>throws</TT>
+clause such that it, too, might possibly throw the appropriate
+exception. Then it's the responsibility of the method that calls
+your method to deal with that exception. This is the other case
+that will satisfy the Java compiler that you have done something
+with a given method. Here's another way of implementing an example
+that reads characters from a stream:
+<BLOCKQUOTE>
+<PRE>
+public void readTheFile(String filename) throws IO Exception {
+    // open the file, init the stream, etc.
+    while (numbytes &lt;= mybuffer.length) {
+        myinputstream.read(mybuffer);
+        numbytes;++
+    }
+</PRE>
+</BLOCKQUOTE>
+<P>
+This example is similar to the example used previously today;
+remember that the <TT>read()</TT>
+method was declared to throw an <TT>IOException</TT>,
+so you had to use <TT>try</TT> and
+<TT>catch</TT> to use it. Once you
+declare your method to throw an exception, however, you can use
+other methods that also throw those exceptions inside the body
+of this method, without needing to protect the code or catch the
+exception.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You can, of course, deal with other exceptions using <TT>try</TT> and <TT>catch</TT> in the body of your method in addition to passing on the exceptions you listed in the <TT>throws</TT> clause. You can also both deal with the exception in some way and 
+then re-throw it so that your method's calling method has to deal with it anyhow. You'll learn how to throw methods in the next section.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="TTFONTSIZEFACECourierthrowsFONTTTFONTSIZEandInheritanceFONT">
+<TT>throws</TT>
+and Inheritance</FONT></A></H3>
+<P>
+If your method definition overrides a method in a superclass that
+includes a <TT>throws</TT> clause,
+there are special rules for how your overridden method deals with
+<TT>throws</TT>. Unlike with the other
+parts of the method signature, your new method does not have to
+have the same set of exceptions listed in the <TT>throws</TT>
+clause. Because there's a potential that your new method may deal
+better with exceptions, rather than just throwing them, your subclass's
+method can potentially throw fewer types of exceptions than its
+superclass's method definition, up to and including throwing no
+exceptions at all. That means that you can have the following
+two class definitions and things will work just fine:
+<BLOCKQUOTE>
+<PRE>
+public class Fruit {
+    public void ripen() throws RotException {
+       ...
+    }
+}
+
+public class WaxFruit extends Fruit {
+    public void ripen() {
+       ...
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The converse of this rule is not true; a subclass's method cannot
+throw more exceptions (either exceptions of different types or
+more general exception classes) than its superclass's method.
+<H2><A NAME="CreatingandThrowingYourOwnExceptions"><FONT SIZE=5 COLOR=#FF0000>
+Creating and Throwing Your Own Exceptions</FONT></A></H2>
+<P>
+There are two sides to every exception: the side that throws the
+exception and the side that catches it. An exception can be tossed
+around a number of times to a number of methods before it's caught,
+but eventually it'll be caught and dealt with.
+<P>
+But who does the actual throwing? Where do exceptions come from?
+Many exceptions are thrown by the Java runtime, or by methods
+inside the Java classes themselves. You can also throw any of
+the standard exceptions that the Java class libraries define,
+or you can create and throw your own exceptions. This section
+describes all these things.
+<H3><A NAME="ThrowingExceptions">
+Throwing Exceptions</A></H3>
+<P>
+Declaring that your method throws an exception is useful only
+to users of your method and to the Java compiler, which checks
+to make sure all your exceptions are being dealt with. But the
+declaration itself doesn't do anything to actually throw that
+exception should it occur; you have to do that yourself in the
+body of the method.
+<P>
+Remember that exceptions are all instances of some exception class,
+of which there are many defined in the standard Java class libraries.
+In order to throw an exception, therefore, you'll need to create
+a new instance of an exception class. Once you have that instance,
+use the <TT>throw</TT> statement to
+throw it (could this be any easier?). The simplest way to throw
+an exception is simply like this:
+<BLOCKQUOTE>
+<PRE>
+throw new ServiceNOteAvailableException();<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Technical Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You can only throw objects that are instances of subclasses of <TT>Throwable</TT>. This is different from C++'s exceptions, which allow you to throw objects of any type.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Depending on the exception class you're using, the exception may
+also have arguments to its constructor that you can use. The most
+common of these is a string argument, which lets you describe
+the actual problem in greater detail (which can be very useful
+for debugging purposes). Here's an example:
+<BLOCKQUOTE>
+<PRE>
+throw new ServiceNotAvailableException(&quot;Exception: 
+   service not available, database is offline.&quot;);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Once an exception is thrown, the method exits immediately, without
+executing any other code (other than the code inside <TT>finally</TT>,
+if that clause exists) and without returning a value. If the calling
+method does not have a <TT>try</TT>
+or <TT>catch</TT> surrounding the
+call to your method, the program may very well exit based on the
+exception you threw.
+<H3><A NAME="CreatingYourOwnExceptions">
+Creating Your Own Exceptions</A></H3>
+<P>
+Exceptions are simply classes, just like any other classes in
+the Java hierarchy. Although there are a fair number of exceptions
+in the Java class library that you can use in your own methods,
+there is a strong possibility that you may want to create your
+own exceptions to handle different kinds of errors your programs
+might run into. Fortunately, creating new exceptions is easy.
+<P>
+Your new exception should inherit from some other exception in
+the Java hierarchy. Look for an exception that's close to the
+one you're creating; for example, an exception for a bad file
+format would logically be an <TT>IOException</TT>.
+If you can't find a closely related exception for your new exception,
+consider inheriting from <TT>Exception</TT>,
+which forms the &quot;top&quot; of the exception hierarchy for
+explicit exceptions (remember that implicit exceptions, which
+include subclasses of <TT>Error</TT>
+and <TT>RuntimeException</TT>, inherit
+from <TT>Throwable</TT>).
+<P>
+Exception classes typically have two constructors: The first takes
+no arguments and the second takes a single string as an argument.
+In the latter case you'll want to call <TT>super()</TT>
+in that constructor to make sure the string is applied to the
+right place in the exception. 
+<P>
+Beyond those three rules, exception classes look just like other
+classes. You can put them in their own source files and compile
+them just as you would other classes:
+<BLOCKQUOTE>
+<PRE>
+public class SunSpotException extends Exception {
+   public SunSpotException() {}
+   public SunSpotExceotion(String msg) {
+      super(msg);
+   }
+}
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="DoingItAllCombiningTTFONTSIZEFACECourierthrowsFONTTTFONTSIZEFONTTTFONTSIZEFACECouriertryFONTTTFONTSIZEandFONTTTFONTSIZEFACECourierthrowFONTTT">
+Doing It All: Combining <TT>throws</TT>,
+<TT>try</TT>,
+and <TT>throw</TT></A></H3>
+<P>
+What if you want to combine all the approaches shown so far? In
+your method, you'd like to handle incoming exceptions yourself,
+but also you'd like to pass the exception up to your caller. Simply
+using <TT>try</TT> and <TT>catch</TT>
+doesn't pass on the exception, and simply adding a <TT>throws</TT>
+clause doesn't give you a chance to deal with the exception. If
+you want to both manage the exception and pass it on to the caller,
+use all three mechanisms: the <TT>throws</TT>
+clause, the <TT>try</TT> statement,
+and by explicitly rethrowing the exception:
+<BLOCKQUOTE>
+<PRE>
+public void  responsibleExceptionalMethod() throws MyFirstException {
+    MyFirstExceptionalClass  aMFEC = new MyFirstExceptionalClass();
+
+    try {
+        aMFEC.anExceptionalMethod();
+    } catch (MyFirstException m) {
+        . . .        // do something responsible
+        throw m;     // re-throw the exception
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+This works because exception handlers can be nested. You handle
+the exception by doing something responsible with it, but decide
+that it is too important to not give an exception handler that
+might be in your caller a chance to handle it as well. Exceptions
+float all the way up the chain of method callers this way (usually
+not being handled by most of them) until at last the system itself
+handles any uncaught ones by aborting your program and printing
+an error message. In a standalone program, this is not such a
+bad idea; but in an applet, it can cause the browser to crash.
+Most browsers protect themselves from this disaster by catching
+all exceptions themselves whenever they run an applet, but you
+can never tell. If it's possible for you to catch an exception
+and do something intelligent with it, you should.
+<H2><A NAME="WhenandWhenNottoUseExceptions"><FONT SIZE=5 COLOR=#FF0000>
+When and When Not to Use Exceptions</FONT></A></H2>
+<P>
+To finish up today's lesson, here's a quick summary and some advice
+on when to use exceptions&#133;and when not to use them.
+<H3><A NAME="WhentoUseExceptions">
+When to Use Exceptions</A></H3>
+<P>
+Because throwing, catching, and declaring exceptions are interrelated
+concepts and can be very confusing, here's a quick summary of
+when to do what.
+<P>
+If your method uses someone else's method, and that method has
+a <TT>throws</TT> clause, you can
+do one of three things:
+<UL>
+<LI>Deal with the exception using <TT>try</TT>
+and <TT>catch</TT> statements.
+<LI>Pass the exception up the calling chain by adding your own
+<TT>throws</TT> clause to your method
+definition.
+<LI>Do both of the above by catching the exception using <TT>catch</TT>
+and then explicitly rethrowing it using <TT>throw</TT>.
+</UL>
+<P>
+In cases where a method throws more than one exception, you can,
+of course, handle each of those exceptions differently. For example,
+you might catch some of those exceptions while allowing others
+to pass up the calling chain.
+<P>
+If your method throws its own exceptions, you should declare that
+it throws those methods using the <TT>throws</TT>
+clause. If your method overrides a superclass's method that has
+a <TT>throws</TT> clause, you can
+throw the same types of exceptions or subclasses of those exceptions;
+you cannot throw any different types of exceptions.
+<P>
+And, finally, if your method has been declared with a <TT>throws</TT>
+clause, don't forget to actually throw the exception in the body
+of your method using <TT>throw</TT>.
+<H3><A NAME="WhenNottoUseExceptions">
+When Not to Use Exceptions</A></H3>
+<P>
+Exceptions are cool. But they aren't <I>that</I> cool. There are
+several cases in which you should not use exceptions, even though
+they may seem appropriate at the time.
+<P>
+First, you should not use exceptions if the exception is something
+that you expect and a simple test to avoid that exceptional condition
+would make much more sense. For example, although you can rely
+on an <TT>ArrayIndexOutofBounds</TT>
+exception to tell you when you've gone past the end of the array,
+a simple test of the length of the array in your code to make
+sure you don't get that exception in the first place is a much
+better idea. Or if your users are going to enter data that you
+need to be a letter, testing to make sure that data is a letter
+is a much better idea than throwing an exception and dealing with
+it somewhere else.
+<P>
+Exceptions take up a lot of processing time for your Java program.
+Whereas you may find exceptions stylistically interesting for
+your own code, a simple test or series of tests will run much
+faster and make your program that much more efficient. Exceptions,
+as I mentioned earlier, should only be used for truly exceptional
+cases that are out of your control.
+<P>
+It's also easy to get carried away with exceptions and to try
+to make sure that all your methods have been declared to throw
+all the possible exceptions that they can possibly throw. In addition
+to making your code more complex in general, if other people will
+be using your code, they'll have to deal with handling all the
+exceptions that your methods might throw. You're making more work
+for everyone involved when you get carried away with exceptions.
+Declaring a method to throw either few or lots of exceptions is
+a trade-off; the more exceptions your method potentially throws,
+the more complex that method is to use. Declare only the exceptions
+that have a reasonably fair chance of happening and that make
+sense for the overall design of your classes. 
+<H3><A NAME="BadStyleUsingExceptions">
+Bad Style Using Exceptions</A></H3>
+<P>
+When you first start using exceptions, it might be appealing to
+work around the compiler errors that result when you use a method
+that declared a <TT>throws</TT> clause.
+While it is legal to add an empty catch clause or to add a <TT>throws</TT>
+clause to your own method (and there are appropriate reasons for
+doing both of these things), intentionally dropping exceptions
+on the floor and subverting the checks the Java compiler does
+for you is very bad style. 
+<P>
+The Java exception system was designed so that if a potential
+error can occur, you're warned about it. Ignoring those warnings
+and working around them makes it possible for fatal errors to
+occur in your program-errors that you could have avoided with
+a few lines of code. And, even worse, adding <TT>throws</TT>
+clauses to your methods to avoid exceptions means that the users
+of your methods (objects further up in the calling chain) will
+have to deal with them. You've just made more work for someone
+else and made your methods more difficult to use for other people.
+<P>
+Compiler errors regarding exceptions are there to remind you to
+reflect on these issues. Take the time to deal with the exceptions
+that may affect your code. This extra care will richly reward
+you as you reuse your classes in later projects and in larger
+and larger programs. Of course, the Java class library has been
+written with exactly this degree of care, and that's one of the
+reasons it's robust enough to be used in constructing all your
+Java projects.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>
+Summary</FONT></A></H2>
+<P>
+Today you have learned about how exceptions aid your program's
+design and robustness. Exceptions give you a way of managing potential
+errors in your programs and of alerting users of your programs
+that potential errors can occur. The Java class library has a
+vast array of exceptions defined and thrown, and also allows you
+to define and throw your own exceptions. Using <TT>try</TT>,
+<TT>catch</TT>, and <TT>finally</TT>
+you can protect code that may result in exceptions, catch and
+handle those exceptions if they occur, and execute code whether
+or not an exception was generated.
+<P>
+Handling exceptions is only half of the equation; the other half
+is generating and throwing exceptions yourself. Today you have
+learned about the <TT>throws</TT>
+clause, which tells users of your method that the method might
+throw an exception. <TT>throws</TT>
+can also be used to &quot;pass on&quot; an exception from a method
+call in the body of your method.
+<P>
+In addition to the information given by the <TT>throws</TT>
+clause, you learned how to actually create and throw your own
+methods be defining new exception classes and by throwing instances
+of any exception classes using <TT>throw</TT>.
+<P>
+And, finally, Java's reliance on strict exception handling does
+place some restrictions on the programmer, but you have learned
+that these restrictions are light compared to the rewards.
+<H2><A NAME="QampABR"><FONT SIZE=5 COLOR=#FF0000>
+Q&amp;A<BR>
+</FONT></A></H2>
+
+<TABLE>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>I'm still not sure I understand the differences between exceptions, errors, and runtime exceptions. Is there another way of looking at them?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>Errors are caused by dynamic linking, or virtual machine problems, and are thus too low-level for most programs to care about-or be able to handle even if they did care about them. Runtime 
+exceptions are generated by the normal execution of Java code, and although they occasionally reflect a condition you will want to handle explicitly, more often they reflect a coding mistake by the programmer and thus simply need to print an error to help 
+flag that mistake. Exceptions that are not runtime exceptions (<TT>IOException</TT> exceptions, for example) are conditions that, because of their nature, should be explicitly handled by any robust and well-thought-out code. The Java class library has been 
+written using only a few of these, but those few are extremely important to using the system safely and correctly. The compiler helps you handle these exceptions properly via its <TT>throws</TT> clause checks and restrictions.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>Is there any way to &quot;get around&quot; the strict restrictions placed on methods by the <TT><B>throws</B></TT> clause?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>Yes. Suppose you have thought long and hard and have decided that you need to circumvent this restriction. This is almost never the case, because the right solution is to go back and redesign 
+your methods to reflect the exceptions that you need to throw. Imagine, however, that for some reason a system class has you in a straitjacket. Your first solution is to subclass <TT>RuntimeException</TT> to make up a new, exempt exception of your own. Now 
+you can throw it to your heart's content, because the <TT>throws</TT> clause that was annoying you does not need to include this new exception. If you need a lot of such exceptions, an elegant approach is to mix in some novel exception interfaces to your 
+new <TT>Runtime</TT> classes. You're free to choose whatever subset of these new interfaces you want to <TT>catch</TT> (none of the normal <TT>Runtime</TT> exceptions need be caught), while any leftover (new) <TT>Runtime</TT> exceptions are (legally) 
+allowed to go through that otherwise annoying standard method in the library.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>I'm still a little confused by long chains of <TT><B>catch</B></TT> clauses. Can you label the previous example with which exceptions are handled by each line of code?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>Certainly. Here it is:
+<P>
+<TT>try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;someReallyExceptionalMethod();<BR>
+} catch (NullPointerException n) {&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;. . .&nbsp;&nbsp;// handles NullPointerExceptions<BR>
+} catch (RuntimeException r) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;. . .&nbsp;&nbsp;// handles RuntimeExceptions <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; //that are not NullPointerExceptions<BR>
+} catch (IOException I) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;. . .&nbsp;&nbsp;// handles IOExceptions<BR>
+} catch (MyFirstException m) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;. . .&nbsp;&nbsp;// handles MyFirstExceptions<BR>
+} catch (Exception e) {&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; . . . // handles Exceptions that are not<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // RuntimeExceptions nor IOExceptions <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // nor MyFirstExceptions<BR>
+} catch (Throwable t) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;. . .&nbsp;&nbsp;// handles Throwables that <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // are not Exceptions (i.e., Errors)<BR>
+}</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>Q:</B></CENTER></TD><TD><B>Given how annoying it can sometimes be to handle exceptional conditions properly, what's stopping me from surrounding any method as follows:</B>
+<P>
+<TT><B>try { thatAnnoyingMethod(); } catch (Throwable t) { }</B></TT>
+<P>
+<B>and simply ignoring all exceptions?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=40><CENTER><B>A:</B></CENTER></TD><TD>Nothing, other than your own conscience. In some cases, you should</FONT> do nothing, because it is the correct thing to do for your method's implementation. Otherwise, you should struggle 
+through the annoyance and gain experience. Good style is a struggle even for the best of programmers, but the rewards are rich indeed.
+</TD></TR>
+</TABLE>
+</CENTER>
+<HR>
+
+<CENTER><P><A HREF="ch16.htm"><IMG SRC="http://docs.rinet.ru/J21/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/J21/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/J21/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch18.htm"><IMG SRC="http://docs.rinet.ru/J21/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

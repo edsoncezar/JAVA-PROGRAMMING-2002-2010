@@ -1,0 +1,355 @@
+<html>
+
+<head><meta http-equiv="pragma" content="no-cache">
+
+<meta NAME="GENERATOR" CONTENT="Internet Assistant for Microsoft Word 2.0z">
+<title>8.2 Synchronisation of data attributes</title>
+
+</head>
+
+<body BGCOLOR="WHITE">
+
+<h2>8.2 Synchronisation of data attributes<br>
+</h2>
+
+<p>
+The simple example above appears to work, but contains a subtle
+and dangerous error. The interruption of a time slice can occur
+at any instant, possibly in the middle of an action, and this
+can result in the object's data attributes being left in an invalid
+state. To illustrate this possibility a class, called <i>Dangerous</i>,
+containing two data attributes will be produced. It also supplies
+three actions: one to write the same value to both data attributes
+and two actions to retrieve the value of each of the data attributes.
+The implementation of the <i>Dangerous</i> class, presented without
+a class diagram, is as follows. <br>
+
+<pre>
+<font>0001 // Filename <i>Dangerous.java</i>.
+0002 // Contains an updatable object without synchronisation,
+0003 // leading to the possibility of an invalid update.
+0004 //
+0005 // Written for JFL book Chapter 8 see text.
+0006 // Fintan Culwin, v0.1, January 1997.
+0007 
+0008 <b>public class</b> <i>Dangerous</i> <b>extends</b> Object { 
+0009 
+0010 <b>private int</b> <i>anAttribute</i>;
+0011 <b>private int</b> <i>anotherAttribute</i>;
+0012 
+0013    <b>public void</b> <i>update</i>( <b>int</b> <i>updateTo</i>) { 
+0014       <i>anAttribute</i>      = <i>updateTo</i>;
+0015       <i>anotherAttribute</i> = <i>updateTo</i>;
+0016    } // End <i>update</i>.
+0017    
+0018    
+0019    <b>public int</b> <i>getAnAttribute</i>() { 
+0020       <b>return</b> <i>anAttribute</i>;
+0021    } // End <i>getAnAttribute</i>.
+0022    
+0023    
+0024    <b>public int</b> <i>getAnotherAttribute</i>() { 
+0025       <b>return</b> <i>anotherAttribute</i>;
+0026    } // End <i>getAnotherAttribute</i>.
+0027    
+0028 } // End <i>Dangerous</i>.<br>
+</font>
+</pre>
+
+<p>
+The implementation of this class should be comprehensible from
+a consideration of the many classes which have already been introduced.
+Two extended <font FACE="Arial">Thread</font> classes called
+<i><font FACE="Arial">DangerousWriter</font></i> and <i><font FACE="Arial">DangerousReader</font></i>,
+constructed in a manner comparable to the <i><font FACE="Arial">RoomFiller</font></i>
+and <i><font FACE="Arial">RoomEmptyer</font></i> classes
+above will also be required. The implementation of the <i><font FACE="Arial">DangerousWriter</font></i>
+ class is as follows. <br>
+
+<pre>
+<font>0001 // Filename DangerousWriter.java.
+0002 // Providing class to read the dangerous attributes. 
+0003 //
+0004 // Written for JFL book Chapter 8 see text.
+0005 // Fintan Culwin, v0.1, January 1997.
+0006 
+0007 <b>import</b> Dangerous;
+0008 
+0009 <b>public class</b> DangerousWriter <b>extends</b> Thread { 
+0010 
+0011 Dangerous writeThis;
+0012 
+0013    <b>public</b> DangerousWriter( Dangerous toWrite) { 
+0014        writeThis = toWrite; 
+0015    } // End DangerousWriter Constructor.
+0016 
+0017 
+0018    <b>public void</b> run() {
+0019
+0020    <b>int</b> index = 0;
+0021
+0022       <b>while</b> ( <b>true</b>) { 
+0023          writeThis.update( index++);
+0024       } // End while.   
+0025    } // End run.
+0026 
+0027 } // End DangerousWriter. <br>
+</font>
+</pre>
+
+<p>
+The <i><font FACE="Arial">run</font></i>() action will
+loop forever continuously calling the <i><font FACE="Arial">update()</font></i>
+action of the <i><font FACE="Arial">writeThis</font></i>
+<i><font FACE="Arial">Dangerous</font></i> object passed
+to the <i><font FACE="Arial">DangerousWriter</font></i>
+instance when it was constructed. Should the value of <i><font FACE="Arial">index</font></i>
+ever reach the maximum positive integer value(+2147483647), incrementing
+it will result in it taking the minimum negative value (-2147483648).
+The reasons for this are explained in Appendix A1. Another class,
+<i><font FACE="Arial">DangerousReader</font></i>, is needed
+to monitor the running of <i><font FACE="Arial">DangerousWriter</font></i>,
+the implementation of the <i><font FACE="Arial">DangerousReader</font></i>
+class is as follows.<br>
+
+<pre>
+<font>0001 // Filename DangerousReader.java.
+0002 // Providing class to read the dangerous attributes. 
+0003 //
+0004 // Written for JFL book Chapter 8 see text.
+0005 // Fintan Culwin, v0.1, January 1997.
+0006 
+0007 <b>import</b> Dangerous;
+0008 
+0009 <b>public class</b> DangerousReader <b>extends</b> Thread { 
+0010 
+0011 Dangerous  readThis;
+0012 
+0013    <b>public</b> DangerousReader( Dangerous toRead) { 
+0014        readThis = toRead; 
+0015    } // End DangerousReader Constructor;
+0016 
+0017 
+0018    <b>public void</b> run() {
+0019    
+0020    <b>int</b> firstAttribute;
+0021    <b>int</b> secondAttribute;
+0022    
+0023        <b>while</b> ( <b>true</b>) { 
+0024           firstAttribute  = readThis.getAnAttribute(); 
+0025           secondAttribute = readThis.getAnotherAttribute();
+0026           <b>if</b> ( firstAttribute != secondAttribute) { 
+0027               System.out.println( &quot;Danger proved ... &quot;      + 
+0028                                   firstAttribute  + &quot; and &quot; + 
+0029                                   secondAttribute + &quot;.&quot;);
+0030           } // End if
+0031        } // End while.   
+0032    } // End run.
+0033 
+0034 } // End DangerousReader.<br>
+</font>
+</pre>
+
+<p>
+As with the <i><font FACE="Arial">DangerousWriter run</font></i>()
+action, the <i><font FACE="Arial">DangerousReader run</font></i>()
+action is a non-terminating loop which, in this case, continually
+reads the values of the two data attributes. The calls of <i><font FACE="Arial">getAnAttribute</font></i>()
+and <i><font FACE="Arial">getAnotherAttribute</font></i><font FACE="Arial">()</font>
+on lines 0024 and 0025 should, in a secure implementation, never
+result in two different values being returned. The remaining part
+of the <i><font FACE="Arial">run</font></i>() loop tests
+the two values obtained and outputs a message if they are ever
+different. <br>
+
+<p>
+To demonstrate the insecurity of this implementation a demonstration
+client called <i><font FACE="Arial">DangerousDemo</font></i>,
+whose implementation is as follows, is required. <br>
+
+<pre>
+<font>0001 // Filename <i>DangerousDemo.java</i>.
+0002 // Providing a demonstration of the possibility of 
+0003 // an invalid update happening to a <i>Dangerous</i> object.
+0004 //
+0005 // Written for JFL book Chapter 8 see text.
+0006 // Fintan Culwin, v0.1, January 1997.
+0007 
+0008 
+0009 <b>public class</b> <i>DangerousDemo</i> { 
+0010 
+0011    public static void main( String argv[]) { 
+0012 
+0013    <i>Dangerous</i>         <i>dangerous</i> = <b>new</b> <i>Dangerous</i>();
+0014    <i>DangerousWriter</i>   <i>aWriter</i>   = <b>new</b> <i>DangerousWriter</i>( <i>dangerous</i>);
+0015    <i>DangerousReader</i>   <i>aReader</i>   = <b>new</b> <i>DangerousReader</i>( <i>dangerous</i>);
+0016 
+0017       <i>aWriter</i>.start();
+0018       <i>aReader</i>.start();
+0019    } // End main.   
+0020 } // End <i>DangerousDemo</i>.<br>
+</font>
+</pre>
+
+<p>
+The construction of this client is directly comparable with the
+construction of the <i><font FACE="Arial">ThreadDemo</font></i>
+client above. When executed this client produced the following
+output. <br>
+
+<hr>
+
+<ul><pre>
+Danger proved ... 8156 and 8155.
+Danger proved ... 15419 and 24246.
+Danger proved ... 33086 and 37437.
+Danger proved ... 37437 and 42018.
+Danger proved ... 42018 and 51202.
+Danger proved ... 51203 and 51202.
+</pre></ul>
+
+<hr>
+
+<p>
+As with the <i><font FACE="Arial">ThreadDemo</font></i>
+client the program had to be interrupted from the keyboard in
+order to stop it and if the client were executed for a second
+time the precise output produced would differ. The output indicates
+that the implementation is insecure, and thus dangerous, as the
+value of the two attributes read from the <i><font FACE="Arial">Dangerous</font></i>
+object are shown to be different. This could be caused by an interruption
+happening between lines 0024 and 0025 of the <i><font FACE="Arial">DangerousReader
+run</font></i>() action as the two values are read; or between
+lines 0014 and 0015 of the <i><font FACE="Arial">Dangerous
+update</font></i>() action as the two values are written. Further
+investigation would indicate that both types of interruption were
+happening, as is suggested by the pattern of outputs involving
+values which are close together and others which are wildly apart.
+<br>
+
+<p>
+This is regarded as a dangerous occurrence as the internal state
+of any object has to be maintained in a well defined consistent
+state at all times. For example the <i><font FACE="Arial">AdaptingMenu</font></i>
+class from the previous chapter emphasised that the state of its
+<i><font FACE="Arial">inUse</font></i> and <i><font FACE="Arial">optionKey</font></i>
+arrays was essential to its secure implementation. If an <i><font FACE="Arial">AdaptingMenu</font></i>
+instance were to be used in a program containing independent threads
+then it is possible that the state of the arrays might become
+inconsistent, causing the program to operate incorrectly. <br>
+
+<p>
+The solution to this problem is to indicate to Java which parts
+of the program code are essential to its correct operation in
+a threaded environment, so that it can be ensured that those parts
+will not be interrupted until they have completed. This is accomplished
+by use of the <b><font FACE="Arial">synchronized</font></b>
+keyword. <br>
+
+<p>
+Corresponding to the four source code files concerned with the
+<i><font FACE="Arial">Dangerous</font></i> class, four
+corresponding files concerned with a <i><font FACE="Arial">Safe</font></i>
+class, which illustrates the correct operation of the software
+when the tasks are synchronized, will be introduced. <br>
+
+<p>
+To prevent the possibility of the <i><font FACE="Arial">Safe</font></i>()
+<i><font FACE="Arial">update</font></i>() action being
+interrupted while the values are being written it can be declared
+with the modifier <b><font FACE="Arial">synchronized</font></b>,
+as follows. <br>
+
+<pre>
+<font>0013    // update action from the <i>Safe</i> class. 
+0014    <b>public synchronized void</b> <i>update</i>( <b>int</b> <i>updateTo</i>) { 
+0015       <i>anAttribute</i>      = <i>updateTo</i>;
+0016       <i>anotherAttribute</i> = <i>updateTo</i>;
+0017    } // End update.<br>
+</font>
+</pre>
+
+<p>
+The <b><font FACE="Arial">synchronized</font></b> modifier
+ensures that the action will be executed without being suspended
+and that only one thread can run it at a time. In this example
+this will ensure that both attributes are always updated and so
+the object can never be left in an invalid state by being suspended
+between lines 0015 and 0016. <br>
+
+<p>
+To prevent the other possibility, the <i><font FACE="Arial">SafeReader</font></i>
+<i><font FACE="Arial">run</font></i>() action being suspended
+between reading the first and second attributes, and during this
+suspension an update action changing the value of the attributes,
+a part of the <i><font FACE="Arial">run</font></i>() action
+can be <b><font FACE="Arial">synchronized</font></b>, as
+follows.<br>
+
+<pre>
+<font>0023        // Loop from the <i>SafeReader</i> <i>run</i>() action.
+0024        <b>while</b> ( <b>true</b>) { 
+0025           <b>synchronized</b>( <i>readThis</i>) { 
+0026              <i>firstAttribute</i>  = <i>readThis.getAnAttribute</i>(); 
+0027              <i>secondAttribute</i> = <i>readThis.getAnotherAttribute</i>();
+0028           } // End synchronize.
+0029           if ( <i>firstAttribute</i> != <i>secondAttribute</i>) { 
+0030               System.out.println( &quot;Danger proved ... &quot; + 
+0031                          <i>firstAttribute</i>  + &quot; and &quot;     + 
+0032                          <i>secondAttribute</i> + &quot;.&quot;);
+0033           } // End if
+0034        } // End while.   <br>
+</font>
+</pre>
+
+<p>
+This use of the <b><font FACE="Arial">synchronized</font></b>
+facility encloses a block of statements, delineated by its opening
+and closing braces, and has to indicate which object is being
+guarded. In this example the synchronization statement indicates
+that the <i><font FACE="Arial">readThis</font></i> object
+is being guarded, it has a similar effect to the synchronization
+of an entire action above. Java will ensure that this thread is
+not suspened until the end of the synchronized block and will
+ensure that no other threads can use any of the actions associated
+with the object guarded by the synchronized statement. <br>
+
+<p>
+When the <i><font FACE="Arial">SafeDemo</font></i> client
+was executed no output was produced indicating that the <i><font FACE="Arial">SafeReader</font></i>
+task never obtained invalid information from the <i><font FACE="Arial">Safe</font></i>
+object. As with the other tasking demonstration programs the program
+had to be interrupted from the keyboard to terminate it. <br>
+<br>
+
+
+<p>
+<hr>
+<h2>
+<ul>
+<a HREF="dangerouswriter.java" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/DangerousWriter.java"><img SRC="..\list.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/list.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="40" HEIGHT="35">
+<i>DangerousWriter.java</i> source code</a>.
+<p>
+<a HREF="dangerousreader.java" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/DangerousReader.java"><img SRC="..\list.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/list.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="40" HEIGHT="35">
+<i>DangerousReader.java</i> source code</a>.
+<p>
+<a HREF="dangerousdemo.java" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/DangerousDemo.java"><img SRC="..\list.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/list.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="40" HEIGHT="35">
+<i>DangerousDemo.java</i> source code</a>.
+<p>
+
+<a HREF="chap8p3.html" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/chap8p3.html"><img SRC="..\next.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/next.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="50" HEIGHT="40">
+8.3 Synchronisation of actions</a>.
+
+<p>
+
+<a HREF="chap8p1.html" tppabs="http://www.scism.sbu.ac.uk/jfl/Chapter8/chap8p1.html"><img SRC="..\last.gif" tppabs="http://www.scism.sbu.ac.uk/jfl/last.gif" ALIGN="MIDDLE" BORDER="0" WIDTH="50" HEIGHT="40">
+8.1 An initial concurrent example</a>.
+
+
+</ul>
+</h2>
+<hr>
+</body>
+
+</html>
+&#26;

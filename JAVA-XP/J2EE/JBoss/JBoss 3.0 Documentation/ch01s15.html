@@ -1,0 +1,119 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Coding and compiling the test client</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch01.html" title="Chapter 1. First steps"><link rel="previous" href="ch01s14.html" title="Packaging and deploying the bean"><link rel="next" href="ch01s16.html" title="Conclusion"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch01.html"><img src="images\toc.gif" border="0"></a><a href="ch01s14.html"><img src="images\prev.gif" border="0"></a><a href="ch01s16.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e376"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e376"></a>Coding and compiling the test client</h2></div></div><p>An EJB on its own is no use; we will need at least a simple client to 
+use its services. A user of EJBs may be another EJB, an ordinary JavaBean, a 
+JSP page, an applet, or a stand-alone application. In this example, for 
+simplicity, we will code a simple application. This application will create an 
+object of class Interest, and execute its one method.</p><p>On deployment of the bean as performed in the previous step, the 
+server has bound the EJB home interface under the JNDI name of interest/Interest
+and exported the home interface so that it can be invoked via RMI.  What we are
+going to cover here is the way you lookup a the home interface using JNDI from a
+client and invoke methods on it. The example client code is listed in the following figure:</p><div class="figure"><p><a name="d0e383"></a><b>Figure 1.8. Test client, file name InterestClient.java</b></p><pre class="programlisting">package org.jboss.docs.interest;
+
+import javax.naming.InitialContext;
+import javax.rmi.PortableRemoteObject;
+
+import org.jboss.docs.interest.Interest;
+import org.jboss.docs.interest.InterestHome;
+
+/** This simple application tests the 'Interest' Enterprise JavaBean which is
+ implemented in the package 'org.jboss.docs.interest'. For this to work, the
+ Bean must be deployed on an EJB server.
+ */
+class InterestClient
+{
+   /** This method does all the work. It creates an instance of the Interest EJB on
+    the EJB server, and calls its `calculateCompoundInterest()' method, then prints
+    the result of the calculation.
+    */
+   public static void main(String[] args)
+   {     
+      // Enclosing the whole process in a single `try' block is not an ideal way
+      // to do exception handling, but I don't want to clutter the program up
+      // with catch blocks
+      try
+      {
+         // Get a naming context
+         InitialContext jndiContext = new InitialContext();
+         System.out.println("Got context");
+         
+         // Get a reference to the Interest Bean
+         Object ref  = jndiContext.lookup("interest/Interest");
+         System.out.println("Got reference");
+         
+         // Get a reference from this to the Bean's Home interface
+         InterestHome home = (InterestHome)
+         PortableRemoteObject.narrow(ref, InterestHome.class);
+         
+         // Create an Interest object from the Home interface
+         Interest interest = home.create();
+         
+         // call the calculateCompoundInterest() method to do the calculation
+         System.out.println("Interest on 1000 units, at 10% per period, compounded over 2 periods is:");
+         System.out.println(interest.calculateCompoundInterest(1000, 0.10, 2));
+      }
+      catch(Exception e)
+      {
+         System.out.println(e.toString());
+      }
+   }
+}</pre></div><p>Please note that the client lookup up the InterestHome interface under the JNDI name "interest/Interest".
+Your bean's home interface has been bound to this name if you supplied a proper jboss.xml file. If not,
+the JNDI name will be "Interest". Connecting to the JBoss JNDI implementation entails creating an
+InitialContext object with the correct jndi.properties in the client classpath. In the source, all that is
+required is:<pre class="programlisting">// Get a naming context
+InitialContext jndiContext = new InitialContext();
+System.out.println("Got context");</pre>
+		</p><p>The jndi.properties file we have to use is located in the examples/resources/jndi.properties of the
+documentation examples distribution. Its contents are:<pre class="programlisting">java.naming.factory.initial=org.jnp.interfaces.NamingContextFactory
+java.naming.provider.url=jnp://localhost:1099
+java.naming.factory.url.pkgs=org.jboss.naming:org.jnp.interfaces</pre>This specifies the InitialContextFactory, provider url, and the packages of object factories
+specific to the JBoss JNDI provider. The provider url can be abbreviated to simply "localhost"
+or the hostname on which JBoss is running when using the default port of 1099.</p><p>The comments in the program should describe how it works; one point that 
+requires mention is that the recommended way to get a reference to the home 
+interface on the server is like this: </p><p>
+			<pre class="programlisting">InterestHome home = (InterestHome) 
+	PortableRemoteObject.narrow (ref, InterestHome.class);</pre>which ensures compatibility with different RMI protocols (e.g., RMI/IIOP). The 'narrow' 
+method ensures that the 'ref' object can be converted to an object 
+of class 'InterestHome'.</p><p>The test client doesn't need to be in the same package as the EJB 
+classes, and in practice it probably won't be. So it needs to import the EJB 
+classes using their fully-qualified class name as illustrated.</p><p>To compile and run the InterestClient execute the following ant command:</p><p>
+			<div class="literallayout"><br>
+				<tt>bash-2.04$&nbsp;ant&nbsp;intro-interest-client<br>
+Buildfile:&nbsp;build.xml<br>
+<br>
+validate:<br>
+<br>
+fail_if_not_valid:<br>
+<br>
+init:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[echo]&nbsp;Using&nbsp;JBoss&nbsp;directory=/tmp/JBoss-2.2.2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[echo]&nbsp;Using&nbsp;base&nbsp;classpath=/tmp/JBoss-2.2.2/client/ejb.jar:/tmp/JBoss-2.2.2/client/jaas.jar:/tmp/JBoss-2.2.2/client/jbosssx-client.jar:/tmp/JBoss-2.2.2/client/jboss-client.jar:/tmp/JBoss-2.2.2/client/jnp-client.jar:/tmp/tomcat/lib/servlet.jar<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[echo]&nbsp;Using&nbsp;Source&nbsp;directory=/tmp/examples<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[echo]&nbsp;Using&nbsp;Build&nbsp;directory=/tmp/examples/build-examples<br>
+<br>
+intro-interest-client:<br>
+<br>
+compile:<br>
+<br>
+interest-client:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[echo]&nbsp;Using&nbsp;client&nbsp;classpath:&nbsp;/tmp/JBoss-2.2.2/client/ejb.jar:/tmp/JBoss-2.2.2/client/jaas.jar:/tmp/JBoss-2.2.2/client/jbosssx-client.jar:/tmp/JBoss-2.2.2/client/jboss-client.jar:/tmp/JBoss-2.2.2/client/jnp-client.jar:/tmp/tomcat/lib/servlet.jar:/tmp/examples/build-examples/interest/classes:/tmp/examples/resources<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Got&nbsp;context<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Got&nbsp;reference<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;Interest&nbsp;on&nbsp;1000&nbsp;units,&nbsp;at&nbsp;10%&nbsp;per&nbsp;period,&nbsp;compounded&nbsp;over&nbsp;2&nbsp;periods&nbsp;is:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[java]&nbsp;210.00000000000023<br>
+<br>
+BUILD&nbsp;SUCCESSFUL<br>
+<br>
+Total&nbsp;time:&nbsp;2&nbsp;seconds</tt><br>
+			</div>
+		</p><p>The output is what you should see if all goes well. This shows that the classpath used to execute the client
+included a number of jars located in the JBoss client directory as well as the directory containing the compiled example
+classes and the directory containing the jndi.properties file. These JBoss client jars contain the standard EJB and
+JNDI interfaces as well as the JBoss specific container code. The various jars are:<div class="itemizedlist"><ul><li><p><a name="d0e420"></a>ejb.jar : the standard javax.ejb.* EJB 1.1 interfaces and classes.</p></li><li><p><a name="d0e423"></a>jaas.jar : the Java Authentication and Authorization Service security classes.</p></li><li><p><a name="d0e426"></a>jbosssx-client.jar : JBossSX security extension client classes.</p></li><li><p><a name="d0e429"></a>jboss-client.jar : the JBoss EJB container proxy and stub client classes.</p></li><li><p><a name="d0e432"></a>jnp-client.jar : the JBoss JNDI provider client classes.</p></li></ul></div>
+		</p><p>There should be output from the Interest EJB on the server console as well. This is generated
+to show that the bean has executed on the server, not the client. Look for something 
+like this in the server log or console:</p><p>
+			<tt>[Interest] Someone called `calculateCompoundInterest!'</tt>
+		</p><p>Well, that's it. We covered coding, compiling and deploying an EJB, 
+and coding and running a simple test client. </p></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch01.html"><img src="images\toc.gif" border="0"></a><a href="ch01s14.html"><img src="images\prev.gif" border="0"></a><a href="ch01s16.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

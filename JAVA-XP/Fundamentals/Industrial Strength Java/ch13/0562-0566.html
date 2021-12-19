@@ -1,0 +1,299 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0557-0561.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0567-0570.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-562"><P>Page 562</P></A>
+
+<PRE>
+        logSem.sSignal();
+}
+
+//Send a string to the logfile
+public void log(String s) {
+        logPS.println(s);
+}
+}
+</PRE>
+
+<P>Whenever the semaphore logSem is signaled, the log file isn't allocated to any
+thread. When the object is constructed, the semaphore is initially signaled once, so the first
+thread to call allocate() is permitted to proceed. Other threads calling allocate() are suspended
+on logSem. When the first thread is done and calls deallocate(), the semaphore is
+resignaled and one of the suspended threads (chosen at random by the scheduler) then has
+exclusive access to the log file.
+</P>
+
+<B>
+Throttling
+</B>
+
+<P>Enabling a limited number of threads to execute within a block, often called
+throttling,
+</P>
+
+<P>is another application of semaphores. Suppose, for example, that to limit disk I/O, a
+class must permit no more than four threads to write to files at any one time, as shown in
+listing 13.48.
+</P>
+
+<P>Listing 13.48 Using a Semaphore to Limit the Number of Processes in a
+                Monitor
+</P>
+<PRE>
+import industrial.Semaphore;
+import java.io.*;
+
+public class FileDump {
+
+//This int is the maximum number of threads that may
+//be dumping to FileDumps at any one time.
+private final static int MAX_DUMPS=4;
+private static Semaphore throttle;
+
+//static initializer code
+static {
+        throttle = new Semaphore();
+        for(int i=0; i&lt;MAX_DUMPS; i++)
+                throttle.sSignal();
+}
+
+private File f;
+</PRE>
+
+<A NAME="PAGENUM-563"><P>Page 563</P></A>
+
+<PRE>
+private FileOutputStream fos;
+
+//Constructor
+public FileDump(String fileName) throws IOException {
+        f = new File(fileName);
+        fos = new FileOutputStream(f);
+}
+
+//dump byte array to file
+public void dump(byte[] b)
+
+
+throws InterruptedException, IOException {
+
+        //Enter the throttled section
+        throttle.sWait();
+
+        //dump the data
+        fos.write(b);
+
+        //Leave the throttled section
+        throttle.sSignal();
+}
+
+//close the file
+public void close() throws IOException {
+        fos.close();
+        fos = null;
+
+        f = null;
+}
+
+}
+</PRE>
+
+<P>Here the semaphore is a class variable. Any threads calling the
+dump() method of any FileDump object will attempt to wait on the semaphore. Because the semaphore is
+initially signaled MAX_DUMPS times, up to MAX_DUMPS threads can dump data at the
+same time. As each thread exits dump(), it resignals the semaphore to let in another thread.
+</P>
+
+<H4><A NAME="ch13_ 36">
+Wait and Notify on Threads
+</A></H4>
+
+<P>Because java.lang.Thread is a subclass of java.lang.Object, threads can call wait()
+and notify() on their own Thread objects. This is how the join() methods work; they call
+wait() on the Thread object. When a thread dies, notifyAll() is called on the Thread object so
+that any waiting join() calls will complete. Any other threads in wait() calls on the dying
+thread are, of course, also notified.
+</P>
+
+<A NAME="PAGENUM-564"><P>Page 564</P></A>
+
+
+<H3><A NAME="ch13_ 37">
+Timed Waits
+</A></H3>
+
+<P>A common requirement, especially in real-time systems, is for some operation to occur
+at regular intervals. This is an obvious application for threading; a thread can be created
+to perform the operation, sleeping until the next interval arrives. For example, the code
+in listing 13.49 is supposed to call tick() every 1,000 milliseconds (this might be to
+implement an on-screen clock, for example).
+</P>
+
+<P>Listing 13.49 A run() Method to Wake up at Regular Intervals
+</P>
+<PRE>
+public void run() {
+        //Loop, waking up every second
+        while(true) {
+                try {
+                        //Sleep for 1000 mS
+                        Thread.sleep(1000);
+                }
+                catch(InterruptedException e) {}
+
+                //Another second has elapsed.
+                tick();
+        }
+}
+</PRE>
+
+<P>This approach has a couple of problems. First of all, after the
+sleep() method is done, the Java VM scheduler might not start executing this thread immediately, depending on
+the other threads currently in the system. This can be partly overcome by setting the
+thread priority to Thread.MAX_PRIORITY, so that this thread is likely to preempt all
+others when it returns from sleep().
+</P>
+
+<P>The second problem is that of lag. The call to tick() takes some time; for example,
+assume it takes 75 milliseconds. After tick() returns, the thread continues around the loop and
+calls sleep() again. Because that extra 75 milliseconds has elapsed, the interval between the
+last call to sleep() and this call is actually 1,075 milliseconds. Every iteration around the
+loop slips by 75 milliseconds.
+</P>
+
+<P>To solve the lag problem, two threads can be used. The first thread operates in a loop.
+In each iteration, it sleeps for a specified period (the cycle time) and, on waking, notifies
+the other thread. It then returns to the sleep, having adjusted the time of the sleep to
+compen-
+</P>
+
+<A NAME="PAGENUM-565"><P>Page 565</P></A>
+
+
+<P>sate for the time the Java VM took to schedule it after it returned from sleep(). It does
+this by using the System.currentTimeMillis() function, which returns the value of a timer
+that's incremented every millisecond.
+</P>
+
+<P>The second thread need not be concerned with details of keeping time. It simply
+calls wait() and is notified by the first thread when it's time to call tick() again. Thus the
+first thread is unaffected by the length of time tick() takes to execute.
+</P>
+
+<P>Here's the class that the first thread implements:
+</P>
+
+<P>Listing 13.50 The Ticker Class </P>
+
+<PRE>package industrial;
+
+/**
+The Ticker class will notify any threads waiting on it
+at the specified time interval.
+*/
+public class Ticker extends Thread {
+
+//Object variables
+
+//The cycle time in milliseconds
+private long cycle;
+
+//Constructor
+public Ticker(long cycleTime) {
+        //Set a name for this Ticker thread
+        super(&quot;Ticker at &quot;+cycleTime+&quot; mS&quot;);
+        cycle = cycleTime;
+        //set our priority to maximum so that
+        //we get scheduled soon after waking.
+        this.setPriority(MAX_PRIORITY);
+        //mark this Thread as a daemon
+        this.setDaemon(true);
+        this.start();
+}
+
+
+//run method, overrides Thread run().
+</PRE>
+<PRE>
+                                                                  continues
+</PRE>
+<A NAME="PAGENUM-566"><P>Page 566</P></A>
+
+<P>Listing 13.50 Continued
+</P>
+
+<PRE>
+public void run() {
+long    next;
+
+        //Set the next waking to occur at &quot;now&quot; plus
+        //the cycle time.
+        next = System.currentTimeMillis() + cycle;
+
+        try {
+                while(true) {
+                        //sleep till the next tick.  That
+                        //will be the &quot;next&quot; time, so we
+                        //need to sleep for the number of
+                        //milliseconds until then.
+                        long period = next
+                        - System.currentTimeMillis();
+
+                        if(period &gt; 0)
+                                Thread.sleep(period);
+                        else
+                                yield();
+
+                        //wake our clients
+                        synchronized(this) {
+                                this.notifyAll();
+                        }
+
+                        next += cycle;
+                }
+        }
+
+        //InterruptedExceptions will stop the ticker
+        //running.
+
+        catch(InterruptedException e) { }
+
+        finally {
+                //If we're stopped, or a really bad
+                //Exception is thrown, we need to make
+                //sure all our clients are notified.
+                synchronized(this) {
+                        this.notifyAll();
+                }
+        }
+}
+
+//wait for a tick.  A wrapper method for wait() that
+//catches InterruptedExceptions and ignores them.
+
+</PRE>
+
+<P><CENTER>
+<a href="0557-0561.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0567-0570.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

@@ -1,0 +1,188 @@
+<html>
+<head>
+<title>Applets Running Wild (Ch. 5, Sec. 8) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-five.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-five-7.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Attack Applets: Exploiting Holes in the Security Model
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-five-1.html">1</a> / <a href="chapter-five-2.html">2</a> / <a href="chapter-five-3.html">3</a> / <a href="chapter-five-4.html">4</a> / <a href="chapter-five-5.html">5</a> / <a href="chapter-five-7.html">6</a> / <a href="chapter-five-7.html">7</a> / <b>8</b> / <a href="chapter-five-9.html">9</a> / <a href="chapter-five-10.html">10</a> / <a href="chapter-five-11.html">11</a> / <a href="chapter-five-12.html">12</a> / <a href="chapter-five-13.html">13</a> / <a href="chapter-five-14.html">14</a> / <a href="chapter-five-15.html">15</a> / <a href="chapter-five-16.html">16</a> / <a href="chapter-five-17.html">17</a> / <a href="chapter-five-18.html">18</a> / <a href="chapter-five-19.html">19</a> / <a href="chapter-five-20.html">20</a><p>
+
+<font size="+2" color="#000000"><b>Section 8 -- Applets Running Wild</b></font>
+</td><td width=60 align=center>
+<a href="chapter-five-9.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+The next security problem is the Princeton class-loader attack. This was the most widely publicized of all Java security breaches. The problem was caused by mistakes in the way the Java system integrated separate pieces of code. By corrupting this integration or linking process, an attacker could break through Java's security and do anything at all. To help better understand this issue, the following section looks more closely at how Java manages the dynamic-linking process.<p><br>
+
+
+<center><font size="+1"><b>Linking</b></font></center><p>
+
+A Java program is composed of several separate pieces called classes. Each class is stored in a separate file, and the Java system uses a just-in-time strategy to load each class only when it is first needed. Just-in-time loading allows Java applets to start running quickly, without waiting for the entire applet to be pulled across the Net. It does have one drawback, however: A running applet is usually incomplete. When an applet is built from several code pieces, the system has to be clever enough to make sure that the right pieces are attached in the right places.<p>
+
+A Java class file contains a series of instructions telling the Java system how the class should behave. The instructions sometimes reference other classes by name. Since classes are stored separately, the Java system translates each name into the identity of another class. This may involve loading the mentioned class across the Net.<p>
+
+The core Java system does not do this translation itself, but outsources it to Java objects called Class Loaders. Outsourcing in this way allows programmers to create their own class loaders, extending Java's linking mechanism.<p>
+
+The interaction between a Class Loader and the core elements of Java is simple. When Java needs to determine which class corresponds to which name, the following steps are followed:
+<OL>
+	<LI>Java calls the Class Loader's loadClass method, passing it the name to look up.
+	<LI>The Class Loader consults its internal dictionary (which can include a list of built-in classes) to see whether a class with that name already exists. If one exists, that class is returned.
+	<LI>If the Class Loader does not have a class with the requested name, it tries to find one. Usually, it does this by fetching the byte code for the class across the Net.
+	<LI>After getting the byte code for the class, the Class Loader calls a special method called defineClass to turn the byte code into a usable class.
+	<LI>When defineClass is finished, the Class Loader returns the resulting class to Java.
+</OL>
+
+The Class Loader's loadClass method returns the class that corresponds to the name being looked up.<p>
+
+There are usually several class loaders in operation. When Java needs to translate a name, it asks the Class Loader that originally loaded the class referencing the name. Thus, each Class Loader is responsible for maintaining and defining its own part of the namespace.<p><br>
+
+
+<center><font size="+1"><b>Linking and Record-Keeping</b></font></center><p>
+
+Because Java has separate namespaces into which classes can be loaded, it can't simply have a unified "phone directory" tracking which class corresponds to which classname. Instead, the Java Virtual Machine maintains a separate directory for each class. These independent directories keep track of the names needed by each class.<p>
+
+For example, if class A has a reference to a class called B, the directory for A will have an entry for B that points to the actual class the name represents. Figure 5.5 shows a more complicated example with four classes referencing each other. A big applet could consist of more than four classes, but the idea is the same: The applet is a set of classes that reference each other.<p>
+
+<center>
+<table border=0 width=262><tr><td>
+<img src="..\images\fig05.05.gif" width=262 height=225 alt="Fig 5.5"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 5.5  Four classes linked together.</b></center><br>
+Each box represents a class. The circled name at the top of each box is the name of the class, and the entries underneath show how the class's namespace is defined.
+</font>
+</td></tr></table>
+</center>
+<p><br>
+
+
+<center><font size="+1"><b>Attack of the Evil Class Loaders</b></font></center><p>
+
+The example described in Figure 5.5 shows reasonable, self-consistent namespaces. The Princeton team discovered that a hostile class loader was capable of setting up a twisted namespace in which different classes had different views of the Java environment. Such inconsistencies can be exploited to create type confusion. A hostile class loader could launch a system-penetration attack.<p>
+
+Figure 5.6 shows an example of what an evil class loader can do. The figure shows two classes, A and B, each of which refers to a classname "C". However, the two classes have different ideas of what the name "C" means. Class A points to the class we've labeled C1, while B points to C2.<p>
+
+<center>
+<table border=0 width=266><tr><td>
+<img src="..\images\fig05.06.gif" width=266 height=216 alt="Fig 5.6"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 5.6  An inconsistent namespace, created by a hostile class loader.</b></center><br>
+Classes A and B have different ideas about what C refers to. This can sometimes be used to 
+confuse the Class Loader.
+</font>
+</td></tr></table>
+</center>
+<p>
+
+Suppose that the Java code in class A allocates an object of type "C" and then passes that object to class B. The Java byte code Verifier thinks everything is okay, since an object whose class was named "C" is being passed into code that is expecting an object whose classname is "C". The Verifier allows the operation to proceed. But when class B accesses the object named "C", the true type will be C1, not the C2 that the Verifier approved. An object of type C1 is being treated as though it were of class C2. This is type confusion.<p>
+
+When this attack is carried out, the evil class loader is asked twice to say which class corresponds to the name "C". It gives back different answers: C1 for class A, and C2 for class B.<p><br>
+
+
+<center><font size="+1"><b>Taking Exception</b></font></center><p>
+
+The class-loader attack should have been impossible. Java's security rules prohibit applets from creating class loaders. Unfortunately, the Princeton team discovered a flaw in the byte code Verifier that allowed this rule to be violated. Nothing stops an applet from declaring a new class that is a subclass of the ClassLoader superclass. It is up to the Security Manager to stop the actual construction from occurring. In this case, the Security Manager check is bypassed because of a bug. Read on for the gory details.<p>
+
+The rule against making class loaders is enforced by the object-oriented nature of Java. Every Java class extends its superclass. Each class can be thought of as being a specialized version of its superclass.<sup><a href="..\footnotes\footnote-five-3.html" onclick="window.open('../footnotes/footnote-five-3.html','footnote','toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=no,resizable=yes,copyhistory=no,width=400,height=150'); return false;">3</sup></a> Every class has one or more constructor functions, which properly initialize new objects. Java requires each constructor to call the constructor of its superclass, or another constructor of the same class, before it does anything else. For example, if you create a class called MyHashtable that extends the built-in class java.util.Hashtable, then you have to provide a constructor for MyHashtable. That constructor must call the constructor of java.util.Hashtable before it does anything else. The byte code 
+Verifier ensures that these rules are followed.<p>
+
+To prevent applets from making class loaders, the constructor for the class ClassLoader consults the Security Manager, which generates a Security Exception if the class loader being constructed would belong to an applet. This Security Exception can abort the creation of such an object. If an applet defines a new EvilClassLoader class to extend the basic ClassLoader, then the new constructor is required to call Java's basic ClassLoader constructor. Doing so generates a Security Exception that prevents the applet from creating an EvilClassLoader.<p>
+
+What the Princeton team discovered was a trick by which a constructor could avoid calling its superclass constructor, without being caught by the Verifier. This allowed them to create an EvilClassLoader whose constructor did not call the basic ClassLoader constructor, and thus was not subject to the normal Security Manager check. The EvilClassLoader could then create type confusion.<p>
+
+Having created type confusion, the attacker could then exploit it to achieve full system intrusion; that is, the attacker could do anything at all on the victim's machine.<p><br>
+
+
+<center><font size="+1"><b>The (Sort of) Fix</b></font></center><p>
+
+Sun Microsystems and Netscape had two options for fixing this problem. They could prevent the superclass-constructor-avoidance by fixing the Verifier, or they could find another way of forcing the basic ClassLoader constructor to be called. They chose to do the latter. They added an initialized data field to every class loader, and set the field to true only when the basic ClassLoader constructor was run. The basic ClassLoader would refuse to perform the crucial defineClass action unless the initialized field was true.<p>
+
+The implementation created a new private ClassLoader method called defineClass0. This does the real work of defineClass. Redefining defineClass to check the initialized flag and call defineClass0 only if the flag was true helps to block this particular security hole. The change does not prevent an attacker from making a class loader, but it does prevent an attacker from using the new class loader once it has been made.<p>
+
+The change took effect in Netscape Navigator 2.02. Unfortunately, future attacks managed to circumvent this fix.<p><br>
+
+
+<center><font size="+1"><b>The Reaction</b></font></center><p>
+
+This flaw received more press coverage than any of the others. It had more news interest than the DNS bug because it was more serious. Later bugs did not receive as much coverage because by the time they came to light, the novelty of bug discovery had worn off. That does not mean that the current and future security problems are not just as serious. Whether or not security problems are splashed on the front pages, they still need to be taken seriously.<p>
+
+Perhaps the press coverage partly reflected a backlash against the extremely positive hype surrounding most press stories about Java at the time. Java is great, but many of the exaggerated claims went much too far. There was even a story stating that if you wrote programs in Java you would never have to debug them because they would always be right the first time. To be fair, only a little of the hype came from Sun. Much of it came from freelance consultants, self-proclaimed experts, and trainers who had an interest in seeing their Java bandwagon become a juggernaut.<p>
+
+When the Applets Running Wild flaw was discovered, Sun Microsystems, Netscape, and the flaw's discoverers gained some valuable experience discussing these issues with each other and with the press. As a result, the parties did a better job of conveying simple and consistent information to the public. Hopefully, this will remain true when future security holes come to light.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-five-7.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-five-9.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br

@@ -1,0 +1,342 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Threads and Swing</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="draw.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="swingfeatures.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/uiHeader.gif" width=26 height=26 align=bottom border=0 alt="Creating a GUI with JFC/Swing | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Swing Features and Concepts</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Threads and Swing
+</h2>
+<p>
+<blockquote>
+
+If your program creates and refers to its GUI the right way,
+you might not need to worry about threads.
+For example, if your program is an applet,
+it's safe to construct its GUI
+in the <code>init</code> method.
+And if your program is an application 
+with the following common pattern,
+you're also safe:
+
+<blockquote>
+<pre>
+<a name="eg1">//Thread-safe example</a>
+public class MyApplication {
+    public static void main(String[] args) {
+	JFrame f = new JFrame(...);
+        <em>...//Add components to the frame here...</em>
+	f.pack();
+	f.setVisible(true);
+	//Don't do any more GUI work here.
+    }
+
+    ...
+    //All manipulation of the GUI -- setText, getText, etc. --
+    //is performed in event handlers such as actionPerformed().
+    ...
+}
+</pre>
+</blockquote>
+
+However, if your program
+creates threads to perform tasks
+that affect the GUI,
+or if it manipulates the already-visible GUI 
+in response to anything but a standard event,
+then read on!
+
+<p>
+
+<DL>
+  <dt><b><A HREF="#rule">The Single-Thread Rule</A></b>
+  <dd>
+  Swing components can be accessed by only one thread at a time,
+  generally, the event-dispatching thread.
+  <dt><b><A HREF="#exceptions">Exceptions to the Rule</A></b>
+  <dd>
+  A few operations are guaranteed to be thread safe.
+  <dt><b><A HREF="#invoke">How to Execute Code in the Event-Dispatching Thread</A></b>
+  <dd>
+  If you need access to the UI from outside event-handling or painting code,
+  you can use the <CODE>SwingUtilities</CODE> <CODE>invokeLater</CODE>
+  or <CODE>invokeAndWait</CODE> method.
+</DL>
+
+<p>
+
+<a name="rule">
+<H4>The Single-Thread Rule</H4>
+</a>
+<blockquote>
+
+<P>The single-thread rule is as follows:</P>
+
+<BLOCKQUOTE>
+<hr>
+  <STRONG>Rule</strong>: Once a Swing component has been realized,
+  all code that might affect or depend on the state of that component
+  should be executed in the event-dispatching thread. </STRONG>
+<hr>
+</BLOCKQUOTE>
+
+<P>This rule might sound scary, but for many simple programs, you don't
+have to worry about threads. Before we go into detail about how to write
+Swing code, let's define the term <EM>realized</EM>.
+
+<P><EM>Realized</EM> means that the component has never been painted
+on-screen, or that it is ready to be painted.
+A Swing component that's a top-level window
+is realized by having one of these methods invoked on it: <CODE>setVisible(true)</CODE>,
+<CODE>show</CODE>, or <CODE>pack</CODE>. Once
+a window is realized, all the components that it contains are realized. Another
+way to realize a component is to add it to a container that's already realized.
+You'll see examples of realizing components later.</P>
+
+<blockquote>
+<hr>
+<strong>Note:</strong>
+The <code>show</code> method does the same thing as
+<code>setVisible(true)</code>.
+<hr>
+</blockquote>
+
+
+</blockquote>
+<a name="exceptions">
+<H4>Exceptions to the Rule</H4>
+</a>
+<blockquote>
+There are a few exceptions to the rule that all code that might affect
+a realized Swing component must run in the event-dispatching thread.</P>
+
+<DL>
+  <dt><strong>A few methods are thread safe.</strong>
+  <dd>In the Swing API documentation,
+  thread-safe methods are marked with this text:
+
+<blockquote>
+This method is thread safe, although most Swing methods are not.
+Please see <A HREF="http://java.sun.com/products/jfc/tsc/swingdoc-archive/threads.html">Threads and Swing</A> for more information.
+</blockquote>
+
+  <dt><STRONG>An application's GUI can often be constructed and shown in
+  the main thread.</STRONG>
+  <dd>
+  As long as no components (Swing or otherwise)
+  have been realized in the current runtime environment, 
+  it's fine to construct and show a GUI 
+  in the main thread
+  of an application.
+  To help you see why, here's an analysis of the thread safety of the 
+  <a href="#eg1">thread-safe example</a>.
+  To refresh your memory, here are the important lines from the example:
+<blockquote>
+<pre>
+public static void main(String[] args) {
+    JFrame f = new JFrame(...);
+    <em>...//Add components to the frame here...</em>
+    f.pack();
+    f.setVisible(true);
+    //Don't do any more GUI work here.
+}
+</pre>
+</blockquote>
+
+
+<ol>
+  <li>The example constructs the GUI in the main thread.
+  In general, you can construct (but not show)
+  a GUI in any thread, 
+  as long as you don't make any calls
+  that refer to or affect already-realized components.
+  <li>
+  The components in the GUI are realized 
+  by the <CODE>pack</CODE> call.
+  <li>
+  Immediately afterward,
+  the components in the GUI are shown with the 
+  <code>setVisible</code>
+  (or <code>show</code>) call.
+  Technically, the <CODE>setVisible</CODE> call
+  is unsafe because the components have already been realized
+  by the <code>pack</code> call.
+  However, because the program
+  doesn't already have a visible GUI,
+  it's exceedingly unlikely that a paint request will occur
+  before <CODE>setVisible</CODE> returns.
+  <li>
+  The main thread executes no GUI code after
+  the <CODE>setVisible</CODE> call.
+  This means that all GUI work moves 
+  from the main thread to the event-dispatching thread,
+  and the example is, in practice,
+  thread safe.
+</ol>
+<p>
+<dt><STRONG>An applet's GUI can be constructed and shown in
+  the <code>init</code> method</STRONG>.
+<dd>
+  Existing browsers don't paint an applet until after
+  its <code>init</code> and <code>start</code> methods
+  have been called.
+  Thus, constructing the GUI
+  in the applet's <code>init</code> method is safe,
+  as long as you never call <code>show()</code> or
+  <code>setVisible(true)</code> on the actual applet object.
+<p>
+
+  <dt><STRONG>Two
+<a target="_top" href="http://java.sun.com/products/jfc/swingdoc-api/javax/swing/JComponent.html"><code>JComponent</code></a><a target="_top" href="http://java.sun.com/products/jfc/swingdoc-api/javax/swing/JComponent.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>  methods are safe to call
+  from any thread: 
+  <CODE>repaint</CODE> and
+  <CODE>revalidate</CODE>.</strong>
+  <dd>
+  These methods queue requests 
+  to be executed on the event-dispatching thread.
+
+  <p>
+  
+  <dt><STRONG>Listener lists can be modified from any thread. </STRONG>
+  <dd>It's
+  always safe to call the <CODE>add<EM>ListenerType</EM>Listener</CODE>
+  and <CODE>remove<EM>ListenerType</EM>Listener</CODE> methods. The add/remove
+  operations have no effect on an event dispatch that's under way.
+</DL>
+
+
+</blockquote>
+<A NAME="invoke">
+<H4>How to Execute Code in the Event-Dispatching Thread</H4>
+</a>
+<blockquote>
+Most post-initialization GUI work naturally occurs in the event-dispatching
+thread. Once the GUI is visible, most programs are driven by events such
+as button actions or mouse clicks, which are always handled in the event-dispatching
+thread.</P>
+
+<P>However, some programs need to perform non-event-driven GUI work after
+the GUI is visible. Here are two examples:</P>
+
+<DL>
+  <dt><STRONG>Programs that must perform a lengthy initialization operation
+  before they can be used</STRONG>
+  <dd>This kind of program should generally
+  show some GUI while the initialization is occurring,
+  and then update or change the GUI.
+  The initialization should <EM>not</EM> occur in the event-dispatching
+  thread;
+  otherwise, repainting and event dispatch would stop.
+  However, after initialization the GUI update/change
+  <EM>should</EM> occur in the event-dispatching thread,
+  for thread-safety reasons.
+  <p>
+  
+  <dt><STRONG>Programs whose GUI must be updated as the result of nonstandard
+  events</STRONG>
+  <dd>For example, suppose a server program can get requests
+  from other programs that might be running on different machines. These
+  requests can come at any time, and they result in one of the server's methods
+  being invoked in some possibly unknown thread. How can that method update
+  the GUI? By executing the GUI-update code in the event-dispatching thread.
+</dL>
+
+<P>The
+<a target="_top" href="http://java.sun.com/products/jfc/swingdoc-api/javax/swing/SwingUtilities.html"><CODE>SwingUtilities</CODE></a><a target="_top" href="http://java.sun.com/products/jfc/swingdoc-api/javax/swing/SwingUtilities.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a> class provides two methods to help you
+run code in the event-dispatching thread:</P>
+
+<DL>
+  <DT><STRONG><CODE>invokeLater</CODE></STRONG>
+  <DD>Requests that some code be executed in the event-dispatching thread. This
+  method returns immediately, without waiting for the code to execute. <BR>
+  <BR>
+  
+  <DT><STRONG><CODE>invokeAndWait</CODE></STRONG>
+  <DD>Acts like <CODE>invokeLater</CODE>,
+  except that this method waits for the code to execute. As a rule, you should
+  use <CODE>invokeLater</CODE> rather than this method.
+</DL>
+
+<p>
+
+For information on using <code>invokeLater</code> and
+<code>invokeAndWait</code>, and for other tips
+on writing multithreaded programs, see 
+<a target="_top" href="..\misc\threads.html">How to Use Threads</a><a target="_top" href="..\misc\threads.html"><img src="http://docs.rinet.ru/Jtuta/images/uiIcon.gif" width=20 height=20 border=0 alt="(in the Creating a User Interface trail)"></a>.
+
+
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="draw.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="swingfeatures.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/uiHeader.gif" width=26 height=26 align=top border=0 alt="Creating a GUI with JFC/Swing | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Swing Features and Concepts</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

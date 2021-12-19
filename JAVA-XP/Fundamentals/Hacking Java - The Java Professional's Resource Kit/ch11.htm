@@ -1,0 +1,1085 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 11 -- Sending E-Mail from an Applet</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;11</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Sending E-Mail from an Applet</FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#SendingEMail">
+Sending E-Mail</A>
+<LI><A HREF="#SendingEMailUsingtheSMTPProtocol">
+Sending E-Mail Using the SMTP Protocol</A>
+<LI><A HREF="#AccessingYourMailboxwiththePOPProtocol">
+Accessing Your Mailbox with the POP3 Protocol</A>
+</UL>
+
+<HR>
+<H2><A NAME="SendingEMail"><FONT SIZE=5 COLOR=#FF0000>
+Sending E-Mail</FONT></A></H2>
+<P>
+One of the problems you may encounter when designing an application
+is not being able to run server-side applications. Many Web providers
+have a limited set of features available for processing form data.
+If you can't post data to a Web server, you may still be able
+to receive data from a client applet by sending e-mail.
+<P>
+This solution is not useful if you need to create a form that
+provides instant feedback. It is useful for creating things like
+a guest book or an order form. 
+<P>
+The idea here is that instead of using an HTTP POST to send data
+to a server, you e-mail the information instead. This is far less
+desirable than the post mechanism because you have to write something
+that goes through your mailbox and extracts the information.
+<H2><A NAME="SendingEMailUsingtheSMTPProtocol"><FONT SIZE=5 COLOR=#FF0000>
+Sending E-Mail Using the SMTP Protocol</FONT></A></H2>
+<P>
+The simple mail transfer protocol (SMTP) is surprisingly simple
+for sending mail messages. A client delivers a mail message to
+a server by opening a socket connection (a TCP socket) to port
+25 on the server. Once the connection is made, the client sends
+a series of commands, delivers the message, then disconnects.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The SMTP protocol, like other Internet protocols, is defined in a document called an RFC (Request For Comment). The Internet RFCs are available from a number of sites, and many are in hypertext format. Beware that many of the RFCs are very dry and do not 
+make for good leisure reading. The SMTP protocol is defined in RFC 821.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+All commands and responses are terminated by CRLF (in Java, \r\n).
+For each command the client sends, the server responds with a
+text response that starts with a 3-digit return code. Return codes
+in the <TT>200-299</TT> range indicate
+a successful command. A return code in the <TT>300-399</TT>
+range indicates that the command was initially successful but
+that it needs more information to complete. Commands in the <TT>400-499</TT>
+and <TT>500-599</TT> range indicate
+errors. An error in the <TT>400-499</TT>
+range indicates that there was an error on the server (server
+down, file system full), while errors in the <TT>500-599</TT>
+range indicate an error on the client side (invalid password,
+unknown command). This pattern of error codes is used in many
+Internet protocols.
+<P>
+The format of the return codes is like that of the FTP protocol.
+If a return code is followed immediately by a '-', the response
+is multiline (the '-' character is a continuation character).
+The sequence of messages sent by the client to the server is:
+<OL>
+<LI>HELO&quot;-a simple greeting from the client to the server.
+This can also include the host name the client would like to be
+known by. For example: &quot;HELO mail-o-matic.com&quot;. Many
+servers ignore the alternative host name if it is not a valid
+name for your host.
+<LI>MAIL FROM: sender's address&quot;-identifies the user account
+that is sending this not have to be a valid account on the client
+machine. In other words, you could say that the mail was from
+an account halfway around the world.
+<LI>think this would be a neat way to fake messages from someone,
+remember that the mail header contains a detailed path of where
+a message came from, so fake . An example &quot;MAIL FROM&quot;
+line would be: &quot;MAIL FROM: wutka@netcom.com.&quot;
+<LI>RCPT TO: recipient address&quot;-identifies the address where
+this mail will be sent. Many mail servers do not need this address
+to be on the server itself. This allows you to bounce messages
+from one server to another.
+</OL>
+<P>
+Web server has a mail server but you want to receive mail from
+your applets at an account onanother host, you should be able
+to send mail to your alternative account. The format of the address
+is the same as in the &quot;MAIL FROM&quot; line: &quot;RCPT TO:
+wutka@netcom.com&quot;.
+<P>
+&quot;DATA&quot;-tells the mail server that the client is ready
+to start sending the body of the mail message. The server should
+respond with a code in the <TT>300-399</TT>
+range if this command is successful, indicating that it wants
+more input-namely, the mail message. 
+<P>
+After the <TT>DATA</TT> command, the
+client sends the mail message one line at a time. When it is finished
+sending the message, the client sends a &quot;.&quot; on a line
+by itself. If any other line in the message starts with a &quot;.&quot;,
+the client adds an extra &quot;.&quot; before the start of the
+line.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If you want to experiment with the SMTP protocol and see what the responses look like, you can pretend to be a mail server client by using a telnet program and telnetting to port 25 on some mail server. Just enter the SMTP commands manually and hit return 
+
+after each one.</BLOCKQUOTE>
+<BLOCKQUOTE>
+You should see a response. If you want to abort the message, just disconnect the telnet session sometime before you send the &quot;.&quot; to end a message.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Listing 11.1 shows a transcript from an SMTP session performed
+using the telnet command.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.1&nbsp;&nbsp;An SMTP Telnet Session<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+220-flamingo Sendmail 8.6.12/8.6.9 ready at Sun, 22 Sep 1996 21:26:28 -0400
+220 ESMTP spoken here
+HELO
+250 flamingo Hello contessa [192.0.0.1], pleased to meet you
+MAIL FROM: elvis
+250 elvis... Sender ok
+RCPT TO: mark
+250 mark... Recipient ok
+DATA
+354 Enter mail, end with &quot;.&quot; on a line by itself
+Subject: Well hey there
+ 
+Uh huh huh. Thank yuh. Thank yuh very much.
+   The King
+.250 VAA07236 Message accepted for delivery
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 11.2 shows a class that implements a session with an SMTP
+server. The <TT>sendMessage</TT> method
+actually sends the message. It automatically closes down the con-nection
+if the message is sent correctly, but you need to close it down
+manually if you get an exception.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.2&nbsp;&nbsp;Source Code for SMTPSession.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+public class SMTPSession extends Object
+{
+     public String host;     // Host name we connect to
+     public int port;     // port number we connect to, default=25
+
+     public String recipient;
+     public String sender;
+     public String[] message;
+
+     protected Socket sessionSock;
+
+     protected DataInputStream inStream;
+     protected DataOutputStream outStream;
+
+     public SMTPSession()
+     {
+     }
+
+     public SMTPSession(String host, String recipient,
+          String sender, String[] message)
+     throws IOException
+     {
+          this.host = host;
+          this.port = 25;     // default SMTP port is 25
+
+          this.recipient = recipient;
+          this.message = message;
+          this.sender = sender;
+     }
+
+     public SMTPSession(String host, int port, String recipient,
+          String sender, String[] message)
+     throws IOException
+     {
+          this.host = host;
+          this.port = port;
+          if (this.port &lt;= 0) this.port = 25;
+
+          this.recipient = recipient;
+          this.message = message;
+          this.sender = sender;
+     }
+
+// Close down the session
+
+     public void close()
+     throws IOException
+     {
+          sessionSock.close();
+          sessionSock = null;
+     }
+
+// Connect to the server
+
+     protected void connect()
+     throws IOException
+     {
+          sessionSock = new Socket(host, port);
+          inStream = new DataInputStream(
+               sessionSock.getInputStream());
+          outStream = new DataOutputStream(
+               sessionSock.getOutputStream());
+
+     }
+
+// Send a command and wait for a response
+
+     protected String doCommand(String commandString)
+     throws IOException
+     {
+          outStream.writeBytes(commandString+&quot;\n&quot;);
+          String response = getResponse();
+          return response;
+     }
+
+// Get a response back from the server. Handles multi-line responses
+// and returns them as part of the string.
+
+     protected String getResponse()
+     throws IOException
+     {
+          String response = &quot;&quot;;
+
+          for (;;) {
+               String line = inStream.readLine();
+
+               if (line == null) {
+                    throw new IOException(
+                         &quot;Bad response from server.&quot;);
+               }
+
+// FTP response lines should at the very least have a 3-digit number
+
+               if (line.length() &lt; 3) {
+                    throw new IOException(
+                         &quot;Bad response from server.&quot;);
+               }
+               response += line + &quot;\n&quot;;
+
+// If there isn't a '-' immediately after the number, we've gotten the
+// complete response. ('-' is the continuation character for FTP responses)
+
+               if ((line.length() == 3) ||
+                    (line.charAt(3) != '-')) return response;
+          }
+     }
+
+
+// Sends a message using the SMTP protocol
+
+     public void sendMessage()
+     throws IOException
+     {
+          connect();
+
+// After connecting, the SMTP server will send a response string. Make
+// sure it starts with a '2' (reponses in the 200's are positive
+// responses.
+
+          String response = getResponse();
+          if (response.charAt(0) != '2') {
+               throw new IOException(response);
+          }
+
+// Introduce ourselves to the SMTP server with a polite &quot;HELO&quot;
+          response = doCommand(&quot;HELO&quot;);
+
+          if (response.charAt(0) != '2') {
+               throw new IOException(response);
+          }
+
+// Tell the server who this message is from
+
+          response = doCommand(&quot;MAIL FROM: &quot; + sender);
+
+          if (response.charAt(0) != '2') {
+               throw new IOException(response);
+          }
+
+
+// Now tell the server who we want to send a message to
+
+          response = doCommand(&quot;RCPT TO: &quot; + recipient);
+
+          if (response.charAt(0) != '2') {
+               throw new IOException(response);
+          }
+
+// Okay, now send the mail message
+
+          response = doCommand(&quot;DATA&quot;);
+
+// We expect a response beginning with '3' indicating that the server
+// is ready for data.
+
+          if (response.charAt(0) != '3') {
+               throw new IOException(response);
+          }
+
+// Send each line of the message
+
+          for (int i=0; i &lt; message.length; i++) {
+
+// Check for a blank line
+               if (message[i].length() == 0) {
+                    outStream.writeBytes(&quot;\n&quot;);
+                    continue;
+               }
+
+// If the line begins with a &quot;.&quot;, put an extra &quot;.&quot; in front of it.
+
+               if (message[i].charAt(0) == '.') {
+                    outStream.writeBytes(&quot;.&quot;+message[i]+&quot;\n&quot;);
+               } else {
+                    outStream.writeBytes(message[i]+&quot;\n&quot;);
+               }
+          }
+
+// A &quot;.&quot; on a line by itself ends a message.
+
+          response = doCommand(&quot;.&quot;);
+
+          if (response.charAt(0) != '2') {
+               throw new IOException(response);
+          }
+
+          close();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 11.3 shows a sample guest book applet that e-mails its
+information to a server. As you can see, the bulk of the applet
+just deals with setting up the screen components. The portion
+that sends e-mail is fairly small. Notice that the <TT>GuestBookApplet</TT>
+class uses a grid bag layout to arrange the input fields. When
+you are creating a simple form with labeled fields, this form
+of the grid bag works very well. The form is essentially a set
+of right-justified labels and left-justified input fields. You
+use the <TT>GridBagConstraints.EAST</TT>
+anchor value to right-justify a component, and the <TT>GridBagConstraings.WEST</TT>
+anchor to left-justify a component. Since the left-justified components
+(the input fields, in this case) are the last components in their
+respective rows, they will all line up with each other. If you
+were to do this form as a series of nested panels, you wouldn't
+be able to guarantee that the input fields would line up.
+<P>
+If you want to set up a completely automated guest book registration,
+you will also need to write a program to read the guest book e-mail
+messages and store them somewhere. You could write such a program
+using the POP3 protocol, which is discussed in the <BR>
+next section. The program could scan through your mail messages
+looking for those messages with a subject heading that matches
+the guest book heading (in the case of the <TT>GuestBookApplet</TT>
+program, it's &quot;GUESTBOOK REGISTRATION&quot;). 
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.3&nbsp;&nbsp;Source Code for GuestBookApplet.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+
+// This applet demonsrates the use of the SMTPSession class to
+// send e-mail information from an applet. It implements a simple
+// guest book that reads a name and e-mail address.
+
+public class GuestBookApplet extends Applet
+{
+     protected TextField nameField;
+     protected TextField emailField;
+     protected Button submitButton;
+
+     public void init()
+     {
+
+// in order to lay the applet out where there are labels to the
+// left of the text fields in a reasonable format, we use the
+// GridBagLayout layout manager.
+
+          GridBagLayout layout = new GridBagLayout();
+          GridBagConstraints c = new GridBagConstraints();
+
+          setLayout(layout);
+
+          c.weightx = 1.0;
+          c.weighty = 1.0;
+
+// Set up a label that is right-justified (anchored EAST) and
+// is the second to the last element in a row (RELATIVE)
+
+          Label nameLabel = new Label(&quot;Name:&quot;);
+          c.anchor = GridBagConstraints.EAST;
+          c.gridwidth = GridBagConstraints.RELATIVE;
+          layout.setConstraints(nameLabel, c);
+          add(nameLabel);
+
+// Set up a left-justified text field that is the last element on the row
+          nameField = new TextField(30);
+          c.anchor = GridBagConstraints.WEST;
+          c.gridwidth = GridBagConstraints.REMAINDER;
+          layout.setConstraints(nameField, c);
+          add(nameField);
+
+// Again, right-justifies label, second-to last in row
+          Label emailLabel = new Label(&quot;E-Mail address:&quot;);
+          c.anchor = GridBagConstraints.EAST;
+          c.gridwidth = GridBagConstraints.RELATIVE;
+          layout.setConstraints(emailLabel, c);
+          add(emailLabel);
+
+// Text field, left justified, last in row
+          emailField = new TextField(30);
+          c.anchor = GridBagConstraints.WEST;
+          c.gridwidth = GridBagConstraints.REMAINDER;
+          layout.setConstraints(emailField, c);
+          add(emailField);
+
+// Now create a centered Submit button that is the only thing in its row
+          submitButton = new Button(&quot;Submit&quot;);
+          c.anchor = GridBagConstraints.CENTER;
+          c.gridwidth = GridBagConstraints.REMAINDER;
+          layout.setConstraints(submitButton, c);
+          add(submitButton);
+          
+     }
+
+     public boolean action(Event evt, Object whichAction)
+     {
+
+// If someone hits the button, send the registration e-mail
+          if (evt.target == submitButton) {
+               sendRegistration();
+               return true;
+          }
+          return false;
+     }
+
+     protected void sendRegistration()
+     {
+          String[] emailMessage = new String[3];
+
+// emailMessage contains the text of the message. You have to
+// generate your own subject line in SMTP. Use the name and
+// the email address as the only two lines in the message body.
+
+          emailMessage[0] = &quot;Subject: GUESTBOOK REGISTRATION&quot;;
+          emailMessage[1] = nameField.getText();
+          emailMessage[2] = emailField.getText();
+
+          try {
+
+// We use dummy e-mail names here, the first one is the name of
+// the recpient, the second is the name of the sender. Fill in
+// your specific addresses for this applet.
+
+               SMTPSession mailSession = new SMTPSession(
+                    getDocumentBase().getHost(),
+                    &quot;recipient@somewhere.xxx&quot;,
+                    &quot;sender@.someplace.yyy&quot;,
+                    emailMessage);
+
+// Send the mail message
+               mailSession.sendMessage();
+
+// This applet SHOULD display some sort of positive response to
+// say that the entry has been submitted, but it doesn't.
+
+          } catch (Exception e) {
+
+// This is a REALLY bogus way to flag an error. You should pop up a
+// dialog box or something.
+
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 11.1 shows the guest book in action.
+<P>
+<A HREF="f11-1.gif"><B>Figure 11.1 : </B><I>A guest book applet can register guests
+by sending e-mail</I>.</A>
+<H2><A NAME="AccessingYourMailboxwiththePOPProtocol"><FONT SIZE=5 COLOR=#FF0000>
+Accessing Your Mailbox with the POP3 Protocol</FONT></A></H2>
+<P>
+The Post Office Protocol version 3 (POP3) allows you to access
+your mailbox remotely. If you subscribe to an Internet provider
+and your e-mail is stored on a server, you can read the mail using
+POP3 without having to copy your entire mailbox down to your local
+machine. POP3 is defined in RFC 1725.
+<P>
+Unlike some of the other Internet protocols, the POP3 protocol
+does not use numeric responses. Instead, its responses start with
+a plus for a successful command or a minus in the case of an error.
+Also, there are only a few specific circumstances when POP3 returns
+multiline responses.
+<P>
+These are in the form of multiple lines terminated by a line containing
+only a period (exactly the same form that is used by the SMTP
+<TT>DATA</TT> command). When you connect
+to a POP3 server, usually at port 110, you send a <TT>USER</TT>
+command with the user name of the mailbox you are reading, followed
+by a <TT>PASS</TT> command containing
+the user's password.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Some mail servers store mail in a different place when you use POP3 to read your mail. If you read your mail using the POP3 protocol, and then you go back to using your normal mail reader, you may suddenly find that your mailbox is completely empty. Don't 
+
+panic. Your mail has probably been copied to another file. For example, if you have a Netcom shell account, your mail is normally stored in .mailbox/inbox. If you read your mail with POP3, however, your mail is moved to .mailbox/inbox.pop.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Once you have logged on to the POP3 server, you can do the following:
+<UL>
+<LI>Retrieve a message count using the <TT>STAT</TT>
+command.
+<LI>Get a list of active message numbers with the <TT>LIST</TT>
+command.
+<LI>Examine the beginning of a message with the <TT>TOP</TT>
+command (this command is optional according to the standard but
+should be available on most servers).
+<LI>Read an entire message with the <TT>RETR</TT>
+command.
+<LI>Delete a message with the <TT>DELE</TT>
+command.
+</UL>
+<P>
+Listing 11.4 shows a POP3 session performed using telnet. It reads
+the message sent by the telnet session in Listing 11.1.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.4&nbsp;&nbsp;Telnet Log of POP3 Session<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
++OK flamingo POP3 Server (Version 1.004) ready.
+USER mark
++OK please send PASS command
+PASS Shhh!!!!
++OK 1 messages ready for mark in /usr/spool/mail/mark
+LIST
++OK 1 messages; msg# and size (in octets) for undeleted messages:
+1 461
+.
+RETR 1
++OK message 1 (461 octets):
+X-POP3-Rcpt: mark@flamingo
+Return-Path: elvis
+Received: from  (contessa [192.0.0.1]) by flamingo (8.6.12/8.6.9)
+ with SMTP id VAA07236 for mark; Sun, 22 Sep 1996 21:26:34 -0400
+Date: Sun, 22 Sep 1996 21:26:34 -0400
+From: elvis@contessa
+Message-Id: &lt;199609230126.VAA07236@flamingo&gt;
+Subject: Well hey there
+Apparently-To: mark@flamingo
+ 
+Uh huh huh. Thank yuh. Thank yuh very much.
+   The King
+ 
+.
+DELE 1
++OK message 1 marked for deletion
+LIST
++OK 1 messages; msg# and size (in octets) for undeleted messages:
+.
+QUIT
++OK flamingo POP3 Server (Version 1.004) shutdown.
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+As you can see, the POP3 protocol has all the ingredients that
+enable you to make a nicee-mail reader. All you need is a Java
+class to do the POP3 protocol. Listing 11.3 shows an excerpt from
+the <TT>POP3Session</TT> class, which
+uses all of the POP3 commands mentioned above (there are a few
+more optional ones that haven't been covered). The complete source
+to the <TT>POP3Session</TT> class
+is available on the CD that comes with this book. The only part
+that has been omitted is the section that sets up the host name,
+port number, user name, and password for the session. The first
+part of the <TT>POP3Session</TT> class
+implements the normal <TT>POP3</TT>
+commands. Each POP3<TT> </TT>command
+is implemented by a separate method. The actual sending and receiving
+of commands is handled by a small set of methods that understand
+the format of the methods.
+<P>
+As you will see, most of the methods that implement the POP3 commands
+are very similar. They all send a command and retrieve a response.
+Some of them return a string response, some of them return no
+response, and some of them return an array of strings for commands
+that give a multiline response. Listing 11.5 gives the source
+code for the <TT>POP3Session</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.5&nbsp;&nbsp;Source Code for POP3Session.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+// This class implements a POP3 (Post Office Protocol 3) session
+// with a mail server. It allows you to create remote mail readers.
+// You create a POP3 session by providing a host name and a username/password
+// combination for the user whose mailbox you are reading. 
+// After creating an instance of this class, you must call the connect
+// method to actually connect to the server. You must always close the
+// connection manually with the close method.
+
+public class POP3Session extends Object
+{
+     protected Socket pop3Sock;
+     protected DataInputStream inStream;
+     protected DataOutputStream outStream;
+
+// The host name and port we connect to. Default POP3 port is 110
+     public String host;
+     public int port;
+
+// The user name and password of the mailbox we want
+     public String userName;
+     public String password;
+
+     public POP3Session()
+     {
+     }
+
+     public POP3Session(String host, String userName, String password)
+     {
+          this.host = host;
+          this.port = 110;
+          this.userName = userName;
+          this.password = password;
+     }
+     
+     public POP3Session(String host, int port, String userName,
+          String password)
+     {
+          this.host = host;
+          this.port = port;
+          this.userName = userName;
+          this.password = password;
+     }
+     
+// POP3 positive responses start with a '+', negative responses start with '-'
+// isErrorResponse returns true if a response does not start with a '+'
+
+     protected boolean isErrorResponse(String str)
+     {
+          return str.charAt(0) != '+';
+     }
+
+// fetches the current number of messages using the POP3 STAT commant
+
+     public int getMessageCount()
+     throws IOException
+     {
+
+// Send the command
+          String response = doCommand(&quot;STAT&quot;);
+
+// Check for error
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+
+// The format of the response is +OK # other text, we are interested in the
+// number after the OK, but we need to stop parsing before the other text.
+// We take the substring from offset 4 (the start of the number) and go
+// up to the first space, then convert that string to a number.
+
+          try {
+               int count = Integer.valueOf(response.substring(4,
+                    response.indexOf(' ', 4))).
+                    intValue();
+               return count;
+          } catch (Exception e) {
+               throw new IOException(&quot;Invalid response - &quot;+response);
+          }
+     }
+
+// Get headers returns a list of message numbers along with some sizing
+// information, and possibly other information depending on the server.
+
+     public String[] getHeaders()
+     throws IOException
+     {
+          String response = doCommand(&quot;LIST&quot;);
+
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+
+          return getData();
+     }
+
+// Get header returns the message number and message size for
+// a particular message number. It may also contain other information
+
+     public String getHeader(int messageNumber)
+     throws IOException
+     {
+          String response = doCommand(&quot;LIST &quot;+messageNumber);
+
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+
+          return response;
+     }
+
+// Retrieves the entire text of a message using the POP3 RETR command
+
+     public String[] getMessage(int messageNumber)
+     throws IOException
+     {
+          String response = doCommand(&quot;RETR &quot;+messageNumber);
+
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+
+          return getData();
+     }
+
+// Retrieves the first &lt;linecount&gt; lines of a message using the POP3 TOP
+// command. Note: this command may not be available on all servers. If
+// it isn't available, you'll get an exception.
+
+     public String[] getMessageHead(int messageNumber, int lineCount)
+     throws IOException
+     {
+          String response = doCommand(&quot;TOP &quot;+messageNumber+&quot; &quot;+
+               lineCount);
+
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+
+          return getData();
+     }
+
+// deletes a particular message
+
+     public void deleteMessage(int messageNumber)
+     throws IOException
+     {
+          String response = doCommand(&quot;DELE &quot;+messageNumber);
+
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+     }
+     
+// Undoes any pending deletions
+
+     public void reset()
+     throws IOException
+     {
+          String response = doCommand(&quot;RSET&quot;);
+
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+     }
+     
+// Initiates a graceful exit
+
+     public void quit()
+     throws IOException
+     {
+          String response = doCommand(&quot;QUIT&quot;);
+
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+     }
+     
+// Connects to the POP2 server and logs on with the USER and PASS commands
+
+     public void connect()
+     throws IOException
+     {
+
+// Make the connection
+          pop3Sock = new Socket(host, port);
+          inStream = new DataInputStream(pop3Sock.getInputStream());
+          outStream = new DataOutputStream(pop3Sock.getOutputStream());
+
+// Send a logon (USER) command
+          String response = doCommand(&quot;USER &quot;+userName);
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+
+// Send a PASS command
+          response = doCommand(&quot;PASS &quot;+password);
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Notice that there is a lot of repetition in the methods that perform
+the different POP3 commands. These methods all use the <TT>doCommand</TT>
+method to send a command and then use <TT>isErrorResponse</TT>
+to see if the command resulted in an error. You could combine
+these steps into a single method. In addition, the POP3 commands
+either return a string, an array of strings, an integer, or no
+value. You could create command methods that execute POP3 commands
+and return each of these result types. In general, you do this
+kind of grouping if you have a large number of each command type.
+If you only have one or two, it may not be worth the effort, unless
+you think that there may be more in the future.
+<P>
+The rest of the <TT>POP3Session</TT>
+class deals with establishing a connection and the sending and
+receiving of data. For most Internet protocols, you use the same
+format, or a small group of formats for all commands. You take
+advantage of this fact by writing methods that send commands in
+the format that the protocol expects.
+<P>
+In the case of the POP3 protocol, every command returns a one-line
+response. The <TT>doCommand</TT> method
+sends a command string and waits for the response line. You can
+determine whether a response line is an error response by using
+the <TT>isErrorResponse</TT> method.
+<P>
+Several POP3 commands also return multiple lines after the initial
+response. When you receive a '.' by itself on a line, you have
+reached the end of the response. Since a mail message might contain
+a '.' on a line by itself, POP3 specifies that any line beginning
+with a '.' will have an extra '.' at the beginning. The POP3 method
+handles these multi-line responses and returns an array of strings
+containing the lines in the response as shown in Listing 11.5.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.5&nbsp;&nbsp;Source Code for POP3Session.java <BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// Connects to the POP2 server and logs on with the USER and PASS commands
+
+     public void connect()
+     throws IOException
+     {
+
+// Make the connection
+          pop3Sock = new Socket(host, port);
+          inStream = new DataInputStream(pop3Sock.getInputStream());
+          outStream = new DataOutputStream(pop3Sock.getOutputStream());
+
+// Send a logon (USER) command
+          String response = doCommand(&quot;USER &quot;+userName);
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+
+// Send a PASS command
+          response = doCommand(&quot;PASS &quot;+password);
+          if (isErrorResponse(response)) {
+               throw new IOException(response);
+          }
+     }
+// Shuts down the connection immediately. You should call this if you
+// get an exception.
+
+     public void close()
+     throws IOException
+     {
+          pop3Sock.close();
+          pop3Sock = null;
+     }
+          
+// Sends a POP3 command and retrieves the response
+     protected String doCommand(String command)
+     throws IOException
+     {
+          outStream.writeBytes(command+&quot;\n&quot;);
+          String response = inStream.readLine();
+          return response;
+     }
+
+// Retrieves a multi-line POP3 response. If a line contains &quot;.&quot; by itself,
+// it is the end of the response. If a line starts with a &quot;.&quot;, it should
+// really have two &quot;.&quot;'s We strip off the leading &quot;.&quot;
+
+     protected String[] getData()
+     throws IOException
+     {
+
+// Don't know how many lines we're getting, so put them in a vector first
+          Vector lines = new Vector();
+
+          String line;
+
+// Read lines from the server
+          while ((line = inStream.readLine()) != null) {
+
+// If we get a &quot;.&quot; on a line by itself, that's the end of the multi-line
+// response. Create a string array and copy the lines of the response
+// into it.
+               if (line.equals(&quot;.&quot;)) {
+
+// Create the array to return
+                    String response[] = new String[
+                         lines.size()];
+
+// Copy the strings from the vector into the array
+                    lines.copyInto(response);
+                    return response;
+               }
+
+// If a line starts with a &quot;.&quot;, strip it off.
+
+               if ((line.length() &gt; 0) &amp;&amp; (line.charAt(0) == '.')) {
+                    line = line.substring(1);
+               }
+               lines.addElement(line);
+          }
+          throw new IOException(&quot;Connection closed.&quot;);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Remember that applets are usually restricted to making socket connections only to the host they were loaded from. This means that your applet must be loaded from the POP3 server for you to use the <TT>POP3Session</TT> class in an applet. This is not 
+unreasonable, however, since many Web servers also run the POP3 service for local e-mail accounts.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Listing 11.6 shows a very simple application that tests the features
+of the <TT>POP3Session</TT> class.
+Remember to replace <TT>YourPOP3Server</TT>,
+<TT>YourUserName</TT>, and <TT>YourPassword</TT>
+with your own values.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.6&nbsp;&nbsp;Source Code for TestPOP3.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public class TestPOP3 extends Object
+{
+     public static void main(String[] args)
+     {
+          try {
+               POP3Session pop3 = new POP3Session(&quot;YourPOP3Host&quot;,
+                    &quot;YourUserName&quot;, &quot;YourPassword&quot;);
+// Connect to the server
+               pop3.connect();
+     
+// Get a message count
+               System.out.println(&quot;There are &quot;+pop3.getMessageCount()+
+               &quot; messages.&quot;);
+
+// Get a list of messages (the results look pretty boring)
+               String[] headers = pop3.getHeaders();
+
+               System.out.println(&quot;Message headers:&quot;);
+
+               for (int i=0; i &lt; headers.length; i++) {
+                    System.out.println(headers[i]);
+               }
+
+// Try fetching message #1, hopefully there will be one
+
+               String[] message = pop3.getMessage(1);
+               System.out.println(&quot;Message #1&quot;);
+
+               for (int i=0; i &lt; message.length; i++) {
+                    System.out.println(message[i]);
+               }
+
+// Try fetching message #99. Unless your mailbox is really full, there won't
+// be one. We are expecting that and we try to cetch the exception.
+
+               try {
+                    String header = pop3.getHeader(99);
+               } catch (Exception e) {
+                    System.out.println(&quot;Got error getting message #99, good!&quot;);
+               }
+
+// Tell the server we're through
+               pop3.quit();
+
+// Close down the socket
+               pop3.close();
+          } catch (Exception e) {
+
+// If we get any error at all, just print a stack trace
+
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+
+<CENTER><P><A HREF="ch10.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch12.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

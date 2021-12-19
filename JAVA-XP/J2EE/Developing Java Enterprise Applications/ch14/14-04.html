@@ -1,0 +1,190 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Network File-Locking Server</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="14-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="14-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H4 ALIGN="LEFT"><A NAME="Heading9"></A><FONT COLOR="#000077">The LockServer</FONT></H4>
+<P>The lock server provides one method for locking and another for unlocking. Both of these rely on the Boolean instance variable called locked, and both are synchronized. Clients that want to affect a lock file must first lock the network lock server. This is a bit more heavy handed than the shared scheme in which client&#146;s using different files had little interaction. Here, a client locking one file may have to wait for a client locking another file to unlock the server. However, this does ensure that no two clients are touching lock files at the same time or in a corrupt manner.
+</P>
+<P>The code for lock and unlock is very similar to the methods with the same name in the SharedFileLock object, because they perform the same function. The same wait-notifyAll technique is used to reduce CPU usage for threads waiting on the lock. Here is the code for the lock method, implemented as part of the global lock server:</P>
+<PRE>
+    public synchronized void lock()
+     {
+        <B>while(locked)
+        {
+            </B>try
+            {<B>
+                wait();
+</B>            }
+            catch(Exception exp)
+            {
+            }
+<B>        }
+</B>        
+<B>        locked = true;
+</B>    }
+    
+    public synchronized void unlock()
+    {
+<B>        locked = false;
+        notifyAll();</B>
+    }
+</PRE>
+<P>The process of locking the server and creating lock files is encapsulated into the class GlobalFileLock.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading10"></A><FONT COLOR="#000077">GlobalFileLock</FONT></H4>
+<P>GlobalFileLock is not a remote class. It is a local class that accesses the NetworkLockServer via RMI. This is a different technique in that RMI is encapsulated behind a library class rather than providing library objects via RMI.
+</P>
+<P>The GlobalFileLock class that follows extends Object and implements the FileLock interface. Instance variables store File objects representing the file to lock and the lock file. A static hash table is used to provide unique global locks within a program, thus reducing memory usage, and the NetworkLockServer&#146;s remote stub.</P>
+<PRE>
+import java.io.*;
+ import java.util.*;
+import java.rmi.*;
+
+public class GlobalFileLock
+ implements FileLock
+{
+    private File file;
+    private File lockFile;
+    
+    private static NetworkLockServer server;
+    private static Hashtable locks = new Hashtable();
+</PRE>
+<P>The GlobalFileLock class provides the setLockServer method to clients so that they can specify to the server host that the lock server is on. Remember that the lock server is used to ensure that lock files are not corrupted, so all of the programs that share a particular file should use the same lock server. All servers use the same name to register.
+</P>
+<PRE>
+    public synchronized static void setLockServer(String host)
+     {
+        String lookup;
+        SecurityManager mng = new RMISecurityManager();
+        
+        try
+        {
+<B>            System.setSecurityManager(mng);
+</B>        
+<B>            lookup = &#147;rmi://&#148;+host+&#147;/&#148;+NetworkLockServer.NLS_NAME;
+        
+            server = (NetworkLockServer) Naming.lookup(lookup);
+</B>        }
+        catch(Exception exp)
+        {
+            server = null;
+        }
+    }
+</PRE>
+<P>For convenience, the SecurityManager is set when the connection is made to the server. You may want to change this setting if you are setting the SecurityManager somewhere else in the program. The getLockServer method is used to get the lock server object stub from the class. This method creates an object for the local host if the server has not already been provided.
+</P>
+<PRE>
+    protected static NetworkLockServer getLockServer()
+     {
+<B>        if(server == null) setLockServer(&#147;localhost&#148;);
+</B>        return server;
+    }
+</PRE>
+<P>To improve performance and reduce memory usage, a unique lock is provided for each path. The getLockFor method that follows implements this behavior. These locks are available only for a single program, so the absolute paths are unique. The unique locks are not shared with clients on other machines that may use different paths. However, they do afford us the ability to rely on synchronization of the lock object as well as locking the server.
+</P>
+<PRE>
+    public synchronized static GlobalFileLock 
+      getLockFor(String path)
+    {
+        GlobalFileLock retVal = null;
+        File tmp = new File(path);
+        String absPath = tmp.getAbsolutePath();
+        
+        try
+        {
+            retVal = (GlobalFileLock) locks.get(absPath);
+        
+            if(retVal == null)
+            {
+                retVal = new GlobalFileLock(tmp);
+                locks.put(absPath,retVal);
+            }
+        }
+        catch(Exception exp)
+        {
+            retVal = null;
+        }
+        
+        return retVal;
+    }
+</PRE>
+<P>Again, to make sure that clients don&#146;t create their own GlobalFileLocks, the constructor is marked protected. This constructor is basically identical to the SharedFileLock&#146;s constructor, as you can see in the GlobalFileLock constructor that follows.
+</P>
+<PRE>
+    protected GlobalFileLock(File f) 
+     throws RemoteException
+    {
+        String parent,name;
+        String lckPath;
+        
+        file = f;
+        
+        parent = file.getParent();
+        name = file.getName();
+        
+        lckPath = parent+File.separator+<B>&#147;.</B><B>&#148;</B>+name+<B>&#147;.</B>lck<B>&#148;</B>;
+        
+        lockFile = new File(lckPath);
+    }
+</PRE>
+<P>Like the shared lock, the lockFile&#146;s existence is used to check whether the file is locked.
+</P>
+<PRE>
+    public synchronized boolean isLocked()
+     {
+        return lockFile.exists();
+    }
+</PRE>
+<P>Requests to lock a file result in a call to the lock method. This method will check for a lock server; if one does not exist, then an exception is thrown.
+</P>
+<PRE>
+    //Waits to acquire a lock.
+     public synchronized void lock()
+        throws FileLockingException
+    {
+<B>        NetworkLockServer serv = getLockServer();
+</B>        
+<B>        if(serv == null)
+            throw new FileLockingException(&#147;No Server Available&#148;);</B>
+            
+        // reallyLock, defined later, verifies lock has been placed.
+        if(!reallyLock(serv))
+        {
+            throw new FileLockingException(<B>&#147;</B>Lock Unavailable<B>&#148;</B>);
+        }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="14-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="14-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

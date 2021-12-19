@@ -1,0 +1,358 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Because the container is managing the persistence, the fields in this bean are marked as public to give the container access to them.
+</P>
+<PRE>
+package containercart;
+
+import javax.ejb.*;
+import java.io.Serializable;
+import java.util.*;
+
+import containercart.*;
+
+public class ShoppingCartBean implements EntityBean
+{
+    transient protected EntityContext context;
+    transient boolean isModified;
+    public Vector items;
+    public String cartName;
+
+    public void ejbActivate()
+    {
+    }
+
+    public void ejbRemove()
+    {
+    }
+
+    public void ejbPassivate()
+    {
+    }
+
+    public void ejbLoad()
+    {
+        //container managed
+    }
+
+    public void ejbStore()
+    {
+        //container managed
+    }
+    public void setEntityContext(EntityContext ctx)
+    {
+        context = ctx;
+    }
+
+    public void unsetEntityContext()
+    {
+        context = null;
+    }
+    <B>public CartPK ejbCreate(String nm)
+    {
+         CartPK pk = new CartPK();
+         pk.cartName = nm;
+
+         cartName = nm;
+         return pk;
+    }</B>
+
+    public void ejbPostCreate(String nm)
+    {
+    }
+
+    <B>public boolean isModified()</B>
+    {
+        return isModified;
+    }
+
+    <B>public void addItem(String item)</B>
+    {
+        if(items == null)
+            items = new Vector();
+
+        isModified = true;
+        items.addElement(item);
+    }
+
+    <B>public Object[] getItems()</B>
+    {
+        if(items == null)
+            items = new Vector();
+
+        Object[] retVal = new Object[items.size()];
+        items.copyInto(retVal);
+
+        return retVal;
+    }
+}
+</PRE>
+<P>Next, let&#146;s look at the same bean, but with bean-managed persistence.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading26"></A><FONT COLOR="#000077">Example of Bean-Managed Persistence</FONT></H4>
+<P>The shopping cart bean is implemented using bean-managed persistence by serializing the list of items to a file named after the cart. This makes the find process as simple as looking for a file with the specified name. If the file is not found, a FindException is thrown. Loading the bean requires reading the items list from file, and saving is accomplished by writing it to file. Because everything is file based, the response to a remove request is to remove the file.
+</P>
+<PRE>
+package beancart;
+
+import javax.ejb.*;
+import java.io.*;
+import java.util.*;
+import java.rmi.*;
+
+import beancart.*;
+
+public class <B>ShoppingCartBean</B> implements <B>EntityBean</B>
+{
+    transient protected EntityContext context;
+    transient boolean isModified;
+    public Vector items;
+    public String cartName;
+
+    public void ejbActivate()
+    {
+    }
+</PRE>
+<P>The remove method checks whether the given cart name is associated with a file and, if so, the file is removed.
+</P>
+<PRE>
+    <B>public void ejbRemove() throws RemoteException</B>
+    {
+     try
+     {
+         File file = fileForCartName(cartName);
+
+         if((file != null)&amp&amp(cartName != null))
+         {
+             if(file.exists())
+             {
+                    <B>file.delete();</B>
+             }
+         }
+     }
+     catch(Exception exp)
+     {
+         items = null;
+         throw new RemoteException(&#147;File doesn&#146;t exist.&#148;);
+     }
+    }
+    public void ejbPassivate()
+    {
+    }
+</PRE>
+<P>The bean is loaded by finding the appropriate file and, if it exists, reading the items Vector from the file. If the file is not available, a new Vector is created.
+</P>
+<PRE>
+    <B>public void ejbLoad() throws RemoteException</B>
+    {
+        try
+        {
+            File file = fileForCartName(cartName);
+
+            if((file != null)&amp&amp(cartName != null))
+            {
+                if(file.exists())
+                {
+                   FileInputStream fileIn;
+                   ObjectInputStream objIn;
+
+                   fileIn = new FileInputStream(file);
+                   objIn = new ObjectInputStream(fileIn);
+
+                   try
+                   {
+                        <B>items = (Vector) objIn.readObject();</B>
+                   }
+                   finally
+                   {
+                        objIn.close();
+                   }
+                }
+                else if(items == null)
+                {
+                   items = new Vector();
+                }
+            }
+     }
+     catch(Exception exp)
+     {
+         items = null;
+         throw new RemoteException(&#147;Unable to load.&#148;);
+     }
+    }
+</PRE>
+<P>The bean is stored only if it is modified to improve performance. Storing is a process of getting the correct file name and serializing the item&#146;s Vector to the file.
+</P>
+<PRE>
+    <B>public void ejbStore() throws RemoteException</B>
+    {
+     if(!isModified()) return;
+
+     try
+     {
+         File file = fileForCartName(cartName);
+
+         if((file != null)&amp&amp(cartName != null))
+         {
+             if(file.exists())
+             {
+                 FileOutputStream fileOut;
+                 ObjectOutputStream objOut;
+
+                 fileOut = new FileOutputStream(file);
+                 objOut = new ObjectOutputStream(fileOut);
+
+                 try
+                 {
+                        <B>objOut.writeObject(items);</B>
+                 }
+                 finally
+                 {
+                        objOut.close();
+                 }
+             }
+          }
+      }
+      catch(Exception exp)
+      {
+         throw new RemoteException(&#147;Unable to store.&#148;);
+      }
+    }
+</PRE>
+<P>For simplicity, the bean keeps track of its context in case it needs to use it in another method.
+</P>
+<PRE>
+    public void setEntityContext(EntityContext ctx)
+    {
+        context = ctx;
+    }
+
+    public void unsetEntityContext()
+    {
+        context = null;
+    }
+</PRE>
+<P>All entity beans should return an instance of their primary keys from their create methods. The cart bean both returns this key and initializes its instance variables when created.
+</P>
+<PRE>
+    <B>public CartPK ejbCreate(String nm) throws CreateException</B>
+    {
+         CartPK pk = new CartPK();
+         pk.cartName = nm;
+
+         items = new Vector();
+         cartName = nm;
+         return pk;
+    }
+
+    public void ejbPostCreate(String nm)
+    {
+    }
+</PRE>
+<P>To find a bean by primary key, the cart first checks the key&#146;s cartName and associates it with a file. If the file is unavailable, the bean throws a FinderException to indicate that the request failed. If the file exists, the bean initializes its instance variables to the specified cart name and waits to have the load method called to initialize the contents.
+</P>
+<PRE>
+    <B>public CartPK ejbFindByPrimaryKey(CartPK pk)</B>
+        <B>throws FinderException</B>
+    {
+         File file = null;
+         String ctName = null;
+         CartPK retVal = null;
+
+         if(pk != null) ctName = pk.cartName;
+
+         if(ctName != null) file = fileForCartName(ctName);
+
+         if((file != null)
+             &amp&amp(ctName != null)
+             &amp&amp(file.exists()))
+         {
+             retVal = pk;
+             cartName = ctName;
+         }
+         else
+         {
+             <B>throw new FinderException(&#147;Couldn&#146;t locate bean.&#148;);</B>
+         }
+
+         return retVal;
+    }
+</PRE>
+<P>The isModified method is used to check whether the bean&#146;s data has changed.
+</P>
+<PRE>
+    public boolean isModified()
+    {
+        return isModified;
+    }
+</PRE>
+<P>This bean provides methods for adding items to the cart and getting the items in the cart:
+</P>
+<PRE>
+    public void addItem(String item)
+    {
+        isModified = true;
+        items.addElement(item);
+    }
+
+    public Object[] getItems()
+    {
+        Object[] retVal = new Object[items.size()];
+        items.copyInto(retVal);
+
+         return retVal;
+    }
+</PRE>
+<P>The following example hard codes the location for cart files. All carts are stored in a file in the temp directory based on their cart name.
+</P>
+<PRE>
+    protected File fileForCartName(String nm)
+    {
+        return new File(&#147;c:\\temp\\&#148;&#43;nm&#43;&#147;.ser&#148;);
+    }
+}
+</PRE>
+<P>This shopping cart bean has a pretty simple implementation for findByPrimaryKey. In general, the implementation for this method should perform the following steps:
+</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Try to locate a bean with the specified key.
+<DD><B>2.</B>&nbsp;&nbsp;If the bean exists, return the primary key for it.
+<DD><B>3.</B>&nbsp;&nbsp;If the bean does not exist, throw a FinderException.
+</DL>
+<P>When a database is used for persistence, the first step is accomplished by querying the database. Other persistence mechanisms require their own techniques for testing whether a bean exists by primary key.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

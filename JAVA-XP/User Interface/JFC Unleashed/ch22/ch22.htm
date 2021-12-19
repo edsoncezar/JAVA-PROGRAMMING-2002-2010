@@ -1,0 +1,787 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+
+<HEAD>
+<SCRIPT LANGUAGE="JavaScript">
+
+
+<!--
+
+function popUp(pPage) {
+ popUpWin = window.open('','popWin','resizable=yes,scrollbars=no,width=525,height=394');
+ figDoc= popUpWin.document;
+ zhtm= '<HTML><HEAD><TITLE>' + pPage + '</TITLE>';
+ zhtm += '<link rel="stylesheet" href="/includes/stylesheets/ebooks.css"></head>';
+ zhtm += '<BODY bgcolor="#FFFFFF">';
+ zhtm += '<IMG SRC="' + pPage + '">';
+ zhtm += '<P><B>' + pPage + '</B>';
+ zhtm += '</BODY></HTML>';
+ figDoc.write(zhtm);
+ figDoc.close();
+ popUpWin.focus();
+ }
+
+//-->
+
+
+</SCRIPT>
+<link rel="stylesheet" href="http://www.szptt.net.cn/includes/stylesheets/ebooks.css">
+
+        <META NAME="GENERATOR" Content="Symantec Visual Page 1.0.1">
+        <META HTTP-EQUIV="Content-Type" CONTENT="text/html;CHARSET=iso-8859-1">
+        <TITLE>JFC -- Chapter 22 - Extending Existing Components</TITLE>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF">
+
+<CENTER>
+<H1><IMG SRC="..\button\sams.gif" BORDER="0"></H1>
+
+<P><A HREF="..\ch21\ch21.htm"><IMG SRC="..\button\previous.gif" BORDER="0"></A>
+<A HREF="..\index.htm"><IMG SRC="..\button\contents.gif" BORDER="0"></A> 
+<A HREF="..\ch23\ch23.htm"><IMG SRC="..\button\next.gif" BORDER="0"></A> 
+
+
+<H1>JFC Unleashed</H1></CENTER>
+<HR>
+
+
+<H1>Chapter&nbsp;22<br>
+Extending Existing Components</H1>
+<HR>
+<p>
+
+
+<UL>
+<LI><A HREF="#ThePluggableLookandFeelTTFONTSIZEplafFONTTTFONTSIZEArchitectureFONT">
+The Pluggable Look-and-Feel (<TT>.plaf</TT>)
+Architecture</A>
+<UL>
+<LI><A HREF="#quotJquotComponentUImethods">
+&quot;J&quot; Component UI methods</A>
+<LI><A HREF="#quotJquotComponentandUIObjectInteractions">
+&quot;J&quot; Component and UI Object Interactions</A>
+<LI><A HREF="#ExampleUIClass">
+Example UI Class</A>
+</UL>
+<LI><A HREF="#Summary">
+Summary</A>
+</UL>
+
+<HR>
+<P>
+The pluggable look-and-feel architecture that Swing components
+are built on gives the developer many options when extending JFC
+components. A component can be extended in the traditional sense;
+extend the component and override selected methods. JFC components
+can also be extended by replacing their user-interface (UI) component.
+Finally, an entirely new look-and-feel implementation can be developed.
+As we will see in this chapter and the next two chapters, changing
+the &quot;look&quot; of JFC components is more common than changing
+their &quot;feel.&quot;
+<P>
+In this chapter, you will learn
+<UL>
+<LI>About the pluggable look-and-feel (<TT>.plaf</TT>) architecture
+<LI>How UI delegates and Swing components are bound
+<LI>How to create your own UI delegate
+</UL>
+<H2><A NAME="ThePluggableLookandFeelTTFONTSIZEplafFONTTTFONTSIZEArchitectureFONT">
+The Pluggable Look-and-Feel (<TT>.plaf</TT>)
+Architecture</A></H2>
+<P>
+A common method for extending an AWT component was to override
+the <TT>paint</TT> and various <TT>size</TT> methods. For example,
+to create a multiline label, one approach was to extend the AWT
+<TT>Component</TT> class, override the <TT>getPreferredSize</TT>,
+<TT>getMinimumSize</TT>, and <TT>getMaximumSize</TT> methods to
+specify the size of the multiline label, and override the <TT>paint</TT>
+method to render the text to the display. The AWT <TT>Label</TT>
+class would probably be consulted as an example, or some may have
+extended this class directly. Coming from this background, developers
+may start down the same path with a JFC version of a multiline
+label. Imagine their surprise when they study the <TT>JLabel</TT>
+class and discover that it doesn't even contain a <TT>paint</TT>
+method! This seeming omission from the <TT>JLabel</TT> class is
+a fundamental difference between the AWT and JFC architectures.
+<H3><A NAME="quotJquotComponentUImethods">
+&quot;J&quot; Component UI methods</A></H3>
+<P>
+Swing &quot;J&quot; components do not interact with the user or
+paint to the screen themselves. Instead, these operations are
+delegated to a UI object. Each &quot;J&quot; component contains
+four methods that manage its UI object. The <TT>getUI</TT> and
+<TT>setUI</TT> methods are simple JavaBean-compliant access methods.
+These methods cannot be inherited from <TT>JComponent</TT>, because
+the type of the UI object is specified. For example, these two
+methods in the <TT>JLabel</TT> class require a <TT>LabelUI</TT>
+instance. This is shown in the following code fragment from the
+<TT>JLabel</TT> class.
+<BLOCKQUOTE>
+<PRE>
+/**
+ * Returns the L&amp;F object that renders this component.
+ *
+ * @return LabelUI object
+ */
+public LabelUI getUI() { 
+    return (LabelUI)ui;
+} 
+
+
+/**
+ * Sets the L&amp;F object that renders this component.
+ *
+ * @param ui  the LabelUI L&amp;F object
+ * @see UIDefaults#getUI
+ * @beaninfo
+ *      expert: true
+ *  description: The L&amp;F object that renders this component.
+ */
+public void setUI(LabelUI ui) { 
+    super.setUI(ui);
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>updateUI</TT> method is called to set the UI for the instance.
+It is called from the class's constructor and by the <TT>UIManager</TT>
+if the look-and-feel for the instance changes. This method requests
+the current UI from the <TT>UIManager</TT> and sets it for the
+instance. The <TT>updateUI</TT> method from the <TT>JLabel</TT>
+class is shown next. The method is identical in the other Swing
+components except the cast is to the proper type for that component.
+<BLOCKQUOTE>
+<PRE>
+/**
+ * Notification from the UIFactory that the L&amp;F
+ * has changed. 
+ *
+ * @see JComponent#updateUI
+ */
+public void updateUI() { 
+    setUI((LabelUI)UIManager.getUI(this));
+    invalidate();
+}
+</PRE>
+</BLOCKQUOTE>
+<H4>Creating UI Objects</H4>
+<P>
+Looking at the <TT>updateUI</TT> method, the question comes to
+mind, &quot;How does the <TT>UIManager</TT> know what UI class
+to use for the component?&quot; The <TT>UIManager</TT> queries
+the component for its UI class by calling the <TT>getUIClassID</TT>
+method. Each &quot;J&quot; component defines a <TT>String</TT>
+constant, <TT>uiClassID</TT>, that defines the ID for the class.
+This constant is returned from the <TT>getUIClassID</TT> method.
+The class ID is used as the key into the <TT>UIDefaults</TT> dictionary.
+The value associated with the key is the key for the UI class
+for the component. Using reflection, an instance of the UI class
+is created with the parameter of the <TT>getUI</TT> method as
+the target for the newly created UI object. Finally, the UI object
+is returned to the component. There are three classes interacting
+to create the single UI instance for the &quot;J&quot; component.
+The interaction between these objects for the <TT>JLabel</TT>
+class is shown in Figure 22.1. A complete description of the <TT>UIManager</TT>
+and <TT>UIDefaults</TT> classes is presented in <A HREF="..\ch30\ch30.htm" >Chapter 30</A>, &quot;Pluggable
+Look-and-Feel.&quot;
+<P>
+<A HREF="javascript:popUp('f22-1.gif')"><B>Figure 22.1 :</B> <I>Creating a UI object message flow</I>.</A>
+<H3><A NAME="quotJquotComponentandUIObjectInteractions">
+&quot;J&quot; Component and UI Object Interactions</A></H3>
+<P>
+Now you know how a UI object gets associated with a &quot;J&quot;
+component, but how do these objects interact and, more importantly,
+how does the UI object paint the &quot;J&quot; component? To answer
+this question, you need to first look at the pluggable look-and-feel
+package, abbreviated as <TT>plaf</TT> in the code, and its child
+packages.
+<H4>The <TT>com.sun.java.swing.plaf</TT> Package Hierarchy</H4>
+<P>
+The <TT>plaf</TT> hierarchy is shown in Figure 22.2. The <TT>plaf</TT>
+package defines an abstract class, not an interface, for each
+user interface component in the JFC. Each of the classes associated
+with a non-abstract &quot;J&quot; class extends the <TT>ComponentUI</TT>
+class, also contained in the <TT>plaf</TT> package. The <TT>ComponentUI</TT>
+class is shown in Listing 22.1. A review of this class shows that
+many of the methods it defines are the familiar <TT>size</TT>
+and <TT>paint</TT> methods from the AWT <TT>Component</TT> class.
+Methods to install, uninstall, and create the UI object are also
+defined. The final methods query the accessibility information
+about this class. Also notice that these are method definitions,
+not abstract method declarations. Thus, extensions do not have
+to provide implementations for every method in the <TT>ComponentUI</TT>
+class. Most of the other classes in the <TT>plaf</TT> package
+are empty extensions of the <TT>ComponentUI</TT> class. However,
+a couple of the more complex UI classes, such as <TT>ComboBoxUI</TT>
+and <TT>FileChooserUI</TT>, define additional abstract methods
+in the <TT>plaf</TT> package.
+<P>
+<A HREF="javascript:popUp('f22-2.gif')"><B>Figure 22.2 :</B> <I>The plaf class hierarchy</I>.</A>
+<P>
+<HR>
+<P>
+<B>Listing 22.1&nbsp;&nbsp;The </B><TT><B>COMPONENTUI</B></TT><B>
+Class in the </B><TT><B>PLAF</B></TT><B>
+Package<BR>
+</B>
+<BLOCKQUOTE>
+<PRE>
+public abstract class ComponentUI
+{ 
+    public void installUI(JComponent c) { 
+    } 
+
+    public void uninstallUI(JComponent c) { 
+    } 
+
+    public void paint(Graphics g, JComponent c) { 
+    } 
+
+    public void update(Graphics g, JComponent c) { 
+     if (c.isOpaque()) { 
+         g.setColor(c.getBackground());
+         g.fillRect(0, 0, c.getWidth(),c.getHeight());
+     } 
+     paint(g, c);
+    } 
+
+    public Dimension getPreferredSize(JComponent c) { 
+     return null;
+    } 
+
+    public Dimension getMinimumSize(JComponent c) { 
+     return getPreferredSize(c);
+    } 
+
+    public Dimension getMaximumSize(JComponent c) { 
+     return getPreferredSize(c);
+    } 
+
+    public boolean contains(JComponent c, int x, int y) { 
+     return c.inside(x, y);
+    } 
+
+    public static ComponentUI createUI(JComponent c) { 
+     throw new Error(&quot;ComponentUI.createUI not implemented.&quot;);
+    } 
+
+    /**
+     * Returns the number of accessible children in the object.  If all
+     * of the children of this object implement Accessible, than this
+     * method should return the number of children of this object.
+     * UIs might wish to override this if they present areas on the
+     * screen that can be viewed as components, but actual components
+     * are not used for presenting those areas.
+     *
+     * @see #getAccessibleChild
+     * @return the number of accessible children in the object.
+     */
+    public int getAccessibleChildrenCount(JComponent c) { 
+        return SwingUtilities.getAccessibleChildrenCount(c);
+    } 
+
+    /**
+     * Return the nth Accessible child of the object.
+     * UIs might wish to override this if they present areas on the
+     * screen that can be viewed as components, but actual components
+     * are not used for presenting those areas.
+     *
+     * @see #getAccessibleChildrenCount
+     * @param i zero-based index of child
+     * @return the nth Accessible child of the object
+     */
+    public Accessible getAccessibleChild(JComponent c, int i) { 
+        return SwingUtilities.getAccessibleChild(c, i);
+    } 
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>javax.swing.plaf.basic</TT> contains concrete extensions
+of the leaf classes contained in the <TT>javax.swing.plaf</TT>
+package. The classes in the basic package provide common implementations
+for the methods in their parent class defined in the <TT>plaf</TT>
+package. The other child packages of the <TT>plaf</TT> package
+are the actual look-and-feel implementations. Each of these packages
+must also contain concrete implementations of the leaf classes
+defined in the <TT>plaf</TT> package that they customize. The
+classes contained in the <TT>basic</TT> package can be used directly
+if the look-and-feel does not need to alter the class. It is an
+instance of one of these packages that is instantiated in the
+<TT>getUI</TT> call in the <TT>UIManager</TT>. The classes in
+the look-and-feel implementations that are part of the JFC extend
+their counterparts in the basic package and override methods as
+required rather than extending the <TT>plaf</TT> class directly,
+and having to provide an implementation for every method that
+is required. This implies that there will be a separate UI class
+for every Swing component for each look-and-feel installed. The
+<TT>plaf</TT> package hierarchy extension model is similar to
+how AWT components are extended and is familiar to developers.
+<H4><TT>JComponent</TT> to the Rescue</H4>
+<P>
+Now you know where the UI objects live and how they are created,
+but you still have not seen how the UI object paints the component
+or how the UI object's sizing methods get called. There is really
+only one place where the UI object and &quot;J&quot; components
+can be bound, in the <TT>JComponent</TT> class. Recall from the
+discussion of the <TT>JComponent</TT> class in <A HREF="..\ch03\ch03.htm" >Chapter 3</A> &quot;<TT>JComponent</TT>,&quot;
+that the <TT>JComponent</TT> class is the top of the visual component
+hierarchy in the JFC. As such, it is an ancestor of the AWT <TT>Component</TT>
+class. This ensures that <TT>JComponent</TT> class's sizing and
+painting methods will be called when required by layout managers
+or the repaint manager. Thus, the <TT>JComponent</TT> class can
+delegate to the UI object those methods defined in the <TT>ComponentUI</TT>
+class in the <TT>plaf</TT> package. As an example of this delegation,
+look at the <TT>getPreferredSize</TT> method contained in the
+<TT>JComponent</TT> class shown next.
+<BLOCKQUOTE>
+<PRE>
+public Dimension getPreferredSize() { 
+    if (preferredSize != null) { 
+        return preferredSize;
+    } 
+    Dimension size = null;
+    if (ui != null) { 
+        size = ui.getPreferredSize(this);
+    } 
+    return (size != null) ? size : super.getPreferredSize();
+} 
+</PRE>
+</BLOCKQUOTE>
+<P>
+Obviously, the method's signature has to match that contained
+in the AWT <TT>Component</TT> class to override that method. The
+method first checks to see if a preferred size has been set for
+the component that overrides the value specified by the component.
+If this is not the case, the UI object is called to calculate
+the preferred size. This is the size returned to the caller. There
+are similar implementations for the other methods that are delegated
+to the UI object.
+<P>
+The <TT>JComponent</TT> class's <TT>paint</TT> method does not
+follow the simple delegation pattern shown for the <TT>getPreferredSize</TT>
+method. Indeed, the <TT>paint</TT> method and its supporting methods
+are perhaps the most complex methods in the <TT>JComponent</TT>
+class. A simplified explanation of the methods is that they test
+for double buffing, and, if enabled, gets the offscreen image
+to which to draw. It then calls the <TT>paintComponent</TT> and
+<TT>paintBorder</TT> methods to paint the component, and finally
+calls the <TT>paintChildren</TT> method to paint any children
+of the component. (Recall that <TT>JComponent</TT> extends the
+AWT <TT>Container</TT> class and can contain children.) This still
+doesn't explain how the UI object's <TT>paint</TT> method gets
+called, but, if you dig deeper, you see that the <TT>paintComponent</TT>
+method calls the <TT>update</TT> method of its UI object. Another
+review of the <TT>ComponentUI</TT> class shown in Listing 22.1
+shows that the <TT>update</TT> method paints the background if
+the component is opaque and then calls the <TT>paint</TT> method.
+There it is! Thus, the <TT>JComponent</TT> class provides the
+complete link between the &quot;J&quot; component and the UI object.
+<P>
+The strength of the pluggable look-and-feel architecture is that
+application code interacts with the &quot;J&quot; components.
+The application sets and queries properties and responds to events
+from these components to create its user interface. It is the
+&quot;J&quot; component that defines the API for the component.
+The UI object responds to property changes and acts accordingly.
+Changing the look-and-feel does not alter the application, because
+this type of change does not affect the &quot;J&quot; component,
+only the UI delegate object is replaced. 
+<H3><A NAME="ExampleUIClass">
+Example UI Class</A></H3>
+<P>
+The previous section explained how the pluggable look-and-feel
+architecture works. There are many components that work together
+to implement the architecture. You also saw that when you create
+a Swing component, you are actually creating the component itself
+and a UI delegate. The <TT>UIManager</TT> determines the class
+of the UI delegate and it is typically dependent on the current
+look-and-feel being used by the application. However, the UI delegate
+class can be overridden to provide your own implementation of
+the delegate. This is perhaps the easiest technique for extending
+a JFC component and will be presented in this section. More complex
+extension examples will be presented in the following chapters.
+<P>
+The <TT>MultiLineToolTipUI</TT> class shown in Listing 22.2 provides
+a UI class that will render ToolTips using multiple lines. The
+line breaks are determined by <TT>'\ n'</TT> characters embedded
+in the ToolTip string registered for the component. The <TT>MultiLineToolTipUI</TT>
+class extends the <TT>BasicToolTipUI</TT> class from the <TT>javax.swing.plaf.basic</TT>
+package. It is very similar to that class and only overrides a
+few methods. As with the <TT>BasicToolTipUI</TT> class, a single
+instance of the class can be shared by all <TT>JToolTip</TT> instances.
+Thus, the <TT>MultiLineToolTipUI</TT> class is a singleton. The
+reference to the class is obtained by calling the <TT>createUI</TT>
+method. This method creates the UI object for the given <TT>JComponent</TT>.
+In this case, the singleton instance can be returned from this
+method. The other two methods that are overridden from the <TT>BasicToolTipUI</TT>
+class are the <BR>
+<TT>paint</TT> and <TT>getPreferredSize</TT> methods. These methods
+are similar in structure. A <TT>StringTokenizer</TT> is used to
+parse the ToolTip into multiple lines. The preferred size of the
+component is the number of lines times the height of each line,
+and the width of the widest line. The <TT>paint</TT> method simply
+loops through the ToolTip and renders each line on the ToolTip
+component. Notice how the font and colors are queried from the
+component, rather than being hard coded. The <TT>paint</TT> method
+renders single line ToolTips the same as the <TT>BasicToolTipUI</TT>
+component. (The margin was made a pixel smaller to conserve space;
+this could be changed to 3 pixels to exactly match the <TT>BasicToolTipUI</TT>
+class if wanted.) Thus, single-line ToolTips are unaffected by
+the change in the UI class.
+<P>
+<HR>
+<P>
+<B>Listing 22.2&nbsp;&nbsp;The </B><TT><B>MULTILINETOOLTIPUI</B></TT><B>
+Class<BR>
+</B>
+<BLOCKQUOTE>
+<PRE>
+package com.foley.utility;
+
+import java.awt.*;
+
+import java.util.StringTokenizer;
+
+import javax.swing.*;
+import javax.swing.plaf.ComponentUI;
+import javax.swing.plaf.basic.BasicToolTipUI;
+
+
+/**
+ * The MultiLineToolTipUI class may be registered with the UIManager
+ * to replace the ToolTipUI for JToolTip instances. When used, it
+ * divides the ToolTip into multiple lines. Each line is divided by
+ * the '\ n' character.
+ * &lt;p&gt;
+ * @author Mike Foley
+ **/
+public class MultiLineToolTipUI extends BasicToolTipUI { 
+    
+    /**
+     * The single shared UI instance.
+     **/
+    static MultiLineToolTipUI sharedInstance = new MultiLineToolTipUI();
+
+    /**
+     * The margin around the text.
+     **/
+    static final int MARGIN = 2;
+    
+    /**
+     * The character to use in the StringTokenizer to
+     * separate lines in the ToolTip. This could be the
+     * system property end of line character.
+     **/
+    static final String lineSeparator = &quot;\ n&quot;;
+
+
+    /**
+     * MultiLineToolTipUI, constructor.
+     * &lt;p&gt;
+     * Have the constructor be protected so we can be subclassed,
+     * but not created by client classes.
+     **/
+    protected MultiLineToolTipUI() { 
+        super();
+    } 
+
+
+    /**
+     * Create the UI component for the given component.
+     * The same UI can be shared for all components, so
+     * return our shared instance.
+     * &lt;p&gt;
+     * @param c The component to create the UI for.
+     * @return Our shared UI component instance.
+     **/
+    public static ComponentUI createUI( JComponent c ) { 
+        return sharedInstance;
+    } 
+
+
+    /**
+     * Paint the ToolTip. Use the current font and colors
+     * set for the given component.
+     * &lt;p&gt;
+     * @param g The graphics to paint with.
+     * @param c The component to paint.
+     **/
+    public void paint( Graphics g, JComponent c ) { 
+        
+        //
+        // Determine the size for each row.
+        //
+        Font font = c.getFont();
+        FontMetrics fontMetrics = c.getFontMetrics( font );
+
+        int fontHeight = fontMetrics.getHeight();
+        int fontAscent = fontMetrics.getAscent();
+
+        //
+        // Paint the background in the tip color.
+        //
+        g.setColor( c.getBackground() );
+        Dimension size = c.getSize();
+        g.fillRect( 0, 0, size.width, size.height );
+        
+        //
+        // Paint each line in the tip using the
+        // foreground color. Use a StringTokenizer
+        // to parse the ToolTip. Each line is left
+        // justified, and the y coordinate is updated
+        // through the loop.
+        //
+        g.setColor( c.getForeground() );
+        int y = 2 + fontAscent;
+        String tipText = ( ( JToolTip )c ).getTipText();
+StringTokenizer tokenizer = 
+                        new StringTokenizer( tipText, lineSeparator );
+        int numberOfLines = tokenizer.countTokens();
+        for( int i = 0; i &lt; numberOfLines; i++ ) { 
+            g.drawString( tokenizer.nextToken(), MARGIN, y );
+            y += fontHeight;
+        } 
+        
+    }  // paint
+
+
+    /**
+     * The preferred size for the ToolTip is the width of
+     * the longest row in the tip, and the height of a
+     * single row times the number of rows in the tip.
+     * 
+     * @param c The component whose size is needed.
+     * @return The preferred size for the component.
+     **/
+    public Dimension getPreferredSize( JComponent c ) { 
+
+        //
+        // Determine the size for each row.
+        //        
+        Font font = c.getFont();
+        FontMetrics fontMetrics = c.getFontMetrics( font );
+
+        int fontHeight = fontMetrics.getHeight();
+        
+        //
+        // Get the tip text string.
+        //
+        String tipText = ( ( JToolTip )c ).getTipText();
+
+        //
+        // Empty tip, use a default size.
+        //
+        if( tipText == null )
+            return new Dimension( 2 * MARGIN, 2 * MARGIN );
+
+        //
+        // Create a StringTokenizer to parse the ToolTip.
+        //
+StringTokenizer tokenizer = 
+                        new StringTokenizer( tipText, lineSeparator );
+        int numberOfLines = tokenizer.countTokens();
+
+        //
+        // Height is number of lines times height of a single line.
+        //
+        int height = numberOfLines * fontHeight;
+        
+        //
+        // Width is width of longest single line.
+        //
+        int width = 0;
+        for( int i = 0; i &lt; numberOfLines; i++ ) { 
+int thisWidth = fontMetrics.stringWidth( 
+  tokenizer.nextToken() );
+            width = Math.max( width, thisWidth );
+        } 
+        
+        //
+        // Add the margin to the size, and return.
+        //
+return(new Dimension( width + 2 * MARGIN, height + 2 * MARGIN ));
+        
+  }  // getPreferredSize
+  
+}  // MultiLineToolTipUI
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>MultiLineToolTipTest</TT> application shown in Listing
+22.3 demonstrates how to register the <TT>MultiLineToolTipUI</TT>
+class with the <TT>UIManager</TT>. This enables the class to be
+used as the UI object for instances of the <TT>JToolTip</TT> class.
+Because the <TT>MultiLineToolTipUI</TT> class is registered as
+a user default, it will override the <TT>ToolTipUI</TT> registered
+by the look-and-feel. Thus, it will be used for all look-and-feels,
+even if the look-and-feel is changed at runtime. The resulting
+ToolTips for a multiline and single line ToolTip are shown in
+Figures 22.3 and 22.4.
+<P>
+<HR>
+<P>
+<B>Listing 22.3&nbsp;&nbsp;The </B><TT><B>MULTILINETOOLTIPTEST</B></TT><B>
+Application<BR>
+</B>
+<BLOCKQUOTE>
+<PRE>
+package com.foley.test;
+
+import java.awt.*;
+
+import javax.swing.*;
+
+import com.foley.utility.ApplicationFrame;
+
+
+/**
+ * An application that registers the MultiLineToolTip
+ * class with the UIManager. Then a frame with some
+ * components are created. MultiLineToolTips are added
+ * to some of these components to test the class.
+ *
+ * @author Mike Foley
+ **/
+public class MultiLineToolTipTest extends Object {       
+    
+    /**
+     * Application entry point.
+     * Register the MultiLineToolTip class.
+     * Create the frame, and display it.
+     *
+     * @param args Command line parameter. Not used.
+     **/
+    public static void main( String args[] ) { 
+
+        //
+        // Register the MultiLineToolTipUI class as the UI class
+        // for the ToolTipUI key. This is the key used by the 
+        // JToolTip class.
+        // There are two maps, one from the ToolTipUI key to the
+        // key for the class of the UI object. The second is from
+        // the key for the class of the UI object to an actual
+        // Class for this key.
+        //
+        try { 
+            String multiLineToolTipUIClassName = 
+                        &quot;com.foley.utility.MultiLineToolTipUI&quot;;
+            UIManager.put( &quot;ToolTipUI&quot;, multiLineToolTipUIClassName );
+            UIManager.put( multiLineToolTipUIClassName, 
+                      Class.forName( multiLineToolTipUIClassName ) );
+        }  catch( ClassNotFoundException cnfe ) { 
+            System.err.println( &quot;MultiLine ToolTip UI class not found&quot; );
+            System.err.println( cnfe );
+        } 
+
+        JFrame frame = new ApplicationFrame( &quot;MultiLineToolTipUI Test&quot; );
+                        
+        JToggleButton t1 = new JToggleButton( &quot;Toggle&quot; );
+        t1.setToolTipText( &quot;This is an example of\ n&quot;
+                            + &quot;a multiline ToolTip.\ n&quot;
+                            + &quot; \ nIt can be very long\ nif required.&quot;);
+        JToggleButton t2 = new JToggleButton( &quot;Toggle&quot; );
+        t2.setToolTipText( &quot;Single line tips are unaltered&quot; );
+        
+        JPanel center = new JPanel();
+        
+        center.setBorder( BorderFactory.createCompoundBorder(
+                     BorderFactory.createLoweredBevelBorder(),
+                     BorderFactory.createEmptyBorder( 4, 4, 4, 4 ) ) );
+
+        center.add( t1 );
+        center.add( t2 );
+        
+        frame.getContentPane().add( center, BorderLayout.CENTER );
+        frame.pack();
+        frame.setVisible( true );
+        
+    }  // main
+
+}  // MultiLineToolTipTest
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<A HREF="javascript:popUp('f22-3.gif')"><B>Figure 22.3 :</B> <I>A multiline ToolTip</I>.</A>
+<P>
+<A HREF="javascript:popUp('f22-4.gif')"><B>Figure 22.4 :</B> <I>A single-line ToolTip</I>.</A>
+<P>
+The most interesting aspect of the <TT>MultiLineToolTipTest</TT>
+application is the block of code at the beginning of the <TT>main</TT>
+method that registers the <TT>MultiLineToolTipUI</TT> class with
+the <TT>UIManager</TT>. The registration is done with two <TT>put</TT>
+calls to the <TT>UIManager</TT>. The first call registers the
+class key for the <TT>ToolTipUI</TT> class. This is the <TT>String</TT>
+returned from the <TT>getUIClassID</TT> in the <TT>JToolTip</TT>
+class. The second registers the <TT>Class</TT> for the class key
+registered in the first call. In Listing 22.3, the class name
+of the <TT>MultiLineToolTipUI</TT> class is used as the key. However,
+any unique key can be used. For example, the following lines of
+code would also register the <TT>MultiLineToolTipUI</TT> class
+for the <TT>ToolTipUI</TT> key.
+<BLOCKQUOTE>
+<PRE>
+UIManager.put( &quot;ToolTipUI&quot;, &quot;fabcdesger&quot; );
+UIManager.put( &quot;fabcdesger&quot;, 
+         Class.forName( multiLineToolTipUIClassName ) );
+</PRE>
+</BLOCKQUOTE>
+<P>
+The application also demonstrates how to set a multi-line ToolTip
+for a <TT>JComponent</TT> instance. By embedding a <TT>'\ n'</TT>
+character in the ToolTip string, the line will be broken at each
+occurrence of that character. Notice how two sequential <TT>'\
+n'</TT> characters cannot specify an empty line. Instead, at least
+one space must be provided for the line.
+<P>
+The choice of using the <TT>'\ n'</TT> character as the line break
+character can be debated. It can be argued that the system <TT>line.separator</TT>
+property should be used instead. This could facilitate reading
+ToolTips from property files. The best solution may be to have
+the break character be a settable property in the <TT>MultiLineToolTipUI</TT>
+class.
+<H2><A NAME="Summary">
+Summary</A></H2>
+<P>
+This chapter introduced the JFC pluggable look-and-feel architecture.
+It demonstrated how a Swing component's UI object is created,
+and the responsibilities of the component to interact with the
+pluggable look-and-feel subsystem.
+<P>
+The <TT>com.sun.java.swing.plaf</TT> package hierarchy was presented.
+The <TT>javax.swing.plaf</TT> package contains abstract classes
+that define the methods that each UI object must implement for
+a Swing component. The <TT>javax.swing.plaf.basic</TT> package
+provides concrete classes containing default behavior for each
+Swing visual component. The remaining <TT>com.sun.java.swing.plaf</TT>
+child packages provide actual look-and-feel implementations. The
+specific look-and-feel classes tend to extend the <TT>javax.swing.plaf.basic</TT>
+package's implementation and override methods when required.
+<P>
+The first technique for extending a Swing component was presented.
+A new UI class was created and registered with the <TT>UIManager</TT>
+for the <TT>ToolTipUI</TT>. This is the UI used for the <TT>JToolTip</TT>
+class. The <TT>MultiLineToolTipUI</TT> class is an extension of
+the <TT>BasicToolTipUI</TT> class and provides a UI implementation
+that allows multiline ToolTips for Swing components. Once registered
+with the <TT>UIManager</TT>, this class is used as the UI object
+for <TT>JToolTip</TT> instances for all look-and-feels. The look-and-feel
+can even be changed at runtime, and the <TT>MultiLineToolTipUI</TT>
+class will still be used. This technique can be used for as many
+classes of UI objects as desired.
+<P>
+<CENTER>
+<HR SIZE=4>
+
+<A HREF="..\ch21\ch21.htm"><IMG SRC="..\button\previous.gif" BORDER="0"></A>
+<A HREF="..\index.htm"><IMG SRC="..\button\contents.gif" BORDER="0"></A> 
+<A HREF="..\ch23\ch23.htm"><IMG SRC="..\button\next.gif" BORDER="0"></A> 
+</p>
+
+<p>&#169; <A HREF="..\copy.htm">Copyright</A>, Macmillan Computer Publishing. All rights reserved.
+</CENTER>
+</BODY>
+</HTML>

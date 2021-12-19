@@ -1,0 +1,185 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Introduction to Java RMI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The send method listed here is the implementation of the remote message described in the MessageServer interface. All messages that can be accessed remotely must throw RemoteException. The send method simply prints out the name of the calling client and its message on the server console. This server could be accessed by multiple clients, and their output would be interspersed on the console. RMI handles the connection for each remote client. It also manages the use of resources such as sockets so that resources can be reused when they are released or shared by multiple clients on the same machine, and so on.
+</P>
+<PRE>
+    public void send(String name, String message)
+     throws RemoteException
+    {
+     System.out.println(name &#43; &#147;: &#148; &#43; s);
+    }
+</PRE>
+<P>The remote object could be installed in a registry through a separate server application or, as in this case, the remote object might define a static main method that installs an instance of the class in the registry. The first step is to install a security manager. This example runs as an application, so java.rmi.RMISecurityManager is used. RMISecurityManager provides an example security manager for use by RMI applications that use downloaded code. RMI&#146;s class loader will not download any classes from remote locations if no security manager has been set. If the client is an applet, it is not necessary to install a security manager; the browser&#146;s security manager will suffice.
+</P>
+<P>Once the security manager is installed, an instance of the Server class is created and bound in the RMI registry. Once the server is bound in the registry, it can be called by remote clients. This code defines the main method:</P>
+<PRE>
+    public static void main(String[] args)
+    {
+      <B>System.setSecurityManager(
+          new RMISecurityManager());</B>
+
+     try
+     {
+         // Create an instance of the server.
+<B>            MessageServer srv = new Server();</B>
+
+         // Bind server to local registry on default port.
+<B>            Naming.rebind(MessageServer.SERVER_NAME, srv);</B>
+
+         System.out.println(&#147;Server bound and started&#148;);
+     } catch (Exception e)
+     {
+         System.err.println(&#147;Server exception: &#148; &#43;
+            e.getMessage());
+         e.printStackTrace();
+     }
+   }
+}
+</PRE>
+<H4 ALIGN="LEFT"><A NAME="Heading10"></A><FONT COLOR="#000077">Compiling and Installing the Server</FONT></H4>
+<P>To compile the server, run javac and rmic. In this example, it is assumed you are in the root directory of the project and that &#147;.&#148; is in your CLASSPATH for convenience. Then, on Windows, compile the server and create the stubs as shown here:
+</P>
+<PRE>
+javac server\Server.java
+rmic -d . server.Server
+</PRE>
+<P>The rmic utility generates Server_Stub.class and Server_Skel.class in the server directory. The stub and skel implement the marshalling code for the client and server. These files need to be accessible from the client and server, so either include them in the CLASSPATH or make them network accessible by placing them in a public directory on your Web server.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Skeleton files are not required for RMI in Java 2. To control rmic under Java 2, use the -vcompat flag to create files that work with both JDK 1.1 and Java 2, or use the flags -v1.1 to create 1.1 files and -v1.2 to create Java 2 files.</FONT><HR>
+</BLOCKQUOTE>
+<P>Once the Server is ready, run it by first starting the RMI registry and then running the server. To start the registry on Windows, type:
+</P>
+<PRE>
+start rmiregistry
+</PRE>
+<P>rmiregistry is located in the java\bin directory by default.
+</P>
+<P>Under JDK 1.1, start the server from the project root directory by typing:</P>
+<PRE>
+start java server.Server
+</PRE>
+<P>To start the server under Java 2, type:
+</P>
+<PRE>
+start java -Djava.security.manager
+    -Djava.security.policy=server.policy server.Server
+</PRE>
+<P>-Djava.security.manager tells the program to use only the security policy server.policy provided in the example directory.
+</P>
+<P>Now that the server is started, build the client application.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading11"></A><FONT COLOR="#000077">Implementing the Client</FONT></H4>
+<P>The client application is defined in the package called client. This object has a main method that installs a security manager, finds the registry on the local host, and requests the remote object server. The registry sends the client a Server_stub that implements the MessageServer interface. Using this stub, the client can send messages in the messageServer interface to the stub and they will be forwarded to the server. At this point, the only difference between invoking methods of local objects and remote objects is that the remote object may throw a RemoteException if there is a network failure, so you must catch and handle these. The application loops. Each time through the loop, it waits for the user to input messages on the console. When the user presses Return, the messages are sent to the server, which prints the messages on the server console. The program ends when the user types &#147;exit.&#148; The code for the client follows.
+</P>
+<PRE>
+package client;
+
+import java.io.*;
+import java.rmi.*;
+import java.rmi.server.*;
+import message.*;
+
+public class Client
+{
+    static String name;          // name of this client
+    static MessageServer server; //Connection to the server
+
+    public static void main(String args[])
+    {
+     // Require the user to type a name to identify client.
+     if(args.length&lt1)
+     {
+         System.out.println(&#147;Usage: java client.Client  
+          ClientName&#148;);
+         System.exit(-1);
+     }
+
+     //Get the client name from the command line.
+     name = args[0];
+
+     System.setSecurityManager(
+          new RMISecurityManager());
+
+     try
+     {
+         // Find the object on the registry.
+         server = (MessageServer)Naming.lookup(
+          MessageServer.SERVER_NAME);
+
+         // Process input from user until &#145;exit&#146; is typed.
+         boolean notDone = true;
+         String message = null;
+         BufferedReader br = new BufferedReader(
+          new InputStreamReader(System.in));
+
+         System.out.println(&#147;Type &#145;exit&#146; to end.&#148;);
+
+         while(notDone)
+         {
+          System.out.print(&#147;Enter message:&#148;);
+          message = br.readLine();
+          if(message.startsWith(&#147;exit&#148;))
+              notDone=false;
+          else
+              // Send the message to the remote object.
+              server.send(name,message);
+         }
+     } catch (Exception e)
+     {
+         System.err.println(&#147;Client exception: &#148; &#43;
+          e.getMessage());
+         e.printStackTrace();
+         System.exit(-1);
+     }
+    }
+}
+</PRE>
+<P>If the stub class or other necessary files are not accessible in the client&#146;s CLASSPATH, they will be loaded from the remote server, provided that the proper java.rmi.server.codebase property is set. A typical example is accessing the remote objects through a Web server. In this case, the files would have to be in known locations on the Web server, such as the classes directory. Of course, the location is server dependent.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading12"></A><FONT COLOR="#000077">Compiling and Running the Client</FONT></H4>
+<P>To compile and run the example, change directories to the root of the project and execute these commands:
+</P>
+<PRE>
+javac client\*.java
+start java
+    -Djava.security.policy=server.policy client.Client Client1
+start java
+    -Djava.security.policy=server.policy client.Client Client2
+</PRE>
+<P>This code executes two clients to demonstrate that multiple clients can be supported. In this example, the names of the clients are Client1 and Client 2, but they can be named anything you want. In this example, a String was passed to the server. All objects used with remote objects should implement either the java.io.Serializable or java.rmi.Remote interface so they can be marshalled correctly. In the next example, objects are passed to the server so that the client can send messages to the server and the server can send messages to each client.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

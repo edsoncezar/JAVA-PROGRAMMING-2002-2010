@@ -1,0 +1,231 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Invoking the Java Virtual Machine</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="..\summary\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=bottom border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Invoking the Java Virtual Machine</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Invoking the Java Virtual Machine
+</h2>
+<p>
+<blockquote>
+
+The JDK1.1 ships the Java Virtual Machine as a shared library (or
+dynamic link library on Win32). You can embed the Java Virtual Machine into your
+native application by linking the native application with the shared
+library. 
+<p>
+The JNI supports an Invocation API that allows you to load,
+initialize, and invoke the Java Virtual Machine. Indeed, the normal
+way of starting the Java interpreter, <code>java</code>, is no more
+than a simple C program that parses the command line arguments and
+invokes the Java Virtual Machine through the Invocation API.
+
+<h4>Invoking the Java Virtual Machine</h4>
+
+<p>
+To illustrate, we will write a C program that invokes the Java Virtual
+Machine and calls the <code>Prog.main</code> method defined in <code>Prog.java</code>:
+
+<blockquote>
+<pre>
+public class Prog {
+    public static void main(String[] args) {
+        System.out.println("Hello World" + args[0]);
+    }
+}
+</pre>
+</blockquote>
+
+The C code in <a href=http://docs.rinet.ru/Jtuta/native1.1/invoking/example-1dot1/invoke.c><code>invoke.c</code></a> begins with a call to
+<code>JNI_GetDefaultJavaVMInitArgs</code> to obtain the default initialization
+settings, such as heap size, stack size, and so on.  It then calls
+<code>JNI_CreateJavaVM</code> to load and initialize the Virtual
+Machine. <code>JNI_CreateJavaVM</code> fills in two return values:
+
+<ul>
+
+<li><code>jvm</code> refers to the created Java Virtual Machine. You
+can use this to destroy the Virtual Machine at a later time, for example.
+
+<li><code>env</code> is a JNI interface pointer that the current
+thread can use to access Java features, such as calling a Java method.
+
+</ul>
+
+Note that after <code>JNI_CreateJavaVM</code> successfully returns, the current
+native thread has bootstrapped itself into the Java Virtual Machine
+and is therefore running just like a native method. The only
+difference is that there is no concept of returning to the Java
+Virtual Machine.  Therefore, any <a href="..\implementing\refs.html">local references</a> 
+that you subsequently create will not be freed until you call <code>DestroyJavaVM</code>.
+
+<p>Once you have created the Java Virtual Machine, you can issue
+regular JNI calls to invoke, for example, <code>Prog.main</code>. <code>DestroyJavaVM</code>
+attempts to unload the Java Virtual Machine. (<em>The JDK 1.1 Java
+Virtual Machine cannot be unloaded; therefore DestroyJavaVM always
+returns an error code.</em>)
+
+<!--JDK update -->
+<p> You need to compile and link <code>invoke.c</code> with the Java libraries shipped
+with JDK1.1. On Solaris, you can use the following command to compile
+and link <code>invoke.c</code>:
+
+<blockquote>
+<pre>
+cc -I&lt;<em>where jni.h is</em>&gt; -L&lt;<em>where libjava.so is</em>&gt; -ljava invoke.c
+</pre>
+</blockquote>
+
+On Win32 with Microsoft Visual C++ 4.0, the command line is:
+
+<blockquote>
+<pre>
+cl -I&lt;<em>where jni.h is</em>&gt; -MT invoke.c -link &lt;<em>where javai.lib is</em>&gt;\javai.lib
+</pre>
+</blockquote>
+
+<p> Those working in the MacOS environment should refer to the JManager API, which is part of the <a href="http://devworld.apple.com/java/"> MacOS Runtime for Java (MRJ)</a>. You use the JManager API to embed Java applications into your application. 
+  
+<p> Run the resulting executable from the command line. It is possible that you may get the following error message:
+
+<blockquote>
+<pre>
+Unable to initialize threads: cannot find class java/lang/Thread
+Can't create Java VM
+</pre>
+</blockquote>
+
+This error message indicates that you have set the wrong value for the <code>vm_args.classpath</code> variable.  
+<p>
+You might get a different 
+system error indicating that it cannot find either <code>libjava.so</code> (on Solaris) or <code>javai.dll</code> (on
+Win32).  If this is the case, add <code>libjava.so</code> into your <code>LD_LIBRARY_PATH</code> on
+Solaris, or add <code>javai.dll</code> into your executable path on Win32. 
+<p>
+The
+program may report an error that it cannot find the class <code>Prog</code>.  If so, make sure the
+directory containing <code>Prog.class</code> is in the <code>vm_args.classpath</code> variable as well.
+
+
+<h4>Attaching Native Threads</h4>
+
+<!-- JDK update -->
+The Invocation API also allows you to <em>attach</em> native threads
+to a running Java Virtual Machine and have the threads bootstrap themselves into Java threads. This
+requires that the Java Virtual Machine internally uses native
+threads. In JDK 1.1, this feature only works on Win32. The Solaris
+version of the Java Virtual Machine uses user-level thread support and is
+therefore incapable of attaching native threads.  In the future, the 
+JDK on Solaris will support native threads.
+
+<p>Our example program, <a href=http://docs.rinet.ru/Jtuta/native1.1/invoking/example-1dot1/attach.c><code>attach.c</code></a>, therefore, will only work on Win32.
+This example program is a variation of <code>invoke.c</code>. Instead of calling<code> Prog.main</code> in the
+main thread, the native code spawns five threads and then waits
+for them to finish before it destroys the Java Virtual Machine. Each
+thread attaches itself to the Java Virtual Machine, invokes the
+<code>Prog.main</code> method, and finally detaches itself from the Virtual Machine
+before it terminates. Note that the third argument to <code>AttachCurrentThread</code> is reserved and should be set to <code>NULL</code>.
+
+<p>
+When you call <code>DetachCurrentThread</code>, you free all local references belonging to the current thread.
+
+<h4>Limitations of the Invocation API in JDK1.1</h4>
+
+As mentioned above, there are a number of limitations of the
+Invocation API implementation in JDK1.1.
+
+<ul>
+
+<li>The user-level Java thread implementation on Solaris requires the
+Java Virtual Machine to redirect certain Solaris system calls. The set of
+redirected system calls currently includes <code>read</code>, <code>readv</code>, <code>write</code>, <code>writev</code>,
+<code>getmsg</code>, <code>putmsg</code>, <code>poll</code>, <code>open</code>, <code>close</code>, <code>pipe</code>, <code>fcntl</code>, <code>dup</code>, <code>create</code>, <code>accept</code>,
+<code>recv</code>, <code>send</code>, and so on. This may cause undesirable effects on a hosting
+native application that also depends on these system calls.
+
+<li>You cannot attach a native thread to the user-thread based Java
+Virtual Machine on Solaris. <code>AttachCurrentThread</code> simply fails on
+Solaris (unless your code calls it from the main thread that created the
+Virtual Machine).
+
+
+<li>You cannot unload the Java Virtual Machine without terminating the
+process. The <code>DestroyJavaVM</code> call simply returns an error code.
+
+</ul>
+
+These problems will be fixed in future releases of the JDK.<! **JDK release!>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="..\summary\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=top border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Invoking the Java Virtual Machine</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>
+

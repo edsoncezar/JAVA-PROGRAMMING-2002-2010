@@ -1,0 +1,135 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Servlet-Based Search Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch09\09-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>In this code, IndexManager is not as concerned about loading indices as building them. If an index file is available for a directory, it is loaded in the same thread that requested the index. Only directories that do not yet contain an index file cause the manager to spawn a thread to build the index and return null. Notice that the use of synchronization around the loading thread is minimized so that when one thread loads an index, the others can&#146;t get it, but they also don&#146;t have to wait for it to load before they can access another index or get the null return value.
+</P>
+<P>IndexLoader is defined in the same file as IndexManager. Its job is to load the index and add it to the manager&#146;s hash table. The loader tells the index to rebuild, if necessary, if it is run in a background thread, but it will simply load the existing file if the index is up to date. This prevents the index from checking whether it needs to update twice: once when asked by the manager and once when told to load. Here is the code for IndexLoader as defined in IndexManager.java:</P>
+<PRE>
+class IndexLoader extends Thread
+{
+    protected String dir;
+    protected String rel;
+    protected Hashtable indices;
+    protected HTMLIndex newIndex;
+    protected boolean buildIfNec;
+ 
+    public IndexLoader(String d,String r,Hashtable holder)
+    {
+     dir = d;
+     rel = r;
+     indices = holder;
+     buildIfNec = false;
+     
+     newIndex = new HTMLIndex(new File(dir));
+    }
+ 
+    public boolean needsBuild()
+    {
+     return newIndex.indexNeedsRebuilding();
+    }
+ 
+    public void run()
+    {
+     buildIfNec = true;
+     load();
+    }
+ 
+    public void load()
+    {
+     if(dir == null) return;
+     
+     if(rel!=null) newIndex.setRelativePath(rel);
+     
+     newIndex.loadIndex(buildIfNec);
+     
+     synchronized(indices)
+     {
+         indices.put(dir,newIndex);
+     }
+    }
+}
+</PRE>
+<P>Both the manager and loader use the provided relative path to tell the index how to return files. If this relative path is not provided, a file&#146;s absolute path is returned from queries. Although this absolute path is not useful to a servlet, you might use it in an application that relies on the index package.
+</P>
+<H3><A NAME="Heading7"></A><FONT COLOR="#000077">SearchTester.html</FONT></H3>
+<P>To test the servlet, we created an HTML file called SearchTester.html. This file provides a form with two input elements and two submit buttons, as pictured in Figure 8.3.
+</P>
+<P>One input element is a text field for entering the query. The second input element is a pull-down list for choosing the maximum number of hits to display. One submit button initiates a search; the other requests that the help file be displayed. The following code listing is the SearchTester.html file.</P>
+<PRE>
+&ltHTML&gt
+&ltHEAD&gt
+&ltTITLE&gt
+Search Tester
+</PRE>
+<P><A NAME="Fig3"></A><A HREF="images\08-03.jpg"><IMG SRC="images\08-03t.jpg"></A>
+<BR><A HREF="images\08-03.jpg"><FONT COLOR="#000077"><B>Figure 8.3</B></FONT></A>&nbsp;&nbsp;SearchTester.html.</P>
+<PRE>
+&lt/TITLE&gt
+&lt/HEAD&gt
+&ltBODY&gt
+&ltFORM METHOD=GET
+ ACTION="/servlet/htmlsearch/"&gt
+Query:
+&ltINPUT NAME="query" VALUE="" SIZE=25&gt
+&ltSELECT NAME="maxhits" SIZE=1&gt
+&ltOPTION VALUE="25"&gt25
+&ltOPTION VALUE="50"&gt50
+&ltOPTION VALUE="100"&gt100
+&lt/SELECT&gt
+&ltBR&gt&ltBR&gt
+&ltINPUT TYPE="Submit" NAME="submit" VALUE="Search"&gt
+&ltINPUT TYPE="Submit" NAME="submit" VALUE="Help"&gt
+&lt/FORM&gt
+&lt/BODY&gt
+&lt/HTML&gt
+</PRE>
+<P>Notice in the HTML that the form ACTION provides a / for the path information. This causes the search servlet to search the document root of the Web server.
+</P>
+<H3><A NAME="Heading8"></A><FONT COLOR="#000077">Summary</FONT></H3>
+<P>The Web site searching servlet discussed in this chapter demonstrates a number of important guidelines. First, don&#146;t make the user wait too long for a response. In this case, a special page is used to prevent the user from waiting for an index to be built, because this can be a lengthy operation. Second, support multiple threads if possible. This can take a lot of your design time, but it improves perceived performance in most cases. Finally, let the Web server do what it does best. Instead of displaying the help and no index available pages in code, use redirect. This makes those pages more flexible, because the Web administrator can change them. It also means that they are served directly from disk instead of having to go through a servlet. Because the pages aren&#146;t dynamic, this is perfectly reasonable.
+</P>
+<P>This chapter took advantage of the Servlet API and showed how you can leverage this API in several ways:</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;Read parameters from the client request.
+<DD><B>&#149;</B>&nbsp;&nbsp;Write dynamic HTML in response to client requests.
+<DD><B>&#149;</B>&nbsp;&nbsp;Generate a dynamic navigation bar.
+<DD><B>&#149;</B>&nbsp;&nbsp;Use the query fields of the URL to store state between client requests.
+<DD><B>&#149;</B>&nbsp;&nbsp;Use the path information from HttpServletRequest to parse the query.
+</DL>
+<P>As you saw in this chapter, servlet programming requires you to hard code the HTML you want to generate into your Java code, or at best read it from a file. For some purposes, this is fine; however, it makes it hard for Java programmers to work with graphic design and layout people, who are more adept at HTML layout, because they can&#146;t directly modify Java code.
+</P>
+<P>The next two chapters look at a technology called server-side scripting and how you can take advantage of this technology in Java to isolate the Java program logic from the HTML, even when ant a dynamic result.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch09\09-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

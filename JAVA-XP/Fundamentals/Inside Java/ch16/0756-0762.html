@@ -1,0 +1,385 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Remote Method Invocation and Object Serialization:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+<P><CENTER>
+<a href="0752-0755.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0763-0766.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-756"><P>Page 756</P></A>
+
+
+
+
+<P>Listing 16.9, Continued
+</P>
+
+<PRE>
+033            getCodeBase().getHost() + &quot;/PlanetServer3&quot;);
+034    } catch (Exception e) {
+035        System.out.println(&quot;PlanetsApplet3: an exception occurred:&quot;);
+036        e.printStackTrace();
+037    }
+038    try {
+039        numPlanets = obj.getNumPlanets();
+040    }
+041    catch (java.rmi.RemoteException e) {
+042        System.out.println(&quot;Error calling remote method&quot;);
+043        e.printStackTrace();
+044    }
+045
+046    setLayout(new BorderLayout());
+047    Panel p = new Panel();
+048
+049    p.add(new Label(&quot;Planet Number 1_&quot; + numPlanets + &quot;:&quot;));
+050    planetNum = new TextField(null, 3);
+051    infoButton = new Button(&quot;Info&quot;);
+052    bumpButton = new Button(&quot;Bump&quot;);
+053    p.add(planetNum);
+054    p.add(infoButton);
+055    p.add(bumpButton);
+056    add(&quot;North&quot;, p);
+057
+058    stats = new TextArea();
+059    add(&quot;Center&quot;, stats);
+060
+061    infoButton.addActionListener(this);
+062    bumpButton.addActionListener(this);
+063 }
+064
+065 // This method is called when the Button is clicked.
+066 public void actionPerformed(ActionEvent evt) {
+067    if (evt.getSource() == infoButton) {
+068        String text = new String();
+069        try {
+</PRE>
+
+<A NAME="PAGENUM-757"><P>Page 757</P></A>
+
+
+
+<PRE>
+070                   pnum = Integer.parseInt(planetNum.getText());
+071               }
+072                   catch (Exception e) {
+073               }
+074               if (pnum &gt; numPlanets || pnum &lt; 1 ) {
+075                   stats.setText(planetNum.getText() +
+076                           &quot; is not a valid planet #&quot;);
+077                   return;
+078               }
+079               try {
+080                   planet = obj.getPlanet(pnum_1);
+081               }
+082               catch (java.rmi.RemoteException e) {
+083                   System.out.println(&quot;Error calling remote method&quot;);
+084                   e.printStackTrace();
+085               }
+086               stats.setText(&quot;Planet Name:     &quot; +
+087                               planet.getName() + &quot;\r\n&quot;);
+088               stats.appendText(&quot;Number of Moons: &quot; +
+089                               planet.getMoons() + &quot;\r\n&quot;);
+090               if (planet.hasRings())
+091                   stats.appendText(&quot;Has Rings:        Yes&quot;);
+092               else
+093                   stats.appendText(&quot;Has Rings:        No&quot;);
+094           }
+095           if (evt.getSource() == bumpButton) {
+096               if (planet != null) {
+097                   planet.bumpMoons();
+098                   try {
+099                       obj.setPlanet(pnum_1, planet);
+100                   }
+101                   catch (java.rmi.RemoteException e) {
+102                       System.out.println(&quot;Error calling remote method&quot;);
+103                       e.printStackTrace();
+104                   }
+105                   EventQueue.getEventQueue().postEvent(new ActionEvent)
+&Acirc;infoButton,
+106                           ActionEvent.ACTION_PERFORMED, null));
+</PRE>
+<PRE>
+                                     						<I>continues</I>
+</PRE>
+<A NAME="PAGENUM-758"><P>Page 758</P></A>
+
+
+<P>Listing 16.9, Continued
+</P>
+
+<PRE>
+107               }
+108           }
+109       }
+110   }
+</PRE>
+
+<P>Listing 16.10
+</P>
+
+<PRE>
+Line==================Java Source=================
+01   //////////
+02   // PlanetsInfo.java  Interface for an RMI
+03   // remote object.
+04   //
+05   // Author: James L. Weaver   JDK version: 1.1 beta
+06   //////////
+07   package chapter16.code.planets_ser;
+08
+09   public interface PlanetsInfo extends java.rmi.Remote {
+10       int getNumPlanets() throws java.rmi.RemoteException;
+11       Planet getPlanet(int num) throws java.rmi.RemoteException;
+12       void setPlanet(int num, Planet pl)
+13               throws java.rmi.RemoteException;
+14   }
+</PRE>
+
+<P>Listing 16.11
+</P>
+
+<PRE>
+Line==================Java Source=================
+001   //////////
+002   // PlanetsImpl.java  Implementation of an RMI
+003   // remote object.
+004   //
+005   // Author: James L. Weaver   JDK version: 1.1 beta
+006   //////////
+007   package chapter16.code.planets_ser;
+008
+009   import java.io.*;
+010   import java.util.*;
+011   import java.rmi.*;
+012   import java.rmi.server.UnicastRemoteObject;
+013
+</PRE>
+
+<A NAME="PAGENUM-759"><P>Page 759</P></A>
+
+
+<PRE>
+014
+015   class PlanetsImpl
+016           extends UnicastRemoteObject
+017           implements PlanetsInfo
+018   {
+019       Vector planets;
+020       String file = &quot;planets.dat&quot;;
+021
+022       public PlanetsImpl() throws RemoteException {
+023           super();
+024
+025           read(file);
+026       }
+027
+028
+029       public int getNumPlanets() throws RemoteException
+030       {
+031           return planets.size();
+032       }
+033
+034       public Planet getPlanet(int num) throws RemoteException
+035       {
+036           return (Planet)planets.elementAt(num);
+037       }
+038
+039       public void setPlanet(int num, Planet pl) throws RemoteException
+040       {
+041           planets.setElementAt(pl, num);
+042           write(file);
+043       }
+044
+045       public void read(String filename)
+046       {
+047           try {
+048               FileInputStream in = new FileInputStream(filename);
+049               ObjectInputStream s = new ObjectInputStream(in);
+050               planets = (Vector)s.readObject();
+051           }
+052           catch (FileNotFoundException e){
+</PRE>
+<PRE>
+                                         						<I>continues</I>
+</PRE>
+<A NAME="PAGENUM-760"><P>Page 760</P></A>
+
+
+
+
+<P>Listing 16.11, Continued
+</P>
+
+<PRE>
+053               planets = new Vector();
+054               System.out.println(&quot;No input file found; Creating one.&quot;);
+055
+056               // Populate the planets Vector
+057               planets.addElement(new Planet(&quot;Mercury&quot;,0, false));
+058               planets.addElement(new Planet(&quot;Venus&quot;,0, false));
+059               planets.addElement(new Planet(&quot;Earth&quot;,1, false));
+060               planets.addElement(new Planet(&quot;Mars&quot;,2, false));
+061               planets.addElement(new Planet(&quot;Jupiter&quot;,16, true));
+062               planets.addElement(new Planet(&quot;Saturn&quot;,18, true));
+063               planets.addElement(new Planet(&quot;Uranus&quot;,15, true));
+064               planets.addElement(new Planet(&quot;Neptune&quot;,8, true));
+065               planets.addElement(new Planet(&quot;Pluto&quot;,1, false));
+066               return;
+067           }
+068           catch (IOException e){
+069               System.out.println(&quot;Exception while Reading&quot;);
+070               return;
+071           }
+072           catch (ClassNotFoundException e){
+073               System.out.println(&quot;ClassNotFoundException while Reading&quot;);
+074               return;
+075           }
+076       }
+077
+078       public void write(String filename){
+079           try {
+080               FileOutputStream   f = new FileOutputStream(filename);
+081               ObjectOutputStream s = new ObjectOutputStream(f);
+082               s.writeObject(planets);
+083               s.close();
+084           }
+085           catch (IOException e){
+086               System.out.println(&quot;Exception while Writing&quot;);
+087               return;
+088           }
+089       }
+090
+091       public static void main(String args[])
+</PRE>
+
+
+<A NAME="PAGENUM-761"><P>Page 761</P></A>
+
+
+<PRE>
+092       {
+093           // Create and install the security manager
+094           System.setSecurityManager(new RMISecurityManager());
+095
+096           try {
+097               PlanetsImpl obj = new PlanetsImpl();
+098               System.out.println(&quot;Binding to PlanetServer3&quot;);
+099               Naming.rebind(&quot;PlanetServer3&quot;, obj);
+100               System.out.println(&quot;PlanetsImpl created and bound&quot;);
+101           } catch (Exception e) {
+102               System.out.println(&quot;PlanetsImpl.main exception&quot;);
+103               e.printStackTrace();
+104           }
+105       }
+106   }
+</PRE>
+
+<P>Listing 16.12
+</P>
+
+<PRE>
+Line==================Java Source=================
+01   //////////
+02   // Planet.java  A class that represents a planet
+03   // in the RMI demonstration.
+04   //
+05   // Author: James L. Weaver   JDK version: 1.1 beta
+06   //////////
+07   package chapter16.code.planets_ser;
+08
+09   class Planet implements java.io.Serializable
+10   {
+11       private String name;
+12       private int moons;
+13       private boolean hasRings;
+14
+15       public Planet(String name, int moons, boolean hasRings) {
+16           this.name = name;
+17           this.moons = moons;
+18           this.hasRings = hasRings;
+19       }
+20
+</PRE>
+<PRE>
+                                           						<I>continues</I>
+</PRE>
+<A NAME="PAGENUM-762"><P>Page 762</P></A>
+
+
+
+
+<P>Listing 16.12, Continued
+</P>
+
+<PRE>
+21       public String getName() {
+22           return name;
+23       }
+24
+25       public int getMoons() {
+26           return moons;
+27       }
+28
+29       public boolean hasRings() {
+30           return hasRings;
+31       }
+32
+33       public void bumpMoons() {
+34           moons++;
+35       }
+36   }
+</PRE>
+
+<P>This is the associated HTML:
+</P>
+
+<PRE>
+&lt;HTML&gt;
+&lt;HEAD&gt;
+&lt;TITLE&gt; Planets Applet 3 &lt;/TITLE&gt;
+&lt;/HEAD&gt;
+&lt;BODY&gt;
+&lt;APPLET CODEBASE=&quot;../../..&quot;
+        CODE=&quot;chapter16.code.planets_ser.PlanetsApplet3.class&quot;
+        WIDTH=300 HEIGHT=300&gt;
+&lt;/applet&gt;
+&lt;/BODY&gt;
+&lt;/HTML&gt;
+</PRE>
+
+<P>To make the planets persistent, two methods have been added to the PlanetsImpl
+class in listing 16.11:
+</P>
+
+<UL>
+<LI>          A read() method, contained in lines 45_76
+<LI>          A write() method, contained in lines 78_89
+</UL>
+
+<P>Nothing special defines the names read() and
+write(), but they do not appear in the PlanetsInfo interface. This means that they can be called only from methods running
+in the same Java VM as the PlanetsImpl object, not from the client applet across
+the network. The methods are part of only the local interface of PlanetsImpl, not its
+remote
+</P>
+<P><CENTER>
+<a href="0752-0755.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0763-0766.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

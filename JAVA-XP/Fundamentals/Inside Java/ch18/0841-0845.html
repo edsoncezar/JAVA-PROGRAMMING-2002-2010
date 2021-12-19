@@ -1,0 +1,300 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Servlets and the Java Web Server:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+<P><CENTER>
+<a href="0836-0840.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0846-0849.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-841"><P>Page 841</P></A>
+
+
+
+<PRE>
+045    }
+046
+047    //initialize the planet information table
+048    public void init() throws ServletException {
+049      Hashtable ht = getInitParameters();
+050      if (ht != null) {
+051        file = (String)ht.get(&quot;file&quot;);
+052        if (file != null)
+053          read();
+054        else
+055          setupPlanets();
+056        }
+057      else
+058        setupPlanets();
+059    }
+060
+061    // Populate the planets Vector
+062    void setupPlanets() {
+063      planets = new Vector();
+064      planets.addElement(new Planet(&quot;Mercury&quot;,0, false));
+065      planets.addElement(new Planet(&quot;Venus&quot;,0, false));
+066      planets.addElement(new Planet(&quot;Earth&quot;,1, false));
+067      planets.addElement(new Planet(&quot;Mars&quot;,2, false));
+068      planets.addElement(new Planet(&quot;Jupiter&quot;,16, true));
+069      planets.addElement(new Planet(&quot;Saturn&quot;,18, true));
+070      planets.addElement(new Planet(&quot;Uranus&quot;,15, true));
+071      planets.addElement(new Planet(&quot;Neptune&quot;,8, true));
+072      planets.addElement(new Planet(&quot;Pluto&quot;,1, false));
+073    }
+074
+075    void read() {
+076      try {
+077        FileInputStream in = new FileInputStream(file);
+078        ObjectInputStream s = new ObjectInputStream(in);
+079        planets = (Vector)s.readObject();
+080      }
+081      catch (FileNotFoundException e) {
+082        setupPlanets();
+083        return;
+</PRE>
+<PRE>
+                                                 <I>continues</I>
+</PRE>
+<A NAME="PAGENUM-842"><P>Page 842</P></A>
+
+
+<P>
+Listing 18.2, Continued</P>
+<PRE>
+084      }
+085      catch (IOException e){
+086        log(&quot;Planets.read: Exception while Reading&quot;);
+087        return;
+088      }
+089      catch (ClassNotFoundException e){
+090        System.out.println(&quot;ClassNotFoundException while Reading&quot;);
+091        return;
+092      }
+093    }
+094
+095    //synchronize in case multiple clients concurrently call &quot;bump&quot;
+096    synchronized void write() {
+097      try {
+098        FileOutputStream f = new FileOutputStream(file);
+099        ObjectOutputStream s = new ObjectOutputStream(f);
+100        s.writeObject(planets);
+101        s.close();
+102      }
+103      catch (IOException e) {
+104        System.out.println(&quot;Exception while Writing&quot;);
+105        return;
+106      }
+107    }
+108
+109    int getNumPlanets() {
+110      return planets.size();
+111    }
+112
+113    Planet getPlanet(int num) {
+114      return (Planet)planets.elementAt(num);
+115    }
+116
+117    public void sendResponse(HttpServletResponse res, Hashtable params)
+118      throws IOException {
+119      ServletOutputStream out = res.getOutputStream();
+120      res.setContentType(&quot;text/html&quot;);
+121      HtmlPage page = new HtmlPage(&quot;Planet Information&quot;);
+</PRE>
+
+<A NAME="PAGENUM-843"><P>Page 843</P></A>
+
+
+
+<PRE>
+122      page.add(&quot;Planet Information&quot;, &quot;h1&quot;);
+123
+124      String planetnumber = (String)params.get(&quot;planet&quot;);
+125      HtmlForm form = new HtmlForm(&quot;/planets&quot;, &quot;GET&quot;);
+126      form.add(&quot;Planet number 1 _ &quot; + getNumPlanets() + &quot;:  &quot;);
+127      if (planetnumber != null)
+128        form.addTextField(&quot;planet&quot;, &quot;size=3 value=&quot; + planetnumber);
+129      else
+130        form.addTextField(&quot;planet&quot;, &quot;size=3&quot;);
+131      form.addSubmitButton(&quot;name=action value=Info&quot;);
+132      form.addSubmitButton(&quot;name=action value=Bump&quot;);
+133      page.add(form);
+134
+135      try {
+136        if (planetnumber != null) {
+137          int index = Integer.parseInt(planetnumber) _1;
+138          Planet p = getPlanet(index);
+139          String action = (String) params.get(&quot;action&quot;);
+140          if (&quot;Bump&quot;.equalsIgnoreCase(action)) {
+141            p.bumpMoons();
+142            write();
+143          }
+144          HtmlTable tbl = new HtmlTable(&quot;Border&quot;);
+145
+146          // add name of planet
+147          tbl.newRow();
+148          tbl.addData(&quot;Planet Name:&quot;);
+149          tbl.addData(p.getName());
+150          // add number of moons
+151          tbl.newRow();
+152          tbl.addData(&quot;Number of Moons:&quot;);
+153          tbl.addData(Integer.toString(p.getMoons()));
+154          // add if had rings
+155          tbl.newRow();
+156          tbl.addData(&quot;Has Rings:&quot;);
+157          tbl.addData((p.hasRings() ? &quot;Yes&quot; : &quot;No&quot;));
+158          page.add(tbl);
+159        }
+160        page.write(out);
+</PRE>
+<PRE>
+                                                             <I>continues</I>
+</PRE>
+<A NAME="PAGENUM-844"><P>Page 844</P></A>
+
+
+
+<P>Listing 18.2, Continued</P>
+<PRE>
+161      }
+162      catch (NumberFormatException e) {
+163        page.add(&quot;&lt;hr&gt;&quot;);
+164        page.add(planetnumber + &quot; is not a valid planet #&quot;, &quot;h2&quot;);
+165        page.write(out);
+166      }
+167      catch (Exception e) {
+168        page.add(&quot;&lt;hr&gt;&quot;);
+169        page.add(&quot;Error: &quot; + e, &quot;h2&quot;);
+170        page.write(out);
+171      }
+172    }
+173  }
+</PRE>
+
+<P>Lines 8_34 in listing 18.2 declare a Planet object that holds the information about a
+planet and, because it implements Serializable, can be stored to and read from a file. The
+only difference from the Planet class definition in the Chapter 16 example is the need
+to declare the bumpMoons() method as synchronized to ensure thread-safe operation.
+</P>
+
+<P>Lines 36_46 declare the servlet as a subclass of FormServlet. The servlet's
+init() method (lines 47_59) is called once when the servlet is loaded to initialize any information
+needed by the servlet. Each service request is handled by a separate thread that accesses
+a single instance of the servlet; any instance variables set up by the
+init() method are shared by these service threads. Line 49 accesses the initialization parameters of
+the servlet:
+</P>
+
+<PRE>
+049      Hashtable ht = getInitParameters();
+</PRE>
+
+<P>Only one parameter, &quot;file,&quot; is defined that specifies the file name of the file that holds
+the information about the planets. Lines 50_58 initialize the planet information either
+from this file or by using predefined information. Lines 62_73 define the
+setupPlanets() method to initialize the use of predefined information, and lines <BR>
+75_93 define a read() method to initialize the use of a Vector of Planets object stored in
+a file.
+</P>
+
+<P>Lines 96_107 define a method to write the updated planet information to the file.
+This method is declared as synchronized to ensure that only one thread at a time attempts
+to write-out the information. Because the init() method is only called once at
+initialization, synhronization is not necessary for the
+read() method.
+</P>
+
+<P>Lines 109_115 define methods to get planet information and to determine the number
+of planets. Because the underlying Vector operations are thread-safe, further
+synchronization is not necessary.
+</P>
+<A NAME="PAGENUM-845"><P>Page 845</P></A>
+
+
+
+<P>The essence of the servlet is the
+sendResponse() method, defined in lines 117_172.
+The sendResponse() method is called by the FormServlet's
+service() method to perform the form's processing and to create the response. Because the FormServlet superclass has
+already stored the form information in a hashtable, performing forms handling is a simple
+matter of retrieving data from the Hashtable and processing it. For this example, processing
+is simply determining the planet number and creating the HTML to display the
+information as follows:
+</P>
+
+<OL>
+<LI>          Prepare the response header and get output stream.
+
+<BR>          To create the response, set values in the HttpServletResponse object and write
+to the output stream defined by lines 119 and 120:
+
+<PRE>
+119      ServletOutputStream out = res.getOutputStream();
+120      res.setContentType(&quot;text/html&quot;);
+</PRE>
+
+
+          You must always specify the content-type on responses that include data.</P>
+
+<LI>          Create the HTML response page.
+
+
+<BR>          Allocate an HtmlPage to help construct the HTML response page and add a
+level-one header as shown in lines 121 and 122:
+
+<PRE>
+121      HtmlPage page = new HtmlPage(&quot;Planet Information&quot;);
+122      page.add(&quot;Planet Information&quot;, &quot;h1&quot;);
+</PRE>
+
+
+          Lines 124_133 create the HTML for the form. This form consists of an input text
+field to hold the planet number and two buttons labeled &quot;Info&quot; and &quot;Bump.&quot;
+</OL>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The HTML creation classes are a simplification of the complete language; you
+are required to manually create HTML code for attributes not supported by the classes.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<OL START="3">
+<LI>          Process forms action request.
+<BR>          Lines 135_160 perform the form's processing and create the response. Lines
+124 gets the planet number from the form and lines 137 and 138 convert that number
+into a reference to the planet object. Lines 139_143 process the &quot;Bump&quot; action
+command.
+
+
+<BR>          Lines 144_157 create an HTML table to display the planet information and
+then adds rows for planet name, number of moons, and has-rings indication. After
+you finish building the table, add the table to the page, and then write the HTML for
+the
+</OL>
+
+
+<P><CENTER>
+<a href="0836-0840.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0846-0849.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

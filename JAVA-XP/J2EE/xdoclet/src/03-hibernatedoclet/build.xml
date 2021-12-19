@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="hibtest"  default="run">
+    <!-- obtem as variáveis de ambiente -->
+    <property environment="env"/>
+
+    <!-- propriedades configuráveis -->
+    <property file="build.properties"/>
+
+    <!-- path das bibliotecas necessárias p/ compilação -->
+    <path id="compile.classpath">
+        <fileset id="compile.fileset" dir="${libs.dir}">
+            <include name="${hibernate.jar}"/>
+            <include name="${hibernate.lib.dir}/*.jar"/>
+            <include name="${hsqldb.jar}"/>
+        </fileset>
+    </path>
+
+    <!-- path necessário para execução dos programas demo -->
+    <path id="run.classpath">
+        <path refid="compile.classpath"/>
+        <pathelement location="${build.classes.dir}"/>
+        <pathelement location="${build.conf.dir}"/>
+        <pathelement location="${build.hbm.dir}"/>
+    </path>
+
+    <!-- path das bibliotecas necessárias p/ execução do XDoclet -->
+    <path id="xdoclet.classpath">
+    	<path refid="compile.classpath"/>
+        <fileset dir="${xdoclet.home}/lib">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+   
+    <!-- apaga tudo o que foi construído -->
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <!-- compila a aplicação -->
+    <target name="compile">
+        <mkdir dir="${build.classes.dir}"/>
+        <javac 	
+            srcdir="${src.java.dir}"
+            destdir="${build.classes.dir}" 
+        	debug="true" 
+            deprecation="true"
+            >
+            <classpath refid="compile.classpath"/>
+        </javac>
+    </target>
+
+    <!-- gera a lista de todo's da aplicação -->
+    <target name="todo">
+        <mkdir dir="${build.todo.dir}"/>
+        <taskdef
+            name="todo"
+            classname="xdoclet.modules.doc.DocumentDocletTask"
+            classpathref="xdoclet.classpath"
+            />
+        <todo destdir="${build.todo.dir}">
+            <fileset dir="${src.java.dir}"/>
+            <info/>
+        </todo>
+    </target>
+
+    <!-- gera os deployments descriptors através das tasks do XDoclet -->
+    <target name="generateDD">
+		<taskdef name="hibernatedoclet"
+            classname="xdoclet.modules.hibernate.HibernateDocletTask"
+            classpathref="xdoclet.classpath"
+            />
+        <mkdir dir="${build.hbm.dir}"/>
+		<hibernatedoclet
+            destdir="${build.hbm.dir}"
+			excludedtags="@version,@author,@todo"
+			force="true"
+			verbose="true"
+            >
+			<fileset dir="${src.java.dir}">
+                <include name="**/*.java"/>
+                <exclude name="**/Hibernate*.java"/>
+			</fileset>
+			<hibernate version="2.0"/>
+		</hibernatedoclet>		    
+    </target>
+
+    <!-- gera o esquema do banco de dados -->
+	<target name="db-create" depends="clean,compile,generateDD">
+        <pathconvert property="db.file" dirsep="/">
+            <path>
+                <pathelement path="${basedir}/${build.db.file}"/>
+            </path>
+        </pathconvert>
+
+        <copy todir="${build.conf.dir}">
+            <fileset dir="${src.conf.dir}"/>
+            <filterset>
+                <filter token="db.file" value="${db.file}"/>
+            </filterset>
+        </copy>
+
+        <mkdir dir="${build.db.dir}"/>
+
+        <property file="${build.conf.dir}/hibernate.properties"/>
+        <sql
+            driver="${hibernate.connection.driver_class}"
+            url="${hibernate.connection.url}"
+            userid="${hibernate.connection.username}"
+            password="${hibernate.connection.password}"
+            classpathref="run.classpath"
+            >
+            create table foo (i int);
+            drop table foo;
+        </sql>      
+
+        <taskdef
+            name="schemaupdate"
+            classname="net.sf.hibernate.tool.hbm2ddl.SchemaUpdateTask"
+            classpathref="run.classpath"/>
+        <schemaupdate
+            properties="${build.conf.dir}/hibernate.properties"
+            quiet="no"
+            >
+            <fileset dir="${build.hbm.dir}">
+                <include name="**/*.hbm.xml"/>
+            </fileset>
+        </schemaupdate>
+    </target>
+
+    <!-- verifica se o arquivo do banco de dados foi criado -->
+    <target name="db-check">
+        <available file="${build.db.file}.script" property="db.exists"/>
+    </target>
+
+    <target name="fail-if-not-exists" unless="db.exists">
+        <fail>execute primeiro a target db-create</fail>
+    </target>
+
+    <!-- executa as aplicações de teste -->
+    <target name="run" depends="db-check,fail-if-not-exists" if="db.exists">
+        <java classname="dbdemo.HibernateDemo" fork="true">
+            <classpath refid="run.classpath"/>
+        </java>
+        <java classname="dbdemo.HibernateDemoOneToMany" fork="true">
+            <classpath refid="run.classpath"/>
+        </java>
+        <java classname="dbdemo.HibernateDemoManyToMany" fork="true">
+            <classpath refid="run.classpath"/>
+        </java>
+        <java classname="dbdemo.HibernateDemoHQL" fork="true">
+            <classpath refid="run.classpath"/>
+        </java>
+    </target>
+
+</project>

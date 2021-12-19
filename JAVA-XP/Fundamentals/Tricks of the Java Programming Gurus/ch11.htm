@@ -1,0 +1,2780 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 11 -- Advanced Event Handling</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 11</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Advanced Event Handling</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+<UL>
+<LI><A HREF="#BasicEventHandling" >Basic Event Handling</A>
+<LI><A HREF="#TheEventClass" >The Event Class</A>
+<LI><A HREF="#KeyEvents" >Key Events</A>
+<LI><A HREF="#MouseEvents" >Mouse Events</A>
+<LI><A HREF="#DisplayingEvents" >Displaying Events</A>
+<LI><A HREF="#EventswithMethods" >Events with Methods</A>
+<LI><A HREF="#GeneratingEvents" >Generating Events</A>
+<LI><A HREF="#FixingBrokenEventHandling" >Fixing Broken Event Handling</A>
+<LI><A HREF="#ACompleteExample" >A Complete Example</A>
+<LI><A HREF="#MajorSurgerytotheEventModel" >Major Surgery to the Event Model</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+This chapter looks at event handling in the AWT. The first section,
+&quot;Basic Event Handling,&quot; is about how events are generated
+and processed by the AWT and by applications using this toolkit.
+<P>
+When application code is called in response to an event, it may
+need to get information about the event, such as the coordinates
+of a mouse click. The information available to an application
+is discussed in &quot;The Event Class.&quot; There are two sets
+of events that are particularly important for applications-key
+and mouse events. Further details on these are given in the next
+two sections.
+<P>
+Regrettably, programs do need debugging. The AWT still has problems,
+which sometimes makes determining where errors are occurring difficult,
+so a program is included in this chapter that can be used to show
+the events that occur in an application and the event information
+associated with them.
+<P>
+The topic of event generation is revisited in the section &quot;Generating
+Events.&quot; Events are manufactured by the AWT in response to
+user actions, but applications may also create them and send them
+to objects.
+<P>
+You have probably already come across a number of problems with
+the AWT event model.  Some of these require fixes by the library
+authors, and some can be fixed by defining new classes and filling
+in some gaps in the AWT methods. These techniques are dealt with
+in &quot;Fixing Broken Event Handling.&quot; This section is followed
+by a longer example incorporating the techniques discussed earlier.
+<P>
+There are deeper problems with AWT events that cannot simply be
+fixed by a few new classes, requiring instead a replacement of
+the event model.  Two alternative models are examined in the section
+&quot;Major Surgery to the Event Model.&quot;
+<H2><A NAME="BasicEventHandling"><FONT SIZE=5 COLOR=#FF0000>Basic
+Event Handling</FONT></A></H2>
+<P>
+The AWT toolkit generates events in response to user actions.
+For example, selecting a button generates an <TT>ACTION_EVENT</TT>.
+Applications or applets that use the AWT toolkit have to respond
+in an <I>event-driven</I> manner to these events; for example,
+a mechanism must exist for catching these events and processing
+them.
+<P>
+GUI applications sit in an <I>event loop</I> to catch and dispatch
+events. The detailed mechanism of this varies between the different
+GUI toolkits. For example, Windows enables you to catch each event
+and branch on the event type. Then, application-specific code
+is invoked. Xlib (the basic library of the X Window System) acts
+in a similar way, which is a strictly procedural approach.
+<P>
+Motif and other Xt-based toolkits allow application-specific code
+to be attached to <I>callback</I> functions, which is more object
+oriented in approach in that it attaches application code to the
+application objects. It does, however, have flaws. For example,
+it is hard to separate view from model-one often ends up with
+application code being mixed up with GUI code.
+<P>
+AWT hides the event processing loop in its internals and <I>posts</I>
+events to objects. When an event of interest to the AWT toolkit
+occurs, the toolkit calls <TT>postEvent()</TT>
+for the object it occurred in. For subclasses of component, <TT>postEvent()</TT>
+calls the <TT>handleEvent()</TT> method
+in the object. If <TT>handleEvent()</TT>
+returns <TT>false</TT>, it calls <TT>handleEvent()</TT>
+in the parent object, etc., until either the method returns <TT>true</TT>
+or the top of the tree is reached.
+<P>
+Note that these events are not Windows events, nor X events, nor
+Mac events, but AWT events. They get triggered by certain actions
+occurring in Windows, but not by all actions. For example, when
+a Motif PushButton is clicked (activated), an AWT event with field
+<TT>id</TT> set to <TT>ACTION_EVENT</TT>
+is sent to the AWT Button. When the Motif PushButton is merely
+pressed (armed), however, no AWT event gets generated.
+<P>
+This setup often causes frustation to the programmer familiar
+with a particular windowing system: At present you just do not
+have the detailed control over some Java objects that you have
+over the native objects that they are built on. For example, Java
+does not presently support control over drag and drop in the full
+sense of being able to drag information from one application to
+another-a window can be dragged from, due to native support, but
+when you try to drop, Java has no way of handling this action.
+(The <TT>MOUSE_DRAG</TT> event type
+is just mouse motion with one of the buttons pressed-it does not
+register a drop site.)
+<H3><TT><FONT SIZE=4 >handleEvent()</FONT></TT><FONT SIZE=4>
+Method for Component</FONT></H3>
+<P>
+Most AWT classes inherit the <TT>handleEvent()</TT>
+method from component, which does a switch on event <TT>id</TT>
+and calls another method:
+<BLOCKQUOTE>
+<TT>public boolean handleEvent(Event evt)
+{<BR>
+&nbsp;&nbsp;&nbsp;switch (evt.id) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case Event.MOUSE_ENTER:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return mouseEnter(evt,
+evt.x, evt.y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case Event.MOUSE_EXIT:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return mouseExit(evt,
+evt.x, evt.y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// other case elements omitted
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;
+<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+public boolean mouseEnter(Event evt, int x, int y) {<BR>
+&nbsp;&nbsp;&nbsp;return false;<BR>
+}<BR>
+</TT>
+</BLOCKQUOTE>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+This group does not include classes derived from MenuComponent. They are dealt with in the section &quot;Fixing Broken Event Handling.&quot;</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Not all events call methods; some fall through to the default
+case, which returns <TT>false</TT>.
+The methods called for AWT component objects all return <TT>false</TT>.
+You can override them in a user-defined subclass.
+<P>
+For a concrete example of this, consider the button. When the
+button gets clicked, an AWT event the with <TT>id</TT>
+set to <TT>ACTION_EVENT</TT> is generated.
+<TT>handleEvent()</TT> calls the method
+<BLOCKQUOTE>
+<TT>public boolean action(Event evt, Object
+what)</TT>
+</BLOCKQUOTE>
+<P>
+The second argument here is the value of the button's label as
+a <TT>String</TT>. To examine this
+value, <TT>what</TT> needs to be coerced
+to the <TT>String</TT> class.
+<P>
+If you use a button and want to attach application code that is
+executed on a button click, you can do so by overriding <TT>action()</TT>
+in a subclass
+<BLOCKQUOTE>
+<TT>class MyButton extends Button {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// handle button
+...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;I've
+been pushed&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+</TT>
+</BLOCKQUOTE>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Note that this returns <TT>true</TT> to prevent the event from being passed to its parent. This return value is intimately tied up with which event model is used. This idea gets discussed further in the following two sections.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+To give a realistic example of event handling, consider the problem
+of password entry. The password should be entered into a single-line
+TextField. This class actually has a special method to set the
+echo character to something other than the input character. When
+the newline character is pressed, the method <TT>action()</TT>
+is invoked. You can override this in a subclass of TextField to
+get useful behavior. The program appears in Listing 11.1.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.1. </B><TT><B></TT>Password.java</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+<BR>
+public class Password extends Frame {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static void main(String argv[])
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new Password().show();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Password() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;Center&quot;,
+new PasswordText());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(100, 20);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+class PasswordText extends TextField {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;PasswordText() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setEchoCharacter('*');
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// just print
+the &quot;secret&quot; password<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(getText());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3>Event Models</H3>
+<P>
+The AWT is built on top of native toolkits.  For example, in Windows
+95 all Java GUI objects are implemented by Windows objects. The
+native toolkits have their own event handling models, with their
+own way of handling user actions.  For example, when the user
+presses the left mouse button, Windows 95 generates a <TT>WM_LBUTTONDOWN</TT>
+event, while Motif generates a <TT>BUTTON_PRESS</TT>
+event.  The details of how these are handled are buried in the
+native code of each implementation of the AWT.
+<P>
+AWT supplies a layer of event handling code that will be called
+when an event occurs and is written in C as native code, different
+for each toolkit. This code is responsible for preparing a dynamic
+call to the Java interpreter, using the AWT object's peer object.
+For example, when an AWT button is clicked, a call is made from
+the native toolkit up to the Java interpreter to execute the method
+<TT>action()</TT> of the button's
+peer. The peer's method prepares an AWT event from the information
+passed to it and calls <TT>postEvent()</TT>
+for the object.
+<P>
+The AWT event is then dealt with by Java code within the AWT toolkit
+for a while. For objects of the component type, <TT>handleEvent()</TT>
+is called on the object, its parent, and its grandparent (in the
+widget tree) until one of the methods returns <TT>true</TT>.
+If none of these return <TT>true</TT>,
+then the <TT>handleEvent()</TT> of
+the peer objects is called, from outer container to inner. These
+methods are native and also return a Boolean value.
+<BLOCKQUOTE>
+<TT>public boolean postEvent(Event e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ComponentPeer peer = this.peer;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (handleEvent(e)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (parent != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.translate(x,
+y);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (parent.postEvent(e))
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (peer != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return peer.handleEvent(e);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+For example, suppose a frame contains a panel, and within the
+panel is a button. If the button is selected, then <TT>postEvent()</TT>
+is called successively on the button, the panel, and the frame
+(assuming that each of these returns <TT>fals</TT>e
+from <TT>handleEvent()</TT>). Then
+the event is offered to <TT>handleEvent()</TT>.
+<P>
+Within this structure, the Java AWT 1.0 has two ways of dealing
+with the native events-the &quot;old&quot; and &quot;new&quot;
+ways.  This has two unfortunate effects: First, the Java code
+you write as an applications programmer may be different for the
+two models; second, Sun has promised to migrate events from the
+old model to the new model over time, which means that the code
+you write today may not work tomorrow.
+<H3>Old Event Model for Component</H3>
+<P>
+In the old model, a native event affects the native object immediately.
+ In response to a mouse click, for example, the focus may change
+to an application and bring it to the top; in response to selecting
+an item in a list, the highlighted element may change.  When the
+AWT event is created, it belongs to the Java level only.  The
+event that triggered the application code should be treated as
+a read-only object because changes to it have no effect.
+<P>
+When application code executes for the event it may return <TT>true
+</TT>or <TT>false</TT> from
+<TT>handleEvent().</TT> The common
+convention has been to return <TT>true</TT>
+to stop further event propagation.
+<P>
+There is a lot of code in the public domain that still assumes
+this event model, and a lot of tutorials and books that tell you
+that this is the way to do it. Unfortunately, you have to use
+this old model for some cases even in JDK 1.0.1 because of bugs,
+some of which are discussed in a later section.
+<H3>New Event Model for Component</H3>
+<P>
+The new model changed the underlying handling of native events
+so that Java application code can <I>filter</I> events.
+<P>
+In a TextComponent, what gets typed may not be what the application
+wants to see in the TextComponent. For example, the application
+may want:
+<UL>
+<LI>To convert all characters typed to lowercase
+<LI>To change all characters to an asterisk for password entry
+(TextField has a method just for this use, but this is really
+too specialized)
+<LI>To discard unwanted characters
+<LI><FONT COLOR=#000000>To replace a character by a sequence as
+in macro expansion</FONT>
+</UL>
+<P>
+These examples show why an application may want to change the
+event presented to a different one, to discard the event, or to
+change it into a sequence of events.
+<P>
+The new model supports this by trapping the native event <I>before
+</I>it gets to the native GUI object.  It uses this to create
+the AWT object that it sends on its route up through the object
+and its parents and back down through the peers.  Once it arrives
+back in the peer object, it is converted back into a native event
+and <I>then</I> is given to the native object. Changes to the
+AWT event are rejected by changes to the native event, so that
+an application can filter and modify events.<BR>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The peer objects allow platform-specific code to execute. You should normally stay away from peer objects because they are a &quot;hidden&quot; part of AWT that exists to implement lots of native code methods. The new event model forces you to pay more 
+attention to the peer objects than you should.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Right now, the AWT only actively uses the new event model for
+key events: A key event is trapped before it gets to the native
+GUI object, is sent through the application code, and then the
+(possibly modified) event is fed back into the native GUI object.
+The new model allows an application to change the input character
+into a different one: One of the component's <TT>handleEvent()</TT>
+methods need only change the key value while returning <TT>false</TT>.
+For example, to change every character input into lowercase for
+a TextArea, the <TT>keyUp()</TT> method
+should be overridden to
+<BLOCKQUOTE>
+<TT>public boolean keyUp(event evt, int key)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;evt.key = Character.toLowerCase((char)
+key);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Suppressing a character entirely is done by one of the <TT>handleEvent()</TT>
+methods returning <TT>true</TT>. Expanding
+a single keystroke into a set of keystrokes is a bit messier,
+but can be done by generating a set of events and passing them
+to the parent's <TT>handleEvent()</TT>.
+An example is given later to do this.<BR>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>You should remember the following points:
+<UL>
+<LI>In AWT 1.0.2, filtering by the new event model is only done to key events-but the Sun documents suggest this will be extended to other event types over time.
+<LI>The AWT code to do this is broken in Windows 95 for JDK version 1.0.1 and earlier, so nothing changes if you do change the event's key.
+<LI>The AWT code to catch key events for the X/Motif JDK version 1.0.1 is also broken-you don't even get the events to try to change them.
+<LI>If the bugs get fixed, then events <I>must</I> be passed to the peer object, or they will never get to the native GUI object. Thus, <TT>handleEvent()</TT> must never return <TT>true</TT>, only <TT>false</TT> for key events (unless you want to discard 
+the event).
+</UL>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The net result of this idea is that <TT>handleEvent()</TT>
+must return false for those event types which get intercepted
+before reaching the native GUI object. This happens by default.
+Even if extensive application code is invoked by receipt of the
+event, however, it must still return <TT>false</TT>.
+If <TT>handleEvent()</TT> returns
+<TT>true</TT>, the event will never
+get back to the GUI object. This is a distinct change from the
+old event model.
+<P>
+On the other hand, for those event types which are <I>not</I>
+intercepted, the old event model applies, and the component that
+handles the event should return <TT>true</TT>.
+<P>
+Regrettably, in JDK 1.0 you cannot assume a single approach for
+all event types. Adopting the old model will result in lost key
+events, whereas adopting the new model, returning <TT>false</TT>,
+leads to problems with other event types (an example appears in
+the section &quot;Window Events&quot;).
+<P>
+This problem could have been solved more cleanly by allowing a
+<I>string</I> of keys to be stored in an event, using the old
+event model and then passing the (possibly modified) event into
+the native object. Unfortunately, this process would have to be
+done within the peer object, which would be messy for application
+developers; however, it is fairly easy for those in charge of
+the AWT.
+<H2><A NAME="TheEventClass"><FONT SIZE=5 COLOR=#FF0000>The Event
+Class</FONT></A></H2>
+<P>
+While processing events, an application may need to make use of
+information such as the location of the mouse in a button click.
+ Much of this information is contained in the event itself, which
+is an instance of the Event class.  This section discusses this
+class in more detail.
+<P>
+The Event class is central to the AWT. Events are constructed
+by peer objects in a supposedly invisible manner. They are then
+fed into methods such as <TT>postEvent()</TT>
+and are used in <TT>handleEvent()</TT>
+and convenience methods. A detailed knowledge of the Event class
+is very necessary for use of the AWT.
+<H3>Event Fields</H3>
+<P>
+A large set of final variables exist that just define constants;
+these variables are discussed in later sections. Apart from these
+items, the variables in each Event object are
+<BLOCKQUOTE>
+<TT>Object&nbsp;&nbsp;target;<BR>
+long&nbsp;&nbsp;&nbsp;&nbsp;when;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;id;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;modifiers;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clickCount;<BR>
+Object&nbsp;&nbsp;arg;<BR>
+Event&nbsp;&nbsp;&nbsp;evt;</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>target</TT> is the object
+the event occurred in, for example the button the mouse was pressed
+in. <TT>when</TT> is a timestamp for
+the event. The <TT>x</TT> and <TT>y</TT>
+fields are the coordinates of the event within the target and
+follow the usual practice of being measured from the top-left
+of the object. The <TT>key</TT> and
+<TT>modifiers</TT> sometimes convey
+extra information; they are discussed in more detail later.
+<P>
+When objects share common characteristics, differing only in small
+ways, you may create separate classes for each, where each class
+is derived from a common parent. Alternatively, you may use non-OO
+tricks, distinguishing each item by different values of a field.
+Which method gets used depends on the designer of the class(es).
+For the Event type, a large number of different events exist,
+so having a separate class for each type would lead to a large
+number of derived classes, which cause confusion. The different
+variations on event types are instead handled by use of the <TT>id</TT>
+field within the single Event class. The values of this field
+are discussed later.
+<P>
+Events are generated by many different objects-buttons, Lists,
+TextField, etc. When an Event is prepared, the <TT>arg</TT>
+field may be set to any suitable object by the AWT object implementing
+<TT>postEvent()</TT>. This field is
+often set to information that can be obtained from the event and
+is just for convenience.
+<P>
+Because of Java safety rules, the various fields will always contain
+sensible values. Whether they actually have <I>useful</I> values
+depends on the type of the event.
+<H3>Event Types</H3>
+<P>
+The constant values used to distinguish event types appear in
+Table 11.1. They appear roughly alphabetically but are grouped
+by function.  For example, there are two focus-related events,
+four key-related events, etc.<BR>
+<P>
+<CENTER><B>Table 11.1. Event types.</B></CENTER>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD COLSPAN=3 WIDTH=553><TT>ACTION_EVENT</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>GOT_FOCUS</TT>
+</TD><TD WIDTH=202><TT>LOST_FOCUS</TT>
+</TD><TD WIDTH=161><TT>&nbsp;</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>KEY_ACTION</TT>
+</TD><TD WIDTH=202><TT>KEY_ACTION_RELEASE</TT>
+</TD><TD WIDTH=161><TT>KEY_PRESS</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>KEY_RELEASE</TT>
+</TD><TD WIDTH=202><TT>&nbsp;</TT>
+</TD><TD WIDTH=161><TT>&nbsp;</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>LIST_DESELECT</TT>
+</TD><TD WIDTH=202><TT>LIST_SELECT</TT>
+</TD><TD WIDTH=161><TT>&nbsp;</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>LOAD_FILE</TT>
+</TD><TD WIDTH=202><TT>SAVE_FILE</TT>
+</TD><TD WIDTH=161><TT>&nbsp;</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>MOUSE_DOWN</TT>
+</TD><TD WIDTH=202><TT>MOUSE_DRAG</TT>
+</TD><TD WIDTH=161><TT>MOUSE_ENTER</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>MOUSE_EXIT</TT>
+</TD><TD WIDTH=202><TT>MOUSE_MOVE</TT>
+</TD><TD WIDTH=161><TT>MOUSE_UP</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>SCROLL_ABSOLUTE</TT>
+</TD><TD WIDTH=202><TT>SCROLL_LINE_DOWN</TT>
+</TD><TD WIDTH=161><TT>SCROLL_LINE_UP</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>SCROLL_PAGE_DOWN</TT>
+</TD><TD WIDTH=202><TT>SCROLL_PAGE_UP</TT>
+</TD><TD WIDTH=161><TT>&nbsp;</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>WINDOW_DEICONIFY</TT>
+</TD><TD WIDTH=202><TT>WINDOW_DESTROY</TT>
+</TD><TD WIDTH=161><TT>WINDOW_EXPOSE</TT>
+</TD></TR>
+<TR><TD WIDTH=190><TT>WINDOW_ICONIFY</TT>
+</TD><TD WIDTH=202><TT>WINDOW_MOVED</TT>
+</TD><TD WIDTH=161></TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>Useful Event Fields</H3>
+<P>
+The <TT>id</TT> field is used by the
+toolkit and also by the Java programmer to distinguish between
+event types. Just as with native events, different event types
+have different pieces of useful information. For example, the
+<TT>ACTION_EVENT</TT> is generated
+after a button has been clicked. The toolkit designers have decided
+that a knowledge of the x, y coordinates of the mouse is not necessary
+here, but a knowledge of the button's label is.
+<P>
+Because the different event types are all handled within the same
+class, some fields have useful information, but others do not.
+This is poor OO practice but is partly excusable. It avoids a
+large number of subclasses of an abstract event class, and due
+to the default values for Java data types, the useless fields
+will never have &quot;dangerous&quot; values in them. Table 11.2
+lists the fields of the event class that are valid for the different
+types of event. The <TT>target</TT>
+field and <TT>id</TT> fields are always
+valid for each type. Some event types are never generated by the
+toolkit, so their valid fields are unknown.<BR>
+<P>
+<CENTER><B>Table 11.2. Valid event fields.</B></CENTER>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=247><B>Event</B></TD><TD WIDTH=288><B>Valid Fields</B>
+</TD></TR>
+<TR><TD WIDTH=247><TT>ACTION_EVENT</TT>
+</TD><TD WIDTH=288><TT>arg</TT>*</TD>
+</TR>
+<TR><TD WIDTH=247><TT>LIST_DESELECT</TT>
+</TD><TD WIDTH=288><TT>arg</TT></TD>
+</TR>
+<TR><TD WIDTH=247><TT>LIST_SELECT</TT>
+</TD><TD WIDTH=288><TT>arg</TT></TD>
+</TR>
+<TR><TD WIDTH=247><TT>GOT_FOCUS</TT>
+</TD><TD WIDTH=288>none</TD></TR>
+<TR><TD WIDTH=247><TT>LOST_FOCUS</TT>
+</TD><TD WIDTH=288>none</TD></TR>
+<TR><TD WIDTH=247><TT>LOAD_FILE</TT>
+</TD><TD WIDTH=288>never generated</TD></TR>
+<TR><TD WIDTH=247><TT>SAVE_FILE</TT>
+</TD><TD WIDTH=288>never generated</TD></TR>
+<TR><TD WIDTH=247><TT>MOUSE_DOWN</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, modifiers, clickCount
+</TD></TR>
+<TR><TD WIDTH=247><TT>MOUSE_DRAG</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, modifiers
+</TD></TR>
+<TR><TD WIDTH=247><TT>MOUSE_ENTER</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>
+</TD></TR>
+<TR><TD WIDTH=247><TT>MOUSE_EXIT</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>
+</TD></TR>
+<TR><TD WIDTH=247><TT>MOUSE_MOVE</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, modifiers
+</TD></TR>
+<TR><TD WIDTH=247><TT>MOUSE_UP</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, modifiers
+</TD></TR>
+<TR><TD WIDTH=247><TT>SCROLL_ABSOLUTE</TT>
+</TD><TD WIDTH=288><TT>arg</TT></TD>
+</TR>
+<TR><TD WIDTH=247><TT>SCROLL_LINE_DOWN</TT>
+</TD><TD WIDTH=288><TT>arg</TT></TD>
+</TR>
+<TR><TD WIDTH=247><TT>SCROLL_LINE_UP</TT>
+</TD><TD WIDTH=288><TT>arg</TT></TD>
+</TR>
+<TR><TD WIDTH=247><TT>SCROLL_PAGE_DOWN</TT>
+</TD><TD WIDTH=288><TT>arg</TT></TD>
+</TR>
+<TR><TD WIDTH=247><TT>SCROLL_PAGE_UP</TT>
+</TD><TD WIDTH=288><TT>arg</TT></TD>
+</TR>
+<TR><TD WIDTH=247><TT>KEY_ACTION</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, key, modifiers
+</TD></TR>
+<TR><TD WIDTH=247><TT>KEY_ACTION_RELEASE</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, key, modifiers
+</TD></TR>
+<TR><TD WIDTH=247><TT>KEY_PRESS</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, key, modifiers
+</TD></TR>
+<TR><TD WIDTH=247><TT>KEY_RELEASE</TT>
+</TD><TD WIDTH=288><TT>when</TT>, <TT>x</TT>, <TT>y</TT>, key, modifiers
+</TD></TR>
+<TR><TD WIDTH=247><TT>WINDOW_DEICONIFY</TT>
+</TD><TD WIDTH=288>none</TD></TR>
+<TR><TD WIDTH=247><TT>WINDOW_DESTROY</TT>
+</TD><TD WIDTH=288>none</TD></TR>
+<TR><TD WIDTH=247><TT>WINDOW_EXPOSE</TT>
+</TD><TD WIDTH=288>never generated</TD></TR>
+<TR><TD WIDTH=247><TT>WINDOW_ICONIFY</TT>
+</TD><TD WIDTH=288>none</TD></TR>
+<TR><TD WIDTH=247><TT>WINDOW_MOVED</TT>
+</TD><TD WIDTH=288><TT>x</TT>, <TT>y</TT>
+</TD></TR>
+<TR><TD COLSPAN=2 WIDTH=535>* For MenuItem and CheckboxMenuItem the fields <TT>when</TT> and <TT>modifiers</TT> are also valid.
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+This and later tables show some minor inconsistencies. For a <TT>GOT_FOCUS</TT>
+or <TT>LOST_FOCUS</TT> event, no additional
+fields of the event are set. The <TT>gotFocus()</TT>
+and <TT>lostFocus()</TT> methods,
+however, have an extra parameter object, which turns out to be
+just <TT>null</TT>-a pretty useless
+parameter, really!
+<H3><TT><FONT SIZE=4 >arg</FONT></TT><FONT SIZE=4>
+value for </FONT><TT><FONT SIZE=4 >ACTION_EVENT</FONT></TT>
+</H3>
+<P>
+The <TT>arg</TT> value in an event
+carries additional information supplied by the toolkit about the
+context in which the event occurred. This value does not contain
+any new information content because any valid information can
+either be obtained from other event fields or from the object
+the event occurred in (available in target). It is, however, convenient
+to use sometimes.
+<P>
+Table 11.3 lists the value of <TT>arg</TT>
+for events of type <TT>ACTION_EVENT</TT>.
+<BR>
+<P>
+<CENTER><B>Table 11.3. </B><TT><B></TT>arg</FONT></B></TT><B>
+Values for </B><TT><B></TT>ACTION_EVENT</FONT></B></TT><B>.</B></CENTER>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=153><B>Object</B></TD><TD WIDTH=186><B>Value</B>
+</TD><TD WIDTH=75><B>Type</B></TD></TR>
+<TR><TD WIDTH=153>Button</TD><TD WIDTH=186><TT>getLabel()</TT>
+</TD><TD WIDTH=75>String</TD></TR>
+<TR><TD WIDTH=153>Checkbox</TD><TD WIDTH=186>Boolean(<TT>getState()</TT>)
+</TD><TD WIDTH=75>Boolean</TD></TR>
+<TR><TD WIDTH=153>CheckboxMenuItem</TD><TD WIDTH=186><TT>getLabel()</TT>
+</TD><TD WIDTH=75>String</TD></TR>
+<TR><TD WIDTH=153>Choice</TD><TD WIDTH=186><TT>getSelectedItem()</TT>
+</TD><TD WIDTH=75>String</TD></TR>
+<TR><TD WIDTH=153>List</TD><TD WIDTH=186><TT>getSelectedItem()</TT>
+</TD><TD WIDTH=75>String</TD></TR>
+<TR><TD WIDTH=153>MenuItem</TD><TD WIDTH=186><TT>getLabel()</TT>
+</TD><TD WIDTH=75>String</TD></TR>
+<TR><TD WIDTH=153>TextField</TD><TD WIDTH=186><TT>getText()</TT>
+</TD><TD WIDTH=75>String</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><TT><FONT SIZE=4 >arg</FONT></TT><FONT SIZE=4>
+Value for </FONT><TT><FONT SIZE=4 >SCROLLBAR_...</FONT></TT><FONT SIZE=4>
+Events</FONT></H3>
+<P>
+The events generated for the various Scrollbar actions all have
+a valid <TT>arg</TT> value of class
+<TT>Integer</TT> (note that this class
+is a wrapper class around the base type <TT>int</TT>).
+These values all contain the new slider location value.
+<H3><TT><FONT SIZE=4 >arg</FONT></TT><FONT SIZE=4>
+Value for </FONT><TT><FONT SIZE=4 >LIST_...</FONT></TT><FONT SIZE=4>
+Events</FONT></H3>
+<P>
+The events generated for <TT>LIST_SELECT</TT>
+and <TT>LIST_DESELECT</TT> have a
+valid <TT>arg</TT> value of type <TT>Integer</TT>,
+which is the index selected or deselected.
+<H3>Tracking Mouse Clicks</H3>
+<P>
+For a simple illustration using this idea, the following example
+shows a box within a Canvas. When the user successfully clicks
+the mouse in the box, a &quot;hit&quot; count is updated, but
+when the box is missed, a &quot;miss&quot; count is updated instead.
+After each mouse click, the box gets moved to a new random location.
+This example uses the method <TT>mouseDown()</TT>
+in the Canvas object and uses the <TT>x</TT>,
+<TT>y</TT> values set for this method
+from the event information. The application, <TT>Chase.java</TT>,
+appears in Figure 11.1 with code in Listing 11.2.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f11-1.gif" ><B>Figure 11.1 :</B><I> Chase application.</I></A>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.2. </B><TT><B></TT>Chase.java</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.util.*;<BR>
+import java.lang.*;<BR>
+import java.awt.*;<BR>
+<BR>
+class Chase extends Frame {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static public void main(String argv[])
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new Chase().show();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Chase() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Report r = new
+Report();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;North&quot;,
+r);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ChaseArea ca =
+new ChaseArea(r);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;Center&quot;,
+ca);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(300, 300);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+/** A status bar showing hits and misses counts<BR>
+&nbsp;*/<BR>
+class Report extends Panel {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int HitCount = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int MissCount = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Label Hits, Misses;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Report() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setLayout(new
+GridLayout(1, 2));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Hits = new Label(&quot;Hits:
+&quot; + HitCount);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Misses = new Label(&quot;Misses:
+&quot; + MissCount);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(Hits);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(Misses);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void addHit() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Hits.setText(&quot;Hits:
+&quot; + ++HitCount);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void addMiss() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Misses.setText(&quot;Misses:
+&quot; + ++MissCount);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+/** A Canvas with a box drawn in it that moves<BR>
+&nbsp;*&nbsp;&nbsp;randomly when the mouse is clicked in it<BR>
+&nbsp;*/<BR>
+class ChaseArea extends Canvas {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final int box_size = 8;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Rectangle box;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Random rand;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int box_x = 0, box_y = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Report report;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ChaseArea(Report r) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;report = r;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rand = new Random();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;box_x = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;box_y = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// draw a new rectangle<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g.drawRect(box_x,
+box_y, box_size, box_size);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// move the box to a random location<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void moveBox() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;box_x = (int)
+Math.floor(rand.nextFloat() *<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(size().width
+- box_size));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;box_y = (int)
+Math.floor(rand.nextFloat() *<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(size().height
+- box_size));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// handle mouse down, moving box and updating
+report line<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean mouseDown(Event evt, int
+x, int y) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (box_x &lt;=
+x &amp;&amp; x &lt;= box_x + box_size &amp;&amp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;box_y
+&lt;= y &amp;&amp; y &lt;= box_y + box_size) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;report.addHit();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;report.addMiss();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;moveBox();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="KeyEvents"><FONT SIZE=5 COLOR=#FF0000>Key Events</FONT></A>
+</H2>
+<P>
+Key and mouse events are probably the most important of the events
+that occur in the AWT.  They are a little more complex than other
+events, and this is explored a little more in these two sections.
+<P>
+There are four key events: <TT>KEY_PRESS</TT>,
+<TT>KEY_RELEASE</TT>, <TT>KEY_ACTION</TT>,
+and <TT>KEY_ACTION_RELEASE</TT>. The
+first two of these are generated by pressing and releasing of
+the &quot;ordinary&quot; keys such as alphabetics and punctuation.
+ The second two are generated in response to pressing and releasing
+&quot;special&quot; keys such as the function keys, the Escape
+key, etc.  The event's <TT>id</TT>
+field can be used to distinguish between these types.
+<H3>Key Values</H3>
+<P>
+Java uses the 16-bit Unicode character set to allow for internationalized
+applications. This is an area where the native toolkit has great
+influence. Windows NT uses Unicode for all character processing.
+The Motif toolkit has support for international character sets
+using &quot;wide&quot; characters and XmStrings. Its implementation
+of the AWT toolkit does not make any use of this as yet, using
+only 8-bit characters. Windows 95 still uses the Windows 3.1 windowing
+functions, which do not understand Unicode at all. Thus, although
+Java admirably supports Unicode, the ordinary ASCII set is all
+that can be currently used portably. Isn't this a shame in a graphical
+environment?
+<P>
+In addition to the &quot;ordinary&quot; characters, the Event
+class defines a number of constants for certain keys, which appears
+in Table 11.4.<BR>
+<P>
+<CENTER><B>Table 11.4. Constant key values.</B></CENTER>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=62><TT>DOWN</TT></TD>
+<TD WIDTH=53><TT>END</TT></TD><TD WIDTH=62><TT>HOME</TT>
+</TD><TD WIDTH=62></TT>LEFT</FONT></TD><TD WIDTH=62></TT>PGDN</FONT>
+</TD><TD WIDTH=62></TT>PGUP</FONT></TD><TD WIDTH=72><TT>RIGHT</TT>
+</TD><TD WIDTH=43><TT>UP</TT></TD>
+<TD WIDTH=110><TT>f1 ... f12</TT>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+These can be used in code as
+<BLOCKQUOTE>
+<TT>if (evt.key == Event.HOME) ...</TT>
+</BLOCKQUOTE>
+<H3><TT><FONT SIZE=4 >modifiers</FONT></TT></H3>
+<P>
+For some event types-the <TT>KEY...</TT>
+and <TT>MOUSE...</TT> types-the <TT>modifiers</TT>
+field is valid. <TT>modifiers</TT>
+is a bitmask of values, where zero means no mask. The possible
+masks are given in Table 11.5.<BR>
+<P>
+<CENTER><B>Table 11.5. </B><TT><B></TT>modifiers</FONT></B></TT><B>
+constants.</B></CENTER>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=107>ALT_MASK</TD><TD WIDTH=117>CTRL_MASK</TD><TD WIDTH=121>META_MASK
+</TD><TD WIDTH=121>SHIFT_MASK</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+For key events, they have the expected values-for example, the
+META key on a Sun is the &quot;diamond&quot; key.
+<H2><A NAME="MouseEvents"><FONT SIZE=5 COLOR=#FF0000>Mouse Events</FONT></A>
+</H2>
+<P>
+There are six mouse events, <TT>MOUSE_DOWN</TT>,
+<TT>MOUSE_DRAG</TT>, <TT>MOUSE_ENTER</TT>,
+<TT>MOUSE_EXIT</TT>, <TT>MOUSE_MOVE</TT>,
+and <TT>MOUSE_UP</TT>.  <TT>MOUSE_DOWN</TT>
+and <TT>MOUSE_UP</TT> occur on button
+clicks for any other mouse buttons. <TT>MOUSE_MOVE</TT>
+and <TT>MOUSE_DRAG</TT> occur on moving
+the mouse-in <TT>MOUSE_DRAG</TT> one
+of the mouse buttons is held down during movement.  <TT>MOUSE_ENTER</TT>
+and <TT>MOUSE_EXIT</TT> occur on moving
+the mouse pointer in and out of a window.
+<H3>Modifiers</H3>
+<P>
+The following information is not officially documented, and some
+newsgroup messages suggest that this part of Java may change in
+the future.
+<P>
+For mouse events, the modifiers play an unusual role in that they
+distinguish keys using a three-button model. With a modifier value
+of zero, the button selected is the left button; with a modifier
+value of <TT>ALT_MASK</TT>, the button
+selected is the middle button; with a modifier value of <TT>META_MASK</TT>,
+the button selected is the right button.
+<P>
+When working with a physical mouse with fewer buttons than are
+logically required, one technique is to use modifier keys as described
+in the preceding text. Another technique is <I>chording</I>, where
+two buttons are pressed simultaneously. This technique is physically
+cumbersome. Chording is not supported by AWT: Even though the
+modifier value is a bit-wise <TT>OR</TT>
+of values, the value of zero for the left button means it canot
+be tested!
+<P>
+Many Macintosh users only have a single-button mouse, and many
+pc mice are still only two-button. Unless absolutely necessary,
+an application should try not to assume more than one button.
+<H2><A NAME="DisplayingEvents"><FONT SIZE=5 COLOR=#FF0000>Displaying
+Events</FONT></A></H2>
+<P>
+In debugging an application and in just trying to find out what
+happens to events, you may want to be able to trace events as
+the application runs. This process can be done for the majority
+of events by simply overriding the top-level frame's <TT>handleEvent()</TT>
+to print event information and then call the overridden event
+handler. This step prints out all events, except those which are
+removed from the event chain by components lower in the window
+tree.
+<P>
+The following program (Listing 11.3) shows events for a very trivial
+program of a label and button in a frame.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.3. </B><TT><B></TT>EventTest.java</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+<BR>
+public class EventTest extends Frame {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static void main(String argv[])
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new EventTest().show();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;EventTest() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// add your own
+windows in here<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;North&quot;,
+new Label(&quot;Hello World&quot;));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;South&quot;,
+new Button(&quot;Hello too&quot;));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(200, 200);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean handleEvent(Event evt)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(evt.toString());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return super.handleEvent(evt);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The program prints constant integer values (such as <TT>id</TT>)
+in their literal, rather than symbolic, form. To interpret these
+values, you may need to have the <TT>Event.java</TT>
+source code handy.
+<H2><A NAME="EventswithMethods"><FONT SIZE=5 COLOR=#FF0000>Events
+with Methods</FONT></A></H2>
+<P>
+Events are eventually dealt with by a method <TT>handleEvent()</TT>
+of some component object. The default method does a switch on
+event <TT>id</TT> and often calls
+another method of component. While the <TT>handleEvent()</TT>
+method can be overridden in subclasses, doing so is not an ideal
+solution, and it is better to override the method called in the
+switch. For example, override the method <TT>action()</TT>
+rather than look for <TT>ACTION_EVENT</TT>
+in <TT>handleEvent()</TT>.
+<P>
+Unfortunately, you cannot always use the preferred style of programming
+because not all event types call their own methods. Table 11.6
+lists the methods called (or not called) by <TT>handleEvent()</TT>
+of component objects. In particular, note that none of the <TT>SCROLL_...</TT>
+nor <TT>WINDOW_...</TT> events are
+handled. Special treatment to redeem this deficiency (and a related
+one with Menus) appears in the section &quot;Fixing Broken Event
+Handling.&quot;<BR>
+<P>
+<CENTER><B>Table 11.6. Event types and associated methods.</B></CENTER>
+<P><P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=197><B>Event Type</B></TD><TD WIDTH=360><B>Method Called</B>
+</TD></TR>
+<TR><TD WIDTH=197><TT>ACTION_EVENT</TT>
+</TD><TD WIDTH=360><TT>action(Event evt, Object arg)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>LIST_DESELECT</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>LIST_SELECT</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>GOT_FOCUS</TT>
+</TD><TD WIDTH=360><TT>gotFocus(Event evt, Object arg)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>LOST_FOCUS</TT>
+</TD><TD WIDTH=360><TT>lostFocus(Event evt, Object arg)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>LOAD_FILE</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>SAVE_FILE</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>MOUSE_DOWN</TT>
+</TD><TD WIDTH=360><TT>mouseDown(Event evt, int x, int y)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>MOUSE_DRAG</TT>
+</TD><TD WIDTH=360><TT>mouseDrag(Event evt, int x, int y)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>MOUSE_ENTER</TT>
+</TD><TD WIDTH=360><TT>mouseEnter(Event evt, int x, int y)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>MOUSE_EXIT</TT>
+</TD><TD WIDTH=360><TT>mouseExit(Event evt, int x, int y)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>MOUSE_MOVE</TT>
+</TD><TD WIDTH=360><TT>mouseMove(Event evt, int x, int y)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>MOUSE_UP</TT>
+</TD><TD WIDTH=360><TT>mouseUp(Event evt, int x, int y)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>SCROLL_ABSOLUTE</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>SCROLL_LINE_DOWN</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>SCROLL_LINE_UP</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>SCROLL_PAGE_DOWN</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>SCROLL_PAGE_UP</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>KEY_ACTION</TT>
+</TD><TD WIDTH=360><TT>keyDown(Event evt, int key)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>KEY_ACTION_RELEASE</TT>
+</TD><TD WIDTH=360><TT>keyUp(Event evt, int key)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>KEY_PRESS</TT>
+</TD><TD WIDTH=360><TT>keyDown(Event evt, int key)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>KEY_RELEASE</TT>
+</TD><TD WIDTH=360><TT>keyUp(Event evt, int key)</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>WINDOW_DEICONIFY</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>WINDOW_DESTROY</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>WINDOW_EXPOSE</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>WINDOW_ICONIFY</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+<TR><TD WIDTH=197><TT>WINDOW_MOVED</TT>
+</TD><TD WIDTH=360><TT>no method</TT>
+</TD></TR>
+</TABLE></CENTER>
+<H2><A NAME="GeneratingEvents"><FONT SIZE=5 COLOR=#FF0000>Generating
+Events</FONT></A></H2>
+<P>
+Because the AWT responds to events, it is useful to know where
+the events come.  The primary source is from the toolkit itself,
+which generates events in response to user actions.
+<H3>Toolkit Generated Events</H3>
+<P>
+One complicated area of AWT is knowing what events get generated
+by what components. For example, an <TT>ACTION_EVENT</TT>
+is generated when a button is clicked, but what other events are
+generated for buttons? While it would be nice to be able to provide
+a table of what events are generated for what objects, it is not
+possible-no such table exists. The following list provides some
+of the particularly worrying aspects of AWT in the JDK version
+1.0.1:
+<UL>
+<LI>The events generated for an object can change if other objects
+are added. For example, an application consisting of just one
+label in a frame will generate key events for the label under
+Motif. Add another object, such as a button, and the label will
+not do so anymore. Although apparently trivial, an application
+with only a label could be used for a digital clock display, so
+such inconsistent behavior can show up in real applications.
+<LI>A discrepancy in behavior often exists between Windows 95
+and Motif. For example, in Windows 95, <TT>KEY_UP</TT>
+(and other KEY events) are generated for TextArea and TextField.
+For Motif, they are not.  This particular problem seems to have
+been fixed in JDK 1.0.2. There is no workaround for older versions.
+<LI><FONT COLOR=#000000>A number of objects generate events that
+would not appear to be of interest to them. For example, Panel
+generates mouse motion events. Why should it do this? It is just
+an object to contain other objects. It is not as though Panel
+should be used for graphics drawing, which would need mouse tracking-Canvas
+gets used for that.</FONT>
+</UL>
+<P>
+These problems could all chalked up to implementation hiccups
+if an implementation-independent specification of what <I>should</I>
+happen existed. Unfortunately, no such document seems to exist
+at the moment.
+<H3>Application Generated Events</H3>
+<P>
+In the native toolkits, you may be able to synthesize events and
+send them to objects. Can this be done in AWT, and is there any
+point to it?
+<P>
+It can certainly be done; this process is exactly what happens
+in the peer objects. Methods such as <TT>action()</TT>
+in the button's peer object get invoked by the native toolkit
+when the button is clicked. The method creates an event and posts
+it
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;public void action()
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;target.postEvent(new
+Event(target, Event.ACTION_EVENT,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+((Button)target).getLabel()));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+where the <TT>target</TT> is the button.
+<P>
+Is it worthwhile for an application to do this? The answer depends,
+unfortunately, on the type of event and whether it is handled
+under the old or new event model. Now look at two cases, a button
+under the old model and a TextField under the new one.
+<P>
+When a button is clicked, the native toolkit catches the event
+and deals with it. It changes the button's appearance, depressing
+and raising it. After all this is over, control is passed to AWT
+to create an <TT>ACTION_EVENT</TT>
+and post it to the button. The native event is handled by the
+old model: You can discard or change the AWT event without any
+effect on the GUI appearance-all that was already dealt with before
+the AWT event was created.
+<P>
+You can create an <TT>ACTION_EVENT</TT>
+and post it to a button. The application-specific code will still
+run in response to the event, but it will have no effect on the
+native implementation of the button. Thus, the button won't depress
+and raise. But other things won't happen that are also important:
+Selecting a button in an application that currently does not have
+the focus will cause it to rise to the top of other applications
+and set the focus to the button (under many window managers).
+This cannot be done in Java as yet.
+<P>
+Similar things happen with List. You can create a <TT>LIST_SELECT</TT>
+event and send it to the List object. The application will process
+the new selection, but the native GUI object will still be showing
+the old selection.
+<P>
+The net result of this for the old model is that the application
+may get out of synch with its native GUI implementation. This
+should be avoided. Easier ways probably exist, such as calling
+<TT>select()</TT> for the List object,
+which removes these problems.
+<P>
+So much for the old event model. In the new model, the application
+acts as a <I>filter</I> on the event, and changes are permissible.
+From JDK 1.0.2 onwards, what happens with keystrokes in <TT>TextComponents</TT>
+is this: The keystroke is captured before it reaches the native
+object and passed up to AWT. Application code has the ability
+to modify or discard the event before it finally gets back to
+the native object via the TextComponent's peer. The (possibly
+modified) event is then allowed to affect the native object in
+the normal way.
+<P>
+In the new event model, it does make sense to create and post
+events from within the application. The created events will not
+only affect the application but will also make their way into
+the native GUI object. For example, a single keystroke could be
+expanded into a sequence of strokes by overriding <TT>keyUp()</TT>
+in a subclass of the TextComponent:
+<BLOCKQUOTE>
+<TT>public boolean keyUp(Event evt, int key)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (key == 9) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// expand tab
+to 8 spaces<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Event e = new
+Event(evt.target, evt.when, Event.KEY_RELEASE,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;evt.x,
+evt.y, ' ', evt.flags, null));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (peer != null)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int n = 0; n &lt; 8; n++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;peer.handleEvent(e);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// lose the tab
+event<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// handle other keys normally<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return super.handleEvent(evt);<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The preceding code short-circuits what any of its window parents
+might want to do to the new sequence of events. It also assumes
+that a subclass of TextArea/TextField is doing this. To relax
+these restrictions gets messier: You have to avoid potentially
+recursing around your macro expansion by passing the new events
+up to the parent's <TT>postEvent()</TT>
+and then deal with peer handling if the event comes back.
+<H2><A NAME="FixingBrokenEventHandling"><FONT SIZE=5 COLOR=#FF0000>Fixing
+Broken Event Handling</FONT></A></H2>
+<P>
+In several places in this chapter, we have mentioned problems
+with the event model. Some of these cannot be fixed by the user
+of the AWT and will have to wait until the authors of the libraries
+fix them. On the other hand, many problems can be dealt with.
+This section looks at some techniques that an application writer
+can use.
+<H3>When to Handle Events</H3>
+<P>
+If <TT>handleEvent()</TT> for a component
+returns <TT>false</TT>, then the event
+is passed to <TT>handleEvent()</TT>
+for its parent in the window tree. This leads to two common locations
+for handling events: in the object for which they were generated
+or in some ancestor object, typically a frame.
+<P>
+If Frame gets used to handle events, then it generally receives
+events from many descendants. Consequently, it will have to figure
+out which descendant the event came from before it can call the
+relevant application code. You see much code like this in a subclass
+of Frame:
+<BLOCKQUOTE>
+<TT>public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String name = (String) what;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (name.equals(&quot;File&quot;))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// handle File
+button<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else if (name.equals(&quot;Quit&quot;))
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// handle Quit
+button<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// etc<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+This process can lead to very fragile code. Consider an application
+with a few hundred buttons:
+<UL>
+<LI>Each button must have a different name, or Frame cannot distinguish
+between them. You could have a severe maintenance problem in that
+each programmer needs to have the name of <I>every</I> other object
+that can generate <TT>ACTION_EVENT</TT>.
+<LI><FONT COLOR=#000000>The application code for every button
+will be called from Frame's </FONT><TT>action()</TT>
+procedure, which could lead to a huge and inefficient method branching
+to application code for each button. It doesn't encourage modularity
+at all.
+</UL>
+<P>
+On the other hand, this technique makes it easy to deal with small
+applications. Because most of the applets and applications seen
+on the Net so far are fairly small, many examples exist using
+this method. It doesn't scale, though.
+<P>
+If each object handles its own events, then you have to subclass
+each object to hold the application code. Each individual <TT>action()</TT>
+method will <I>only</I> contain the application code for that
+object because it won't need the distinction test between objects.
+The downside is that it leads to a large number of subclasses,
+each there just to supply application code for that object.
+<P>
+Some intermediate possibilities exist, of course, but these two
+extremes are the most commonly seen. Of the two, the second seems
+preferable, where each object handles its own events. It means
+that you can rename the object, move it around the window hierarchy,
+ and so on without having to worry about losing the association
+between the object and its application code.
+<P>
+Neither of these extremes satisfy demands for <I>separation</I>
+of GUI object and application code-these concerns are addressed
+in the section &quot;Major Surgery to the Event Model.&quot;
+<H3>Missing Methods</H3>
+<P>
+For some types of events, <TT>handleEvent()</TT>
+calls a convenience method. For example, an event of type <TT>KEY_PRESS</TT>
+gets handled by <TT>keyDown()</TT>.
+Many events, unfortunately, are not, introducing an inconsistency
+in handling them.
+<P>
+This section discusses how consistency can be brought in for these
+other event types. Basically it is quite simple: Define a subclass
+of the object affected, redefine <TT>handleEvent()</TT>
+for this subclass to use convenience methods for these event types,
+and from then on, use the new class and its new convenience methods
+rather than the old one.
+<H3>List Events</H3>
+<P>
+List objects generate <TT>LIST_SELECT</TT>
+and <TT>LIST_DESELECT</TT> events.
+No branch occurs in <TT>handleEvent()</TT>
+of component for these event types, so they usually get handled
+by redefining <TT>handleEvent()</TT>
+in application code for each List object needed or deferring the
+problem to a frame that knows about all of the lists. A much simpler
+solution is to fix the problem once in a subclass of List and
+then to use this subclass when needed.
+<BLOCKQUOTE>
+<TT>class SelectList extends List {<BR>
+&nbsp;&nbsp;&nbsp;public boolean handleEvent(Event evt) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List list = (List) evt.target;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int index = ((Integer) evt.arg).intValue();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;switch (evt.id) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case Event.LIST_SELECT:
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+return selected(evt, index, list.getItem(index));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case Event.LIST_DESELECT:
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+return deselected(evt, index);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default:
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+return super.handleEvent(evt);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean selected(Event evt, int index,
+String item) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean deselected(Event evt, int index)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>SelectList</TT> class defines
+two convenience methods, <TT>selected()</TT>
+and <TT>deselected()</TT>. Each of
+these methods has as a parameter the index of the item selected/deselected.
+In the case of selection, it is also worthwhile to include the
+item selected, for convenience. (The <TT>SelectList</TT>
+also requires constructor methods like those of List. They do
+not appear here.) An example of this is given by the application
+of Listing 11.4, which displays a list of colors and repaints
+the label when a color is selected. The application appears in
+Figure 11.2.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f11-2.gif" ><B>Figure 11.2 : </B><I>Colors application.</I></A>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.4. </B><TT><B></TT>Colors.java</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+<BR>
+class Colors extends Frame {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final Color colors[] = {Color.red, Color.blue,
+Color.green};<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final String colorLabels[] = {&quot;red&quot;,
+&quot;blue&quot;, &quot;green&quot;};<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Label label;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static void main(String argv[])
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new Colors().show();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Colors() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorList list
+= new ColorList();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int n = 0;
+n&lt; colors.length; n++)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list.addItem(colorLabels[n]);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label = new Label(&quot;Hello
+World&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// set geometry
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;West&quot;,
+list);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;Center&quot;,
+label);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(300, 100);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void setColor(int index) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.setForeground(colors[index]);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+class ColorList extends SelectList {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean selected(Event evt,&nbsp;&nbsp;int
+index, String item) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((Colors) getParent()).setColor(index);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+class SelectList extends List {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean handleEvent(Event evt)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List list = (List)
+evt.target;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int index = ((Integer)
+evt.arg).intValue();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;switch (evt.id)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+case Event.LIST_SELECT:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+return selected(evt, index, list.getItem(index));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+case Event.LIST_DESELECT:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+return deselected(evt, index);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default:
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+return super.handleEvent(evt);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean selected(Event evt, int
+index, String item) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return false;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean deselected(Event evt, int
+index) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return false;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3>Scrollbar Events</H3>
+<P>
+Events related to Scrollbar are <TT>SCROLL_LINE_UP</TT>,
+<TT>SCROLL_LINE_DOWN</TT>, <TT>SCROLL_PAGE_UP</TT>,
+<TT>SCROLL_PAGE_DOWN</TT>, and <TT>SCROLL_ABSOLUTE</TT>.
+No convenience method gets called by <TT>handleEvent()</TT>for
+these event types.
+<P>
+Fix this up in the same way as for the List class by defining
+a subclass with a set of convenience methods. From then on, use
+this new class.
+<BLOCKQUOTE>
+<TT>class SelectScrollbar extends Scrollbar
+{<BR>
+&nbsp;&nbsp;&nbsp;public boolean handleEvent(Event evt) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;switch (evt.id) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case
+Event.SCROLL_ABSOLUTE:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+scrollAbsolute(evt, evt.arg);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case
+Event.SCROLL_LINE_DOWN:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+scrollLineDown(evt, evt.arg);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case
+Event.SCROLL_LINE_UP:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+srcollLineUp(evt, evt.arg);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case
+Event.SCROLL_PAGE_DOWN:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+scrollPageDown(evt, evt.arg);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case
+Event.SCROLL_PAGE_UP:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+scrollPageUp(evt, evt.arg)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default:
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+super.handleEvent(evt);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean scrollAbsolute(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean scrollLineDown(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean scrollLineUp(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean scrollPageDown(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean scrollPageUp(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3><TT><FONT SIZE=4 >WINDOW</FONT></TT><FONT SIZE=4>
+Events</FONT></H3>
+<P>
+<TT>WINDOW</TT> events are also not
+dealt with by <TT>handleEvent()</TT>,which
+leads to two problems:
+<UL>
+<LI>When a <TT>WINDOW_DESTROY</TT>
+is received, the application should exit, as it is a signal from
+the user clicking on the Windows frame Exit button. Of course,
+the application may need to do some cleanup work first. Anyway,
+the default should be to exit rather than ignore the event-users
+don't like applications that refuse to go away.
+<LI><FONT COLOR=#000000>When a </FONT><TT>WINDOW_ICONIFY</TT>
+is received in JDK version 1.0.1, the application may want to
+pause some graphics operations but continue with other operations.
+At present, the default is to ignore this event. In at least one
+case, this default is wrong, such as when an applet has created
+another top-level window such as a dialog box. If the dialog is
+iconified, the event travels all the way up to the AppletViewer,
+which thinks that <I>it</I> has been iconified! Its action is
+to stop the applet just because a dialog has been iconified, which
+is clearly wrong. This behavior has been rectified in JDK 1.0.2.
+</UL>
+<P>
+These problems should have a default handler that can be overridden
+by application-specific code. Again, you need new classes with
+new convenience methods implementing the default behavior.
+<P>
+Window events are generated for Frame, Dialog, and Window. You
+need a new subclass for each.
+<BLOCKQUOTE>
+<TT>class WindowHandlingFrame extends Frame
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean handleEvent(Event evt)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;switch (evt.id)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case
+Event.WINDOW_ICONIFY:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+windowIconified(();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case
+Event.WINDOW_DESTROY:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+windowQuit();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default:
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+super.handleEvent(evt);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean windowIconified() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean windowQuit() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.exit(0);
+<BR>
+return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+You should have similar classes for Dialog and Window.
+<H3>Menu Events</H3>
+<P>
+Event handling within menus has been designed to be different
+than component, which can be a nuisance. When a MenuItem is selected,
+an event with <TT>id</TT> set to <TT>ACTION_EVENT</TT>
+is generated, and <TT>postEvent()</TT>
+is executed for that object. <TT>postEvent()</TT>,
+however, does not call <TT>handleEvent()</TT>
+like component objects do-no method <TT>handleEvent()</TT>
+exists for MenuItems. Instead, it calls the <TT>postEvent()</TT>
+method for the parent in the GUI tree. Consequently, it walks
+up the GUI tree until it gets to the ancestor Frame object and
+executes <TT>handleEvent()</TT> for
+the Frame.
+<P>
+Because no <TT>handleEvent()</TT>
+method exists for MenuComponent objects, none of the convenience
+methods events such as <TT>action()</TT>
+or <TT>mouseDown()</TT> exist to handle
+menu events.
+<P>
+This approach seems poor because it requires the Frame object
+to know all sorts of detail information about the structure of
+its menu, which will make the application difficult to change
+as it evolves.
+<P>
+You can easily make menus behave in the same way as components,
+but it means tampering with a method that the designers of the
+AWT toolkit would probably prefer you not bother: the <TT>postEvent</TT>
+method. This is really part of the implementation side that normally
+should not be overridden. That solution seems the simplest way
+to get consistency in event handling.
+<P>
+You have no interest in actions for MenuBar and Menu-only in MenuItem.
+Define a new subclass of <TT>MenuItem</TT>
+with two methods <TT>postEvent</TT>
+and <TT>action</TT>, which shortcuts
+the component mechanism that also uses the <TT>handleEvent</TT>
+method.
+<BLOCKQUOTE>
+<TT>class MenuButton extends MenuItem {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean postEvent(Event evt) {
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (evt.id ==
+Event.ACTION_EVENT)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(action(evt, evt.arg))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return super.postEvent(evt);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+This code uses the old event model, which is currently correct
+for MenuItem. If later versions of AWT change menu handling to
+the new event model, then  you need to modify this code to call
+peer object <TT>handleEvent()</TT>
+on failure.
+<P>
+In the future, subclass all menu buttons from MenuButton, with
+application logic in <TT>action()</TT>:
+<BLOCKQUOTE>
+<TT>class QuitButton extends MenuButton {
+<BR>
+&nbsp;&nbsp;&nbsp;public boolean action(Event evt, Object what)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Exiting...&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.exit(0);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+For example, consider a program with a label in a frame, where
+you can change the foreground color of the label by selection
+from a menu. This program is similar in intent to the program
+<TT>Colors.java</TT> of Listing 11.4
+but uses a menu to select the color instead of a list. The complete
+code appears in Listing 11.5.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.5. </B><TT><B></TT>ColorMenu.java</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+<BR>
+public class ColorMenu extends Frame {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private Label label;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static void main(String argv[])
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorMenu cm =
+new ColorMenu();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cm.show();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ColorMenu() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label = new Label(&quot;Hello&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;Center&quot;,
+label);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CreateMenu();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(100, 100);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private void CreateMenu()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MenuBar mb = new
+MenuBar();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Menu fileB = new
+Menu(&quot;Color&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mb.add(fileB);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorMenuButton
+blueB = new ColorMenuButton(&quot;Blue&quot;, this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorMenuButton
+redB = new ColorMenuButton(&quot;Red&quot;, this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fileB.add(blueB);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fileB.add(redB);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setMenuBar(mb);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void changeColor(Color col) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.setForeground(col);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+<BR>
+class MenuButton extends MenuItem {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;MenuButton(String name) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(name);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean postEvent(Event evt) {
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (evt.id ==
+Event.ACTION_EVENT) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(action(evt, evt.arg))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return super.postEvent(evt);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+class ColorMenuButton extends MenuButton {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ColorMenu toplevel;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ColorMenuButton(String name, ColorMenu
+top) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(name);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toplevel = top;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String name =
+(String) what;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (name.equals(&quot;Red&quot;))
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toplevel.changeColor(Color.red);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toplevel.changeColor(Color.blue);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now, look at selected parts of this code. The class <TT>ColorMenu</TT>
+is a top-level frame extended to hold a label and a menu. An additional
+method is used to set the color of the label.
+<P>
+MenuButton derives from MenuItem and adds the new <TT>postEvent</TT>
+and <TT>action()</TT> methods. You
+also have to add in a constructor method that just calls the super
+constructor. This step needs to occur because MenuItem has only
+one constructor, which takes a String parameter, and such constructors
+cannot be inherited in Java.
+<P>
+The buttons you actually want in the menu are of class <TT>ColorMenuButton</TT>,
+which derives from the MenuButton class and overrides the <TT>action()</TT>
+method. <TT>action()</TT> calls the
+method <TT>changeColor()</TT> of the
+top-level <TT>ColorMenu</TT>, which
+resets the foreground of its label. The top level is passed through
+as a parameter in the constructor. An alternative could be to
+walk up the parent tree when required until the top level is reached.
+<H2><A NAME="ACompleteExample"><FONT SIZE=5 COLOR=#FF0000>A Complete
+Example</FONT></A></H2>
+<P>
+The following example enables the selection of an image from a
+list and shows the image in a clipped area. This setup uses the
+modified List class of <TT>SelectList</TT>
+to handle the selection and the modified Scrollbar class of <TT>SelectScrollbar</TT>
+to handle the interaction with the scrollbars. These two classes
+are omitted from the following listing because they have already
+been presented.
+<P>
+A screen capture of this applet running from within the AppletViewer
+appears in Figure 11.3, with the program shown in Listing 11.6.
+The applet HTML appears in Listing 11.7.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f11-3.gif" ><B>Figure 11.3 : </B><I>An image viewer applet.</I></A>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.6. ImageViewerApplet.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+import java.awt.image.*;<BR>
+import java.applet.Applet;<BR>
+<BR>
+/**<BR>
+&nbsp;* An applet class to view images<BR>
+&nbsp;*/<BR>
+public class ImageViewerApplet extends Applet {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String imageStrings[] = {&quot;udp.gif&quot;,
+&quot;tcp.gif&quot;};<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageViewer imageViewer;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// initialize applet to show first image
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Image image =
+getImage(getDocumentBase(), imageStrings[0]);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageViewer =
+new ImageViewer(image);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ImageList imageList
+= new ImageList(imageStrings);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageList.select(0);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setLayout(new
+BorderLayout());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;West&quot;,
+imageList);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;Center&quot;,
+imageViewer);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// set a new image in the viewer<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void setImage(String item) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Image image =
+getImage(getDocumentBase(), item);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageViewer.setImage(image);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+/**<BR>
+&nbsp;* a class to display a list of image names and set a new
+image<BR>
+&nbsp;*/<BR>
+class ImageList extends SelectList {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageList(String items[]) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int n = 0;
+n&nbsp;&nbsp;&lt; items.length; n++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addItem(items[n]);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean selected(Event evt, int
+index, String item) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((ImageViewerApplet)
+getParent()).setImage(item);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+/**<BR>
+&nbsp;* a composite class to show an image with scrollbars<BR>
+&nbsp;*/<BR>
+class ImageViewer extends Panel {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageCanvas imageCanvas;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageScrollbar horizontalSB, verticalSB;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageViewer(Image image) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageCanvas =
+new ImageCanvas(image);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;horizontalSB =
+new ImageScrollbar(Scrollbar.HORIZONTAL, <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0,
+200, 0, 200,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageCanvas);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;verticalSB = new
+ImageScrollbar(Scrollbar.VERTICAL, <BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0,
+200, 0, 200,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageCanvas);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Set the geometry
+layout<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GridBagLayout
+gridBag = new GridBagLayout();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setLayout(gridBag);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// first the imageCanvas
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GridBagConstraints
+c = new GridBagConstraints();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.weightx = 1.0;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.weighty = 1.0;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.fill = GridBagConstraints.BOTH;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gridBag.setConstraints(imageCanvas,
+c);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(imageCanvas);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// then the horizontal
+Scrollbar<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.weightx = 0.0;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.weighty = 0.0;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.gridx = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.gridy = 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gridBag.setConstraints(horizontalSB,
+c);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(horizontalSB);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// finally, the
+vertical Scrollbar<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.gridx = 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.gridy = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gridBag.setConstraints(verticalSB,
+c);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(verticalSB);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;void setImage(Image img) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageCanvas.setImage(img);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;void setHorizontalScrollbar(int value,
+int visible, int min, int max) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;horizontalSB.setValues(value,
+visible, min, max);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;void setVerticalScrollbar(int value, int
+visible, int min, int max) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;verticalSB.setValues(value,
+visible, min, max);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int getHorizontalValue() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return horizontalSB.getValue();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int getVerticalValue() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return verticalSB.getValue();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+}<BR>
+<BR>
+/**<BR>
+&nbsp;* a class to display the image<BR>
+&nbsp;*/<BR>
+class ImageCanvas extends Canvas {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Image image;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int imageWidth, imageHeight;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int top = 0, left = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int width = 200, height = 200;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageCanvas(Image img) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image = img;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// display/redisplay the image<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int x, y;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ImageViewer parent
+= (ImageViewer) getParent();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// find current
+scrollbar values<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x = parent.getHorizontalValue();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y = parent.getVerticalValue();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g.drawImage(image,
+-x, -y, this);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// reset scrollbar
+values in case image changed<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// or resized
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageHeight =
+image.getHeight(this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageWidth = image.getWidth(this);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;height = this.size().height;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width = this.size().width;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent.setHorizontalScrollbar(x,
+width, 0, imageWidth - width);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent.setVerticalScrollbar(y,
+height, 0, imageHeight - height);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// install a new image and display it
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void setImage(Image img) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image = img;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+/**<BR>
+&nbsp;* a class to provide a scrollbar to manage an image display
+<BR>
+&nbsp;*/<BR>
+class ImageScrollbar extends SelectScrollbar {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageCanvas canvas;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ImageScrollbar(int o, int v, int vis,
+int min, int max, ImageCanvas c) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(o, v, vis,
+min, max);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas = c;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean scrollLineUp(Event evt,
+Object what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.repaint();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean scrollLineDown(Event evt,
+Object what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.repaint();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean scrollPageUp(Event evt,
+Object what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.repaint();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean scrollPageDown(Event evt,
+Object what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.repaint();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean scrollAbsolute(Event evt,
+Object what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.repaint();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.7. HTML to show Image Viewer.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>&lt;html&gt;<BR>
+&lt;head&gt;<BR>
+&lt;title&gt; An Image Viewer &lt;/title&gt;<BR>
+&lt;/head&gt;<BR>
+<BR>
+&lt;body&gt;<BR>
+<BR>
+&lt;h1 align=&quot;center&quot;&gt;An Image Viewer&lt;/h1&gt;
+<BR>
+<BR>
+&lt;applet code=&quot;ImageViewerApplet.class&quot; width=400
+height=300&gt;<BR>
+Since your browser cannot run applets, this is what the application
+<BR>
+looks like:<BR>
+&lt;br&gt;<BR>
+&lt;img src=&quot;ImageViewer.gif&quot; align=&quot;center&quot;&gt;
+<BR>
+&lt;/applet&gt;<BR>
+<BR>
+&lt;/body&gt;</TT>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="MajorSurgerytotheEventModel"><FONT SIZE=5 COLOR=#FF0000>Major
+Surgery to the Event Model</FONT></A></H2>
+<P>
+The AWT event model has generated a lot of complaints from programmers.
+Mostly, these issues revolve around confusion about what is actually
+going on, with two event models, many bugs, and no clear statement
+about what events can be generated for each object class. These
+concerns are serious and can have a practical everyday effect;
+this chapter has attempted to resolve some of these issues.
+<P>
+If you step back a little from these immediate concerns, the AWT
+event model still shows fundamental problems. Consider the two
+major ones:
+<UL>
+<LI>The current model either leads to a frame knowing too much
+about all of its component objects or to a proliferation of subclasses
+which just override a small number of methods to supply application
+code.
+<LI><FONT COLOR=#000000>It is important to try to separate any
+application into functionally separate components; this is what
+OO programming is all about. In particular, it is important to
+try to separate presentation from application, for example, GUI
+code from application code. The current model does not encourage
+this separation.</FONT>
+</UL>
+<P>
+Just as the AWT event model is built above other event models,
+it is possible to build new event models above AWT. The following
+sections discuss two other models that have become publically
+available. The first is the <TT>awtExt</TT>
+package of Sal Cataudella. The second is the <TT>awtCommand</TT>
+class of Jan Newmarch, the author of this chapter.
+<H3>The <TT><FONT SIZE=4 >awtExt</FONT></TT><FONT SIZE=4>
+Package</FONT></H3>
+<P>
+The Xt and Motif toolkits for the X Window System use an event
+handling mechanism called <I>callback functions</I>. When a GUI
+object is created, so-called <I>callback</I> functions can be
+added to the object that gets executed when events occur in the
+object. For example, the Motif Pushbutton can have callback functions
+added that will be called on pressing the button down or on releasing
+it. Application code gets placed in these callback functions.
+<P>
+Basically, all that an Xt/Motif application has to do to add application
+code is to have the event handling mechanism execute these callback
+functions without requiring the application to do any event dispatching.
+<P>
+The <TT>awtExt</TT> package transports
+this idea into the Java realm. Each AWT GUI object gets subclassed
+by one which knows about callback methods. A callback method is
+an arbitrary method of an arbitrary class that can be attached
+to one of these new objects.
+<P>
+Because the <TT>awtExt</TT> package
+handles and dispatches events itself, you have no need for any
+overriding of <TT>handleEvent()</TT>
+or its convenience methods. Because each GUI object of the <TT>awtExt</TT>
+class can have callbacks attached, you don't need to create subclasses
+of the GUI objects just to hold application code, which solves
+the first set of problems in the AWT model.
+<H4>Selecting and Showing Colors</H4>
+<P>
+Look at how the <TT>Colors.java</TT>
+program is done using this event handling package. The revised
+program, <TT>ExtColors.java</TT>,
+appears in Listing 11.8.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.8. Colors using </B><TT><B></TT>awtExt</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.Frame;<BR>
+import java.awt.Label;<BR>
+import java.awt.Color;<BR>
+<BR>
+import sysExt.*;<BR>
+import awtExt.*;<BR>
+<BR>
+public class ExtColors extends Frame {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final Color colors[] = {Color.red, Color.blue,
+Color.green};<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final String colorLabels[] = {&quot;red&quot;,
+&quot;blue&quot;, &quot;green&quot;};<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Label label;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static void main(String argv[])
+{<BR>
+new ExtColors().show();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public ExtColors() {<BR>
+List list = new List();<BR>
+for (int n = 0; n&nbsp;&nbsp;&lt; colors.length; n++)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list.addItem(colorLabels[n]);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// add the callback
+method<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list.eventDispatch.LIST_SELECT
+=<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Callback.newRef(this,
+&quot;listSelect&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} catch(Exception
+e) {e.printStackTrace();}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label = new Label(&quot;Hello
+World&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// set geometry
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;West&quot;,
+list);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;Center&quot;,
+label);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(300, 100);&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void setColor(int index) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.setForeground(colors[index]);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void listSelect(CallbackInfo cbi)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List list = (List)
+cbi.thisAwtObj;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setColor(list.getSelectedIndex());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>awtExt</TT> package defines
+a subclass of each of the standard AWT GUI objects, <TT>awtExt.Button</TT>,
+<TT>awtExt.List</TT>, etc. This reuse
+of names can be a little bit of a nuisance. Instead of importing
+all of <TT>java.awt</TT> and all of
+<TT>awtExt</TT>, you have to be more
+selective about which classes get imported, or use package-qualified
+names such as <TT>java.awt.Button</TT>.
+Anyway, this point is minor.
+<P>
+Ordinary AWT objects and <TT>awtExt</TT>
+objects may get mixed in the same program. The example uses objects
+from the <TT>java.awt</TT> package,
+such as <TT>java.awt.Frame</TT>, and
+objects from the <TT>awtExt</TT> package,
+such as <TT>awtExt.List</TT>.
+<P>
+The interesting part comes from the fact that you do not need
+to subclass List just to hold application code. Instead, a callback
+method is added to the <TT>awtExt</TT>
+list for this, which is done in the lines
+<BLOCKQUOTE>
+<TT>list.eventDispatch.LIST_SELECT =<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Callback.newRef(this,
+&quot;listSelect&quot;);</TT>
+</BLOCKQUOTE>
+<P>
+Consequently, the method <TT>this.listSelect()</TT>
+will be executed automatically when the List object receives a
+<TT>LIST_SELECT</TT> event. The <TT>newRef()</TT>
+method exploits a generally unknown part of Java, the capability
+to generate a method call from the name of the method. By passing
+in the <I>String</I> <TT>&quot;listSelect&quot;</TT>,
+the <TT>sysExt</TT> package included
+as part of <TT>awtExt</TT> can later
+execute a call to the <TT>listSelect()</TT>
+method. The code has an exception handler around it because <TT>newRef()</TT>
+can throw an <TT>InvalidMethodRefException</TT>
+exception.
+<P>
+When the method <TT>listSelect()</TT>
+executes, it does so with a parameter of class <TT>CallbackInfo</TT>.
+<TT>CallbackInfo</TT> has public fields
+of the event and also of the <TT>awtExt</TT>
+object in which the event occurred. The <TT>awtExt</TT>
+object is used in the method to find the current index selected.
+<P>
+Basically, Frame doesn't need to override <TT>handleEvent()</TT>,
+and you haven't had to subclass List. Although this example seems
+fairly trivial, the technique scales well; even if you had thousands
+of objects, you would not have to override <TT>handleEvent()</TT>
+or subclass the GUI objects. Many very large Xt/Motif programs
+have been written using this type of event model.
+<P>
+A number of methods exist to install and manipulate callback methods.
+Many of them are convenience ones for cases where only one callback
+should occur (button with an <TT>ACTION_EVENT</TT>
+callback is one case). These areas can make the code look simpler.
+<H4>Availability</H4>
+<P>
+The <TT>awtExt</TT> package is available
+from the Web page <TT><A HREF="http://www.panix.com/~rangerx/packages.html">http://www.panix.com/~rangerx/packages.html</A></TT>.
+<H3>The <TT><FONT SIZE=4 >awtCommand</FONT></TT><FONT SIZE=4>
+Package</FONT></H3>
+<P>
+The other major issue in the AWT model is separation of GUI code
+from application code. This concept becomes important because
+an object whose purpose is to read in the contents of a file should
+not need to know anything about the FileDialog object that allowed
+the filename to be selected; a request to show a piece of information
+to the user should not be dealt with directly in terms of Dialog
+objects, but should be given to an object that can deal with such
+objects.
+<P>
+The support given by AWT for the separation between GUI code and
+general application code is fairly low. The majority of applets
+and applications available today have application code scattered
+throughout GUI code. Whenever a change is made to any part of
+the GUI interface, rewrites of the application code are often
+required. These changes are often minor: changing a GUI object's
+name or its path in the window tree. This setup also tends to
+promote the nearest equivalent to global variables: Every GUI
+object is known by a unique name to the top-level frame! For example,
+the following type of code is common:
+<BLOCKQUOTE>
+<TT>public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String name = (String) what;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (name.equals(&quot;File&quot;))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (fileDialog
+== null)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fileDialog
+= new FileDialog(...);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fileDialog.show();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// etc<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+This process requires FileDialog to be an object known to this
+object. The code becomes fragile with respect to name clashes
+and other more subtle considerations-how would you translate this
+application to a French version?
+<P>
+Of course, you cannot completely separate the two: The application
+code does need to communicate with the GUI side after all! The
+GUI code, however, should not need to know the detailed internals
+of the application objects, and vice versa. Ideally, you should
+be able to swap a command-line interface for a Windows interface
+without changing any of the application objects.
+<P>
+AWT does not give direct support for separation. How about the
+<TT>awtExt</TT> package described
+in the preceding section? The example given was poor in one respect:
+It cast the application code into the Frame, often considered
+a bad thing; however, the example was small enough to get away
+with it. The <TT>awtExt</TT> package,
+in fact, gives some support for separation because any method
+of any object could have been used as the callback. For example,
+the callback could have been set as
+<BLOCKQUOTE>
+<TT>list.eventDispatch.LIST_SELECT =<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Callback.newRef(new
+ApplicationObject(), &quot;colorSelected&quot;);</TT>
+</BLOCKQUOTE>
+<P>
+to place the processing within the <TT>colorSelected()</TT>
+method of an <TT>ApplicationObject</TT>.
+This object may have a very limited knowledge of the user interface.
+<H4>The Command Class Model</H4>
+<P>
+The <TT>awtExt</TT> package allows
+separation but does not enforce it. A more disciplined approach
+is to use an event model that enforces separation by default,
+which the Command class of the <TT>awtCommand</TT>
+package supplies.
+<P>
+The Command class model separates GUI objects from application
+behavior by placing application behavior in subclasses of Command
+objects. For example, when the application wants a file to be
+saved, it should call on the <TT>FileSaveCommand</TT>
+object to perform this action, instead of making GUI objects,
+such as a frame or a MenuItem, perform this task.
+<P>
+The book <I>Design Patterns</I> by Gamma, Helm, Johnson and Vlissides
+provides an excellent look above the language level to identify
+&quot;good&quot; patterns of usage and design of object classes.
+For event handling, it identifies this Command class as appropriate
+for this. Each GUI object has associated Command objects to handle
+the application code.
+<P>
+Each Command object has a method <TT>execute()</TT>
+that is invoked to perform this application-specific code. This
+object uses as little information as possible about its GUI environment
+to perform its tasks.
+<P>
+A GUI object from the <TT>awtCommand</TT>
+package does not perform application-specific code itself. It
+&quot;installs&quot; a Command object. When an event of interest
+to the GUI object occurs, the object invokes the <TT>execute()</TT>
+method on its Command object.
+<P>
+This capability allows Command objects to be written more or less
+independently of GUI objects. The implementation of both the GUI
+code and the application code can then be varied independently,
+as long as they use the same Command objects.
+<H4>The Command Class</H4>
+<P>
+The Command class defines one abstract method <TT>execute()</TT>.
+This could be implemented either as an abstract class or as an
+interface. An application will be expected to have a fairly complex
+class structure of its own. An interface allows the Java &quot;multiple
+inheritance&quot; model to work well here, so Command is defined
+as an interface.
+<P>
+Each object has a set of events that it handles. For example,
+a List object will generate <TT>LIST_SELECT</TT>,
+<TT>LIST_DESELECT</TT>, and <TT>ACTION_EVENT</TT>
+events. There will be a (possibly) different Command object used
+to handle each of these. The <TT>LIST_SELECT</TT>
+event will be handled by a <TT>selectCommand</TT>
+object, the <TT>EVENT_ACTION</TT>
+event will be handled by an <TT>actionCommand</TT>
+object, etc.
+<P>
+The <TT>awtCommand</TT> package subclasses
+all of the relevant AWT classes. Each class is prefixed with &quot;C&quot;
+(really, the prefix should be &quot;Command,&quot; but that is
+too verbose). So CList is a subclass of List, CFrame is a subclass
+of Frame, etc. Each of these classes has additional methods over
+the parent class to allow a Command object to be attached. These
+methods have names based on the event types that they handle.
+<P>
+In order to associate Command objects with <TT>awtCommand</TT>
+objects, a method sets the Command object for each event type.
+For example, CList has additional methods:
+<BLOCKQUOTE>
+<TT>setSelectCommand(Command c)<BR>
+setDeselectCommand(Command c)<BR>
+setActionCommand(Command c)</TT>
+</BLOCKQUOTE>
+<P>
+When an event occurs for which a Command object has been registered,
+the <TT>awtCommand</TT> package invokes
+the following method of the Command object:
+<BLOCKQUOTE>
+<TT>execute(Object target, Event evt, Object
+what)</TT>
+</BLOCKQUOTE>
+<P>
+The actual Command object is an instance of a subclass, which
+contains the application code in the execute method. The <TT>targetparameter</TT>
+is the object the event occurred in, and the <TT>what</TT>
+parameter is similar to the <TT>what</TT>
+parameter of component methods such as <TT>action()</TT>.
+<P>
+If no Command object is registered for a particular type of event,
+then the original event processing is done. (For example, for
+component objects, the method <TT>handleEvent</TT>
+will pass the event to its parent in the GUI tree. For MenuComponent
+objects, the method <TT>postEvent</TT>
+will pass the event to its parent.) This setup allows the event-handling
+techniques of the AWT tookit to be still used if needed. For example,
+an AWT application will continue to work if all AWT objects are
+changed to <TT>awtCommand</TT> objects
+without other changes.
+<P>
+This allows several ways of writing applications using Command
+objects:
+<UL>
+<LI>Use the ordinary AWT techniques. In this case, why bother
+with this toolkit?
+<LI>Attach Command objects to the GUI objects that generate events,
+which is the most common use.
+<LI><FONT COLOR=#000000>Attach Command objects to </FONT><I>ancestors</I>
+of the GUI objects, which may be appropriate if Command objects
+are shared by many GUI objects. For example, a Command object
+attached to a CMenu could handle all the events from CMenuItem
+children.
+</UL>
+<H4>Selecting and Showing Colors</H4>
+<P>
+The following application is another variation of the program,
+which shows a list of colors next to a label. When one of the
+colors is selected, the label's foreground changes to that color.
+This is the program of Listing 11.4 adapted to use the Command
+class and is given as Listing 11.9.
+<P>
+A Command object is used to process the <TT>LIST_SELECT</TT>
+events. It is created and installed by
+<BLOCKQUOTE>
+<TT>ColorCommand command = new ColorCommand(this,
+colors);<BR>
+list.setSelectCommand(command);</TT>
+</BLOCKQUOTE>
+<P>
+Two parameters are passed through in the constructor: the list
+of colors and the top-level frame. The list of colors is passed
+so that the <TT>execute()</TT>method
+can later determine which color is selected. The frame is passed
+through in an attempt to minimize the amount of knowledge the
+Command object needs to have about the GUI side.
+<P>
+The &quot;application code&quot; here is fairly trivial-it just
+has to figure out what color was selected and then call back into
+the GUI code to set the color. Sufficient information is passed
+into the Command object's constructor and in the parameters to
+<TT>execute()</TT> to do all of this.
+The Command object knows very little about the structure of the
+GUI side, just calling on a method of the top-level frame to set
+the color.
+<P>
+To see the separation of application code from GUI code even in
+this simple example, consider the changes that would need to be
+made if the label was changed into a button. For the Command object,
+no changes would be needed at all. For the Frame object, the occurrences
+of the label would be changed into a button. More substantial
+changes, such as changing the color of a <I>tree</I> of windows,
+not just a single one, would also only need changes on the frame
+side.
+<P>
+On the other hand, changing from a List selection to a Menu selection
+would involve changes to the Command object because the <TT>execute()</TT>
+method can only examine the String name of the selected menu item.
+The changes are still relatively minor, involving adding String
+handling.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 11.9. CommandColors.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+import java.awtCommand.*;<BR>
+<BR>
+class CommandColors extends CFrame {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final Color colors[] = {Color.red, Color.blue,
+Color.green};<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;final String colorLabels[] = {&quot;red&quot;,
+&quot;blue&quot;, &quot;green&quot;};<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Label label;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static void main(String argv[])
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new CommandColors().show();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;CommandColors() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// a CList showing the color choices<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;CList list = new CList();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (int n = 0; n &lt; colors.length;
+n++)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list.addItem(colorLabels[n]);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// set a Command
+invoked on button select<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorCommand command
+= new ColorCommand(this, colors);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list.setSelectCommand(command);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label = new Label(&quot;Hello
+World&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// set geometry
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;West&quot;,
+list);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(&quot;Center&quot;,
+label);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(300, 100);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void setColor(Color color) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.setForeground(color);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+<BR>
+class ColorCommand implements Command {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;CommandColors app;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Color colors[];<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Constructor stores local info<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ColorCommand(CommandColors app, Color
+colors[]) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.app = app;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.colors =
+colors;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void execute(Object target, Event
+evt, Object what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int index = ((Integer)
+what).intValue();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;app.setColor(colors[index]);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H4>Availability</H4>
+<P>
+The <TT>awtCommand</TT> package is
+available from <TT><A HREF="http://pandonia.canberra.edu.au/java/">http://pandonia.canberra.edu.au/java/</A></TT>
+or by anonymous ftp from <TT><A HREF="ftp://ftp.canberra.edu.au/pub/motif/command/">ftp://ftp.canberra.edu.au/pub/motif/command/</A></TT>.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+AWT event handling is fraught with problems. Obvious bugs exist,
+and no clear specifications to resolve these issues have been
+created. Two event models exist with a vague promise that events
+will move from the old to the new model. Inconsistencies occur
+in event handling with missing methods, inappropriate defaults,
+and different handlers between component and MenuComponent objects.
+<P>
+The release of JDK 1.0 has stated that the libraries have basically
+been frozen-which is clearly a mistake as far as event handling
+is concerned. One can only hope that this part of JDK 1.0 will
+be allowed to evolve rapidly.
+<P>
+Apart from the bugs, most of these problems can be worked around.
+This chapter has shown how new subclasses can be defined that
+resolve many of these issues. It has also supplied much information
+that is needed by the AWT programmer to use the toolkit effectively.
+<P>
+The AWT event models do not directly support separation of view
+from the model. Two alternative event models have been built above
+AWT which try to fix this. They are both available in source code
+form, free to use in your own projects. They are written in Java
+so that they may be used in both applets and applications. Each
+model represent ways of handling events in large scale Java systems
+where the simple techniques used in current small systems will
+break down.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch10.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch12.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>

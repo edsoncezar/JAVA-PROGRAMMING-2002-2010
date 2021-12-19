@@ -1,0 +1,283 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The MiniProducer is associated with a destination and keeps track of this destination in an instance variable.
+</P>
+<P>Creating a MiniProducer initializes the instance variables, for which accessor methods are provided. The following code provides a snapshot of the MiniProducer.java file and contains embedded discussions for the interesting features in the MiniProducer class.</P>
+<PRE>
+package minijms;
+
+//Imports removed to save space.
+
+public class MiniProducer
+ implements MessageProducer,TopicPublisher,QueueSender
+{
+    protected MiniSession session;
+    protected boolean disableMsgId;
+    protected boolean disableTimestamp;
+    protected int mode; //default mode
+    protected int priority; //default priority
+    protected int time; //default timeToLive
+    protected MiniDestination dest;
+
+    public MiniProducer(MiniSession session
+                            ,MiniDestination dest)
+    {
+        this.session = session;
+        this.dest = dest;
+
+        disableMsgId = false;
+        disableTimestamp = false;
+
+        //default mode is not a correct value
+        mode = DeliveryMode.PERSISTENT;
+
+        priority = 4;
+        time = Message.DEFAULT_TIME_TO_LIVE;
+    }
+
+    public void setDisableMessageID(boolean value)
+     throws JMSException
+    {
+        disableMsgId = value;
+    }
+
+    public boolean getDisableMessageID()
+     throws JMSException
+    {
+        return disableMsgId;
+    }
+
+    public void setDisableMessageTimestamp(boolean value)
+     throws JMSException
+    {
+        disableTimestamp = value;
+    }
+
+    public boolean getDisableMessageTimestamp()
+     throws JMSException
+    {
+        return disableTimestamp;
+    }
+
+    public void setDeliveryMode(int deliveryMode)
+     throws JMSException
+    {
+        mode = deliveryMode;
+    }
+
+    public int getDeliveryMode() throws JMSException
+    {
+        return mode;
+    }
+
+    public void setPriority(int p) throws JMSException
+    {
+        priority = p;
+    }
+
+    public int getPriority() throws JMSException
+    {
+        return priority;
+    }
+
+    public void setTimeToLive(int timeToLive) throws JMSException
+    {
+        time = timeToLive;
+    }
+
+    public int getTimeToLive() throws JMSException
+    {
+        return time;
+    }
+</PRE>
+<P>Closing a MiniProducer doesn&#146;t do anything because it doesn&#146;t require any server resources.
+</P>
+<PRE>
+    public void close() throws JMSException
+    {
+    }
+</PRE>
+<P>Like the MiniConsumer, a MiniProducer provides access to its destination as either a queue or topic, throwing an exception if the wrong method is used.
+</P>
+<PRE>
+    public Queue getQueue() throws JMSException
+    {
+        if(dest.isQueue()) return dest;
+        else throw new JMSException();
+    }
+
+    public Topic getTopic() throws JMSException
+    {
+        if(!dest.isQueue()) return dest;
+        else throw new JMSException();
+    }
+</PRE>
+<P>QueueSender defines four methods for sending messages. MiniProducer implements all four but relies on a single method for the actual send. The first three methods listed here simply call the fourth method, using default values where appropriate.
+</P>
+<PRE>
+    public void send(Message message)
+     throws JMSException
+    {
+        if(message != null)
+        {
+            <B>send(getQueue(), message, mode
+                , priority, time);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+
+    public void send(Message message,
+              int deliveryMode, int pri,
+               long timeToLive) throws JMSException
+    {
+        if(message != null)
+        {
+            <B>send(getQueue(),message, deliveryMode
+                ,pri,timeToLive);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+
+    public void send(Queue queue, Message message)
+     throws JMSException
+    {
+        if((message != null)&amp&amp(queue!=null))
+        {
+            <B>send(queue, message, mode
+                , priority, time);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+</PRE>
+<P>The final send method is the most versatile. This method configures the messages header, using the flags provided. If the message has a timeToLive, the expiration time is set to the current time plus this value. If time stamps are enabled, one is set; if message IDs are enabled, one is assigned. Once configured, the producers session is told to send the message.
+</P>
+<PRE>
+    public void send(Queue queue, Message message,
+              int deliveryMode, int pri,
+               long timeToLive) throws JMSException
+    {
+        long now = System.currentTimeMillis();
+
+        if((message != null)&amp&amp(queue!=null))
+        {
+            if(session == null)
+                throw new JMSException(&#147;No Session&#148;);
+
+            <B>message.setJMSDestination(queue);
+            message.setJMSPriority(pri);
+            message.setJMSDeliveryMode(deliveryMode);
+
+            if(timeToLive &lt= 0)
+                message.setJMSExpiration(0);
+            else
+                message.setJMSExpiration(now &#43; timeToLive);
+
+            if(!disableTimestamp)
+            {
+                message.setJMSMessageID(createId());
+            }
+
+            if(!disableTimestamp)
+            {
+                message.setJMSTimestamp(now);
+            }
+
+            session.send(message);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+</PRE>
+<P>TopicPublishers also provide a number of methods for sending messages to a topic. Again, these methods, listed below, are implemented in terms of the most generic form.
+</P>
+<PRE>
+    public void publish(Message message)
+     throws JMSException
+    {
+        if(message != null)
+        {
+            <B>publish(getTopic(), message, mode
+                , priority, time);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+
+    public void publish(Message message,
+              int deliveryMode, int pri,
+               long timeToLive) throws JMSException
+    {
+        if(message != null)
+        {
+            <B>publish(getTopic(),message, deliveryMode
+                ,pri,timeToLive);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+
+    public void publish(Topic topic, Message message)
+     throws JMSException
+    {
+        if((message != null)&amp&amp(topic!=null))
+        {
+            <B>publish(topic, message, mode
+                , priority, time);</B>
+        }
+        else
+        {
+            throw new JMSException(&#147;Null Message.&#148;);
+        }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

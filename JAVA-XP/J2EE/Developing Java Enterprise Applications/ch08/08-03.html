@@ -1,0 +1,169 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Servlet-Based Search Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>After the necessary parameters have been retrieved from the client request, the method tries to load the index. All of the indices are managed by the IndexManager class discussed later in this section. An index is requested based on the directory it searches, and IndexManager returns either the index object or null if the directory is not indexed. Because indexing takes a while, don&#146;t make the user wait for it. However, do make the first user to search a directory wait for the index to be loaded. In other words, the first user to search a directory that is not indexed receives an error message telling them that the index is not available. But that user also triggers the creation of the index. The first person to access a directory with an index will wait for the index to load, before his or her query is processed. Once loaded, IndexManager keeps track of the index and returns it when requested. The indexes are thread safe once loaded, because IndexManager is used to protect them during loading and to allow index sharing, which improves performance. If you try this example from the CD-ROM, notice that the first search can be slow due to the load, but subsequent searches are nearly immediate.
+</P>
+<P>The following code in the handleQuery method logs a status message to the log and then attempts to load the index for the current directory.</P>
+<PRE>
+    logger.log("Requesting index for: "&#43;dir);
+
+    index = IndexManager.indexForDirectory(fullDir,dir);
+</PRE>
+<P>In this code, IndexManager is given both the relative and absolute paths to the directory so that the index can be found on disk and so that it returns file paths relative to the servers document root, instead of real file paths.
+</P>
+<P>The next section discusses how to check whether the index was returned or whether the manager returned null.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading4"></A><FONT COLOR="#000077">Handling Non-Query Requests</FONT></H4>
+<P>The preceding code attempted to load the index. The following code shows how handleQuery works in case the index is unavailable. If the index is unavailable, an attempt is made to redirect the client to the no-index page indicated by the configuration parameters. If this page is unavailable, an error code is sent to the client, indicating that the service is unavailable.
+</P>
+<PRE>
+    if(index == null)
+    {
+     logger.log("Index not available for: "&#43;fullDir);
+     
+     if(noIndexPage != null)
+         response.sendRedirect(noIndexPage);
+     else
+     response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+    }
+    else
+    {
+     ...
+</PRE>
+<P>These error codes are a poor choice for communicating the situation to the user. The error codes should be used as a last resort. Another consideration is that the HTMLIndex class has a main method that will build an index for a directory. This means that you can build the initial directory early instead of waiting for a user request. The builder will also rebuild the index if any files in the directory or subdirectories are newer than the existing index. You might want to update the indices regularly, although the servlet will do this automatically. If the update interval configuration parameter is set, the servlet will check the index after the specified number of seconds pass and update it if necessary.
+</P>
+<P>If the index described is not null, a query is performed. The next section describes the code executed in this case (under the else condition) in the handleQuery method.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading5"></A><FONT COLOR="#000077">Handling Queries</FONT></H4>
+<P>When a query request arrives, the servlet&#146;s first step is to ask the index for the files associated with that query. The index parses the query for &#147;and,&#148; &#147;or,&#148; and &#147;not,&#148; searches its hash table, and returns the matching files in a vector called results. The servlet then uses this vector to determine the number of hits.
+</P>
+<PRE>
+     results = index.filesForQuery(query);
+     
+     if(results != null) resultCount = results.size();
+
+     logger.log("Got "&#43;resultCount&#43;" results for query: "&#43;query);
+</PRE>
+<P>Next, write the header for the results page using the writer of the response object. The following code shows how the handleQuery method does this by first writing the header, which wraps the results in a centered table to make them more readable. The results themselves will be displayed as links.
+</P>
+<PRE>
+     writer.println("&ltHTML&gt");
+     writer.println("&ltHEAD&gt");
+     writer.println("&ltTITLE&gt");
+     writer.println("Search Results");
+     writer.println("&lt/TITLE&gt");
+     writer.println("&lt/HEAD&gt");
+     writer.println("&ltBODY TEXT=\"#000000\" BGCOLOR=\"#FFFFFF\""
+          &#43;" LINK=\"#0000EE\" VLINK=\"#551A8B\""
+          &#43;" ALINK=\"#FF0000\"&gt");
+ 
+     writer.println("&ltCENTER&gt");
+     writer.println("&ltTABLE&gt");
+     writer.println("&ltTR&gt");
+     writer.println("&ltTD&gt");
+</PRE>
+<P>Once the header is written, figure out whether there were any result hits. If there were no hits, an appropriate message is displayed. If there are hits, determine whether the number of results exceeds the maximum hits to display by comparing the maxHits to the resultCount minus the numeric index of the curHitStart. The variable curHitStart contains the counter for the first element to display. In other words, you could have counted  100 items indexed from 0 to 99, but if you start by displaying the element at index 95, there are only five elements to display. The actual number of hits to display on this page is stored in the local variable max. Before displaying the results, a message is displayed that tells the user how many hits occurred and which ones are displayed on this page.
+</P>
+<PRE>
+     if(resultCount &gt 0)
+     {
+         writer.println("&ltH1&gtYour search results are:&lt/H1&gt");
+         max = Math.min(resultCount-curHitStart
+                   ,maxHits);
+      
+         //inc printout by one to make it 1-25 not 0-25
+         writer.println("&ltCENTER&gt"&#43;(curHitStart&#43;1)&#43;"-"
+                   &#43;(curHitStart&#43;max)
+                   &#43;" of "&#43;resultCount
+                   &#43;" matches&lt/CENTER&gt");
+      
+         outputHitsNavigator(maxHits,curHitStart,resultCount
+                    ,query,myURL,writer);
+                    
+         writer.println("&ltBLOCKQUOTE&gt");
+      
+         try
+         {
+          
+          for(i=0;i&ltmax;i<SMALL>&#43;&#43;</SMALL>)
+          {
+              curFileName = (String)
+                 results.elementAt(curHitStart&#43;i);
+              outputFile(curFileName,dir,writer);
+          }
+         }
+         catch(Exception exp)
+         {
+          logger.log("Bad file name: "&#43;curFileName);
+         }
+          
+         writer.println("&lt/BLOCKQUOTE&gt");
+      
+         outputHitsNavigator(maxHits,curHitStart
+                    ,resultCount
+                    ,query,myURL,writer);
+     }
+     else
+     {
+         writer.println("&ltH1&gtNo files matched your "
+                    &#43;"query.&lt/H1&gt");
+     }
+</PRE>
+<P>After all of the files are displayed, the result page&#146;s footer is printed to the client, and the handleQuery method concludes as defined in the code that follows.
+</P>
+<PRE>
+     writer.println("&lt/TD&gt");
+     writer.println("&lt/TR&gt");
+     writer.println("&lt/TABLE&gt");
+     writer.println("&lt/CENTER&gt");
+     writer.println("&lt/BODY&gt");
+     writer.println("&lt/HTML&gt");
+    }
+}
+</PRE>
+<P>Each of the results in the preceding code is displayed using a method called outputFile. This method displays a link for each file, with the link&#146;s text equal to the file&#146;s name. The code for outputFile is as follows.
+</P>
+<PRE>
+protected void outputFile(String file,String dir,PrintWriter w)
+{
+    String fileName = file.substring(dir.length());
+    w.print("&ltA HREF=\"");
+    w.print(file.replace('\\','/'));//make sure the URL is valid
+    w.print("\"&gt");
+    w.print(fileName.replace('\\','/'));
+    w.println("&lt/A&gt&ltBR&gt");
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

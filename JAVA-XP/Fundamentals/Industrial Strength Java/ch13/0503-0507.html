@@ -1,0 +1,254 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="..\ch12\0500-0502.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0508-0512.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-503"><P>Page 503</P></A>
+
+<H3><A NAME="ch13_ 1">
+Chapter 13
+</A></H3>
+
+<H2>
+
+Thinking in Terms of <BR>Threads
+
+</H2>
+
+<P>The use of multiple threads is a low-level technique that enables a program to
+perform more than one job at a time. Effective application of multiple threads requires a
+strong conceptual understanding of these mechanisms provided by Java. This chapter,
+therefore, includes detailed discussions of the underlying concepts that support these
+powerful techniques.
+</P>
+
+<H3><A NAME="ch13_ 2">
+The Thread Model
+</A></H3>
+
+<P>A thread (or &quot;thread of control&quot;) is often defined as &quot;a single sequential flow of
+control within a program.&quot; Every Java program contains at least one thread that performs
+the operations denoted by code in the expected order. Consider the simple &quot;Hello
+World&quot; program in listing 13.1.
+</P>
+
+<P>Listing 13.1 A Simple &quot;Hello World&quot; Program
+</P>
+<PRE>
+public class HelloWorld {
+public static void main(String[] args) {
+        System.out.println(&quot;Hello World&quot;);
+}
+}
+</PRE>
+
+<P>When this program is run, the Java VM creates an initial thread of control. This
+thread enters main(), enters the System.out.println() method, and then proceeds to perform
+the
+</P>
+
+<A NAME="PAGENUM-504"><P>Page 504</P></A>
+
+
+<P>
+necessary operations to make &quot;Hello World&quot; appear on the console. Finally, after
+returning from println(), the thread exits from main(), and the program terminates. Figure
+13.1 shows the progress of the thread through main() and println().
+</P>
+
+<P><a href="images\ch13fg01.jpg"><img src="images\tn_ch13fg01.jpg"></a><BR>
+Figure 13.1
+Flow of control through the Hello World program.
+</P>
+
+<P>Single-threaded applications, such as the previous example, only perform one operation
+at a time. Multithreaded applications (or multithreaded applets) enable
+simultaneous execution of multiple operations in
+parallel.
+</P>
+
+<H3><A NAME="ch13_ 3">
+Applications of Threads
+</A></H3>
+
+<P>Threads are often used when a program needs to do more than one task at a time, such
+as when a GUI must respond to the user while the program simultaneously transfers a file
+or prints data. Creating separate threads of control to handle these jobs is preferable
+to constructing a complex loop that attempts to transfer the next block of a file, print
+some data, and check for user actions that require a response.
+</P>
+
+<P>Threads are also appropriate when an activity needs to be performed on a regular
+basis. Although it's possible, for example, to have an application perform animation by
+regularly checking whether it's time to display the next image (as well as responding to the
+user, processing data, and so on), it's much easier to create a separate thread of control that
+is devoted to handling the animation.
+</P>
+
+<A NAME="PAGENUM-505"><P>Page 505</P></A>
+
+
+
+<P>Finally, threading can also enable a program (such as the server application of a
+client/server system) to respond according to demand. For example, by creating a separate
+thread to handle requests as they arrive from multiple clients, the server design is
+simplified (because each thread considers only one request), and the load on the server
+platform becomes proportional to the number of client requests; in other words, the server
+responds to the demands of the clients by creating threads to handle their requests. Indeed, unless
+a program is multithreaded, there is no easy way to take advantage of the extra
+processing power of a multiprocessor system.
+</P>
+
+<H4><A NAME="ch13_ 4">
+Threads in Design
+</A></H4>
+
+<P>To demonstrate some possible applications of threads, consider the simple object
+hierarchy example in listings 13.2a and 13.2b.
+</P>
+
+<P>Listing 13.2a Abstract Worker Class </P>
+<PRE>
+public abstract class Worker {
+//Do the processing required for this task
+public void doTask(Task task);
+}
+</PRE>
+
+<P>Listing 13.2b Abstract Supervisor Class </P>
+<PRE>
+public class Supervisor {
+public void getWorkDone(Task[] tasks) {
+        for(int t=0; t&lt;tasks.length; t++) {
+                //create a new Worker to do the job
+                Worker w = new Worker();
+                //give that worker the job to do
+                w.doTask(tasks[t]);
+}
+}
+</PRE>
+
+<P>The Supervisor class is able to create Worker objects on demand to do Tasks.
+Although this seems ideal for completing many Tasks, there's a flaw. The single thread of control
+in getWorkDone() creates a new Worker and then enters
+doTask(), but the thread is then occupied with that Task. Only after completing the Task does the thread of control
+return to getWorkDone() (see fig. 13.2). The thread then circles the for loop to create
+another Worker to do the next Task. In fact, getWorkDone() would operate just as quickly
+by creating only one Worker to process all the Tasks in
+series.
+</P>
+
+<A NAME="PAGENUM-506"><P>Page 506</P></A>
+
+
+
+
+<P><a href="images\ch13fg02.jpg"><img src="images\tn_ch13fg02.jpg"></a><BR>
+Figure 13.2
+Flow of control between Supervisor and Worker.
+</P>
+
+<P>Having a separate Task object for each task to be performed may simplify the design
+and the code of the program, but it doesn't allow the code to process Tasks in parallel
+unless multiple threads are also used.
+</P>
+
+<H4><A NAME="ch13_ 5">
+Processing Tasks in Parallel
+</A></H4>
+
+<P>If doTask() is capable of creating a new, separate thread to perform the processing of
+a Task, then the initial thread of control can return immediately to getWorkDone()
+and create another Worker while the separate thread continues to execute doTask(). For
+each Task, a new Worker object (and thread) is created, which all process in parallel.
+</P>
+
+<P>In fact, most real-world objects implement parallel activity. A human supervisor
+allocating tasks to human (or mechanical) workers doesn't need to wait for each worker to
+complete an assigned task before proceeding; workers perform various tasks while the
+supervisor and other workers handle other business.
+</P>
+
+<P>Several Java API classes that you may already have used create separate threads
+of control. Loading an image via java.applet.getImage() is handled by a separate
+image-loading thread that builds the image as the data is received. A class that
+implements java.applet.AudioClip to reproduce sound may also create a separate thread to handle
+the playing and looping of the audio.
+</P>
+
+
+
+<A NAME="PAGENUM-507"><P>Page 507</P></A>
+
+
+
+<H4><A NAME="ch13_ 6">
+Candidates for Threading
+</A></H4>
+
+<P>Here are some examples of cases where a multithreaded design can work well:
+</P>
+
+<UL>
+<LI>          Packaging complex, time-consuming operations that can proceed
+independently upon starting.
+<LI>          Providing services, particularly those that don't return results, such as the case
+of an object that sends log messages to a slow printer while ignoring printing
+errors. Services that return no results are often appropriate for threading because
+code invoking them has no need to wait for them to complete and could continue to
+do other work while the service is provided.
+<LI>          Performing autonomous tasks. For example, a GUI object that displays a
+date/time clock.
+<LI>          Responding to external and possibly asynchronous events. For example,
+when receiving data via a network connection or serial port.
+<LI>          Modeling the real world behavior of a set of autonomous systems. For example,
+an industrial-control system that monitors results from several asynchronous
+output sources and generates multiple control values.
+</UL>
+
+<P>It's appropriate to consider the use of separate threads wherever one object can
+usefully carry out work independently of other objects.
+</P>
+
+<H4><A NAME="ch13_ 7">
+When Not to Use Threads
+</A></H4>
+
+<P>Creating separate threads of control burdens system resources. Furthermore, some
+systems support a limited number of threads. Only a limited number of threads can actually
+run concurrently. The mechanisms that Java provides to enable variables to be shared
+among threads impose an overhead that restricts the access to those variables. Arranging
+for complex interaction or communication between many threads can be error-prone.
+Potential defects may be caused by race conditions, which occur where the behavior of
+the system is affected by very subtle shifts in the timing of actions that are performed
+by multiple threads.
+</P>
+
+<P>In short, threads are not the universal solution to all programming problems; they
+should be used when concurrent activity is appropriate and when they contribute to
+elegant system design.
+</P>
+
+<P><CENTER>
+<a href="..\ch12\0500-0502.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0508-0512.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

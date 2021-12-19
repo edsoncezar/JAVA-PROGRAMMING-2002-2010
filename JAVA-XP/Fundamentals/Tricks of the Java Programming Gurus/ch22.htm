@@ -1,0 +1,525 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 22 -- Authentication, Encryption,
+and Trusted Applets</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 22</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Authentication, Encryption,
+and Trusted Applets</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+<UL>
+<LI><A HREF="#CryptographyBasics" >Cryptography Basics</A>
+<LI><A HREF="#SecurityMechanismsProvidedbyjavasec" >Security Mechanisms Provided by java.security</A>
+<LI><A HREF="#EnablingTrustedApplets" >Enabling Trusted Applets</A>
+<LI><A HREF="#CryptographicSecuritySolvesEverything" >Cryptographic Security Solves Everything, Right?</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+The security that Java provides against malicious code is one
+of the language's biggest selling points. You can download programs
+over the network, automatically, perhaps even without realizing
+that it's happening, without serious risk of loss or theft of
+valuable information. Think of the possibilities!
+<P>
+Unfortunately, once you start thinking about it, the possibilities
+are somewhat limited unless the security can be relaxed somewhat.
+An applet that can't do anything dangerous can't do much that's
+useful either. In previous chapters, you learned ways of loosening
+security restrictions in controlled ways, but how do you decide
+which applets get the special privileges? How do you know whom
+you can trust, and how much?
+<P>
+Other problems hinder the development of really useful applets.
+Many useful applications, for instance, need to send sensitive
+information across the Internet. Even if the applet and its provider
+are trusted, having some way of protecting that information from
+eavesdroppers on the network is important.
+<P>
+Fortunately, you can use cryptography to solve these problems.
+Even more fortunately, a package of useful classes that provide
+the cryptographic building blocks for solutions is being developed
+by Sun and will probably be a part of the core Java library at
+some point, so applets and applications can rely on its availability
+in any Java environment. By the time you read this chapter, the
+java.security package may be available.
+<P>
+In this chapter I discuss some of the security problems in more
+detail, with suggested strategies for solving them. I do discuss
+the java.security package, but because the package interface is
+still unstable as I write this chapter, I'll stay away from details
+in favor of more general discussions of capabilities and the way
+the java.security package will interact with and augment the Java
+security architecture of security managers and class loaders.
+<H2><A NAME="CryptographyBasics"><B><FONT SIZE=5 COLOR=#FF0000>Cryptography
+Basics</FONT></B></A></H2>
+<P>
+Before I go into the details of cryptographic security as it relates
+to Java, you need to know a few basics about cryptography in general.
+Because this book isn't about cryptography, I won't go into great
+depth, and I will certainly stay far away from the complex math
+involved. The java.security package hides all these details anyway,
+so the level of discussion presented here is sufficient for most
+developers.
+<P>
+<I>Encryption</I> is the process of transforming a message in
+such a way that it cannot be read without authorization. With
+the proper authorization (the message's <I>key</I>), the message
+can be decrypted and read in its original form. The theories and
+technologies of encryption and decryption processes are called
+<I>cryptography</I>.
+<P>
+Modern cryptography has its basis in some pretty heavy mathematics.
+Messages are treated as very large numbers, and an original, readable
+message (the <I>plaintext</I>) is transformed into an encrypted
+message (the <I>ciphertext</I>) and back again by means of a series
+of mathematical operations using the appropriate keys. The keys
+are also large numbers. All this math means that cryptography
+is a somewhat specialized field, but it also means that computers
+are good cryptographic tools. Because computers treat everything
+as numbers (at some level), cryptography and computers go together
+well.
+<P>
+The obvious use for encryption is to keep secrets. If you have
+a message that you need to save or send to a friend, but you don't
+want anyone else to be able to read it, you can encrypt it and
+give the key only to the people you want to trust with the secret
+message.
+<P>
+Less obvious, but just as important, is the possibility of using
+cryptography for <I>authentication</I>: verifying someone's identity.
+After you know how to keep secrets, authentication comes naturally.
+For centuries, people have proved their identities to each other
+by means of shared secrets: secret handshakes, knocks, or phrases,
+for example. If you were to meet someone who claimed to be a childhood
+friend, but who had changed so much that you didn't recognize
+him, how would he go about convincing you? Probably by telling
+you details of memorable experiences that you shared together,
+alone. The more personal, the better-the more likely that both
+of you would have kept the secret through the years. Cryptographic
+authentication works the same way: Alice and Bob share a key,
+which is their shared secret. To prove her identity, Alice encrypts
+an agreed-upon message using that key and passes on the encrypted
+message. When Bob decrypts it successfully, it is proof that the
+message originated from someone who shares the secret. If Bob
+has been careful to keep the secret and trusts Alice to do the
+same, then he has his proof.
+<P>
+You may have noticed in the preceding two paragraphs that keeping
+secrets and proving identity both depend on keeping other secrets:
+the keys. If some enemy can steal a key, he or she can read the
+secret messages or pretend to be someone else. Thus, key security
+is very important. Worse still, for most uses of cryptography,
+keys must be traded between people who want to communicate securely;
+this <I>key exchange</I> represents a prime opportunity for the
+security of the keys to be compromised.
+<P>
+Conventional cryptographic algorithms are symmetric: that is,
+the same key is used for both encryption and decryption. More
+recently, researchers have developed asymmetric public-key cryptographic
+algorithms that use key pairs: if a message is encrypted with
+one key, it must be decrypted with the other key in the pair.
+The two keys are related mathematically, but in such a complex
+way that it's infeasible (too costly or time consuming) to derive
+one key from the other, given sufficiently long keys.
+<P>
+Public-key cryptography simplifies key management immensely. You
+can treat one of the keys in the pair as your public key and distribute
+it widely, keeping the other as your secret key, known only to
+you. If Bob wants to create a message that only Alice can read,
+he can encrypt it using her public key. Because the public key
+can't be used to decrypt the message, others who also know Alice's
+public key can't read it, but Alice, using her secret key, can.
+Then, if Alice wants to prove her identity to Bob, she can encrypt
+an agreed-upon message with her secret key. Bob (or anyone else)
+can decrypt it with her public key, thus demonstrating that it
+must have been encrypted with her secret key. Because only Alice
+knows her secret key, the message must really have come from her.
+<P>
+Public-key cryptography sounds unlikely and almost magical when
+you first encounter it, but it's not such an uncommon idea. Your
+own handwritten signature is somewhat like a key pair. Many of
+the people and organizations you deal with regularly might recognize
+your signature (or have a copy on file for comparison), making
+the appearance of your signature a sort of public key. Actually
+placing your signature on a new piece of paper, however, is a
+skill that only you have: that's the secret key. Of course, signatures
+can be forged, but the point is that for all but one person, creating
+the signature is pretty difficult, whereas having anyone verify
+it is easy. Public-key cryptography makes possible the creation
+of digital signatures that work in much the same way, except that
+forging a digital signature is much more difficult.
+<P>
+If Alice wants to apply a digital signature to a document before
+sending it to Bob, a simple way for her to do so is to encrypt
+the document with her secret key. Because many people know her
+public key, the document isn't private-anyone with Alice's public
+key can decrypt it and read the contents (applying another layer
+of encryption with another key is possible, to produce a document
+that is both signed and private). When Bob successfully decrypts
+the message with Alice's public key, that action indicates that
+the message must have originally been encrypted with her secret
+key. What makes this effective as a signature is that, because
+only Alice knows her secret key, only she could have encrypted
+it in the first place.
+<P>
+Many other details enter into practical use of cryptography, of
+course. For several reasons, practical digital signatures are
+not as simple as the preceding example. Even with public-key cryptography,
+key management and security are important (and tricky) issues.
+Furthermore, public-key cryptography is much more complicated
+(and thus much slower) than symmetric cryptography, so symmetric
+cryptography still has an important role to play. One serious
+complication is that, unlike most computer algorithms, most good
+cryptographic algorithms come with legal entanglements. Many are
+protected by patents, so they must be licensed from the patent
+holders. The United States government considers implementations
+of strong encryption algorithms to be in the same category as
+munitions, and it places heavy restrictions on their export (even
+though many of the best algorithms were invented outside the U.S.).
+Some other governments prohibit the use of strong cryptography
+except for purposes of authentication, and a few governments ban
+it entirely. There are bills currently pending in the U.S. Congress
+to lift the export restrictions, but those bills haven't become
+law yet, and the U.S. government's cryptography export policy
+is one of the factors currently delaying the release of the java.security
+package.
+<P>
+Fortunately, the package will hide most of the technical complications,
+and the Java license will explain all the legal and political
+details. The rest of this chapter covers the basics of how you
+can use the java.security package with the rest of the Java library
+to make it possible for applets to do really useful work.
+<H2><A NAME="SecurityMechanismsProvidedbyjavasec"><B><FONT SIZE=5 COLOR=#FF0000>Security
+Mechanisms Provided by java.security</FONT></B></A></H2>
+<P>
+The java.security package provides five separate but related services:
+encrypted data, digital signatures, secure channels, key exchange,
+and key management.
+<H3><B>Encrypted Data</B></H3>
+<P>
+Using either symmetric or public-key encryption algorithms, Java
+programs can use the java.security package to encrypt and decrypt
+data buffers using specified keys. The encryption facilities can
+also be used in filtered I/O streams, so files or sockets can
+be encrypted or decrypted transparently during input and output
+operations (<A HREF="ch5.htm" >see Chapter 5</A>, &quot;Building
+Special-Purpose I/O Classes&quot; for more information). When
+encrypted two-way communication is necessary, creating a secure
+channel may be better, as described later in this chapter.
+<H3><B>Digital Signatures</B></H3>
+<P>
+Signatures are used as proof that a communication-whether legal
+or personal-came from a particular individual or organization.
+You can apply digital signatures to any kind of electronic document,
+whether they are text files, binary data files, or even short
+tokens used for authentication. In many cases, digital signatures
+can provide much stronger guarantees than conventional signatures:
+a digital signature can show not only that a particular entity
+signed a document but also that the document has not been modified
+by a third party since it was signed. The java.security package
+provides facilities for applying digital signatures and for verifying
+them.
+<H3><B>Secure Channels</B></H3>
+<P>
+A <I>secure channel</I> is a communication channel that is both
+authenticated and encrypted. The authentication ensures that the
+party on the other end of the communication is genuine, and not
+some impostor; the encryption ensures that a third party eavesdropping
+on the channel cannot understand the communication. Establishing
+a secure channel involves trading proof of identity (using small
+messages with digital signatures), after which the two parties
+can agree on a key to be used to encrypt all the subsequent communication
+on the channel. After the channel is successfully established,
+communications are automatically encrypted before transmission
+and decrypted upon reception. Facilities for easily establishing
+secure channels with other entities are provided as a part of
+java.security.
+<H3><B>Key Exchange</B></H3>
+<P>
+Effective use of the facilities mentioned in the preceding section
+requires that encryption keys be exchanged between two parties.
+Secure channels, in particular, require that two parties exchange
+a conventional, symmetric encryption key (the session key), which
+is used to encrypt the communication on the channel and is then
+thrown away when the channel is destroyed. The key must be exchanged
+on an open channel, however, because the channel can't be secured
+until the key has been exchanged. Cryptographers have developed
+mechanisms for two parties to exchange keys securely on open channels.
+The secure channel implementation uses these mechanisms transparently,
+but the java.security package also makes the key exchange mechanism
+available for direct use by programmers.
+<H3><B>Key Management</B></H3>
+<P>
+Session keys for secure channels are used once and thrown away,
+but other keys, especially secret keys and the public keys of
+other people or groups, must be stored and used repeatedly. Such
+keys are useless unless you keep track of whom they belong to,
+and they are also useless if they aren't stored securely. If someone
+can steal your secret key, then he or she can read your private
+communications and impersonate you, and if someone can modify
+a public key that you hold, then he or she can substitute his
+or her own public key, making it easy to impersonate others in
+interactions with you. The java.security package provides key
+management facilities that help to maintain this key security.
+<H2><A NAME="EnablingTrustedApplets"><B><FONT SIZE=5 COLOR=#FF0000>Enabling
+Trusted Applets</FONT></B></A></H2>
+<P>
+Applets and applications can use all these facilities to perform
+secure operations across the network in fairly straightforward
+ways. But I previously mentioned that java.security features can
+be used to loosen the security boundaries for trusted applets
+so that they can do useful work. How can you accomplish that task?
+<P>
+<A HREF="ch21.htm" >Chapter 21</A>, &quot;Creating a Security
+Policy,&quot; explains that Java security enforcement in Java
+is largely the responsibility of the security manager, with help
+from class loaders. The class loaders keep track of the source
+of each class currently loaded into the virtual machine, and the
+security manager uses that information to decide whether a class
+is allowed access to particular resources.
+<P>
+In early Java applications, the &quot;source&quot; of a class
+meant the Internet host from which the class was loaded. But that
+criterion is not a particularly useful one on which to base trust.
+Classes can be copied from site to site, and because many sites
+are insecure, even classes from trusted machines might not really
+be trustworthy. And because that's such a poor way to determine
+the origin of a class, current applications are (justifiably)
+paranoid: if a class was loaded from a local directory in the
+<TT>CLASSPATH</TT>, the class is trusted;
+otherwise, it isn't.
+<P>
+If you want to trust a dynamically loaded class, either partially
+or completely, the really important information isn't where the
+class resides on the network, it's who wrote the class (or, in
+a more general sense, who takes responsibility for it). Digital
+signatures provide a way to determine the real source of a class
+with some degree of confidence.
+<P>
+It's easier to see how this might work using a concrete example.
+Assume that you trust the kind folks at GoodGuys, Inc. (GGI) to
+write well-written, trustworthy software that doesn't steal or
+destroy your data (I examine whether such blanket trust is reasonable
+later in this chapter). From GGI, you get their public key, and
+using some application-specific configuration mechanism, you give
+the public key from GoodGuys to your Java-based Web browser and
+inform it that GGI is an entity you trust completely. Meanwhile,
+hard-working GGI programmers have just finished a terrific applet,
+and a &quot;signature officer&quot; at GGI uses their secret key
+to sign the Useful.class file, which contains the applet's code,
+and places it on their Web server.
+<P>
+Next, the class loader in your browser can load the digitally
+signed class file, verifying the signature against the list of
+known entities using the java.security facilities. If the signature
+turns out to be a valid signature from GoodGuys, the class loader
+can be certain that the class really came from that company, and
+because digital signatures provide strong guarantees, the class
+loader can be sure that nobody else has modified the class because
+it was signed by a GoodGuys employee.
+<P>
+Later, when that class requests access to a secured local resource
+(such as your financial database), the security manager will ask
+the class loader where the class came from, and the class loader
+can confidently report to the security manager that the class
+came from GoodGuys, Inc. Then, when the security manager sees
+in the configuration database that you trust that company, it
+allows the access.
+<H2><A NAME="CryptographicSecuritySolvesEverything"><B><FONT SIZE=5 COLOR=#FF0000>Cryptographic
+Security Solves Everything, Right?</FONT></B></A></H2>
+<P>
+The java.security package provides many useful building blocks.
+Those building blocks, coupled with the Java security model, permit
+you to build Java applications that make better use of network
+resources than before, enlisting applets to extend the basic application
+functionality. You also can use these building blocks to build
+applications that participate in electronic commerce-perhaps agents
+that carry out transactions on behalf of a user, or downloadable
+applications that are rented for a small per-use fee instead of
+purchased. These capabilities are possible without encryption-based
+security features, but they simply aren't practical because abusing
+them is too easy, and the potential for loss is too great.
+<P>
+Careful use of cryptographic facilities can raise serious security
+barriers against thieves and vandals-serious enough to make many
+new kinds of applications feasible. But the security still won't
+be perfect, just as the security at your bank, although hopefully
+very good, isn't perfect. Having realistic expectations about
+cryptographic security is important.
+<P>
+Even in nonelectronic life, security has its price; it doesn't
+happen magically. Locking your door when you leave the house is
+a bit of an inconvenience, and unlocking it again when you return
+is a little more trouble. Unless you're fortunate enough to live
+someplace that is relatively idyllic, you've probably cultivated
+the habit of locking your door, so you don't really notice the
+inconvenience any more. But if you happen to lose your key or
+lock it inside your house, the inconvenience of security measures
+comes back to you full force.
+<P>
+Electronic security is no different. It requires a little bit
+of trouble, and a little vigilance, for users (whether they be
+individuals or organizations) to secure their systems, and it
+requires thought and discretion to decide who to trust and how
+much.
+<P>
+And, as mentioned previously, security still won't be perfect.
+Just as a determined criminal can ultimately find a way to defeat
+any physical lock, people will find ways to get around cryptographic
+security measures. Some of the most effective ways to do so are
+decidedly low-tech. A classic example is the so-called &quot;social
+engineering&quot; attack, in which people call employees on the
+phone and pretend to be other employees, asking questions that
+would be innocuous coming from a real employee but that give the
+attackers valuable information. Often the attack progresses in
+stages-the first encounters might yield only harmless information,
+but even that information can help the attackers to be more convincing
+in later probes. Eventually, the attackers might learn passwords
+or other important network security information from an unsuspecting
+employee who is convinced that the caller is a highly placed company
+employee.
+<P>
+No technological security solution is completely effective against
+such attacks. Key management is currently the weakest point in
+many encryption-based security systems. Researchers will surely
+find ways to improve security over time, and as people become
+more familiar with computers, they might become more sophisticated
+in their responses to people who call and ask for information
+on the telephone, but perfect security will never come.
+<P>
+In the earlier section &quot;Enabling Trusted Applets,&quot; I
+gave an example showing how an application can grant trust to
+an applet, based on digital signatures and configuration options
+specified by the application's user. The user in the example decided
+to trust any applet that came from GoodGuys, Inc. Does granting
+a company complete trust like that make sense?
+<P>
+The fact is, people do that all the time today. We tend, rightly
+or wrongly, to think of software vendors as reasonably trustworthy.
+If, while browsing in a computer store, I see a new program for
+sale and it looks as though it does something that would be useful
+to me (or maybe I just think it looks cool), I might be tempted
+to buy it, bring it home, and install it on my computer. I might
+ask myself a lot of questions first: &quot;Do I really need this?
+Is it worth the price? Do I have enough disk space?&quot; But
+I'm not accustomed to asking &quot;Is this company trustworthy?
+Is this thing going to reformat my hard drive? Is it going to
+steal my private e-mail archive and send it to the company headquarters
+the next time I connect to the Internet?&quot;
+<P>
+Occasionally, a software company does something that does weaken
+the trust people place in them. Several companies have carelessly
+shipped viruses to their customers on their software installation
+disks. Many consumers lost some of their trust in Microsoft when
+it was revealed that The Microsoft Network software shipped with
+early beta versions of Windows 95 would collect information about
+software packages installed on users' computers and send the information
+back to Microsoft. Where applets are concerned, similar adjustments
+can occur. A user might start out trusting a familiar company,
+but if an applet from that company does something unscrupulous
+(or just careless), the trust could vanish. Furthermore, in the
+Internet environment, word can spread among users more easily:
+&quot;Don't trust applets from ShadyCo-you'll get burned like
+I did!&quot;
+<P>
+The important point is that security doesn't have to be perfect.
+Flaws in physical security (for example, the ability to hot-wire
+cars to start them without a key) cause everyone problems from
+time to time, and people are always working to improve the situation,
+but by and large, we get along well, even with the flaws. The
+reason is that we adapt our security measures to fit the value
+of the things that are being protected and the inconvenience we
+can live with, so that the more valuable an item, the more difficult
+it is to subvert the security barriers surrounding it. In addition,
+we establish penalties for those who break and enter, or steal,
+or destroy what is not their own. We are always struggling to
+get the balance right, but in most cases our property and well-being
+are successfully protected by the combination of troublesome barriers
+and the risk of penalty in case of failure.
+<P>
+So it is with computer security. You probably have data on your
+computer that is so important to you, so valuable, that you trust
+nobody with it. (Your personal secret key might be a good example.)
+You are very careful with that data, and you don't mind some inconvenience
+associated with using it, if security accompanies that inconvenience.
+Other data, though, might be less valuable, and less stringent
+security measures apply in the interest of getting more work done.
+A reasonable level of security doesn't have to be a serious inconvenience,
+and as you learn to understand computer security better, you should
+be able to achieve higher levels of security before it starts
+to get in the way. Nevertheless, truly strong security will always
+take work, and it will never be free.
+<H2><A NAME="Summary"><B><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></B></A>
+</H2>
+<P>
+Applets that display animated coffee cups are fun, and they have
+definitely helped to make the Web more interactive and interesting,
+but developers and users alike are clamoring for applets that
+do more, that can actually help users be productive by doing some
+of the things applications do today. Especially when it comes
+to small tasks that might not be needed very often, such as specialized
+effects in an image processing program, the idea of using an applet
+that can be downloaded on demand and then thrown away is attractive.
+But for applets to do such useful things, users have to grant
+them some privileges, and before wise users grant those privileges,
+they need some way of knowing where the applet came from. That
+information is important because users don't want to trust applets
+from people or organizations they know nothing about, and also
+because they want to know who to be angry with should their trust
+turn out to be misplaced.
+<P>
+Additionally, applets need some way of communicating securely
+with servers and some way to know that they are communicating
+with the right server. Such capabilities are necessary for many
+simple client-server applications, as well as more advanced applications,
+such as those involving electronic commerce.
+<P>
+The java.security package, currently being developed by JavaSoft
+and soon to be a part of the core Java library, provides basic
+security facilities that are necessary to solve these problems.
+Using both symmetric and public-key encryption technology, the
+package provides primitives for encryption and decryption, applying
+and verifying digital signatures, establishing secure communication
+channels, and exchange and management of encryption keys.
+<P>
+The facilities in the java.security package are just building
+blocks, but they are essential ones. Using these facilities, combined
+with the Java security model and the information in the other
+chapters in this section, you can build applets that perform valuable
+services worth paying for and the applications that can host them.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch21.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch23.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

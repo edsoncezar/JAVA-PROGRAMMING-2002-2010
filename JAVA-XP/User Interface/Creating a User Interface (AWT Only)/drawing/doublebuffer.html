@@ -1,0 +1,202 @@
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Eliminating Flashing: Implementing Double Buffering</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="update.html"><img src="http://docs.rinet.ru/OLDui/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="movingimage.html"><img src="http://docs.rinet.ru/OLDui/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="http://docs.rinet.ru:8080/OLDui/trailmap.html"><img src="http://docs.rinet.ru/OLDui/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/OLDui/images/uiHeader.gif" width=26 height=26 align=bottom border=0 alt="Creating a User Interface (AWT Only) | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Working with Graphics</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/OLDui/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/OLDui/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Eliminating Flashing: Implementing Double Buffering
+</h2>
+<p>
+<blockquote>
+
+
+The previous page showed you how to eliminate flashing
+by implementing the <code>update()</code> method.
+You might have noticed 
+(depending on the performance of your computer)
+that the resulting applet,
+although it didn't flash,
+appeared to crawl a bit.
+That is, instead of the whole drawing area (or frame)
+being updated at once,
+sometimes one part would be updated
+before the part just to its right,
+causing noticeably uneven drawing between columns.
+
+<p>
+
+You can use double buffering
+to avoid this crawling effect
+by forcing the entire frame
+to be drawn at once.
+To implment double buffering,
+you need to create an undisplayed buffer
+(often called a <em>backbuffer</em> or <em>offscreen buffer</em>),
+draw to it, and then display the resulting image onscreen.
+
+<p>
+
+Here is the 
+<a href=http://docs.rinet.ru/OLDui/OLDui/drawing/example/DoubleBuffer.java>code</a>
+for the graphics animation example,
+modified so that it implements double buffering.
+Below is the resulting applet in action.
+
+<p>
+
+<applet codebase=http://docs.rinet.ru:8080/OLDui/OLDui/drawing/example code=DoubleBuffer.class width=450 height=60>
+<blockquote>
+<hr>
+<em>
+Your browser can't run 1.0 Java applets.
+Here is a snapshot of what you'd see:
+</em>
+<blockquote><IMG SRC="http://docs.rinet.ru/OLDui/figures/ui/animGraphics.gif" WIDTH="450" HEIGHT="60" ALIGN="BOTTOM" NATURALSIZEFLAG="3" ALT=""></blockquote><hr>
+</blockquote>
+</applet>
+
+<p>
+To create an offscreen buffer with the AWT,
+you need to first create an image of the proper size
+and then get a graphics context to manipulate the image.
+Below is the code that does this:
+
+<blockquote>
+<pre>
+<em>//Where instance variables are declared:</em>
+Dimension offDimension;
+Image offImage;
+Graphics offGraphics;
+. . .
+<em>//In the update() method, where d holds the size of the 
+//onscreen drawing area:</em>
+if ( (offGraphics == null)
+  || (d.width != offDimension.width)
+  || (d.height != offDimension.height) ) {
+    offDimension = d;
+    offImage = createImage(d.width, d.height);
+    offGraphics = offImage.getGraphics();
+}
+</pre>
+</blockquote>
+
+Below, in <b>bold font</b>,
+is the new drawing code in the 
+<code>update()</code> methods.
+Note that the drawing code now clears the entire background,
+but that it doesn't cause flashing
+because the code is drawing to the offscreen buffer,
+not to the screen.
+Note also that all the calls to <code>fillRect()</code>
+are performed to the offscreen buffer.
+The final result is drawn to the screen 
+just before the <code>update()</code> method returns.
+<blockquote>
+<pre>
+public void update(Graphics g) {
+    <em>...//First, initialize variables and create the
+       //offscreen buffer as shown above. Then erase the
+       //previous image: </em>
+        <b>offGraphics.setColor(getBackground());
+        offGraphics.fillRect(0, 0, d.width, d.height);
+        offGraphics.setColor(Color.black);</b>
+
+    <em>...//Do everything the old paint() method did --
+       //until we draw the rectangle.</em>
+            if (fillSquare) {
+                <b>offGraphics.fillRect(x, y, w, h);</b>
+                fillSquare = false;
+            } else {
+                fillSquare = true;
+            }
+
+    <em>...//The rest is exactly like the old paint() method
+       //until the very end, when we add the following:</em>
+    //Paint the image onto the screen.
+    <b>g.drawImage(offImage, 0, 0, this);</b>
+}
+</pre>
+</blockquote>
+<p>
+
+It's not necessary that the <code>update()</code> method
+call the <code>paint()</code> method.
+All that's necessary is that the <code>update()</code> method
+somehow draw its offscreen buffer to the screen,
+and that the <code>paint()</code> method 
+be able to draw the proper image
+when it's called directly by the AWT.
+
+<p>
+
+You might wonder why the offscreen image and graphics context
+are created in the <code>update()</code> method,
+instead of in (for example) the <code>start()</code> method.
+The reason is that the image and graphics context
+depend on the size of the applet Panel's drawing area,
+and the size of any Component's drawing area
+is not valid until the Component is just about to be drawn to the screen
+for the first time.
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="update.html"><img src="http://docs.rinet.ru/OLDui/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="movingimage.html"><img src="http://docs.rinet.ru/OLDui/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="http://docs.rinet.ru:8080/OLDui/trailmap.html"><img src="http://docs.rinet.ru/OLDui/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/OLDui/images/uiHeader.gif" width=26 height=26 align=top border=0 alt="Creating a User Interface (AWT Only) | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Working with Graphics</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

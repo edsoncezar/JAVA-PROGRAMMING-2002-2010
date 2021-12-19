@@ -1,0 +1,336 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0533-0536.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0542-0545.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-537"><P>Page 537</P></A>
+
+
+<P>in a web browser where there may be applets loaded from many different web
+sites. Therefore, it's important that security mechanisms exist to control and monitor
+Threads, so that Java code from any package cannot arbitrarily interfere with the operation
+of threads in other packages. Without any security, for example, an applet could be
+written that could interfere with the threads running the web browser itself, stopping them
+and crashing the browser.
+</P>
+
+
+<P>Both the Thread and ThreadGroup classes provide
+checkAccess() methods (shown in listing 13.29) that determines if the current thread is allowed to perform certain actions
+on that Thread object or ThreadGroup. If access is not permitted, checkAccess() throws
+a java.lang.SecurityException.
+</P>
+
+<P>Listing 13.29 java.lang.Thread and java.lang.ThreadGroup
+checkAccess Methods
+</P>
+<PRE>
+//Thread class checkAccess().  Throws SecurityException
+//if access to this thread is not permitted.
+public void checkAccess();
+
+//ThreadGroup class checkAccess().  Throws SecurityException
+//if access to this group is not permitted.
+public final void checkAccess();
+</PRE>
+
+<P>Several Thread and ThreadGroup methods call checkAccess() before they proceed,
+as shown in the following lists.
+</P>
+
+<P>In ThreadGroup:
+</P>
+
+<UL>
+<LI>          ThreadGroup(ThreadGroup parent, String name)
+<LI>          setMaxPriority(int maxPriority)
+<LI>          destroy()
+</UL>
+
+<P>In Thread:
+</P>
+
+<UL>
+<LI>          All constructors that pass a ThreadGroup
+<LI>          setPriority(int newPriority)
+<LI>          setName(String name)
+</UL>
+
+<P>In both:
+</P>
+
+<UL>
+<LI>          stop()
+<LI>          suspend()
+<LI>          resume()
+<LI>          setDaemon(Boolean on)
+</UL>
+
+<A NAME="PAGENUM-538"><P>Page 538</P></A>
+
+<P>In non-applet Java VMs, a SecurityManager may not exist, and hence access is
+permitted to all Threads and ThreadGroups. However, the Thread class checkAccess() is not
+final and therefore may be overridden to provide security even when no SecurityManager
+is present, as in listing 13.30.
+</P>
+
+
+
+
+<P>Listing 13.30 A SecureThread Class Implementing checkAccess()
+</P>
+
+<PRE>
+public class SecureThread extends Thread {
+
+//Only threads in the allowed group or any of
+//the group's descendants may access us.
+private ThreadGroup allowedGroup;
+
+//Constructors
+public SecureThread(Runnable r) {
+        super(r);
+        //The allowed group is the group the
+        //current thread is in.
+        allowedGroup = this.getThreadGroup();
+}
+
+public SecureThread(ThreadGroup g, Runnable r) {
+        //Create this as a member of group g,
+        //which is then the allowed group.
+        super(g, r);
+        allowedGroup = g;
+}
+
+public void setAllowedGroup(ThreadGroup tg) {
+        if(tg != null) {
+                //should we allow this change?
+                checkAccess();
+                allowedGroup = tg;
+        }
+}
+
+//Overrides Thread.checkAccess.
+public void checkAccess() {
+        //If there's a security manager, let it check
+        //first.  If it disallows, it'll throw the
+        //SecurityException.
+        SecurityManager sm = System.getSecurityManager();
+        if(sm != null)
+                sm.checkAccess(this);
+
+        //If there's no allowed group, then access
+
+
+</PRE>
+
+
+<A NAME="PAGENUM-539"><P>Page 539</P></A>
+
+
+<PRE>
+
+        //is allowed, otherwise check.
+        if(allowedGroup == null)
+                return;
+
+        //Check to see if the current thread is
+        //in the allowed group.  First, find the
+        //ThreadGroup g for the current thread.
+        ThreadGroup g;
+        g = Thread.currentThread().getThreadGroup();
+        //If g is the allowed group, then access is allowed.
+        if(g == allowedGroup)
+                return;
+
+        //Check if the allowed group is an ancestor
+        //of g.  If not, throw an exception.
+        if(!allowedGroup.parentOf(g))
+                throw new SecurityException();
+}
+}
+</PRE>
+
+<P>The checkAccess() method implements greater security than any
+SecurityManager, enabling control only from Threads in a specified group.
+</P>
+
+<P>To use a SecureThread, call setAllowedGroup() to establish what set of groups can
+access this SecureThread. This class might be useful in a package that contains multiple
+threads to prevent other packages from inadvertently affecting its operation.
+</P>
+
+<H3><A NAME="ch13_ 29">
+Concurrent Thread Interaction
+</A></H3>
+
+<P>So far, all the examples of threaded objects in this chapter have been self contained.
+Each object contains its own data, which is private to that object and the thread calling
+run(). The exception is the stopFlag that FileChecksum uses to determine whether run()
+should exit. This variable is checked by the FileChecksum run() method and set by
+stopThread(). However, stopThread() may be called from methods of any other object and, therefore,
+by any thread in the system. It's therefore possible that more than one thread may try
+to access stopFlag at the same time; one calling stopThread() and a FileChecksum
+thread testing stopFlag.
+</P>
+
+<P>In the case of FileChecksum, this isn't a real problem because stopFlag is only
+changed from false to true. Java guarantees that the reading or writing of a Boolean, char,
+byte,
+</P>
+
+<A NAME="PAGENUM-540"><P>Page 540</P></A>
+
+
+<P>short, int, or float variable is atomic (once started by one thread, a write or read
+must complete before any other thread can affect that variable). After the stopFlag is set true
+by stopThread(), it will be read as true when it is next checked by run().
+</P>
+
+<P>When interactions become more complex than simply setting and testing binary
+flags, further problems can occur. Consider the method in listing 13.31.
+</P>
+
+
+<P>Listing 13.31 Incrementing a Shared Variable
+</P>
+<PRE>
+private int theCount=0;
+
+//This method counts the number of times it has been
+//called.
+public int howManyTimes() {
+        theCount += 1;  //increment the counter
+        return theCount;
+}
+</PRE>
+
+<P>If two threads, A and B, running under a time-sliced scheduler, call
+howManyTimes(), the following might occur:
+</P>
+
+<OL>
+<LI>          A enters the method, reads theCount (which holds 0), increments its copy of it,
+ and returns 1.
+<LI>     B is scheduled, enters the method, reads theCount (which still holds 0),
+increments its copy, and returns 1.
+<LI>     B writes the value 1 back into theCount and returns 1.
+<LI>     A is rescheduled, writes back its copy (value 1) into theCount, and returns 1.
+</OL>
+
+<P>As a result, theCount's value is 1 and both threads receive a return value of 1
+from howManyTimes() despite the fact that the method is called twice. This situation
+is sometimes called a coherency problem, or a race condition. The term &quot;race&quot; comes
+from the fact that the two threads are in a so-called race to update the variable.
+</P>
+
+<H4><A NAME="ch13_ 30">
+Synchronized Methods
+</A></H4>
+
+<P>To solve this coherency problem, howManyTimes() can be marked as &quot;synchronized,&quot;
+as shown in listing 13.32.
+</P>
+
+<P>Listing 13.32 Synchronized Incrementing of a Shared Variable
+</P>
+
+<A NAME="PAGENUM-541"><P>Page 541</P></A>
+
+
+<PRE>
+public synchronized int howManyTimes() {
+        theCount += 1;  //increment the counter
+        return theCount;
+}
+</PRE>
+
+<P>A thread calling a synchronized method locks the &quot;this&quot; object when the method is
+entered and unlocks this just before returning. Only one thread may have a lock on an object
+at
+</P>
+
+<P>any one time. As a result, only one thread can execute the body of the method at once.
+For the synchronized version of the method, the following happens:
+
+
+<OL>
+<LI>       A enters the method, locks this, reads theCount (which holds 0), increments
+its copy of theCount, and returns 1.
+<LI>       B is scheduled, enters the method and attempts to lock this. Because A already
+has it locked, B is suspended.
+<LI>       A is re-scheduled and writes back its copy (value 1) into theCount, unlocks
+this, and returns 1. Unlocking this makes B eligible for execution again.
+<LI>       B is re-scheduled, gets a lock on this, reads 1 from theCount, increments it to
+2, writes 2 back, unlocks this, and returns 2.
+</OL>
+
+
+<H4><A NAME="ch13_ 31">
+Mutual Exclusion
+</A></H4>
+
+<P>Locking out multiple threads so that only one can enter a method at one time is
+called mutual exclusion because threads exclude each other from the body of a
+synchronized method. Any block of code protected from access by multiple threads is called a
+monitor in concurrent programming terminology.
+</P>
+
+<P>When an object or class variable is accessed by more than
+one method, synchronization should always be used to ensure
+that reading and writing don't overlap. In fact, every method of
+every class should be considered as a possible candidate for
+synchronization. This applies even in classes that are non-threaded
+because other threaded objects might create and share objects of any
+class. Synchronization has its share of overhead, but this is
+usually outweighed by the benefits of a multithreaded application.
+</P>
+
+<P>Listing 13.33 presents some example code using
+synchronized methods that will be discussed in the following sections to
+explain uses of mutual exclusion.
+</P>
+
+<P>Listing 13.33Synchronized Methods Protecting Shared Variables
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+WARNING
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+If a class is designed only for single-threaded use,
+this should be clearly stated in its documentation as a restriction.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<PRE>
+                                                          continues
+</PRE>
+
+<P><CENTER>
+<a href="0533-0536.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0542-0545.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

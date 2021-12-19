@@ -1,0 +1,311 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Using Stringified Object References</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="compiling.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="..\summary\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=bottom border=0 alt="IDL | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>The Hello Client Server Example</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Using Stringified Object References
+</h2>
+<p>
+<blockquote>
+
+To invoke an operation on a CORBA object, a client application needs a
+reference to the object. You can get such references in a number of
+ways, such as calling <CODE CLASS="Code">ORB.resolve_initial_references</CODE>
+or using another CORBA object (like the name service). In previous
+lessons, you used both of these methods to get an initial object
+reference.
+<P>
+Often, however, there is no naming service available in the distributed
+environment. In that situation, CORBA clients use a stringified object
+reference to find their first object. 
+<P>
+In this lesson, you will learn how to create a stringified object
+reference as a part of the server startup, and how the client gets that
+reference and destringifies it for use as a real object reference. You
+can find the completed versions of the source code:
+<a href="http://docs.rinet.ru/Jtuta/idl/hello/example-1dot2/HelloStringifiedServer.java">
+<CODE CLASS="UnderlineCODE">HelloServer.java</CODE></a>
+and
+<a href="http://docs.rinet.ru/Jtuta/idl/hello/example-1dot2/HelloStringifiedClient.java">
+<CODE CLASS="UnderlineCODE">HelloStringifiedClient.java</CODE></a>.
+
+<H4>Making a Stringified Object Reference</H4>
+<blockquote>
+For a stringified object reference to be available to the client, the
+server must create the reference and store it somewhere that the client
+can access. Your reference will be written to disk in the form of a
+text file.
+<OL>
+<LI> Copy your existing file <CODE CLASS="Code">HelloStringifiedServer.java</CODE>.
+<LI> Because the new server will write a file to disk, you need to add
+     an import statement. Add the following:
+<blockquote>
+<PRE> 
+import java.io.*; // needed for output to the file system.
+</PRE>
+</blockquote>
+<LI> The new server won't use the naming service,
+     so you don't need the <CODE CLASS="Code">CosNaming </CODE>
+     packages. Delete these lines from the code:
+<blockquote>
+<PRE> 
+import org.omg.CosNaming.*; // not needed for stringified 			
+			    // version
+import org.omg.CosNaming.NamingContextPackage.*; // remove 	
+						 // from code
+</PRE>
+</blockquote>
+<LI> Delete the code that gets the initial naming context and resolves
+     the reference to a <CODE CLASS="Code">Hello</CODE> object:
+<blockquote>
+<PRE> 
+// Get the root naming context
+org.omg.CORBA.Object objRef = orb.resolve_initial_references(&quot;NameService&quot;);
+NamingContext ncRef = NamingContextHelper.narrow(objRef);
+
+// Bind the object reference in naming
+NameComponent nc = new NameComponent(&quot;Hello&quot;, &quot;&quot;);
+NameComponent path[] = {nc};
+ncRef.rebind(path, helloRef);
+</PRE>
+</blockquote>
+<LI> Call the ORB's <CODE CLASS="Code">object_to_string</CODE>
+     method and pass it the reference to the servant object. This returns
+     the object reference in a string form that can be saved in a file on
+     disk.
+<blockquote>
+<PRE> 
+String ior = orb.object_to_string(helloRef);
+</PRE>
+</blockquote>
+<LI> Build the path to the file that will be stored, using system
+     properties to determine the path structure and syntax.
+<blockquote>
+<PRE> 
+String filename = System.getProperty(&quot;user.home&quot;) +
+            System.getProperty(&quot;file.separator&quot;)+&quot;HelloIOR&quot;;</PRE>
+</blockquote>
+<LI> Use standard Java operations to write the stringified
+     <CODE CLASS="Code">ior</CODE> to disk:
+<blockquote>
+<PRE> 
+FileOutputStream fos = new FileOutputStream(filename);
+PrintStream ps = new PrintStream(fos);
+ps.print(ior);
+ps.close();
+</PRE>
+</blockquote>
+</OL
+<P>
+When <CODE CLASS="Code">HelloStringifiedServer</CODE> runs,
+instead of calling the ORB and registering the servant object with
+naming, it creates the text file <CODE CLASS="Code">HelloIOR </CODE>
+containing a stringified reference to the servant.
+The file is stored in your home directory.
+</blockquote>
+
+<H4>Getting a Stringified Object Reference</H4>
+<blockquote>
+
+<blockquote>
+<hr>
+<strong>Note to UNIX users</strong>:
+You should substitute slashes (/) for the
+backslashes (\) in all paths in these steps.
+<hr>
+</blockquote>
+<OL>
+<LI> Copy your existing file <CODE CLASS="Code">HelloStringifiedClient.java</CODE>.
+<LI> Because the new client will read a file from the disk, you need to
+     change the import statements. Add the following:
+<blockquote>
+<PRE> 
+import java.io.*; // needed for input from the file system.
+</PRE>
+</blockquote>
+<LI> The new client won't use the naming service, so you don't need the
+     <CODE CLASS="Code">CosNaming</CODE> package.
+     Delete this line from the code:
+<blockquote>
+<PRE> 
+import org.omg.CosNaming;*_ // not needed for stringified version
+</PRE>
+</blockquote>
+<LI> Delete the code that gets the initial naming context and registers
+     the servant with the naming service:
+<blockquote>
+<PRE> 
+// Get the root naming context
+org.omg.CORBA.Object objRef = orb.resolve_initial_references(&quot;NameService&quot;);
+NamingContext ncRef = NamingContextHelper.narrow(objRef);
+
+// Resolve the object reference in naming
+NameComponent nc = new NameComponent(&quot;Hello&quot;, &quot;&quot;);
+NameComponent path[] = {nc};
+
+Hello helloRef = HelloHelper.narrow(ncRef.resolve(path));
+</PRE>
+</blockquote>
+<LI> Use standard Java operations to read the file that has the object
+reference. Note that client and server programs must know the name of
+the file and where it is stored.
+<blockquote>
+<PRE> 
+String filename = System.getProperty(&quot;user.home&quot;) + 
+        System.getProperty(&quot;file.separator&quot;) + &quot;HelloIOR&quot;;
+FileInputStream fis = new FileInputStream(filename);
+DataInputStream dis = new DataInputStream(fis);
+String ior = dis.readLine();
+</PRE>
+</blockquote>
+<LI> The <CODE CLASS="Code">HelloStringifiedClient</CODE>
+application now has a <CODE CLASS="Code">String</CODE>
+object containing the stringified object reference.
+</OL>
+</blockquote>
+
+<H4>Destringifying the Object Reference</H4>
+<blockquote>
+To destringify the object reference in <CODE CLASS="Code">ior</CODE>,
+call the standard ORB method: 
+<blockquote>
+<PRE CLASS="Code"> 
+org.omg.CORBA.Object obj = orb.string_to_object(ior);
+</PRE>
+</blockquote>
+<P>
+Finally, narrow the CORBA object to its proper type, so that the client
+can invoke on it:
+<blockquote>
+<PRE CLASS="Code"> 
+Hello helloRef = HelloHelper.narrow(obj);
+</PRE>
+</blockquote>
+<P>
+The rest of the client code stays the same.
+</blockquote>
+
+<H4>Compiling a Stringified Hello World</H4>
+<blockquote>
+To compile Hello World: 
+<OL>
+<LI> Compile your source code:
+<blockquote> 
+<PRE> 
+javac *.java
+</PRE>
+</blockquote> 
+<LI> Correct any errors in your files and recompile if necessary.
+<LI> You should see <CODE CLASS="Code">HelloStringifiedServer.class</CODE>,
+     <CODE CLASS="Code">HelloServant.class</CODE>,
+     and <CODE CLASS="Code">HelloStringifiedClient.class</CODE> in the
+     <CODE CLASS="Code">String</CODE> directory.
+</OL>
+</blockquote>
+
+<H4>Running a Stringified Hello World</H4>
+<blockquote>
+To be certain that you are running your own server, check that all
+Hello server and name server processes have been stopped. Stop them if
+they are running.
+<OL>
+<LI> Start the Hello server:
+<blockquote>
+<PRE> 
+java HelloStringifiedServer -ORBInitialPort 1050 &amp;
+</PRE>
+</blockquote>
+<LI> Run the Hello application client from another window:
+<blockquote>
+<PRE> 
+java HelloStringifiedClient -ORBInitialPort 1050
+</PRE>
+</blockquote>
+<LI>
+The client prints the string from the server to the command line: 
+<blockquote>
+<PRE>
+Hello world!!
+</PRE>
+</blockquote>
+</OL>
+<P>
+ 
+Remember to stop the
+<code>HelloStringifiedServer</code>
+process after the client application returns successfully.
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="compiling.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="..\summary\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=top border=0 alt="IDL | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>The Hello Client Server Example</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

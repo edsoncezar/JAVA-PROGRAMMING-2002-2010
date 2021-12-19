@@ -1,0 +1,200 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The servlet stores the current items for a shopper in her session. A session is created for the shopper or retrieved for use throughout the method. The servlet also gets a copy of its URL, which is used as the target for forms that may be output dynamically. All of the pages displayed by the servlet include a link back to the page that initially contacted the servlet, if possible. The URL for the page that contacted the servlet should be stored in the Referer header field. Once the servlet gets this value, it includes it in the dynamic forms it creates. This allows the user to interact with the servlet, possibly creating numerous pages, and still have a link back to the original contact point. Because the servlet overrides the actual referer with the original referer, the servlet&#146;s version and input parameter is checked first. Only if that parameter is unavailable does the servlet check the header fields.
+</P>
+<PRE>
+        session = request.getSession(true);
+         requestURL = HttpUtils.getRequestURL(request).toString();
+    
+        //See if we are reloading first
+        referer = request.getParameter(&#147;referer&#148;);
+        
+        //Then look for the refering page
+        if(referer == null)
+            referer = request.getHeader(&#147;Referer&#148;);
+</PRE>
+<P>The servlet expects to write HTML, and it tells the response so. The PrintWriter for the response is cached out in the local variable for later use.
+</P>
+<PRE>
+        response.setContentType(&#147;text/html&#148;);
+        out = response.getWriter();
+</PRE>
+<P>The shopper&#146;s current items are stored in a hash table in the client session under the name &#147;shoppingcart.items.&#148; This value is reused if it exists or created the first time the client initiates this method.
+</P>
+<PRE>
+        items = (Hashtable) session.getValue(&#147;shoppingcart.items&#148;);
+         
+        if(items==null)
+        {
+            session.putValue(&#147;shoppingcart.items&#148;,new Hashtable());
+        
+            items =
+             (Hashtable) session.getValue(&#147;shoppingcart.items&#148;);
+        }
+</PRE>
+<P>The current request for the servlet is stored in the &#147;action&#148; input parameter. This value is used to determine the servlet&#146;s response. For some requests, the description, price, and quantity associated with the request are also included. All of these values are cached in local variables. The description value is used as a flag to indicate whether an item is selected. If an error occurs, this value is set to null.
+</P>
+<P>Throughout the doGet method, the errorMessage variable is used to hold an errorMessage. The servlet assumes that if this variable is non-null, an error occurred and it should display the appropriate notification to the user.</P>
+<PRE>
+        action = request.getParameter(&#147;action&#148;);
+             
+        try
+        {
+            desc = request.getParameter(&#147;item&#148;);
+            price = (new Double(request.getParameter(&#147;price&#148;))).doubleValue();
+            quantity = Integer.parseInt(request.getParameter(&#147;quantity&#148;));
+        }
+        catch(Exception exp)
+        {
+            //reset
+            desc = null;
+            errorMessage = &#147;No item specified.&#148;;
+        }
+</PRE>
+<P>Next, the servlet checks to see which action was called. If the view action is called or the purchase action is used, the description can be null, so the servlet resets the errorMessage variable.
+</P>
+<PRE>
+        if(&#147;view&#148;.equalsIgnoreCase(action)
+             ||&#147;purchase&#148;.equalsIgnoreCase(action))
+        {
+            errorMessage = null;
+        }
+</PRE>
+<P>If errorMessage is not null, doGet skips to the end, where the message will be displayed to the user.
+</P>
+<PRE>
+        if(errorMessage != null)
+         {
+            //do nothing, but go to end
+        }
+</PRE>
+<P>If this is an add request, the servlet checks to see whether the user already ordered this item. In this case, the item&#146;s quantity is updated. When a new item is added to the cart, a ShoppingCartItem is created and added to the items hash table. Any exceptions are caught, and the errorMessage variable is set.
+</P>
+<PRE>
+        else if(&#147;add&#148;.equalsIgnoreCase(action))
+         {
+            item = new ShoppingCartItem(desc,price,quantity);
+            
+            try
+            {
+                logger.log(&#147;Adding item: &#148;+item);
+        
+                item = (ShoppingCartItem) items.get(desc);
+            
+                if(item == null)
+                {
+                    item =
+                        new ShoppingCartItem(desc,price,quantity);
+                    items.put(desc,item);
+                }
+                else
+                {
+                    item.price = price;
+                    item.quantity += quantity;
+                }
+            }
+            catch(Exception exp)
+            {
+                logger.log(exp);
+                errorMessage = &#147;Unable to add item(s).&#148;;
+            }
+        }
+</PRE>
+<P>The adjust action tells the servlet to adjust the quantity of an item. This results in an error if the item is not in the session already. However, the servlet does not remove the item from the session, so the user could readjust a 0 value back to a positive one. Again, exceptions are caught and the error message is set.
+</P>
+<PRE>
+        else if(&#147;adjust&#148;.equalsIgnoreCase(action))
+         {
+            item = new ShoppingCartItem(desc,price,quantity);
+                
+            try
+            {
+                item = (ShoppingCartItem) items.get(desc);
+            
+                if(item != null)
+                {
+                    item.quantity = quantity;
+                }
+                else
+                {
+                    errorMessage = 
+                      &#147;Item(s) was not contained in the cart.&#148;;
+                };
+            }
+            catch(Exception exp)
+            {
+                logger.log(exp);
+                errorMessage = &#147;Unable to adjust item(s).&#148;;
+            }
+        }
+</PRE>
+<P>The delete action is similar to adjust except that it totally removes an item from the cart if the adjustment results in zero items of a particular type.
+</P>
+<PRE>
+        else if(&#147;delete&#148;.equalsIgnoreCase(action))
+         {
+            item = new ShoppingCartItem(desc,price,quantity);
+            
+            try
+            {item = (ShoppingCartItem) items.get(desc);
+            
+                if(item != null)
+                {
+                    if(item.quantity &gt quantity)
+                    {
+                        item.quantity -= quantity;
+                    }
+                    else
+                    {
+                        items.remove(desc);
+                    }
+                }
+                else
+                {
+                    errorMessage = 
+                      &#147;Item(s) was not contained in the cart.&#148;;
+                }
+            }
+            catch(Exception exp)
+            {
+                logger.log(exp);
+                errorMessage = &#147;Unable to remove item(s).&#148;;
+            }
+        }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

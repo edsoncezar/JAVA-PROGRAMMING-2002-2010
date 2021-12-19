@@ -1,0 +1,984 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+
+<HEAD>
+<SCRIPT LANGUAGE="JavaScript">
+
+
+<!--
+
+function popUp(pPage) {
+ popUpWin = window.open('','popWin','resizable=yes,scrollbars=no,width=525,height=394');
+ figDoc= popUpWin.document;
+ zhtm= '<HTML><HEAD><TITLE>' + pPage + '</TITLE>';
+ zhtm += '<link rel="stylesheet" href="/includes/stylesheets/ebooks.css"></head>';
+ zhtm += '<BODY bgcolor="#FFFFFF">';
+ zhtm += '<IMG SRC="' + pPage + '">';
+ zhtm += '<P><B>' + pPage + '</B>';
+ zhtm += '</BODY></HTML>';
+ figDoc.write(zhtm);
+ figDoc.close();
+ popUpWin.focus();
+ }
+
+//-->
+
+
+</SCRIPT>
+<link rel="stylesheet" href="http://www.szptt.net.cn/includes/stylesheets/ebooks.css">
+
+        <META NAME="GENERATOR" Content="Symantec Visual Page 1.0.1">
+        <META HTTP-EQUIV="Content-Type" CONTENT="text/html;CHARSET=iso-8859-1">
+        <TITLE>JFC -- Chapter 4 - JFC Programming Techniques</TITLE>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF">
+
+<CENTER>
+<H1><IMG SRC="..\button\sams.gif" BORDER="0"></H1>
+
+<P><A HREF="..\ch03\ch03.htm"><IMG SRC="..\button\previous.gif" BORDER="0"></A>
+<A HREF="..\index.htm"><IMG SRC="..\button\contents.gif" BORDER="0"></A> 
+<A HREF="..\ch05\ch05.htm"><IMG SRC="..\button\next.gif" BORDER="0"></A> 
+
+
+<H1>JFC Unleashed</H1></CENTER>
+<HR>
+
+
+<H1>Chapter&nbsp;4<br>
+JFC Programming Techniques</H1>
+<HR>
+<p>
+
+
+<UL>
+<LI><A HREF="#ThreadSafetyRequirementsofJFC">
+Thread Safety Requirements of JFC</A>
+<UL>
+<LI><A HREF="#ExceptionstotheRule">
+Exceptions to the Rule</A>
+<LI><A HREF="#TTFONTSIZEmainFONTTTFONTSIZEEntryPointConsiderationsFONT">
+<TT>main</TT> Entry Point
+Considerations</A>
+<LI><A HREF="#UsingTTFONTSIZEinvokeLaterFONTTTFONTSIZEandFONTTTFONTSIZEinvokeAndWaitFONTTT">
+Using <TT>invokeLater</TT>
+and <TT>invokeAndWait</TT></A>
+<LI><A HREF="#Timers">
+Timers</A>
+</UL>
+<LI><A HREF="#TheRepaintManager">
+The Repaint Manager</A>
+<UL>
+<LI><A HREF="#TheTTFONTSIZERepaintManagerFONTTTFONTSIZEClassFONT">
+The <TT>RepaintManager</TT>
+Class</A>
+<LI><A HREF="#UsingtheRepaintManagertoManageRepaintandRevalidationOperations">
+Using the Repaint Manager to Manage Repaint and Revalidation
+Operations </A>
+<LI><A HREF="#UsingtheRepaintManagertoManageDoubleBuffering">
+Using the Repaint Manager to Manage Double Buffering</A>
+</UL>
+<LI><A HREF="#TTFONTSIZEActionFONTTTFONTSIZEsFONT">
+<TT>Actions</TT></A>
+<UL>
+<LI><A HREF="#ActionstoSettheLookandFeel">
+Actions to Set the Look-and-Feel</A>
+</UL>
+<LI><A HREF="#Summary">
+Summary</A>
+</UL>
+
+<HR>
+<P>
+Writing applications and applets using the JFC toolkit isn't that
+different than using any other toolkit written in Java. However,
+there are some issues that must be understood when designing a
+JFC-based application. The first is that the Swing component toolkit
+is not thread safe. Code that alters the state of Swing components
+must be executed in the event-dispatch thread. Therefore, if your
+application contains multiple threads that need to report information
+to the user, special programming techniques must be used.
+<P>
+The Swing toolkit optimizes painting through the use of a repaint
+manager. Understanding this class, and creating your own repaint
+manager if necessary, can enhance the performance and visual appearance
+of Swing applications.
+<P>
+The <TT>Action</TT> interface is provided in the Swing toolkit
+to allow a single bit of functionality to be easily added to multiple
+user interface controls. The <TT>Action</TT> interface is an extension
+of the <TT>ActionListener</TT> interface contained in the AWT.
+As such, an <TT>Action</TT> can be used anywhere an <TT>ActionListener</TT>
+can be used. However, as we will see later in this book, <TT>Action</TT>s
+are integrated with menus and toolbars in the JFC.
+<P>
+This chapter discusses some of the unique programming techniques
+required to design and write complete JFC applications and applets.
+You will learn
+<UL>
+<LI>How to write thread-safe JFC code
+<LI>How to use the <TT>RepaintManager</TT>
+<LI>How to encapsulate bits of application functionality in an
+<TT>Action</TT>
+</UL>
+<H2><A NAME="ThreadSafetyRequirementsofJFC">
+Thread Safety Requirements of JFC</A></H2>
+<P>
+JFC requires that Swing components be accessed by only one thread
+at a time. The normal thread of execution is the application's
+event-dispatch thread. JavaSoft documentation states the following:
+<BLOCKQUOTE>
+Once a Swing component has been realized, all code that might
+affect or depend on the state of that component should be executed
+in the event-dispatch thread.
+</BLOCKQUOTE>
+<P>
+While this requirement may seem onerous at first glance, you won't
+often need to access components from other threads, and when you
+do, the <TT>SwingUtilities</TT> class provides an easy mechanism
+to execute code on the event-dispatch thread.
+<P>
+Components are considered to be <I>realized</I>
+as soon as their <TT>setVisible</TT>, <TT>show</TT>, or <TT>pack</TT>
+methods are called. Components are also considered realized when
+they are added to a container that is realized.
+<P>
+The event-dispatch thread is the application's main thread of
+execution. All event listeners are called on this thread, so you
+normally don't need to be concerned about thread safety. If you
+are creating threads, however, you must ensure that their execution
+is thread safe when accessing Swing components.
+<H3><A NAME="ExceptionstotheRule">
+Exceptions to the Rule</A></H3>
+<P>
+There are a few exceptions to the requirement of not accessing
+Swing components on threads other than the event-dispatch thread.
+The <TT>repaint</TT>, <TT>revalidate</TT>, and <TT>invalidate</TT>
+methods are thread safe and can be called by any thread, including
+timer threads. These methods use different techniques to obtain
+thread safety. The <TT>repaint</TT> and <TT>revalidate</TT> methods
+use the repaint manager to post a message to the event-dispatch
+thread to call <TT>paint</TT> and <TT>validate</TT>, respectively.
+If multiple <TT>repaint</TT> or <TT>revalidate</TT> messages are
+in the queue when they are to be dispatched, the repaint manager
+will attempt to collapse the multiple events into a single event
+call. The <TT>invalidate</TT> method uses the more traditional
+approach to thread safety: It obtains a lock on the component
+and marks it as invalid. In addition to these methods, all of
+the methods to add and remove event listeners are guaranteed to
+be thread safe. 
+<H3><A NAME="TTFONTSIZEmainFONTTTFONTSIZEEntryPointConsiderationsFONT">
+<TT>main</TT> Entry Point
+Considerations</A></H3>
+<P>
+The code in an application's <TT>main</TT> entry point is not
+executed in the event-dispatch thread. To be absolutely safe,
+you should not place any GUI code after the first call to either
+the <TT>setVisible</TT>, <TT>show</TT>, or <TT>pack</TT> method.
+JavaSoft documentation says the following code is typically safe,
+even though the <TT>show</TT> method follows the <TT>pack</TT>
+method.
+<BLOCKQUOTE>
+<PRE>
+public class MyApplication { 
+    public static void main(String[] args) { 
+        JFrame frame = new JFrame(&quot;MyApplication&quot;);
+        // add JFC components here
+        frame.pack();                // realizes components
+        frame.show();
+        // No more GUI calls!
+    } 
+} 
+</PRE>
+</BLOCKQUOTE>
+<P>
+This is because it's unlikely that a <TT>paint</TT> call will
+reach the frame before the <TT>show</TT> method call returns.
+After the <TT>show</TT> call, the GUI event dispatching moves
+from the main thread to the event-dispatching thread. All subsequent
+calls that alter JFC components must be in the event-dispatch
+thread.
+<H3><A NAME="UsingTTFONTSIZEinvokeLaterFONTTTFONTSIZEandFONTTTFONTSIZEinvokeAndWaitFONTTT">
+Using <TT>invokeLater</TT>
+and <TT>invokeAndWait</TT></A></H3>
+<P>
+There are situations where you will need to access Swing user
+interface components on threads other than the event-dispatch
+thread. The following list gives some examples of such situations.
+<UL>
+<LI>When you must perform a long initialization sequence at startup
+time.<BR>
+The initialization cannot occur in the event-dispatching thread
+because repainting and event dispatching would be blocked for
+the duration of the initialization. However, the initialization
+code does need to update GUI components to indicate the progress
+of the initialization.
+<LI>When you must update the user interface as the result of a
+non-AWT event.<BR>
+Programs, such as servers that can receive requests from other
+programs, may need to update GUI components in response to external
+requests that are not executing in the event-dispatch thread.
+</UL>
+<P>
+When you need to access Swing component methods that are not guaranteed
+to be thread safe from threads other than the event-dispatch thread,
+you can use the <TT>invokeLater</TT> and <TT>invokeAndWait</TT>
+methods in the <TT>SwingUtilities</TT> class. These methods allow
+code to be run on the event-dispatch thread. <TT>SwingUtilities</TT>
+also provides the <TT>isEventDispatchThread</TT> to allow you
+to determine at runtime if code is running in the event-dispatch
+thread.
+<BLOCKQUOTE>
+<PRE>
+public static void invokeLater(Runnable code);
+public static boolean isEventDispatchThread();
+public static void invokeAndWait(Runnable code);
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>invokeLater</TT> and <TT>invokeAndWait</TT> methods take
+a <TT>Runnable</TT> object and execute it on the application's
+event-dispatch thread. The following fragment shows how you can
+use an anonymous inner class as a <TT>Runnable</TT> object to
+contain code to be executed by <TT>invokeLater</TT>.
+<BLOCKQUOTE>
+<PRE>
+Runnable Update = new Runnable() { 
+    public void run() { 
+        // Put your code here
+    } 
+} ;
+SwingUtilities.invokeLater(Update);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Note that the <TT>Runnable</TT> interface contains a single method,
+<TT>run</TT>. The code in the <TT>run</TT> method is the code
+that is executed when the runnable object is invoked.<p>
+<p>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1>
+<TR VALIGN=TOP><TD WIDTH=600><B>NOTE</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=600>
+<BLOCKQUOTE>
+The <TT>invokeAndWait </TT>method is similar to the <TT>invokeLater </TT>method except that it waits until the <TT>Runnable </TT>object is executed before returning. You can use <TT>invokeAndWait </TT>the same way you use <TT>invokeLater </TT>to ensure that your access of Swing components is thread safe.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><A NAME="Timers">
+Timers</A></H3>
+<P>
+JFC timers utilize timer listeners to serve as callbacks for periodic
+or one-shot timer objects. All timer listeners are executed in
+a single system thread to reduce the usage of system resources.
+<P>
+The system timer thread executes timer action events in the event-dispatch
+thread-you don't need to use <TT>invokeLater</TT> and <TT>invokeAndWait</TT>
+to access Swing components in timer listeners. A complete description
+of timers in the JFC is presented in <A HREF="..\ch31\ch31.htm" >Chapter 31</A>, &quot;Timers.&quot;
+<H2><A NAME="TheRepaintManager">
+The Repaint Manager</A></H2>
+<P>
+All Swing components and any custom components based on <TT>JComponent</TT>
+utilize a repaint manager to manage screen repaint and double
+buffering operations. The repaint manager keeps track of invalid
+components and dirty regions and batches these operations so that
+they can be processed simultaneously on the event-dispatch thread.
+Repaint operations are done through the use of an offscreen buffer
+to ensure smooth repaints. JFC maintains one repaint manager instance
+per thread group.
+<P>
+Any JFC application can take advantage of the services of the
+repaint manager simply by using the component <TT>repaint</TT>
+and <TT>revalidate</TT> methods. The only reason for most applications
+to directly access the repaint manager is to disable double buffering
+for performance, debugging, or other reasons. However, the repaint
+manager is designed to be extensible for applications that want
+to plug in their own repaint batching or double buffering solutions.
+<H3><A NAME="TheTTFONTSIZERepaintManagerFONTTTFONTSIZEClassFONT">
+The <TT>RepaintManager</TT>
+Class</A></H3>
+<P>
+The repaint manager is represented by the <TT>RepaintManager</TT>
+class. Listing 4.1 gives the class signature of this class.<BR>
+<HR>
+<P>
+<B>Listing 4.1&nbsp;&nbsp;</B><TT><B>REPAINTMANAGER</B></TT><B>
+Class Signature<BR>
+</B>
+<BLOCKQUOTE>
+<PRE>
+public class RepaintManager extends Object 
+{ 
+  // Public constructors
+    public RepaintManager();
+  // Public class methods
+    public static RepaintManager currentManager(JComponent component);
+    public static void setCurrentManager(RepaintManager manager);
+  // Public instance methods
+    public void addDirtyRegion(JComponent component component, 
+                               int x, int y,
+                               int width, int height);
+    public synchronized void addInvalidComponent(JComponent component);
+    public Rectangle getDirtyRegion(JComponent component);
+    public Dimension getDoubleBufferMaximumSize();
+    public Image getOffscreenBuffer(Component component, 
+                                    int desiredWidth,
+                                    int desiredHeight);
+    public boolean isCompletelyDirty(JComponent component);
+    public boolean isDoubleBufferingEnabled();
+    public void markCompletelyClean(JComponent component);
+    public void markCompletelyDirty(JComponent component);
+    public void paintDirtyRegions();
+    public synchronized void 
+                        removeInvalidComponent(JComponent component);
+    public void setDoubleBufferingEnabled(boolean enable);
+    public void setDoubleBufferMaximumSize(Dimension size);
+    public synchronized String toString();
+    public void validateInvalidComponents();
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+There is a public constructor for <TT>RepaintManager</TT>, but
+you would use it only if you were writing your own custom repaint
+manager and wanted to subclass the JFC repaint manager. JFC maintains
+a single repaint manager instance for each thread group (application).
+You can access the current repaint manager by calling a static
+class method, <TT>currentManager</TT>. The following line of code
+illustrates how to get the current repaint manager and use it
+to disable double buffering.
+<P>
+<TT>RepaintManager.currentManager(this).setDoubleBufferingEnabled(false);</TT>
+<P>
+Note that the <TT>currentManager</TT> method takes a component
+as an argument. This construction is an artifact from an early
+version of the JFC-the component argument is currently not used
+by the <TT>currentManager</TT> method. However, it's a good idea
+to provide a non-<TT>null</TT> component for this parameter because
+future versions of the JFC may depend on it.
+<P>
+The repaint manager provides the <TT>addDirtyRegion</TT>, <TT>getDirtyRegion</TT>,
+<TT>isCompletelyDirty</TT>, <TT>markCompletelyClean</TT>, <TT>markCompletelyDirty</TT>,
+and <TT>paintDirtyRegions</TT> methods for managing component
+repaint operations. The <TT>JComponent</TT> class and the repaint
+manager itself use these methods-applications do not normally
+call these methods directly. Likewise, the <TT>addInvalidComponent</TT>,
+<TT>removeInvalidComponent</TT>, and <TT>validateInvalidComponents</TT>
+methods are for managing component revalidations. Applications
+also don't normally call these methods directly.
+<P>
+The repaint manager provides the <TT>getDoubleBufferMaximumSize</TT>,
+<TT>isDoubleBufferingEnabled</TT>, <TT>setDoubleBufferingEnabled</TT>,
+and <TT>setDoubleBufferMaximumSize</TT> methods for applications
+to manage double buffering-the use of these methods is discussed
+in the &quot;Using the Repaint Manager to Manage Double Buffering&quot;
+section later in this chapter. The <TT>getOffscreenBuffer</TT>
+method is used only by the <TT>JComponent </TT>class-applications
+do not normally need to access the repaint manager's offscreen
+buffer.
+<H3><A NAME="UsingtheRepaintManagertoManageRepaintandRevalidationOperations">
+Using the Repaint Manager to Manage Repaint and Revalidation
+Operations </A></H3>
+<P>
+The internal operation of the repaint manager is closely integrated
+with the various painting and layout validation methods in the
+<TT>JComponent</TT> class. When you call a component's <TT>revalidate</TT>
+method, the repaint manager adds the component to a list of components
+that require revalidation. It then queues a component work request
+(if one is not already queued) to be executed on the event-dispatch
+thread. Likewise, when you call a component's <TT>repaint</TT>
+method, the repaint manager adds the region to be painted to a
+list of dirty regions and, if necessary, queues a component work
+request. When the component work request is executed, it validates
+the invalid components, paints the dirty regions to an offscreen
+buffer, and then copies the contents of the offscreen buffer to
+the display. Figure 4.1 illustrates the role of the repaint manager
+in executing component repaint and revalidate requests.
+<P>
+If you use the <TT>revalidate</TT> and <TT>repaint</TT> methods,
+your application will automatically take advantage of the services
+of the repaint manager. Be sure to use the new <TT>revalidate</TT>
+method in place of the older <TT>invalidate</TT>/<TT>validate</TT>
+method pair.
+<H3><A NAME="UsingtheRepaintManagertoManageDoubleBuffering">
+Using the Repaint Manager to Manage Double Buffering</A></H3>
+<P>
+Double buffering is a screen drawing technique that performs multiple
+drawing operations to an offscreen buffer and then copies this
+buffer to the screen. The result is that a number of separate
+drawing operations will appear as a single smooth screen transition.
+This technique is essential for applications that do animation.
+The tradeoff for using double buffering is a slight decrease in
+graphics performance and increased memory usage to support the
+offscreen buffer.
+<P>
+<A HREF="javascript:popUp('f4-1.gif')"><B>Figure 4.1 :</B> <I>Repaint manager operation</I>.</A><BR>
+<p>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1>
+<TR VALIGN=TOP><TD WIDTH=600><B>NOTE</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=600>
+<BLOCKQUOTE>
+The repaint manager performs double buffering on a per-component basis-it does not render multiple unrelated components to the off-screen buffer before copying the buffer to the display. The repaint manager does render all of a component's children to the off- screen buffer before copying the buffer to the display.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+All Swing components are designed to support double buffering.
+There are two <TT>JComponent</TT> methods, <TT>setDoubleBuffered</TT>
+and <TT>isDoubleBuffered</TT>, that you can use to control double
+buffering at the component level. By default, double buffering
+is disabled for most components. The only components that are
+double buffered by default are the <TT>JPanel</TT>, <TT>JPopupMenu</TT>,
+and <TT>JRootPane</TT> components. <p>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1>
+<TR VALIGN=TOP><TD WIDTH=600><B>NOTE</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=600>
+<BLOCKQUOTE>
+The fact that most Swing components do not have double buffering enabled by default is somewhat misleading. If any ancestor of a component has double buffering enabled, the repaint manager will double buffer the child component. All children of a double buffered component are, in effect, double buffered themselves. Since <TT>JRootPane </TT>is the root of most containment hierarchies, it's safe to say that all Swing components in a JFC application are double buffered.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Enabling and Disabling Double Buffering</H4>
+<P>
+The repaint manager provides global control for double buffering
+for all components owned by a thread group (application). The
+<TT>setDoubleBufferingEnabled</TT> method enables and disables
+double buffering. The <TT>isDoubleBufferingEnabled</TT> method
+returns a Boolean indicating whether double buffering is currently
+enabled or disabled. By default, the repaint manager enables double
+buffering. The following line of code illustrates how to enable
+double buffering with the repaint manager.
+<P>
+<TT>RepaintManager.currentManager(this).setDoubleBufferingEnabled(true);</TT>
+<P>
+In addition to <TT>setDoubleBufferingEnabled</TT>, the repaint
+manager also includes the <TT>isDoubleBufferingEnabled</TT> method
+to determine if double buffering is enabled for the application.
+By default, the repaint manager enables double buffering.<p>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1>
+<TR VALIGN=TOP><TD WIDTH=600><B>NOTE</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=600>
+<BLOCKQUOTE>
+You must disable double buffering for the &quot;flash graphics&quot; option to operate properly with debug graphics. See <A HREF="..\ch25\ch25.htm" >Chapter 25</A>, &quot;ToolTips and Debug Graphics," for more information on using debug graphics.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H4>Setting the Offscreen Buffer Size</H4>
+<P>
+Each repaint manager instance maintains a single offscreen buffer.
+Since there is only one repaint manager instance per application,
+all components in the application share the same buffer. 
+<P>
+The repaint manager provides the <TT>getDoubleBufferMaximumSize</TT>
+and <TT>setDoubleBufferMaximumSize</TT> methods to get and set
+the maximum size of the offscreen buffer. Note that buffer size
+is not specified in bytes but is specified as a <TT>Dimension</TT>.
+The buffer itself is an <TT>Image</TT>, not just a block of memory.
+The default size of the buffer is the screen size of the display
+on which the application is running. 
+<H2><A NAME="TTFONTSIZEActionFONTTTFONTSIZEsFONT">
+<TT>Actions</TT></A></H2>
+<P>
+In the JFC toolkit, an <TT>Action</TT> encapsulates a bit of application
+functionality and information to identify the functionality. Standard
+identification information contained in an <TT>Action</TT> can
+be a string to be used in a menu or a ToolTip for the <TT>Action</TT>,
+as well as an <TT>Icon</TT> to be used in a toolbar. However,
+an <TT>Action</TT> is not limited to only containing this data.
+The <TT>Action</TT> interface defines the <TT>putValue</TT> and
+<TT>getValue</TT> methods for adding and retrieving any piece
+of information by using a key. The data is stored in the <TT>Action</TT>
+in a data structure conforming to the <TT>java.util.Dictionary</TT>
+class.
+<P>
+Creating a class that implements the <TT>Action</TT> interface
+allows a single bit of functionality to be easily added to multiple
+user interface controls. The <TT>Action</TT> interface is an extension
+of the <TT>ActionListener</TT> interface contained in the AWT.
+As such, a class that implements the <TT>Action</TT> interface
+can be used anywhere an <TT>ActionListener</TT> can be used. However,
+as we will see later in this book, <TT>Action</TT>s are integrated
+with menus and toolbars in the JFC. This integration allows <TT>Action</TT>s
+to be added directly to menus and toolbars. This integration allows
+applications built with <TT>Action</TT>s encapsulating functionality
+to easily create menu and keyboard interfaces.
+<P>
+The <TT>Action</TT> interface is presented in the following code.
+As can be seen, constants are defined for the keys used when adding
+the standard descriptions to an <TT>Action</TT>. The <TT>setEnabled</TT>
+method can be used to enable or disable the <TT>Action</TT>, similar
+to how a <TT>Component</TT> can be enabled or disabled. Finally,
+the interface defines methods for adding and removing property
+change listeners. An <TT>Action</TT>-aware control listens for
+<TT>PropertyChangeEvents</TT> fired by the <TT>Action</TT> and
+updates its state accordingly. For example, when an <TT>Action</TT>
+is added to a menu or toolbar and the <TT>Action</TT> is disabled,
+the menu and toolbar will display the control associated with
+the <TT>Action</TT> as disabled.
+<BLOCKQUOTE>
+<PRE>
+public interface Action extends ActionListener { 
+    /**
+     * Useful constants that can be used as the storage-retrieval key 
+     * when setting or getting one of this object's properties (text
+     * or icon).
+     */
+    public static final String DEFAULT = &quot;Default&quot;;
+    public static final String NAME = &quot;Name&quot;;
+    public static final String SHORT_DESCRIPTION = &quot;ShortDescription&quot;;
+    public static final String LONG_DESCRIPTION = &quot;LongDescription&quot;;
+    public static final String SMALL_ICON = &quot;SmallIcon&quot;;
+
+    /**
+     * Puts/gets one of this object's properties
+     * using the associated key.  If the value has
+     * changed, a PropertyChangeEvent will be sent
+     * to listeners.
+     */
+    public Object getValue(String key);
+    public void putValue(String key, Object value);
+
+    /**
+     * Sets/tests the enabled state of the Action. When enabled,
+     * any component associated with this object is active and
+     * able to fire this object's &lt;code&gt;actionPerformed&lt;/code&gt; method.
+     */
+    public void setEnabled(boolean b);
+    public boolean isEnabled();
+
+    /**
+     * Add or remove a PropertyChange listener. Containers and attached
+     * components use these methods to register interest in this Action
+     * object. When its enabled state or other property changes,
+     * the registered listeners are informed of the change.
+     */
+    public void addPropertyChangeListener(
+                   PropertyChangeListener listener);
+    public void removePropertyChangeListener(
+                   PropertyChangeListener listener);
+
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+To ease the burden of writing <TT>Action</TT>s, the <TT>AbstractAction</TT>
+class is provided by the JFC. The <TT>AbstractAction</TT> class,
+as its name implies, is an abstract class. It manages property
+change listeners and fires <TT>PropertyChangeEvent</TT>s when
+a value is changed in the <TT>Action</TT>, or when the enabled
+state of the <TT>Action</TT> changes. An annoying characteristic
+of the <TT>AbstractAction</TT> implementation is that a <TT>null</TT>
+value cannot be added to the <TT>Action</TT> by using the <TT>putValue</TT>
+method. If this is attempted, a <TT>NullPointerException</TT>
+is thrown. Classes that extend the <TT>AbstactAction</TT> class
+must provide an implementation for the <TT>actionPerformed</TT>
+method. This is where the functionality contained in the <TT>Action</TT>
+lives.
+<P>
+Perhaps the most trivial <TT>Action</TT> that can be written is
+shown next. This is an <TT>Action</TT> that does nothing. From
+the <TT>NoOpAction</TT> class, it is seen how easily an <TT>Action</TT>
+can be written. When the <TT>AbstractAction</TT> class is extended,
+the subclass must simply provide an <TT>actionPerformed</TT> method.
+The <TT>NoOpAction</TT> class also supplies a name for the <TT>Action</TT>
+in its constructor. The <TT>AbstractAction</TT> class provides
+the implementation for the methods defined in the <TT>Action</TT>
+interface. The only method left to implement is the method defined
+in the <TT>ActionListener</TT> interface, <TT>actionPerformed</TT>.
+<BLOCKQUOTE>
+<PRE>
+package com.foley.utility;
+
+import java.awt.event.*;
+
+import javax.swing.*;
+ 
+
+/**
+ * Class NoOpAction
+ * &lt;p&gt;
+ * An action which does nothing.
+ * &lt;p&gt;
+ * @author Mike Foley
+ * @version 1.2
+ **/
+public class NoOpAction extends AbstractAction { 
+
+    /**
+     * The default name used in a menu.
+     **/
+    private static final String DEFAULT_NAME = &quot;NoOp&quot;;
+    
+    
+    public NoOpAction() { 
+        super( DEFAULT_NAME );
+    }  // NoOpAction
+    
+    /**
+     * actionPerformed, from ActionListener
+     * &lt;p&gt;
+     * Do nothing.
+     * &lt;p&gt;
+     * @param event The event causing the action to fire.
+     **/
+    public void actionPerformed( ActionEvent event ) { 
+    }  // actionPerformed
+
+}  // NoOpAction
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>NoOpAction</TT> class shows that writing an <TT>Action</TT>
+is not any more difficult that writing an <TT>ActionListener</TT>.
+However, an <TT>Action</TT> provides a great deal more functionality
+than a simple <TT>ActionListener</TT>. To demonstrate, let's look
+at a more useful <TT>Action</TT>. The <TT>ExitAction</TT> is shown
+in the following code. When invoked, this <TT>Action</TT> shuts
+down the Java Virtual Machine. The class contains a static initializer
+to load the default <TT>Icon</TT> associated with the <TT>Action</TT>.
+The class contains many constructors to allow the <TT>Action</TT>
+to be customized at construction time. The <TT>setValue</TT> method
+can be used to customize an existing instance of the <TT>ExitAction</TT>
+class. The name given in the constructor is the name used for
+the <TT>Action</TT> in a menu. The <TT>Icon</TT> specified in
+the constructor would be used if the <TT>Action</TT> is added
+to a toolbar. The <TT>actionPerformed</TT> method is called to
+invoke the <TT>Action</TT>, in this case, exiting the application.
+In <A HREF="..\ch09\ch09.htm" >Chapter 9</A> &quot;Menus and Toolbars,&quot; as well as in examples
+throughout this book, it will be seen how to add this <TT>Action</TT>
+to a menu and toolbar.
+<BLOCKQUOTE>
+<PRE>
+package com.foley.utility;
+
+import java.awt.event.ActionListener;
+import java.awt.event.ActionEvent;
+
+import javax.swing.AbstractAction;
+import javax.swing.Icon;
+ 
+
+/**
+ * Class ExitAction
+ * &lt;p&gt;
+ * An action which shuts down the Java virtual machine.
+ * &lt;p&gt;
+ * @author Mike Foley
+ * @version 1.2
+ **/
+public class ExitAction extends AbstractAction { 
+
+    /**
+     * The default name and Icon for the Action.
+     **/
+    private static final String DEFAULT_NAME = &quot;Exit&quot;;
+    private static final String DEFAULT_ICON_NAME = &quot;exit.gif&quot;;
+    private static Icon DEFAULT_ICON;
+    
+    /**
+     * ExitAction, default constructor.
+     * Create the Action with the default name and Icon.
+     **/
+    public ExitAction() { 
+        this( DEFAULT_NAME, DEFAULT_ICON );
+    }  // ExitAction
+    
+    /**
+     * ExitAction, constructor.
+     * Create the Action with the given name and 
+     * default Icon.
+     *
+     * @param name The name for the Action.
+     **/
+    public ExitAction( String name ) { 
+        this( name, DEFAULT_ICON );
+    }  // ExitAction
+    
+    /**
+     * ExitAction, constructor.
+     * Create the Action with the given name and 
+     * Icon.
+     *
+     * @param name The name for the Action.
+     * @param icon The small icon for the Action.
+     **/
+    public ExitAction( String name, Icon icon ) { 
+            super( name, icon );
+    }  // ExitAction
+    
+    /**
+     * putValue, overridden from AbstractAction.
+     * Guard against null values being added to the Action.
+     *
+     * @param key The key for the value.
+     * @param value The value to be added to the Action.
+     **/
+    public void putValue( String key, Object value ) { 
+        if( value != null )
+            super.putValue( key, value );
+    } 
+    
+    /**
+     * actionPerformed, from ActionListener
+     * &lt;p&gt;
+     * Perform the action.  Exit the JVM.
+     * &lt;p&gt;
+     * @param event The event causing the action to fire.
+     **/
+    public void actionPerformed( ActionEvent event ) { 
+        System.exit(0);        
+    }  // actionPerformed
+
+    /**
+     * static initialization. Load the default Icon.
+     **/
+    static { 
+        try { 
+            DEFAULT_ICON = ImageLoader.loadIcon( DEFAULT_ICON_NAME );
+        }  catch( InterruptedException ie ) { 
+            System.err.println( &quot;Could not load ExitAction default Icon&quot; );            
+        } 
+    }         
+
+}  // ExitAction
+</PRE>
+</BLOCKQUOTE>
+<P>
+Using <TT>Action</TT> classes to encapsulate the functionality
+of a control, or the application itself, makes it easier to create
+user interfaces. This programming technique also allows the user
+interface and the program's functionality to be kept separate.
+This makes it easier to modify the user interface without altering
+the application's functional classes.
+<H3><A NAME="ActionstoSettheLookandFeel">
+Actions to Set the Look-and-Feel</A></H3>
+<P>
+ Swing components are shown in the various look-and-feel implementations
+provided with the JFC throughout this book. The following action
+is used to set the look-and-feel for an application. When invoked,
+the <TT>SetLookAndFeelAction</TT> will update the look-and-feel
+to that named by the <TT>lookAndFeelName</TT> parameter specified
+for the action. It will also update the UI of components registered
+in the <TT>framesToUpdate</TT> vector and the component that is
+the source of the <TT>ActionEvent</TT> that invoked that action.
+The methods that actually change the look-and-feel and update
+the component tree are presented in <A HREF="..\ch30\ch30.htm" >Chapter 30</A>, &quot;Pluggable
+Look-and-Feel,&quot; and <A HREF="..\ch33\ch33.htm" >Chapter 33</A>, &quot;Accessibility.&quot;
+There are also extensions of the <TT>SetLookAndFeelAction</TT>
+that are initialized for the standard look-and-feel implementations
+that are shipped with the JFC. The name of one of these actions
+embeds the name of the look-and-feel that it will activate. For
+example, the action to set the MS Windows look-and-feel is named
+<TT>SetWindowsLookAndFeelAction</TT>. Each of these actions is
+part of the <TT>com.foley.utility</TT> package shown in Appendix
+C, &quot;<TT>com.foley.utility</TT> Source Code.&quot;
+<BLOCKQUOTE>
+<PRE>
+package com.foley.utility;
+
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+
+import javax.swing.*;
+ 
+
+/**
+ * Class SetLookAndFeelAction
+ * &lt;p&gt;
+ * An action which sets the look and feel to the given look
+ * and feel class name.
+ * &lt;p&gt;
+ * @author Mike Foley
+ * @version 1.2
+ **/
+public class SetLookAndFeelAction extends AbstractAction { 
+
+    /**
+     * The default name used in a menu.
+     **/
+    private static final String DEFAULT_NAME = &quot;Set Look and Feel&quot;;
+    
+    /**
+     * The key into our property table of the name of the 
+     * class containing the look and feel.
+     **/
+    private static final String LOOKANDFEELNAME_KEY 
+                         = &quot;LookAndFeelNameKey&quot;;
+        
+    /**
+     * The key into our property table for the collection of
+     * Frames to update when this action is invoked.
+     **/
+    private static final String FRAMESTOUPDAT_KEY
+                         = &quot;FramesToUpdateKey&quot;;
+    
+    
+    /**
+     * Initialize the Action with the given name and L&amp;F name.
+     * &lt;p&gt;
+     * @param name The name for the Action.
+     * @param lookAndFeelName The look and feel class name.
+     **/
+    public SetLookAndFeelAction( String name, String lookAndFeelName ) { 
+        this( name, null, lookAndFeelName, null );
+    }  // SetLookAndFeelAction
+
+    
+    /**
+     * Initialize the Action with the given name and L&amp;F name.
+     * &lt;p&gt;
+     * @param name The name for the Action.
+     * @param icon The Icon for the Action.
+     * @param lookAndFeelName The look and feel class name.
+     * @param framesToUpdate Each Component in this array will have its
+     *                       component tree udpated when this action is
+     *                       invoked.
+     **/
+    public SetLookAndFeelAction( String name, Icon icon, 
+                                 String lookAndFeelName, 
+                                 Vector framesToUpdate ) { 
+        super( name );
+        
+        if( lookAndFeelName == null )
+            throw new RuntimeException( 
+               &quot;Look-and-feel name may not be null.&quot; );
+            
+        if( icon != null )
+            putValue( SMALL_ICON, icon );
+        putValue( LOOKANDFEELNAME_KEY, lookAndFeelName );            
+        if( framesToUpdate != null )
+            putValue( FRAMESTOUPDAT_KEY, framesToUpdate );
+        
+    }  // SetLookAndFeelAction
+
+    
+    /**
+     * actionPerformed, from ActionListener
+     * &lt;p&gt;
+     * Perform the action.  Set the look and feel
+     * to that defined by the look-and-feel attribute.
+     * Update the source frame, and frames in the
+     * frames Vector.
+     * &lt;p&gt;
+     * @param event The event causing the action to fire.
+     **/
+    public void actionPerformed( ActionEvent event ) { 
+
+        try { 
+            String lookAndFeelName = ( String )getValue( 
+                                       LOOKANDFEELNAME_KEY );
+            UIManager.setLookAndFeel( lookAndFeelName );        
+            
+            //
+            // Update component tree for the source of the event.
+            //
+            Object o = event.getSource();
+            if( o instanceof Component ) { 
+                Frame frame = JOptionPane.getFrameForComponent( 
+                                  ( Component )o );
+                SwingUtilities.updateComponentTreeUI( frame ); 
+            } 
+            
+            //
+            // See if there are any registered frames to update.
+            //
+            Vector framesToUpdate = ( Vector )getValue( 
+                                      FRAMESTOUPDAT_KEY );
+            if( framesToUpdate != null ) { 
+                for( Enumeration e = framesToUpdate.elements(); 
+                             e.hasMoreElements(); ) { 
+                    Object f = e.nextElement();
+                    if( f instanceof Component ) { 
+                        Frame frame = JOptionPane.getFrameForComponent( 
+                                          ( Component )f );
+                        SwingUtilities.updateComponentTreeUI( frame );
+                    } 
+                } 
+            } 
+        }  catch( ClassNotFoundException cnf ) { 
+            throw new RuntimeException( cnf.getLocalizedMessage() );
+        }  catch( InstantiationException ie ) { 
+            throw new RuntimeException( ie.getLocalizedMessage() );
+        }  catch( UnsupportedLookAndFeelException ulf ) { 
+            throw new RuntimeException( ulf.getLocalizedMessage() );
+        }  catch( IllegalAccessException ia ) { 
+            throw new RuntimeException( ia.getLocalizedMessage() );
+        }  // catch
+        
+    }  // actionPerformed
+
+}  // SetLookAndFeelAction
+</PRE>
+</BLOCKQUOTE>
+<H2><A NAME="Summary">
+Summary</A></H2>
+<P>
+To fully understand and exploit the power of the JFC, some programming
+techniques need to be understood. This chapter addressed some
+of those issues. It was seen that the JFC is a single-threaded
+toolkit. Due to the multithreaded nature of Java, this may have
+come as a surprise to many programmers. The JFC developers decided
+that most user interface code was inherently single threaded.
+Thus the extra complexity and performance penalty for making the
+Swing toolkit multithreaded were not worth the effort. This decision
+is being hotly debated, and probably will be for as long as the
+toolkit is used. However, the fact is that this version of the
+toolkit is single threaded and using it in a multithreaded application
+requires special programming techniques. These techniques where
+discussed in this chapter. For most types of updates of a Swing
+component from a thread other than the event-dispatch thread,
+the <TT>invokeLater</TT> or <TT>invokeAndWait</TT> method must
+be used. These methods place a <TT>Runnable</TT> object in the
+event-dispatch thread's queue. This ensures that when the <TT>Runnable</TT>
+object's <TT>run()</TT> method is invoked, it will be in the event-dispatch
+thread.
+<P>
+For reccurring operations, the JFC provides the <TT>Timer</TT>
+class that will fire an <TT>ActionEvent</TT> in the event-dispatch
+thread. Thus the listener's <TT>actionPerformed</TT> method is
+free to update Swing components.
+<P>
+This chapter investigated the <TT>RepaintManager</TT> contained
+in the JFC. Understanding this class, or even providing your own
+implementation of a <TT>RepaintManager</TT>, can enhance the efficiency
+of painting JFC applications.
+<P>
+Finally, this chapter investigated <TT>Action</TT>s. It was shown
+how an <TT>Action</TT> could be used to encapsulate a piece of
+application functionality and store data associated with that
+functionality. The associated data can consist of a <TT>String</TT>
+used in a menu representation of the <TT>Action</TT> or an <TT>Icon</TT>
+to represent the <TT>Action</TT> on a toolbar, to name a few of
+the standard data items contained in an <TT>Action</TT>. Designing
+applications that contain <TT>Action</TT>s allows the user interface
+to be separated from the functionality of the application. This
+gives the programmer more flexibility when creating the user interface
+for the application. It also allows the user interface and the
+application's functionality to change independently of one another.
+
+<P>
+<CENTER>
+<HR SIZE=4>
+
+<A HREF="..\ch03\ch03.htm"><IMG SRC="..\button\previous.gif" BORDER="0"></A>
+<A HREF="..\index.htm"><IMG SRC="..\button\contents.gif" BORDER="0"></A> 
+<A HREF="..\ch05\ch05.htm"><IMG SRC="..\button\next.gif" BORDER="0"></A> 
+</p>
+
+<p>&#169; <A HREF="..\copy.htm">Copyright</A>, Macmillan Computer Publishing. All rights reserved.
+</CENTER>
+</BODY>
+</HTML>

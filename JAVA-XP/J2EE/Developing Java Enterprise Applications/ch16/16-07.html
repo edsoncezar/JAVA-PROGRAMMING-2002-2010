@@ -1,0 +1,200 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+</P>
+<TABLE WIDTH="100%">
+<TD VALIGN="TOP" ALIGN="LEFT" COLSPAN="2"><B>Table 16.4</B> SessionBean Methods
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="50%" VALIGN="TOP" ALIGN="LEFT">METHOD
+<TH VALIGN="TOP" ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void<BR>setSessionContext(SessionContext<BR>ctx) throws RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Used by the container to tell the bean about its context.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void ejbRemove() throws<BR>RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Notification to the bean that it is being removed from the host.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void ejbActivate() throws<BR>RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Notification to the bean that it is being taken out of storage for use by a client.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void ejbPassivate() throws<BR>RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Notification to the bean that it is going into storage.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+</TABLE>
+<P>At this point, the bean is ready for client messages. If the client initiates a removal of the bean from the host, the message ejbRemove is sent to the bean. Clients should remove beans when they are done with them.
+</P>
+<P>The only two other messages that the host will send are ejbActivate and ejbPassivate. These are used by the host to notify a stateful session bean that it doesn&#146;t seem to be in use, but has not been removed, so it will be put into a temporary holding area. Often, this holding area is a serialized file, but it doesn&#146;t have to be. The bean can, and should, use these notifications to clean up any nonserializable resources such as files and database connections. Because a stateless bean doesn&#146;t have any state to serialize, it will not be passivated or activated and will therefore not receive these two messages.</P>
+<P>All of the notification messages are part of the SessionBean interface that all session beans are required to implement. These methods are listed in Table 16.4.</P>
+<P>Let&#146;s take a look at a couple of session beans, provided on the CD-ROM. The next chapter discusses the steps required to compile and deploy these beans. If you are on Windows NT, a script that builds and deploys them on the BEAWebLogic server is provided.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading17"></A><FONT COLOR="#000077">An Example Stateless Session Bean</FONT></H4>
+<P>The first bean that a stateless session bean calls IsPrimeBean. This bean performs the task of checking a number to determine if it is prime or not. Remember that a prime number is only divisible by itself and 1. A really simple algorithm is used to test numbers. This algorithm is by no means the fastest, but it gets the job done. On our test computer (a 200MHz Pentium running NT), the results from this algorithm were basically instantaneous, so it should be okay for your testing as well.
+</P>
+<P>Remember the steps to write a bean. First, define the remote interface. In this case, two methods are defined: one for testing integers and one for testing longs.</P>
+<PRE>
+package isprime;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import java.rmi.Remote;
+
+public interface <B>IsPrime</B> extends <B>EJBObject, Remote</B>
+{
+    <B>public boolean isPrime(long num) throws RemoteException;
+    public boolean isPrime(int num) throws RemoteException;</B>
+}
+</PRE>
+<P>Next, define a home interface. Because this is a stateless bean, the client should always use a create method with no arguments so the home interface is only one method. Notice that the return type is IsPrime, the remote interface. This is an important rule for all of your home interfaces.
+</P>
+<PRE>
+package isprime;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import isprime.*;
+
+public interface <B>IsPrimeHome</B> extends <B>EJBHome</B>
+{
+    <B>IsPrime create() throws CreateException, RemoteException;</B>
+}
+</PRE>
+<P>Finally, define the session bean itself. As with most simple examples, it wasn&#146;t necessary to implement the SessionBean methods with any real code. They were implemented because the interface was implemented, but nothing is done in them. Larger examples will use these methods to perform the appropriate activation semantics.
+</P>
+<PRE>
+package isprime;
+
+import javax.ejb.*;
+import java.io.Serializable;
+import java.util.*;
+
+import isprime.*;
+
+public class <B>IsPrimeBean</B> implements <B>SessionBean</B>
+{
+    protected SessionContext context;
+
+    public void ejbActivate()
+    {
+    }
+    public void ejbRemove()
+    {
+    }
+    public void ejbPassivate()
+    {
+    }
+    public void setSessionContext(SessionContext ctx)
+    {
+     context = ctx;
+    }
+    <B>public void ejbCreate()
+    {
+    }</B>
+
+    <B>public boolean isPrime(long num)</B>
+    {
+         long test;
+         long max;
+         boolean retVal = true;
+
+         if((num==0)||(num==1)) return false;
+         num = Math.abs(num);
+
+         max = num/2 &#43; 1;
+
+         for(test=2;test&ltmax;test&#43;&#43;)
+         {
+             if(num%test == 0)
+             {
+                 retVal = false;
+                 break;
+             }
+         }
+
+         return retVal;
+    }
+
+    <B>public boolean isPrime(int num)</B>
+    {
+         return isPrime((long)num);
+    }
+}
+</PRE>
+<H4 ALIGN="LEFT"><A NAME="Heading18"></A><FONT COLOR="#000077">An Example Stateful Session Bean</FONT></H4>
+<P>Along the same lines as this IsPrime bean, the second example bean returns a series of prime numbers. In this case, the bean has a starting point and calculates primes from that point on. This means that the bean has to have state between each method and is therefore a stateful session bean.
+</P>
+<P>Again, start by defining the remote interface. In this case, the remote interface has methods for getting the next prime based on the last prime as well as getting the next prime after a specified number.</P>
+<PRE>
+package nextprime;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import java.rmi.Remote;
+
+public interface <B>NextPrime</B> extends <B>EJBObject, Remote</B>
+{
+    <B>public long nextPrime() throws RemoteException;
+    public long nextPrimeAfter(long num) throws RemoteException;</B>
+}
+</PRE>
+<P>Next, define two create methods. The first takes no arguments, and the second takes a long as an argument. Use the semantics that if this long is not a prime number, the bean will throw a CreateException. This way the client can create only beans that start with a prime number.
+</P>
+<PRE>
+package nextprime;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import nextprime.*;
+
+public interface <B>NextPrimeHome</B> extends <B>EJBHome</B>
+{
+    <B>NextPrime create() throws CreateException, RemoteException;
+    NextPrime create(long start) throws CreateException
+                                        , RemoteException;</B>
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

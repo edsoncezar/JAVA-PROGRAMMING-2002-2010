@@ -1,0 +1,179 @@
+<HTML>
+<HEAD>
+
+<TITLE>Java 1.2 In Record Time:Understanding Graphics Animation</TITLE>
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="438-442.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="446-450.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>In the <TT>paint()</TT> method, simply draw the image <TT>nowImage</TT> on the screen:</P>
+<PRE>
+        public void run() &#123;
+             while(animateFlag)&#123;
+                  nowImage = spinImages[spinIndex&#43;&#43;];
+                  if(spinIndex &gt; 3)spinIndex = 0;
+                  repaint();
+                      .
+                      .
+                      .
+             &#125;
+        &#125;
+        public void paint (Graphics g) &#123;
+&#8594;          if(nowImage != null) g.drawImage(nowImage, 10, 10, this);
+        &#125;
+   &#125;
+</PRE>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Make sure <TT>nowImage</TT> is not <TT>null</TT> before drawing it. You do so to make sure that the images are loaded in before you try to display them.<HR></FONT>
+</BLOCKQUOTE>
+<P><FONT SIZE="+1"><B>Using the <I>sleep</I> Method
+</B></FONT></P>
+<P>Drawing images like this is fine, but this approach flashes the images on the screen with great rapidity&#151;as fast as the computer can do it. You want the user to have time to view each image, not just a blur of action, so you slow things down with the <TT>Thread</TT> class&#146;s <TT>sleep()</TT> method. This method puts the thread to &#147;sleep&#148; for the number of milliseconds (thousandths of a second) that you pass to it. You can make each image appear for .2 seconds by passing a value of 200 milli-seconds to <TT>sleep()</TT> as follows:</P>
+<PRE>
+        public void run() &#123;
+             while(animateFlag)&#123;
+                  nowImage = spinImages[spinIndex&#43;&#43;];
+                  if(spinIndex &gt; 3)spinIndex = 0;
+                  repaint();
+&#8594;               Thread.sleep(200);
+             &#125;
+        &#125;
+
+        public void paint (Graphics g) &#123;
+             if(nowImage != null) g.drawImage(nowImage, 10, 10, this);
+        &#125;
+   &#125;
+</PRE>
+<P>Actually, Java insists that you place that statement in a <TT>try&#123;&#125;</TT> block, with an accompanying <TT>catch&#123;&#125;</TT> block in case there is an error, and so instead of the code listed above, enter the following:</P>
+<PRE>
+        public void run() &#123;
+             while(animateFlag)&#123;
+                  nowImage = spinImages[spinIndex&#43;&#43;];
+                  if(spinIndex &gt; 3)spinIndex = 0;
+                  repaint();
+&#8594;                try &#123;Thread.sleep(200);&#125;
+&#8594;                catch(InterruptedException e) &#123; &#125;
+             &#125;
+        &#125;
+        public void paint (Graphics g) &#123;
+             if(nowImage != null) g.drawImage(nowImage, 10, 10, this);
+        &#125;
+ &#125;
+</PRE>
+<P>You can run the applet now, as shown below. The image spins around and around, as it should. The code for this applet appears in <TT>spinner.java</TT>.</P>
+<P><A NAME="Fig6"></A><A HREF="images\14-06.jpg"><IMG SRC="images\14-06t.jpg"></A></P>
+<P><B>spinner.java</B></P>
+<PRE>
+ import java.awt.*;
+ import java.applet.Applet;
+
+ public class spinner extends Applet implements Runnable&#123;
+
+      Image spinImages[] = new Image[4];
+      Image nowImage;
+      int spinIndex = 0;
+      Thread spinThread;
+      boolean animateFlag = true;
+
+      public void init() &#123;
+           spinImages[0] = getImage(getCodeBase(), "spin1.gif");
+           spinImages[1] = getImage(getCodeBase(), "spin2.gif");
+           spinImages[2] = getImage(getCodeBase(), "spin3.gif");
+           spinImages[3] = getImage(getCodeBase(), "spin4.gif");
+      &#125;
+
+      public void start() &#123;
+           spinThread = new Thread(this);
+           spinThread.start();
+      &#125;
+
+      public void stop() &#123;
+           animateFlag = false;
+      &#125;
+
+      public void run() &#123;
+           while(animateFlag)&#123;
+                nowImage = spinImages[spinIndex&#43;&#43;];
+                if(spinIndex &gt; 3)spinIndex = 0;
+                repaint();
+                try &#123;Thread.sleep(200);&#125;
+                catch(InterruptedException e) &#123; &#125;
+           &#125;
+      &#125;
+
+      public void paint (Graphics g) &#123;
+           if(nowImage != null) g.drawImage(nowImage, 10, 10, this);
+      &#125;
+ &#125;
+</PRE>
+<P>If you watch the &#147;spinner&#148; applet, you&#146;ll see that it flickers occasionally. If you make the spinner spin faster, there will be even more flicker. There is a way to get rid of screen flicker, for the most part anyway, and we&#146;ll take a look at that now.
+</P>
+<H3><A NAME="Heading8"></A><FONT COLOR="#000077">Eliminating Screen Flicker</FONT></H3>
+<P>One of the main reasons that the applet flickers is that each time the <TT>paint()</TT> method is called, the <TT>update()</TT> method is called first, which clears the entire applet display. That means that between successive images, your applet&#146;s display is entirely repainted with the background color. There is no need for this repainting&#151;the spinner images are all the same size, each one exactly covers the previous one, and so there is no need to clear the whole applet between images. Let&#146;s stop the flickering now.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading9"></A><FONT COLOR="#000077">Stopping Java from Clearing an Applet&#146;s Display</FONT></H4>
+<P>Here, you will discover how to stop the <TT>update()</TT> method from clearing the applet each time you place a new image on the screen. You can do that by overriding the <TT>update()</TT> method yourself:</P>
+<PRE>
+ public class spinner extends Applet implements Runnable&#123;
+
+      Image spinImages[] = new Image[4];
+      Image nowImage;
+      int spinIndex = 0;
+      Thread spinThread;
+
+      public void init() &#123;
+           spinImages[0] = getImage(getCodeBase(), "spin1.gif");
+           spinImages[1] = getImage(getCodeBase(), "spin2.gif");
+           spinImages[2] = getImage(getCodeBase(), "spin3.gif");
+           spinImages[3] = getImage(getCodeBase(), "spin4.gif");
+      &#125;         .
+                .
+                .
+      public void run() &#123;
+           while(animateFlag)&#123;
+                nowImage = spinImages[spinIndex&#43;&#43;];
+                if(spinIndex &gt; 3)spinIndex = 0;
+                repaint();
+                try &#123;Thread.sleep(200);&#125;
+                catch(InterruptedException e) &#123; &#125;
+           &#125;
+      &#125;
+
+      public void paint (Graphics g) &#123;
+           if(nowImage != null) g.drawImage(nowImage, 10, 10, this);
+      &#125;
+
+&#8594;     public void update(Graphics g) &#123;
+                     .
+                     .
+                     .
+&#8594;     &#125;
+ &#125;
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="438-442.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="446-450.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

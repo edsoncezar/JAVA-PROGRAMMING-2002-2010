@@ -1,0 +1,654 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0381-0383.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0389-0393.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-384"><P>Page 384</P></A>
+
+
+
+
+
+
+
+<P>Note that the InetDate class does not attempt to correct any of
+
+the perceived deficiencies of the basic Java Date class.
+
+</P>
+
+
+
+<H3><A NAME="ch11_ 7">
+
+InetOutputStream Class
+
+</A></H3>
+
+
+
+<P>Servers have unique requirements relating to end-of-line
+
+termination and efficient use of network resources. You can solve any
+
+server-specific output problems with a single InetOutputStream class.
+
+This class implements OutputStream and deals with the end-of-line
+
+and buffering issues.
+
+</P>
+
+
+
+<H4><A NAME="ch11_ 8">
+
+Problems with PrintStream
+
+</A></H4>
+
+
+
+<P>Although most TCP-based client/server protocols exchange
+
+information encoded in ASCII characters rather than straight binary,
+
+you should not use a PrintStream for output. Java uses the Unix
+
+convention of \n as the end-of-line character. When you generate
+
+a println(&quot;text&quot;), a \n character automatically attaches to the end of
+
+the string. Single end-of-line characters do not conform to the
+
+Internet standard, though. True to its roots and the days of mechanical
+
+output devices, the Internet standard remains the two-character sequence
+
+of \r and \n, or carriage-return and linefeed.
+
+</P>
+
+
+
+<P>Depending on your TCP implementation, you may notice that
+
+the characters arrive individually or in small clumps, even though
+
+you used a println() statement to output a complete line.
+
+PrintStream converts the characters in the string from Unicode to ASCII
+
+and writes to the output stream one character at a time. Because
+
+the OutputStream classes pass individual characters to TCP but
+
+IP expects packets from TCP, the TCP implementation must
+
+convert this stream of characters into packets for transmission across
+
+the Internet.
+
+</P>
+
+
+
+<P>Most implementations of TCP buffer characters wait a few
+
+hundred milliseconds for additional characters to be written to the
+
+stream before they actually build and transmit the next data packet.
+
+This delay compensates for the character-at-a-time nature of
+
+streams. 
+
+</P>
+
+<P>
+
+
+
+<CENTER>
+
+<TABLE BGCOLOR="#FFFF99">
+
+<TR><TD><B>
+
+NOTE
+
+</B></TD></TR>
+
+<TR><TD>
+
+<BLOCKQUOTE>
+
+The Java.io.
+
+PrintStream implementation for println() illustrates a
+
+common issue in object-oriented design: the tradeoff
+
+between performance, and flexibility or strict adherence to
+
+OO design principles. The code for
+
+&quot;println(int i);&quot; could have been implemented
+
+as &quot;print(b); println();&quot; to localize the
+
+knowledge of the end-of-line termination sequence to the println() method. <BR>
+
+<BR>
+
+<BR>
+
+Instead, the Java implementers used &quot;print(a); write(`\r');&quot;
+
+to spreading the knowledge of the end-of-line terminator
+
+into all println() methods. In this case, that approach is
+
+reasonable, because most programs use `\r' to end each line.
+
+The extra effort spent rewriting the affected methods to adhere
+
+to the Internet standard is also minimal: separate String.
+
+valueOf() methods handle the real implementation
+
+effort, conversion of the different data types
+
+to print form.
+
+</BLOCKQUOTE></TD></TR>
+
+</TABLE></CENTER>
+
+</P>
+
+
+
+
+
+<A NAME="PAGENUM-385"><P>Page 385</P></A>
+
+
+
+
+
+<P>Other TCP implementations use only a short delay, if any, which requires that
+
+your application properly bundles individual characters together into a single write.
+
+Because this aspect of TCP behavior is not yet standardized for Java, you must buffer characters
+
+for better efficiency.
+
+</P>
+
+
+
+<P>Figure 11.3 shows the characters of a println() being processed and sent over a
+
+TCP connection. Because TCP is a stream protocol, only the sequence of characters is
+
+preserved and not any record boundaries. The characters from one print() may be read
+
+by multiple read() calls or one read() call can return chacaters from multiple print() calls.<BR>
+
+</P>
+
+
+
+
+
+<P><a href="images\ch11fg03.jpg"><img src="images\tn_ch11fg03.jpg"></a><BR>
+
+Figure 11.3
+
+Sending data across a TCP connection.
+
+</P>
+
+
+
+<H4><A NAME="ch11_ 9">
+
+Implementing InetOutputStream
+
+</A></H4>
+
+
+
+<P>The constructor for InetOutputStream automatically creates a BufferedOutputStream,
+
+if necessary, and allows you to control whether a flush() occurs at every end of line or
+
+under program control. The InetOutputStream extends the FilterOutputStream function
+
+and defines the methods available from a PrintStream, as shown in the following.
+
+</P>
+
+
+
+<A NAME="PAGENUM-386"><P>Page 386</P></A>
+
+
+
+
+
+
+<PRE>
+
+public class InetOutputStream extends FilterOutputStream {
+
+    private boolean linemode;
+
+
+
+    public InetOutputStream(OutputStream out) {
+
+    this(out, true);
+
+    }
+
+
+
+    public InetOutputStream(OutputStream out, boolean linemode) {
+
+    super((out instanceof BufferedOutputStream) ? out : new
+
+       &Acirc;BufferedOutputStream(out));
+
+    this.linemode = linemode;
+
+    }
+
+
+
+    OutputStream getOutputStream() {
+
+    return out;
+
+    }
+
+
+
+    void setLinemode(boolean flag) {
+
+    linemode = flag;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Propagating IOExceptions
+
+</B>
+
+</P>
+
+<P>Unlike Printstream, the InetOutputStream also propagates all IOExceptions to
+
+your application. In most cases, an IOException is a signal indicating that the connection to
+
+the client has broken and that the server must abort processing. Do not ignore these
+
+exceptions. The write() method looks for the linefeed character and generates any needed
+
+buffer flushing to implement the buffer mode currently active, as shown in the following listing.
+
+</P>
+
+
+<PRE>
+
+public void write(int i) throws IOException {
+
+    out.write(i);
+
+    if (linemode &amp;&amp; (i == `\n'))
+
+      out.flush();
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Adding Overloaded print() Methods
+
+</B>
+
+</P>
+
+
+
+<P>You must add overloaded methods of print() for all basic data types. The
+
+following example illustrates only a few of the different overloaded versions of print().
+
+</P>
+
+
+<PRE>
+
+public void print(Object obj) throws IOException {
+
+    print(String.valueOf(obj));
+
+    }
+
+</PRE>
+
+
+
+
+
+
+<A NAME="PAGENUM-387"><P>Page 387</P></A>
+
+
+
+
+
+
+<PRE>
+
+    synchronized public void print(String str) throws IOException {
+
+    int length = str.length();
+
+    for (int i = 0 ; i &lt; length ; i++) {
+
+      write(str.charAt(i));
+
+    }
+
+    }
+
+
+
+    public void print(char chr) throws IOException {
+
+    print(String.valueOf(chr));
+
+    }
+
+
+
+    public void print(int i) throws IOException {
+
+    print(String.valueOf(i));
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Changing Line-Termination Characters
+
+</B>
+
+</P>
+
+
+
+<P>To change the line termination from a single newline character, override the
+
+println() method to terminate each line with a carriage-return and linefeed. The following
+
+code shows how to declare the various types of println() as synchronized to prevent
+
+random interleaving of individual output characters when more than one thread writes to a
+
+single stream.
+
+</P>
+
+
+
+
+<PRE>
+
+    synchronized public void println() throws IOException {
+
+    write(`\r');
+
+    write(`\n');
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Overriding println() Methods
+
+</B>
+
+</P>
+
+
+
+<P>Now override the println() methods for the various argument types to print the data
+
+and output the new line termination characters. The following code illustrates only
+
+the methods for a few argument types.
+
+</P>
+
+
+
+
+<PRE>
+
+    synchronized public void println(Object obj) throws IOException {
+
+    print(obj);
+
+    println();
+
+    }
+
+
+
+    synchronized public void println(String str) throws IOException {
+
+    print(str);
+
+    println();
+
+    }
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-388"><P>Page 388</P></A>
+
+
+
+
+
+
+<PRE>
+
+    synchronized public void println(char chr) throws IOException {
+
+    print(chr);
+
+    println();
+
+    }
+
+
+
+    synchronized public void println(int i) throws IOException {
+
+    print(i);
+
+    println();
+
+    }
+
+
+
+  }
+
+</PRE>
+
+
+
+
+<P>The InetOutputStream class provides a network-efficient and standards
+
+compliant OutputStream wrapper for TCP connections.
+
+</P>
+
+
+
+<H3><A NAME="ch11_ 10">
+
+TimeoutInputStream Class
+
+</A></H3>
+
+
+
+<P>What if a client establishes a connection to your port but never sends any
+
+commands? What if the client crashes or is disconnected from the network in the middle of
+
+the request/response exchange? In many cases, your server will become blocked
+
+while waiting for input that never arrives. The TimeoutInputStream wraps a timeout
+
+mechanism around any InputStream to detect these situations. If your server is blocked while
+
+waiting for input and the timeout expires, an exception is generated allowing your server to
+
+clean-up and handle other clients.
+
+</P>
+
+
+
+<P>TCP automatically detects a communication failure only if information has been sent but
+
+not acknowledged as received. TCP retransmits unacknowledged information periodically
+
+and throws an exception if it is unsuccessful after a number of attempts. When TCP
+
+completes sending, however, it waits for packets from the remote host; the failure detection
+
+mechanisms do not activate, and the connection can remain alive indefinitely. If the client
+
+leaves and this set of circumstances occurs when your server is generating a read() on an
+
+ordinary InputStream, the read() will not complete, and TCP will not throw an Exception.
+
+</P>
+
+
+
+<P>Normally, this problem will not occur to a client. Most TCP implementations refrain
+
+from sending the acknowledgment in order to give the server application time to process
+
+the request and return a response. If the response returns quickly enough, TCP can
+
+piggy-back both the response and acknowledgment into a single packet. Thus, the server likely
+
+will not crash in the middle of a client-originated transaction that cannot detect the
+
+failure. Even if this unlikely event happens, however, a user often supervises the operation of
+
+the client and eventually can abort the connection.
+
+</P>
+
+
+
+
+
+<P><CENTER>
+
+<a href="0381-0383.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0389-0393.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

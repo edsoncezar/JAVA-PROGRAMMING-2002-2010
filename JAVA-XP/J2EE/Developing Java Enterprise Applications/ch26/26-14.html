@@ -1,0 +1,221 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The message store is ultimately responsible for creating queues and topics. Before a destination can be created, the store checks that it does not already exist. Trying to create a queue or topic that already exists produces an exception. If the destination is created successfully, its information is inserted into the database, making it persistent. The new destination is bound into the JNDI context for access by other MiniJMS clients. The store also initializes a vector to store any registered sessions listening to the new destination and stores it in the destination&#146;s hash table.
+</P>
+<PRE>
+    public Queue createQueue(String queueName)
+     throws JMSException
+    {
+        Queue retVal;
+
+        synchronized(destinations)
+        {
+            Object test = null;
+
+            <B>if(queueName!= null)
+                test = destinations.get(queueName);
+
+            if(test==null)
+            {</B>
+                Vector sessions = new Vector();
+
+                destinations.put(queueName,sessions);
+
+                try
+                {
+                    <B>statement.executeUpdate(&#147;insert into &#148;
+                                        &#43;&#147;destinations &#148;
+                                        &#43;&#147;values(\&#145;&#148;
+                                        &#43;queueName
+                                        &#43;&#147;\&#145;,\&#146;true\&#146;)&#148;);
+
+                    retVal = new MiniDestination(queueName,true);
+
+                    context.rebind(queueName,retVal);
+
+                    conn.commit();</B>
+                }
+                catch(Exception exp)
+                {
+                    try
+                    {
+                        conn.rollback();
+                    }
+                    catch(Exception ignore)
+                    {
+                    }
+
+                    throw new JMSException(exp.toString());
+                }
+            <B>}
+            else
+            {
+                throw new JMSException(queueName&#43;&#147; exists.&#148;);
+            }</B>
+        }
+
+        return retVal;
+    }
+
+    public Topic createTopic(String topicName)
+     throws JMSException
+    {
+        Topic retVal;
+
+        synchronized(destinations)
+        {
+            Object test = destinations.get(topicName);
+
+            if(test==null)
+            {
+                Vector sessions = new Vector();
+
+                destinations.put(topicName,sessions);
+
+                try
+                {
+                    statement.executeUpdate(&#147;insert into &#148;
+                                        &#43;&#147;destinations &#148;
+                                        &#43;&#147;values(\&#145;&#148;
+                                        &#43;topicName
+                                        &#43;&#147;\&#145;,\&#146;false\&#145;)&#148;);
+
+                    retVal = new MiniDestination(topicName,false);
+
+                    context.rebind(topicName,retVal);
+
+                    conn.commit();
+                }
+                catch(Exception exp)
+                {
+                    try
+                    {
+                        conn.rollback();
+                    }
+                    catch(Exception ignore)
+                    {
+                    }
+                    throw new JMSException(exp.toString());
+                }
+            }
+            else
+            {
+                throw new JMSException(topicName&#43;&#147; exists.&#148;);
+            }
+        }
+
+        return retVal;
+    }
+</PRE>
+<P>Deleting a destination using the deleteDestination method listed below is trickier than creating one. First, the destination must exist. Next, all of the messages for the destination must be removed from the database. In the process, all of the serialized messages referenced in the database must be removed. Then the entry in the DESTINATION table of the database is removed, and finally all of the acknowledgment records related to the destination are removed before the destination is removed from the destination&#146;s hash table.
+</P>
+<PRE>
+    public void deleteDestination(String destName)
+     throws JMSException
+    {
+        synchronized(destinations)
+        {
+            Object test = destinations.get(destName);
+            ResultSet rs;
+            File file;
+            String content;
+
+            if(test!=null)
+            {
+                try
+                {
+                    //Delete messages from disk.
+                    <B>rs = statement.executeQuery(&#147;select * from &#148;
+                                            &#43;&#147;messages &#148;
+                                            &#43;&#147;where destination=\&#145;&#148;
+                                            &#43;destName
+                                            &#43;&#147;\&#145;&#148;);
+
+                    while(rs.next())
+                    {
+                        content = rs.getString(&#147;content&#148;);
+
+                        file = new File(objDir,content);
+
+                        if(file.exists()) file.delete();
+                    }
+
+                    rs.close();</B>
+
+                    //Delete destination.
+                    <B>statement.executeUpdate(&#147;delete from &#148;
+                                        &#43;&#147;destinations &#148;
+                                        &#43;&#147;where name=\&#145;&#148;
+                                        &#43;destName
+                                        &#43;&#147;\&#145;&#148;);</B>
+
+                    //Delete acknowledgements.
+                    <B>statement.executeUpdate(&#147;delete from &#148;
+                                        &#43;&#147;ack &#148;
+                                        &#43;&#147;where DESTINATION=\&#145;&#148;
+                                        &#43;destName
+                                        &#43;&#147;\&#145;&#148;);</B>
+
+                    //Delete all messages.
+                    <B>statement.executeUpdate(&#147;delete from &#148;
+                                &#43;&#147;messages &#148;
+                                &#43;&#147;where destination=\&#145;&#148;
+                                &#43; destName
+                                &#43;&#147;\&#145;&#148;);
+
+                    conn.commit();</B>
+                }
+                catch(Exception exp)
+                {
+                    try
+                    {
+                        conn.rollback();
+                    }
+                    catch(Exception ignore)
+                    {
+                    }
+                    throw new JMSException(exp.toString());
+                }
+
+                <B>destinations.remove(destName);</B>
+            }
+        }
+    }
+</PRE>
+<P>A request for a message by a session results in a call to nextMessageFor in the message store on the server. This method checks for messages based on the ClientID or name used by the session. If a message has been cached for that id, it is tested to see if it has expired. If there is an unexpired message, it is returned. Otherwise, if there are messages but the current one has expired, null is returned. In case no messages are currently being held for an id, this method calls wait, pausing the requesting thread until it is notified of a message. The nextMessageFor method, listed here, is called by the RemoteMiniSession in a thread that loops checking for messages. In the case of an expired message, the loop calls this method again immediately after the null return value. Only when no messages are waiting delivery will the wait method be called, pausing the sessions polling thread.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

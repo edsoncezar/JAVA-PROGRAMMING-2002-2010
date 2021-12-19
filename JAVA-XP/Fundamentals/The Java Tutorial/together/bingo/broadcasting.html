@@ -1,0 +1,432 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Broadcasting Game Information</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="communication.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="rmi.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Broadcasting Game Information
+</h2>
+<p>
+<blockquote>
+
+The Game sends three kinds of information to the Players:
+<ol>
+<li> BINGO balls
+<li> Player status updates (such as when a new player registers
+     or when a player cries wolf)
+<li> Game status updates (such as when the game is about to
+     begin, when the game is over, and so on)
+</ol>
+
+The Game needs to send this information to all of the Players
+simultaneously. Most notably, the balls must be sent to all Players
+at the same time so that the Game does not favor one Player over
+the others--timing can make a critical difference in the game.
+Sending information to many recipients at the same time can
+be accomplished using UDP and is known as <em>broadcasting</em>.
+If you don't know about UDP and how it works, refer to
+<a target="_top" href="..\..\networking\overview\index.html">Overview of Networking</a><a href="..\..\networking\overview\index.html"><img src="http://docs.rinet.ru/Jtuta/images/networkingIcon.gif" width=20 height=20 border=0 alt="(in the Custom Networking trail)"></a> and
+<a target="_top" href="..\..\networking\datagrams\index.html">All About Datagrams</a><a href="..\..\networking\datagrams\index.html"><img src="http://docs.rinet.ru/Jtuta/images/networkingIcon.gif" width=20 height=20 border=0 alt="(in the Custom Networking trail)"></a>.
+
+<p>
+To broadcast a tidbit of information to the Players, the Game
+creates a <code>DatagramPacket</code> containing the information
+encoded in a byte array.
+The Game addresses the packet with a destination port number
+and a <em>group identifier</em> specified by a class D Internet address.
+The port number is an arbitrarily chosen number that the Player
+and Game have agreed to use.
+The group identifier simply identifies what type of information
+is contained in the packet.
+
+<p>
+The Game uses three different group identifiers each of which
+identifies one of the three kinds of information sent by the Game.
+Thus ball packets are marked with the <code>BallListeningGroup</code>
+identifier, the player status packets are marked with
+the <code>PlayerListenerGroup</code> identifier,
+and the game status packets are
+marked with the <code>GameListenerGroup</code> identifier.
+
+<p>
+To receive information broadcast by the Game, the Player
+opens a <code>MulticastSocket</code> on the same port number
+used by the Game to create its <code>DatagramPacket</code>.
+Next the Player asks the <code>MulticastSocket</code> 
+to join one of the groups that the Game used to
+create its <code>DatagramPacket</code>.
+That <code>MulticastSocket</code> will only receive packets destined
+for that port and marked with that group identifier.
+If the Player wants information for a different group,
+it must create a different <code>MulticastSocket</code>
+and have it join a different group.
+
+<p>
+Using UDP in this way, the Game can broadcast information to all
+the Players simultaneously and uses only one port
+for all of its status updates. Additionally,
+through the use of group identifiers, the Game can 
+identify the different kinds of information thereby allowing
+the Player application to receive only the information that it wants.
+
+<blockquote><IMG SRC="http://docs.rinet.ru/Jtuta/figures/together/multicasting.gif" WIDTH="566" HEIGHT="277" ALIGN="BOTTOM" NATURALSIZEFLAG="3" ALT=""></blockquote>
+Currently, the Player application listens for announced balls and
+game status updates, but ignores player updates.
+<p>
+As the diagram implies, one interesting side-effect of
+broadcasting information to the Players is that the Game can listen
+to the information, too. This particular side-effect was used to advantage
+to design the various status panes to operate independently of the Game.
+Instead of having the Game directly update the status panes
+within its code, the status panes update themselves by listening to the
+broadcast information. Thus the status panes can be shared by the
+Player application (or any other application) as well.
+You can read more about this in [PENDING].
+
+<h4>How the Game Broadcasts Information</h4>
+<blockquote>
+The
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/game/SocketGate.java"><code>SocketGate</code></a>
+class, as its name implies, is the gate through which all information is
+broadcast from the Game application.
+<p>
+The Game application creates and uses one instance of <code>SocketGate</code>
+for the entire program. The 
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/game/RingMaster.java"><code>RingMaster</code></a>
+creates the <code>SocketGate</code> in its constructor:
+<blockquote>
+<pre>
+socketGate = new SocketGate();
+</pre>
+</blockquote>
+The constructor for <code>SocketGate</code> creates a
+<code>MulticastSocket</code> through which the Game sends
+<code>DatagramPacket</code>s. Additionally, the constructor
+creates three <code>InetAddress</code>'s. These are the
+group identifiers for the game. There is one group identifier
+for each type of information broadcast from the Game: balls,
+player status, and game status.
+<blockquote>
+<pre>
+SocketGate () throws java.io.IOException {
+    socket = new MulticastSocket(Constants.portNumber);
+
+    ballListeningGroup = InetAddress.getByName(Constants.BallListeningGroup);
+    playerListeningGroup = InetAddress.getByName(Constants.PlayerListeningGroup);
+    gameListeningGroup = InetAddress.getByName(Constants.GameListeningGroup);
+}
+</pre>
+</blockquote>
+The argument to the constructor for the <code>MulticastSocket</code>,
+<code>Constants.portNumber</code>, is the port to which the socket is bound.
+The actual port number doesn't matter except that 
+the Game and the Player agree on what it is
+and it's not one of the reserved port numbers between
+0 and 1023. The BINGO game port number is 52596 which is
+Sophia's birthday (5/25/96).
+<p>
+Group identifiers are class D Internet address which range
+from 224.0.0.1 and 239.255.255.255.
+As with the port number, the actual addresses used by the BINGO game
+don't matter as long as the Player and Game agree on what they are.
+The addresses we chose for the BINGO game are consecutive and are
+as follows (for no particular reason at all):
+<ul>
+<li> <code>Constants.BallListeningGroup</code> is "230.0.0.1"
+<li> <code>Constants.PlayerListeningGroup</code> is "230.0.0.2"
+<li> <code>Constants.GameListeningGroup</code> is "230.0.0.3"
+</ul>
+
+<p>
+All information is broadcast from the Game via the
+<code>sendBytes</code> method provided by
+<code>SocketGate</code>.
+Given an array of bytes and a group identifier, <code>sendBytes</code>
+packages the array into a <code>DatagramPacket</code> and sends it on
+its way.
+<blockquote>
+<pre>
+private void sendBytes(byte[] data, InetAddress group) {
+    DatagramPacket packet = new DatagramPacket(data, data.length, group,
+					       Constants.portNumber);
+    try {
+        socket.send(packet);
+    } catch (java.io.IOException e) {
+        // PENDING: what should go in here?
+    }
+}
+</pre>
+</blockquote>
+The <code>sendBytes</code> method is called from each of the three
+convenience methods implemented by <code>SocketGate</code> to send
+each kind of information sent by the Game:
+<blockquote>
+<pre>
+void sendBall(BingoBall b) {
+    sendBytes(b.getBytes(), ballListeningGroup);
+}
+
+void sendPlayerStatusMessage(PlayerRecord p) {
+    sendBytes(p.getBytes(), playerListeningGroup);
+}
+
+void sendGameStatusMessage(String msg) {
+    sendBytes(msg.getBytes(), gameListeningGroup);
+}
+</pre>
+</blockquote>
+The information sent in a <code>Datagrampacket</code> must
+be bytes, so all of the information is converted to bytes before
+being broadcast. The receiver must reconstruct the actual
+information from bytes on the other side. You'll see this in
+<a href="#RECEIVING">How to Receive Information Broadcast by the Game</a>.
+<p>
+Note that the code is a bit cavalier about converting
+everything to bytes. Although careless, the code works
+for all of the converted data except in one, unlikely, scenario.
+<p>
+The BINGO ball numbers always survive the conversion because
+they range from 1 to 75 which is small enough to fit into a byte.
+The game status string survives the conversion because the code
+calls the <code>getBytes</code> method from the <code>String</code>
+class which automatically encodes Unicode characters to bytes
+(and back again on the other side) using the default character
+encoding.
+<p>
+Potential problems occur with the player status.
+The player name is a <code>String</code> and survives the conversion for the
+same reason that the game status string survives.
+However, problems may occur with the numbers in the player
+status--the player ID, the number of cards used by the player,
+and the number of wolf cries made by the player--which are all
+declared to be integers.
+<p>
+By default, the game parameters limit these numbers to those
+that fit within a byte (player ID won't exceed 100, the number of cards
+won't exceed 3, and so on). However, if you change the game parameters,
+and allow them to exceed 255, then the numbers will not survive
+the conversion and will be broadcast incorrectly.
+</blockquote>
+
+<a name="RECEIVING">
+<h4>How to Receive Information Broadcast by the Game</h4>
+</a>
+<blockquote>
+The <code>bingo.shared</code> package contains three
+classes whose sole purpose is to just sit around and listen for packets to
+come across a <code>MulticastSocket</code>. Each class listens
+for packets marked with a different group identifier:
+<ul>
+<li><code>BallListenerThread</code> listens for packets marked with
+    the <code>BallListeningGroup</code> identifer
+<li><code>GameListenerThread</code> listens for packets marked with
+    the <code>GameListeningGroup</code> identifier
+<li><code>PlayerListenerThread</code> listens for packets marked with
+    the <code>PlayerListeningGroup</code> identifier
+</ul>
+
+All of the listening thread classes subclass the abstract superclass called
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/shared/ListenerThread.java"><code>ListenerThread</code></a>
+shown here:
+<blockquote>
+<pre>
+package bingo.shared;
+
+import java.net.*;
+import java.io.*;
+
+public abstract class ListenerThread extends Thread {
+
+    boolean stopListening = false;
+    MulticastSocket socket;
+
+    private InetAddress group;
+    private String groupString;
+
+    public ListenerThread(String groupString) throws UnknownHostException, IOException
+    {
+	super();
+
+	this.groupString = groupString;
+
+        this.group = InetAddress.getByName(groupString);
+        socket = new MulticastSocket(Constants.portNumber);
+	socket.joinGroup(group);
+    }
+
+    public void stopListening() {
+	stopListening = true;
+    }
+
+    protected void finalize() throws Throwable {
+	socket.leaveGroup(group);
+	socket.close();
+    }
+}
+</pre>
+</blockquote>
+The abstract superclass provides a constructor that its subclasses
+must call from their constructors, a mechanism for gently stopping
+the thread, and a <code>finalize</code> method.
+<p>
+As you can see from the code, the constructor in <code>ListenerThread</code>
+creates a group identifier based on the group string passed into the constructor.
+The group string is passed into the constructor by a subclass constructor.
+The <code>BallListenerThread</code> subclass passes in
+<code>Constants.BallListeningGroup</code>, and so on.
+This is the same group used by the Game to address packets sent
+to the <code>MulticastSocket</code>.
+<p>
+The constructor then creates a <code>MulticastSocket</code> on the
+BINGO port, and joins a group on that socket. By joining the group
+this thread will only receive information for that particular group.
+Each ListenerThread must have its own <code>MulticastSocket</code>
+because a <code>MulticastSocket</code> can join only one group at a time.
+Thus a <code>MulticastSocket</code> cannot be shared for listening as
+it can be for broadcasting.
+<p>
+The subclasses of <code>ListenerThread</code> each provide their own
+<code>run</code> method which are all similar.
+Each loops until <code>stopListening</code> becomes <code>true</code>.
+During each iteration of the loop, the thread waits for a packet to come
+over the socket. When a packet arrives, the thread gets the information
+from the packet, converts it from bytes to the appropriate type,
+and notifies another object (its notifyee) of the event.
+
+<p>
+The three subclasses of <code>ListenerThread</code> are basically the
+same, so let's just look at one: the
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/shared/BallListenerThread.java"><code>BallListenerThread</code></a>
+class:
+<blockquote>
+<pre>
+package bingo.shared;
+
+import java.net.*;
+import java.io.*;
+
+public class BallListenerThread extends ListenerThread {
+
+    private BallListener notifyee;
+
+    public BallListenerThread(BallListener notifyee) throws IOException {
+
+	super(Constants.BallListeningGroup);
+	this.notifyee = notifyee;
+    }
+
+    public synchronized void run() {
+	DatagramPacket packet;
+
+        while (stopListening == false) {
+	    byte[] buf = new byte[256];
+            packet = new DatagramPacket(buf, 256);
+	    try {
+                socket.receive(packet);
+		byte[] rcvd = packet.getData();
+		BingoBall b = new BingoBall(rcvd);
+		if (b.getNumber() == BingoBall.GAME_OVER) {
+		    notifyee.noMoreBalls();
+		} else
+		    notifyee.ballCalled(b);
+
+	    } catch (IOException e) {
+		    // PENDING: what goes in here?
+	    }
+        }
+    }
+}
+</pre>
+</blockquote>
+The constructor for <code>BallListenerThread</code> requires a
+<a href="example-swing\bingo\shared\balllistener.java"><code>BallListener</code></a>--
+an object that implements the <code>BallListener</code> interface and thus
+implements two methods: <code>ballCalled</code> and <code>noMoreBalls</code>.
+The <code>BallListenerThread</code> notifies its <code>BallListener</code> whenever a ball
+is called, or when the end-of-game ball arrives by calling the appropriate
+one of those two methods.
+The notifyee then takes whatever action is appropriate.
+<p>
+<p>
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/shared/PlayerListenerThread.java"><code>PlayerListenerThread</code></a>
+is similar but its <code>notifyee</code> is a
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/shared/PlayerListener.java"><code>PlayerListener</code></a>.
+Likewise,
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/shared/GameListenerThread.java"><code>GameListenerThread</code></a>'s
+<code>notifyee</code> is a
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/shared/GameListener.java"><code>GameListener</code></a>.
+
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="communication.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="rmi.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

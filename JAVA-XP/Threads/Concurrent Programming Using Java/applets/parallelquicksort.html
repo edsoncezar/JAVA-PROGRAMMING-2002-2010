@@ -1,0 +1,141 @@
+<HTML>
+<HEAD>
+<TITLE>Parallel Quick Sort Applet using XtangoAnimator</TITLE>
+</HEAD>
+<BODY BGCOLOR="#FFFFFF" TEXT="#000000">
+
+<P>
+This is an animation of the parallel quick sort algorithm.
+There are six CPUs available and one initial partition of random
+positive numbers to sort.
+The left-most circle is chosen as the pivot point of the partition.
+The circles less than the pivot are swept to the lower left quadrant
+of the partition and the circles larger than the pivot are swept
+to the upper right quadrant of the partition.
+Then the pivot circle is moved to the middle of the partition
+and changed to solid black.
+This leaves two new partitions to which the algorithm is applied
+recursively by any two available CPUs.
+The circles in a partition take on the solid color of the CPU
+working on them, except the pivot, which is outline.
+<PRE>
+private static void quickSort(int worker, int left, int right) {
+   int pivot = nums[left]; int l = left, r = right;
+   // enclose what this worker is working on in a black outline rectangle
+   int ymin = minn(nums, left, right);
+   int ymax = maxx(nums, left, right);
+   float xpos, ypos, xsize, ysize;
+   xpos = scaleX(left); ypos = scaleY(ymin);
+   xsize = scaleX(right-left); ysize = scaleY(ymax-ymin);
+   xa.rectangle("rect"+worker, xpos, ypos, xsize, ysize, Color.black, xa.OUTLINE);
+   xa.delay(1);
+   // change items sorted to this worker's color
+   for (int i = left; i &lt;= right; i++) {
+      xa.color("nums"+i, colors[worker]);   // would be better to do
+      xa.fill("nums"+i, xa.SOLID);          // these as a batch i.e.
+   }                                        // no frameDelay
+   xa.delay(1);
+   // make pivot outline color
+   xa.fill("nums"+left, xa.OUTLINE);
+   // draw a black horizontal line from the pivot across the rectangle
+   xpos = scaleX(left); ypos = scaleY(pivot);
+   xsize = scaleX(right-left); ysize = 0.0f;
+   xa.line("lineH"+worker, xpos, ypos, xsize, ysize, Color.black, xa.THIN);
+   // draw two vertical lines at left+1 and right
+   xpos = scaleX(l+1); ypos = scaleY(pivot);
+   xsize = 0.0f; ysize = scaleY(ymax-pivot);
+   xa.line("lineVL"+worker, xpos, ypos, xsize, ysize, Color.black, xa.THIN);
+   xpos = scaleX(r); ypos = scaleY(ymin);
+   xsize = 0.0f; ysize = scaleY(pivot-ymin);
+   xa.line("lineVR"+worker, xpos, ypos, xsize, ysize, Color.black, xa.THIN);
+   xa.delay(1);
+   boolean done = false;
+   while (!done) {
+      if (nums[l+1] &gt; pivot) {
+         while (r &gt; l+1 && nums[r] &gt; pivot) { r--;
+            // move the right vertical line one to the left
+            if (!done) {
+               xa.jumpRelative("lineVR"+worker, scaleX(-1), 0.0f);
+            }
+         }
+         if (r &gt; l+1) { l++;
+            int temp = nums[r]; nums[r] = nums[l]; nums[l] = temp;
+            done = l &gt;= r-1;
+            // swap locations and ids of the objects
+            xa.moveAsync("nums"+r, scaleX(l), scaleY(nums[l]));
+            xa.move("nums"+l, scaleX(r), scaleY(nums[r]));
+            xa.swapIds("nums"+r, "nums"+l);
+            // move the left vertical line one to the right
+            if (!done) {
+               xa.jumpRelative("lineVL"+worker, scaleX(1), 0.0f);
+            }
+         } else done = true;
+      } else { l++; done = l &gt;= r;
+         // move the left vertical line one to the right
+         if (!done) {
+            xa.jumpRelative("lineVL"+worker, scaleX(1), 0.0f);
+         }
+      }
+   }
+   int temp = nums[left]; nums[left] = nums[l]; nums[l] = temp;
+   // swap locations and ids of the objects
+   xa.moveAsync("nums"+left, scaleX(l), scaleY(nums[l]));
+   xa.move("nums"+l, scaleX(left), scaleY(nums[left]));
+   xa.swapIds("nums"+left, "nums"+l);
+   if (right-(l+1) &gt; 0) send(task, new Task(l+1, right));
+   else if (right-(l+1) == 0) {  V(doneCount);
+      // color the object solid black to indicate it is in final position
+      xa.color("nums"+right, Color.black);
+      xa.fill("nums"+right, xa.SOLID);
+   }
+   // delete the line and rectangle objects
+   xa.delete("rect"+worker);
+   xa.delete("lineH"+worker);
+   xa.delete("lineVL"+worker);
+   xa.delete("lineVR"+worker);
+   V(doneCount);
+   // color the object solid black to indicate it is in final position
+   xa.color("nums"+l, Color.black);
+   xa.fill("nums"+l, xa.SOLID);
+   if ((l-1)-left &gt; 0) send(task, new Task(left, l-1));
+   else if ((l-1)-left == 0) {  V(doneCount);
+      // color the object solid black to indicate it is in final position
+      xa.color("nums"+left, Color.black);
+      xa.fill("nums"+left, xa.SOLID);
+   }
+}
+</PRE>
+At the bottom of the animation window is a button and text field
+showing the default values of some of the command line arguments.
+Alter these as needed and click the button.
+<UL>
+  <P>
+   <TT>-n</TT>: number of numbers to sort<BR>
+   <TT>-r</TT>: range of random numbers generated to sort (from 1)<BR>
+   <TT>-p</TT>: number of CPUs (worker threads) available<BR>
+  </P>
+</UL>
+To start the animation, push the ``Start'' button after
+checking the command line arguments text field and clicking that button.
+<APPLET CODE="XtangoApplet.class" WIDTH=500 HEIGHT=600>
+<PARAM NAME="command" VALUE="quickSort -n50 -r10000 -p6">
+An applet appears here if you have a Java-enabled browser.
+</APPLET>
+</P>
+
+<HR>
+
+<P>
+<SCRIPT LANGUAGE="JavaScript">
+<!--hide from non-JavaScript browsers
+   document.write("Last modified on "+document.lastModified);
+ // end hiding -->
+</SCRIPT>
+</P>
+
+<P>
+<EM>&#169 1998 Stephen J. Hartley<EM>
+</P>
+
+</BODY>
+</HTML>

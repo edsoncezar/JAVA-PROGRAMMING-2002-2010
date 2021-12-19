@@ -1,0 +1,311 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0405-0409.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0415-0419.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-410"><P>Page 410</P></A>
+
+
+<PRE>
+    boolean deliverMsg(String msg, Vector recipients) {
+    try {
+      Enumeration enum = recipients.elements();
+      while (enum.hasMoreElements()) {
+        String recp = (String)(enum.nextElement());
+        String user = recp.substring(0, recp.lastIndexOf(`@'));
+        Maildrop md = getMaildrop(user);
+        try {
+          md.deliverMsg(msg);
+        }
+        finally {
+          md.release();
+        }
+      }
+      return true;
+    }
+    catch (Exception e) {
+      ServerLog.out.println(e);
+      return false;
+    }
+    }
+
+  }
+</PRE>
+
+<H4><A NAME="ch11_ 27">
+Maildrop Class
+</A></H4>
+
+<P>Maildrop objects shield the mail handling servers and the MailDomain class from
+the implementation details of mail storage. You can store the actual mail messages in
+several ways. The most common ways are storing one message per file within a directory
+dedicated to a user, or storing all messages for a user within a single file. The first method
+is more processor-efficient for temporary storage of a few messages, while the
+second method offers more space efficiency for longer-term storage. In addition, you can
+use database facilities for mail stores. For the following exercise, store messages one per
+file in a directory for each user.
+</P>
+
+<P>Maildrop directories contain only message-related files created and managed by
+a Maildrop object. To maintain reception order, message files receive numeric names in
+an ascending order. That is, the first message stored in a file earns the name &quot;1,&quot; while
+a second message becomes &quot;2.&quot;
+</P>
+
+
+<A NAME="PAGENUM-411"><P>Page 411</P></A>
+
+
+
+<B>
+Creating Maildrop Objects
+</B>
+
+<P>Create a Maildrop object by passing it the name of the user's mail directory:
+</P>
+<PRE>
+  public class Maildrop {
+    static Hashtable maildropList = new Hashtable();
+    int useCounter;
+    String fname;
+    String prefix;
+    boolean locked;
+    int msgID[];
+    boolean msgDeleted[];
+    int msgLength[];
+
+    Maildrop(String fname) throws IOException {
+    locked = false;
+    this.fname = fname;
+    prefix = fname + File.separator;
+    }
+</PRE>
+
+<P>Synchronization issues are critical for Maildrop objects. One or more threads may
+attempt to deliver a new message into a mailbox at the same time another thread retrieves
+messages. To support both concurrent SMTP and POP access, you can allow multiple
+SMTP threads to deliver new mail but only one POP client to control the maildrop.
+</P>
+
+<B>
+Accessing Mail Directories
+</B>
+
+<P>Your handler calls getMaildrop() to access the mail directory, and then release()
+when finished. If a Maildrop object for the indicated user is already allocated, the system
+returns that object; otherwise, it creates a new instance. A useCounter keeps track of the
+number of handlers using a given Maildrop object. Because you call it to obtain a
+Maildrop instance, getMaildrop() must be a class method:
+</P>
+
+<PRE>
+    static Maildrop getMaildrop(String fname) throws IOException {
+    Maildrop md;
+    synchronized (maildropList) {
+      md = (Maildrop)(maildropList.get(fname));
+      if (md == null)
+        md = new Maildrop(fname);
+      md.useCounter++;
+    }
+    return md;
+    }
+</PRE>
+
+<A NAME="PAGENUM-412"><P>Page 412</P></A>
+
+
+
+<B>
+Releasing Mail Directories
+</B>
+
+<P>Remove the Maildrop object from the instance list when all handlers have released it:
+</P>
+
+<PRE>
+    synchronized void release() {
+    useCounter&#151;;
+    if (useCounter == 0)
+      maildropList.remove(this);
+    }
+</PRE>
+<P>
+<B>
+Scanning Mail Directories
+</B>
+</P>
+
+<P>A directory stores messages as files. You can obtain a list of messages by scanning
+the contents of the mail drop directory:
+</P>
+
+<PRE>
+    String[] listMailfolder() throws IOException {
+    File md = new File(fname);
+    if (!md.exists() || !md.canRead() || !md.isDirectory())
+      throw new FileNotFoundException(&quot;not a maildrop&quot;);
+    String files[] = md.list();
+    return files;
+    }
+</PRE>
+<P>
+<B>
+Delivering Mail Messages
+</B>
+</P>
+
+<P>Delivery is relatively easy with one message per file. Simply scan the directory to
+determine the highest file name, increase this value by 1, create a new file, and write
+your message. Because you rescan the directory within this method, you can allow
+multiple threads to deliver messages by using the synchronized modifier:
+</P>
+<PRE>
+    synchronized void deliverMsg(String msg) throws IOException {
+    int maxID = 0;
+    String files[] = listMailfolder();
+    for (int i = 0; i &lt; files.length; i++) {
+      int id = Integer.parseInt(files[i]);
+      if (id &gt; maxID)
+        maxID = id;
+    }
+    maxID++;
+    RandomAccessFile fs = new RandomAccessFile(prefix + maxID, &quot;rw&quot;);
+    fs.writeBytes(msg);
+    fs.close();
+    }
+</PRE>
+
+<A NAME="PAGENUM-413"><P>Page 413</P></A>
+
+
+
+<B>
+Retrieving Mail Messages
+</B>
+
+<P>Retrieving messages from the maildrop is much more complicated than adding
+them. Three arrays capture the state of the maildrop. Because the file names are numeric
+text strings, you can convert these file names back into numbers for easy sorting and
+manipulation. The msgID[] stores and lists these message ID values or file names as ints. These
+IDs appear in an increasing order to reflect the order of delivery into the maildrop.
+</P>
+
+<B>
+Marking Messages for Deletion
+</B>
+
+<P>The msgDeleted[] provides a flag for each message to indicate that the message is
+marked for deletion. The third array surveys the length of each message. You build this
+information each time you call refresh():
+</P>
+<PRE>
+    void refresh() throws IOException {
+    String files[] = listMailfolder();
+    msgID = new int[files.length];
+    for (int i = 0; i &lt; files.length; i++) {
+      int id = Integer.parseInt(files[i]);
+      int j = 0;
+      while ((j &lt; i) &amp;&amp; (id &gt; msgID[j]))
+        j++;
+      System.arraycopy(msgID, j, msgID, j+1, i-j);
+      msgID[j] = id;
+    }
+    msgDeleted = new boolean[msgID.length];
+    msgLength = new int[msgID.length];
+    for (int i = 0; i &lt; msgID.length; i++) {
+      msgDeleted[i] = false;
+      msgLength[i] = computeLength(i);
+    }
+    }
+</PRE>
+<P>
+<B>
+Restricting Multiple Maildrop Logins
+</B>
+</P>
+<P>To prevent multiple POP e-mail clients from manipulating the same Maildrop, you
+can define a locking mechanism. This ensures only one maildrop login at a time. When
+you lock the Maildrop, you also build the list of messages in the mail drop by calling
+refresh(). Likewise, when you unlock the maildrop, you clear its message information and
+must provide a subsequent lock() before you can manipulate messages. This locking
+mechanism is implemented as follows:
+</P>
+
+<A NAME="PAGENUM-414"><P>Page 414</P></A>
+
+
+<PRE>
+    synchronized boolean lock() {
+    if (locked)
+      return false;
+    try {
+      refresh();
+      locked = true;
+      return true;
+    }
+    catch (IOException e) {
+      ServerLog.out.println(e);
+      return false;
+    }
+    }
+
+    boolean isLocked() {
+    return locked;
+    }
+
+    void unlock() {
+    msgID = null;
+    msgDeleted = null;
+    msgLength = null;
+    locked = false;
+    }
+</PRE>
+<P>
+<B>
+Counting Maildrop Messages
+</B>
+</P>
+<P>You also can provide methods that count the number of messages in the mail
+drop, compute the length of each message, and compute the total mail drop length. POP
+requires these functions. Because SMTP stores messages with the required two-character
+end-of-line sequence (&quot;\r\n&quot;), you can use the file length as the POP message length:
+</P>
+
+<PRE>
+    int count() {
+    return msgID.length;
+    }
+
+    int messageLength(int id) {
+    return msgLength[id];
+    }
+
+    int maildropLength() {
+    int total = 0;
+    for (int i = 0; i &lt; msgLength.length; i++)
+</PRE>
+
+
+<P><CENTER>
+<a href="0405-0409.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0415-0419.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

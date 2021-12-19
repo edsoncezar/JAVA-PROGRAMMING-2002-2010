@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- An Ant build file for the JAAS tutorial code
+-->
+
+<project name="JAAS Howto Build Script" default="ears" basedir=".">
+
+    <!-- Allow override from local properties file -->
+    <property file="ant.properties" />
+    <!-- Override with your JBoss/Web server bundle dist location -->
+    <property name="jboss.dist" value="/tmp/jboss-3.2.5" />
+   <!-- The servlet.jar location in 3.2.3- -->
+   <property name="servlet.jar" value="${jboss.dist}/server/default/lib/javax.servlet.jar"/>
+   <!-- The servlet.jar location in 3.2.4+ -->
+   <property name="servlet324.jar" value="${jboss.dist}/server/default/deploy/jbossweb-tomcat50.sar/servlet-api.jar"/>
+
+    <property name="src.dir" value="${basedir}/org/jboss/docs/jaas/howto"/>
+    <property name="build.dir" value="${basedir}/output"/>
+    <property name="build.classes.dir" value="${build.dir}/classes"/>
+
+    <path id="base.path_32">
+        <pathelement location="${jboss.dist}/client/jbossall-client.jar" />
+        <pathelement location="${servlet.jar}"/>
+        <pathelement location="${servlet324.jar}"/>
+        <pathelement location="${build.classes.dir}"/>
+    </path>
+
+    <!-- Validate the jboss.dist value by looking for a the client/jboss-j2ee.jar jar -->
+    <target name="validate">
+        <available property="classpath_id" value="base.path_32" file="${jboss.dist}/client/jboss-j2ee.jar" />
+    </target>
+    <target name="fail_if_not_valid" unless="classpath_id">
+        <fail message="jboss.dist=${jboss.dist} is not a valid JBoss dist directory"/>
+    </target>
+    <target name="init" depends="validate,fail_if_not_valid">
+        <property name="classpath" refid="${classpath_id}" />
+        <echo message="Using jboss.dist=${jboss.dist}" />
+        <echo message="Using classpath=${classpath}" />
+    </target>
+
+    <target name="compile" depends="init">
+    <mkdir dir="${build.classes.dir}"/>
+    <javac srcdir="${basedir}"
+           destdir="${build.classes.dir}"
+           classpathref="${classpath_id}"
+           debug="on"
+           deprecation="on"
+           optimize="off"
+       includes="org/jboss/docs/jaas/howto/*.java"
+    />
+    </target>
+
+<!-- ### Example 1 targets -->
+    <!-- Tutorial ejb jar1 -->
+    <target name="jar1" depends="compile">
+        <delete dir="${build.dir}/META-INF"/>
+        <mkdir dir="${build.dir}/META-INF"/>
+        <copy file="${src.dir}/ejb-jar.xml" todir="${build.dir}/META-INF" />
+        <filter filtersfile="${src.dir}/example1.properties" />
+        <copy filtering="true" file="${src.dir}/jboss.xml" todir="${build.dir}/META-INF" />
+        <jar jarfile="${build.dir}/ssbean1.jar"
+        >
+            <fileset dir="${build.classes.dir}">
+                <include name="**/Session.class" />
+                <include name="**/SessionHome.class" />
+                <include name="**/PrivateSessionBean.class" />
+               <include name="**/PublicSessionBean.class" />
+               <include name="**/JaasLoginFilter.class" />
+            </fileset>
+            <fileset dir="${build.dir}">
+                <include name="META-INF/ejb-jar.xml" />
+                <include name="META-INF/jboss.xml" />
+            </fileset>
+            <fileset dir="${src.dir}">
+                <include name="roles.properties" />
+                <include name="users.properties" />
+            </fileset>
+        </jar>
+    </target>
+    <!-- Tutorial web app war -->
+    <target name="war1" depends="compile">
+        <delete dir="${build.dir}/web"/>
+        <mkdir dir="${build.dir}/web/WEB-INF/classes/org/jboss/docs/jaas/howto"/>
+        <copy file="${src.dir}/web.xml" todir="${build.dir}/web/WEB-INF" />
+        <filter filtersfile="${src.dir}/example1.properties" />
+        <copy filtering="true" file="${src.dir}/jboss-web.xml" todir="${build.dir}/web/WEB-INF" />
+        <copy file="${build.dir}/classes/org/jboss/docs/jaas/howto/EJBServlet.class" todir="${build.dir}/web/WEB-INF/classes/org/jboss/docs/jaas/howto" />
+        <jar jarfile="${build.dir}/tutorial1.war">
+            <fileset dir="${build.dir}/web">
+                <include name="WEB-INF/**"/>
+            </fileset>
+            <fileset dir="${src.dir}">
+                <include name="index.html"/>
+            </fileset>
+        </jar>
+    </target>
+    <!-- Create the tutorial ear that uses the properties based security info -->
+    <target name="ear1" depends="jar1,war1">
+        <filter filtersfile="${src.dir}/example1.properties" />
+        <copy filtering="true" file="${src.dir}/application.xml" todir="${build.dir}/META-INF" />
+        <jar jarfile="${build.dir}/tutorial1.ear">
+            <fileset dir="${build.dir}">
+                <include name="META-INF/application.xml" />
+                <include name="ssbean1.jar" />
+                <include name="tutorial1.war" />
+            </fileset>
+        </jar>
+    </target>
+
+<!-- ### Example 2 targets -->
+    <!-- Tutorial ejb jar2 -->
+    <target name="jar2" depends="compile">
+        <delete dir="${build.dir}/META-INF"/>
+        <mkdir dir="${build.dir}/META-INF"/>
+        <copy file="${src.dir}/ejb-jar.xml" todir="${build.dir}/META-INF" />
+        <filter filtersfile="${src.dir}/example2.properties" />
+        <copy filtering="true" file="${src.dir}/jboss.xml" todir="${build.dir}/META-INF" />
+        <jar jarfile="${build.dir}/ssbean2.jar"
+        >
+            <fileset dir="${build.classes.dir}">
+                <include name="**/Session.class" />
+                <include name="**/SessionHome.class" />
+                <include name="**/PrivateSessionBean.class" />
+                <include name="**/PublicSessionBean.class" />
+               <include name="**/JaasLoginFilter.class" />
+            </fileset>
+            <fileset dir="${build.dir}">
+                <include name="META-INF/ejb-jar.xml" />
+                <include name="META-INF/jboss.xml" />
+            </fileset>
+            <fileset dir="${src.dir}">
+                <include name="roles.properties" />
+                <include name="users.properties" />
+            </fileset>
+        </jar>
+    </target>
+    <!-- Tutorial web app war -->
+    <target name="war2" depends="compile">
+        <delete dir="${build.dir}/web"/>
+        <mkdir dir="${build.dir}/web/WEB-INF/classes/org/jboss/docs/jaas/howto"/>
+        <copy file="${src.dir}/web.xml" todir="${build.dir}/web/WEB-INF" />
+        <filter filtersfile="${src.dir}/example2.properties" />
+        <copy filtering="true" file="${src.dir}/jboss-web.xml" todir="${build.dir}/web/WEB-INF" />
+        <copy file="${build.dir}/classes/org/jboss/docs/jaas/howto/EJBServlet.class" todir="${build.dir}/web/WEB-INF/classes/org/jboss/docs/jaas/howto" />
+        <jar jarfile="${build.dir}/tutorial2.war">
+            <fileset dir="${build.dir}/web">
+                <include name="WEB-INF/**"/>
+            </fileset>
+            <fileset dir="${src.dir}">
+                <include name="index.html"/>
+            </fileset>
+        </jar>
+    </target>
+    <!-- Create the tutorial ear that uses the properties based security info -->
+    <target name="ear2" depends="jar2,war2">
+        <filter filtersfile="${src.dir}/example2.properties" />
+        <copy filtering="true" file="${src.dir}/application.xml" todir="${build.dir}/META-INF" />
+        <jar jarfile="${build.dir}/tutorial2.ear">
+            <fileset dir="${build.dir}">
+                <include name="META-INF/application.xml" />
+                <include name="ssbean2.jar" />
+                <include name="tutorial2.war" />
+            </fileset>
+        </jar>
+    </target>
+
+   <!-- Create the tutorial ears and install them into a custom JBoss configuration
+   named jaas_howto.
+   -->
+   <target name="ears" depends="ear1,ear2">
+      <mkdir dir="${jboss.dist}/server/jaas_howto" />
+      <copy todir="${jboss.dist}/server/jaas_howto">
+         <fileset dir="${jboss.dist}/server/default">
+            <exclude name="**/jms/**" />
+            <exclude name="data/**" />
+            <exclude name="log/**" />
+            <exclude name="tmp/**" />
+            <exclude name="work/**" />
+         </fileset>
+      </copy>
+      <copy file="${src.dir}/server_auth.xml" tofile="${jboss.dist}/server/jaas_howto/conf/login-config.xml"
+         overwrite="yes"/>
+      <copy file="${build.dir}/tutorial1.ear" todir="${jboss.dist}/server/jaas_howto/deploy" />
+      <copy file="${build.dir}/tutorial2.ear" todir="${jboss.dist}/server/jaas_howto/deploy" />
+   </target>
+
+    <!-- Build the DatabaseServerLoginModule tables -->
+    <target name="buildDB" depends="compile">
+      <property name="jboss.server.data.dir"
+         value="${jboss.dist}/server/jaas_howto/data"/>
+      <sql driver="org.hsqldb.jdbcDriver"
+          url="jdbc:hsqldb:${jboss.server.data.dir}/hypersonic/localDB"
+          userid="sa"
+          password=""
+         classpath="${jboss.dist}/server/default/lib/hsqldb.jar"><![CDATA[
+
+        DROP TABLE Principals IF EXISTS;
+        DROP TABLE Roles IF EXISTS;
+        CREATE TABLE Principals (PrincipalID VARCHAR(64) PRIMARY KEY, Password VARCHAR(64) );
+        CREATE TABLE Roles (PrincipalID	VARCHAR(64), Role	VARCHAR(64), RoleGroup VARCHAR(64) );
+        INSERT INTO Principals VALUES ('java', 'echoman');
+        INSERT INTO Principals VALUES ('duke', 'javaman');
+        INSERT INTO Roles VALUES ('java', 'Echo', 'Roles');
+        INSERT INTO Roles VALUES ('java', 'caller_java', 'CallerPrincipal');
+        INSERT INTO Roles VALUES ('duke', 'Java', 'Roles');
+        INSERT INTO Roles VALUES ('duke', 'Coder', 'Roles');
+        INSERT INTO Roles VALUES ('duke', 'caller_duke', 'CallerPrincipal')
+      ]]></sql>
+    </target>
+
+    <!-- Run all example 1 test cases -->
+    <target name="example1-test">
+        <property name="example" value="example1" />
+        <antcall target="client-tests" />
+    </target>
+    <!-- Run the example 1 test cases individually -->
+    <target name="example1-test0">
+        <property name="example" value="example1" />
+        <antcall target="client-test0" />
+    </target>
+    <target name="example1-test1">
+        <property name="example" value="example1" />
+        <antcall target="client-test1" />
+    </target>
+    <target name="example1-test2">
+        <property name="example" value="example1" />
+        <antcall target="client-test2" />
+    </target>
+    <!-- Run all example 2 test cases -->
+    <target name="example2-test">
+        <property name="example" value="example2" />
+        <antcall target="client-tests" />
+    </target>
+    <!-- Run the example 2 test cases individually -->
+    <target name="example2-test0">
+        <property name="example" value="example2" />
+        <antcall target="client-test0" />
+    </target>
+    <target name="example2-test1">
+        <property name="example" value="example2" />
+        <antcall target="client-test1" />
+    </target>
+    <target name="example2-test2">
+        <property name="example" value="example2" />
+        <antcall target="client-test2" />
+    </target>
+
+    <target name="client-tests" depends="compile">
+        <antcall target="client-test0" />
+        <antcall target="client-test1" />
+        <antcall target="client-test2" />
+    </target>
+    <target name="client-test0" depends="compile">
+        <java classname="org.jboss.docs.jaas.howto.SessionClient" fork="yes">
+            <classpath>
+                <path refid="${classpath_id}"/>
+                <pathelement location="${src.dir}"/>
+            </classpath>
+            <jvmarg value="-Djava.security.auth.login.config=file:./resources/auth.conf" />
+            <arg value="java" />
+            <arg value="echoman" />
+            <arg value="${example}" />
+        </java>
+    </target>
+    <target name="client-test1" depends="compile">
+        <java classname="org.jboss.docs.jaas.howto.SessionClient" fork="yes">
+            <classpath>
+                <path refid="${classpath_id}"/>
+                <pathelement location="${src.dir}"/>
+            </classpath>
+            <jvmarg value="-Djava.security.auth.login.config=file:./resources/auth.conf" />
+            <arg value="duke" />
+            <arg value="javaman" />
+            <arg value="${example}" />
+        </java>
+    </target>
+    <target name="client-test2" depends="compile">
+        <java classname="org.jboss.docs.jaas.howto.SessionClient" fork="yes">
+            <classpath>
+                <path refid="${classpath_id}"/>
+                <pathelement location="${src.dir}"/>
+            </classpath>
+            <jvmarg value="-Djava.security.auth.login.config=file:./resources/auth.conf" />
+            <arg value="java" />
+            <arg value="badpass" />
+            <arg value="${example}" />
+        </java>
+    </target>
+
+    <target name="dist">
+        <zip zipfile="../examples.zip"
+        >
+            <fileset dir=".">
+                <exclude name="output" />
+            </fileset>
+        </zip>
+    </target>
+    <target name="clean">
+      <delete dir="${build.dir}" />
+    </target>
+</project>

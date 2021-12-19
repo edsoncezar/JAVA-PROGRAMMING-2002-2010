@@ -1,0 +1,356 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Weaknesses and Alternatives</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="vstep5.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="..\userperm\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=bottom border=0 alt="Security in JDK 1.2  | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Generating and Verifying Signatures</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Weaknesses and Alternatives
+</h2>
+<p>
+<blockquote>
+
+The  <code>GenSig</code> and <code>VerSig</code> programs
+in this lesson illustrate the use of the JDK Security API
+to generate a digital signature for
+data and to verify that a signature is authentic.
+However, the actual scenario depicted by those
+programs, in which
+a sender uses the JDK Security API to generate a new public/private key pair,
+the sender stores the encoded public key bytes in a file, and
+the receiver reads in the key bytes,
+is not necessarily realistic, and has a potential major flaw.
+
+<p>In many cases the keys do not need to be generated; they already exist,
+either as encoded keys in files or as entries in a keystore.
+
+<p>The potential major flaw is that nothing guarantees the
+authenticity of the public key the receiver receives, and
+the <code>VerSig</code> program 
+correctly verifies the authenticity of a signature only if the
+public key it is supplied is <i>itself</i> authentic!
+
+<p>These are not issues in some cases, as
+when a single program is doing both signing and
+verification. For example, in the 
+
+<a target="_top" href="..\..\together\bingo\signatures.html">Signing and Verifying the BINGO Cards</a><a href="..\..\together\bingo\signatures.html"><img src="http://docs.rinet.ru/Jtuta/images/javaIcon.gif" width=20 height=20 border=0 alt="(in the Learning the Java Language trail)"></a>
+part of the
+
+<a target="_top" href="..\..\together\index.html">Putting It All Together</a><a href="..\..\together\index.html"><img src="http://docs.rinet.ru/Jtuta/images/javaIcon.gif" width=20 height=20 border=0 alt="(in the Learning the Java Language trail)"></a>
+trail, the <code>NotaryPublic</code> class constructor creates a key pair.
+Subsequently, whenever a <code>Player</code> joins a game, the 
+<code>Game</code> class generates the cards for the
+<code>Player</code> to play with. Before sending the cards back to the 
+<code>Player</code>, the <code>Game </code>
+digitally signs the cards, using the private key. 
+Later, when a <code>Player</code> claims to have a winning card, the 
+<code>Game</code> verifies the 
+signature by using the public key, to make sure
+that the card was actually created by this 
+<code>Game</code> for the current game.
+
+
+<H3>Working with Encoded Key Bytes</H3>
+
+<blockquote>
+
+Sometimes encoded key bytes already exist in files for the key pair
+to be used for signing and verification. 
+If that's the case the <code>GenSig</code> program can import the 
+encoded private key bytes and convert them to a <code>PrivateKey</code>
+needed for signing, via the following, assuming that the name of the file containing
+the private key bytes is in in the <code>privkeyfile</code> <code>String</code>
+and that the bytes 
+represent a DSA key that has been encoded by using the PKCS #8 standard.
+
+<pre>
+    FileInputStream keyfis = new FileInputStream(privkeyfile);
+    byte[] encKey = new byte[keyfis.available()];
+    keyfis.read(encKey);
+    keyfis.close();
+
+    PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(encKey);
+
+    KeyFactory keyFactory = KeyFactory.getInstance("DSA");
+    PrivateKey privKey = keyFactory.generatePrivate(privKeySpec);
+</pre>
+
+<code>GenSig</code> no longer needs to save the public key bytes 
+in a file, as they're already in one.
+
+<p>In this case the sender sends the receiver
+
+<ul>
+<li>the already existing file containing the encoded public key
+bytes (unless the receiver already has this) and<p>
+<li>the data file and the signature file exported by <code>GenSig</code>.
+</ul>
+
+<p>The <code>VerSig</code> program remains unchanged, as it already
+expects encoded public key bytes in a file.
+
+<p>But what about the potential problem of a malicious user
+intercepting the files and replacing them all in such a way that their
+switch cannot be detected?
+In some cases this is not an issue, because
+people have already exchanged public keys face to face or via a
+trusted third party that does the face-to-face exchange. After that,
+multiple subsequent file and signature exchanges may be done remotely
+(that is, between two people in different locations),
+and the public keys may be used to verify their authenticity. If a malicious user
+tries to change the data or signature, this is detected by <code>VerSig</code>.
+
+<p>If a face-to-face key exchange is not possible, you can try
+other methods of increasing the likelihood of proper receipt.
+For example, you could
+send your public key via the most secure method possible
+prior to subsequent exchanges of data and signature files,
+perhaps using less secure mediums.
+
+<p>In general, sending the data and the signature 
+separately from your public key greatly reduces the likelihood of an attack. 
+Unless all three files are changed, and in
+a certain manner discussed in the next paragraph,
+<code>VerSig</code> will detect any tampering.
+
+<p>If all three files (data document, public key, and signature) were intercepted by a malicious user,
+that person could replace the document with something else, 
+sign it with a private key, and forward on to you the replaced 
+document, the
+new signature, and the public key corresponding to the private key
+used to generate the new signature. Then <code>VerSig</code>
+would report a successful verification, and you'd think that the
+document came from the original sender. Thus you should take
+steps to ensure that at least the public key is received intact
+(<code>VerSig</code> detects any tampering of the other files),
+or you can use certificates to facilitate authentication of
+the public key, as described in the next section.
+
+
+</blockquote>
+
+
+
+<H3>Working with Certificates</H3>
+
+<blockquote>
+
+<p>It is more common in cryptography to exchange <i>certificates</i> 
+containing public keys rather than the keys themselves.
+
+<p>One benefit is that a certificate is signed by one entity (the
+<i>issuer</i>) to verify that the enclosed public key is the actual 
+public key of another entity (the <i>subject</i> or <i>owner</i>). 
+Typically a trusted third-party <I>certification authority</I> (CA) 
+verifies the identity of the subject and then vouches for its
+being the owner of the public key by signing the certificate.
+
+<p>Another benefit of using certificates is that you can check to ensure
+the validity of a certificate you received by
+verifying its digital signature, using its issuer's (signer's) public key, which
+itself may be stored in a certificate whose signature can be verified
+by using the public key of that certificate issuer; that public key itself 
+may be stored in a certificate, and so on, until you reach a public key 
+that you already trust.
+
+<p>If you cannot establish a trust chain (perhaps because the required 
+issuer certificates are not available to you), 
+the certificate <b>fingerprint(s)</b> can be calculated.
+Each fingerprint is a relatively short number that uniquely and 
+reliably identifies the certificate. (Technically it's a
+hash value of the certificate information, using a message digest,
+also known as a one-way hash function.)
+You can call up the
+certificate owner and compare the fingerprints of the certificate you
+received with the ones sent. If they're the same, the certificates are the 
+same.
+
+<p>It would be more secure for <code>GenSig</code> to create a 
+certificate containing the public key and for <code>VerSig</code>
+to then import the certificate and extract the public key. 
+However, the JDK has no public certificate
+APIs that would allow you to create a certificate from a public
+key, so the <code>GenSig</code> program cannot create 
+a certificate from the public key it generated. 
+(There <i>are</i> public APIs for extracting a public
+key from a certificate, though.)
+
+<p>If you want, you can use the various security tools, not
+APIs, to sign your important document(s) and work with certificates 
+from a keystore, as was done in the
+
+<a target="_top" href="..\toolfilex\index.html">Exchanging Files</a><a href="..\toolfilex\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1-2.gif" width=20 height=20 border=0 alt="(in the Java Security 1.2 trail)"></a>
+lesson.
+
+<p>Alternatively you can use the API to modify your programs to
+work with an already existing
+private key and corresponding public key (in a certificate)
+from your keystore.
+To start, modify the <code>GenSig</code> program to extract a private
+key from a keystore rather than generate new keys. First, let's assume the following.
+
+<ul>
+<li>The keystore name is in the <code>String</code> <code>ksName</code><p>
+<li>The keystore type is "JKS", the proprietary type created by Sun Microsystems<p>
+<li>The keystore password is in the char array <code>spass</code><p>
+<li>The alias to the keystore entry containing the private key,
+and the public key certificate is in the <code>String</code> <code>alias</code><p>
+<li>The private key password is in the char array <code>kpass</code>
+</ul>
+
+Then you can extract the private
+key from the keystore via the following.
+
+<pre>
+    KeyStore ks = KeyStore.getInstance("JKS");
+    FileInputStream ksfis = new FileInputStream(ksName); 
+    BufferedInputStream ksbufin = new BufferedInputStream(ksfis);  
+    
+    ks.load(ksbufin, spass);
+    PrivateKey priv = (PrivateKey) ks.getKey(alias, kpass);
+</pre>
+
+You can extract the public key certificate from the keystore
+and save its encoded bytes to a file named <code>suecert</code>, via the following.
+
+<pre>
+    java.security.cert.Certificate cert = ks.getCertificate(alias);
+    byte[] encodedCert = cert.getEncoded();
+    
+    /* save the certificate in a file named "suecert" */
+    FileOutputStream certfos = new FileOutputStream("suecert");
+    certfos.write(encodedCert);
+    certfos.close();
+</pre>
+
+Then you send the data file, the signature, and the certificate
+to the receiver. The receiver verifes the authenticity of the
+certificate by first getting the certificate's fingerprints, via the
+<code>keytool -printcert</code> command.
+
+<pre>
+  <b>keytool -printcert -file suecert</b>
+    Owner: CN=Susan Jones, OU=Purchasing, O=ABC, L=Cupertino, ST=CA, C=US
+    Issuer: CN=Susan Jones, OU=Purchasing, O=ABC, L=Cupertino, ST=CA, C=US
+    Serial number: 35aaed17
+    Valid from: Mon Jul 13 22:31:03 PDT 1998 until: Sun Oct 11 22:31:03 PDT 1998
+    Certificate fingerprints:
+         MD5:  1E:B8:04:59:86:7A:78:6B:40:AC:64:89:2C:0F:DD:13
+         SHA1: 1C:79:BD:26:A1:34:C0:0A:30:63:11:6A:F2:B9:67:DF:E5:8D:7B:5E
+</pre>
+
+Then the receiver verifies the fingerprints, 
+perhaps by calling the sender up 
+and comparing them with those of the sender's certificate or by
+looking them up in a public repository.
+
+<p>The receiver's verification program (a modified <code>VerSig</code>)
+can then import
+the certificate and extract the public key from it
+via the following, assuming that the certificate file
+name (for example, <code>suecert</code>) is in the 
+<code>String</code> <code>certName</code>.
+
+<pre>
+    FileInputStream certfis = new FileInputStream(certName);
+    CertificateFactory cf = CertificateFactory.getInstance("X.509");
+    java.security.cert.Certificate cert = cf.generateCertificate(certfis);
+    PublicKey pub = cert.getPublicKey();
+</pre>
+
+</blockquote>
+
+
+<H3>Ensuring Data Confidentiality</H3>
+
+<blockquote>
+
+Suppose that you want to keep the contents of the data confidential so people 
+accidentally or maliciously trying to view it in transit (or on your own machine 
+or disk) cannot do so. To keep the data confidential, you should
+encrypt it and store and send only the encryption result (referred to as
+<i>ciphertext</i>). The receiver can decrypt the ciphertext to obtain a
+copy of the original data.
+
+<p>APIs for data encryption and decryption, together with
+some default algorithm implementations, are released 
+separately in the Java
+Cryptography Extension (JCE), an add-on package to the JDK, in
+accordance with U.S. export control regulations.
+
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="vstep5.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="..\userperm\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=top border=0 alt="Security in JDK 1.2  | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Generating and Verifying Signatures</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

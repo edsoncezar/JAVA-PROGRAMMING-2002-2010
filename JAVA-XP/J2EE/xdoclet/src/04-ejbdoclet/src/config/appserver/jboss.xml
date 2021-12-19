@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project basedir="." default="check-jboss-home">
+
+    <!-- =================================================================== -->
+    <!-- Verify that jboss is available                                      -->
+    <!-- =================================================================== -->
+    <target 
+        name="show-variables"
+        description="mostra as variaveis utilizadas por este projeto"
+        >
+        <echo>basedir=${basedir}</echo>
+        <echo>jboss.home=${jboss.home}</echo>
+        <echo>deploy.dir=${deploy.dir}</echo>
+        <echo>build.app-ejb.jar=${build.app-ejb.jar}</echo>
+        <echo>build.app.ear=${build.app.ear}</echo>
+    </target>
+
+    <target 
+        name="check-jboss-home" 
+        depends="show-variables"
+        description="averigua a existencia da instalacao do JBoss"
+        >
+        <available file="${jboss.home}" type="dir" property="jboss.home.present"/>
+    </target>
+
+    <target 
+        name="fail-if-not-jboss-home-present" 
+        unless="jboss.home.present"
+        >
+        <echo message="You have to specify the home directory for JBoss in an ant property named jboss.home"/>
+        <fail/>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Run verifier on the ejb jar file                                    -->
+    <!-- =================================================================== -->
+    <target 
+        name="postprocess-ejb-jar" 
+        depends="check-jboss-home,fail-if-not-jboss-home-present" 
+        description="Verify ejb jar file's correctness using JBoss' verifier"
+        >
+        <path id="verifier.class.path">
+            <fileset dir="${jboss.home}/server/all/lib">
+                <include name="*.jar"/>
+            </fileset>
+            <fileset dir="${jboss.home}/lib">
+                <include name="*.jar"/>
+            </fileset>
+            <pathelement location="${jboss.home}/server/default/conf"/>
+        </path>
+      
+        <java 
+            classname="org.jboss.verifier.Main" 
+            fork="yes"
+            failonerror="true"
+            classpathref="verifier.class.path"
+            >
+             <arg value="${build.app-ejb.jar}"/>
+        </java>
+    </target>
+
+    <target
+        name="deploy"
+        depends="postprocess-ejb-jar"
+        description="realiza o deploy no JBoss"
+        >
+        <!--
+        <copy file="${build.app.ear}" todir="${deploy.dir}"/>
+        -->
+        <copy file="${build.app-ejb.jar}" todir="${deploy.dir}"/>
+    </target>
+
+    <target
+        name="undeploy"
+        depends="show-variables"
+        description="realiza o undeploy no JBoss"
+        >
+        <!--
+        <delete file="${deploy.dir}/${app.ear}"/>
+        -->
+        <delete file="${deploy.dir}/${app-ejb.jar}"/>
+    </target>
+</project>

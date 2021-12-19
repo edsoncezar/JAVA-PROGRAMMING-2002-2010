@@ -1,0 +1,483 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 34 -- Interfacing with CICS Systems </TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter 34</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Interfacing with CICS Systems </FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#AThumbnailSketchofCICS">
+A Thumbnail Sketch of CICS</A>
+<LI><A HREF="#TheCICSExternalCallInterface">
+The CICS External Call Interface</A>
+<LI><A HREF="#TheJavaCICSGatewayAPI">
+The Java-CICS Gateway API</A>
+<LI><A HREF="#CreatingMultipleCallLUWs">
+Creating Multiple-Call LUWs</A>
+<LI><A HREF="#CreatingWebInterfacestoCICS">
+Creating Web Interfaces to CICS</A>
+<LI><A HREF="#ProvidingaCORBAInterfacetoCICS">
+Providing a CORBA Interface to CICS</A>
+<UL>
+<LI><A HREF="#CreatingaCORBACICSGateway">
+Creating a CORBA-CICS Gateway</A>
+<LI><A HREF="#CreatingCORBAInterfacestoCICSPrograms">
+Creating CORBA Interfaces to CICS Programs</A>
+</UL>
+</ul>
+<HR>
+<P>
+IBM's Customer Information Control System (CICS) is an extremely
+popular transaction processing system. Sites all over the world
+use CICS for ordering, inventory, accounting, and almost any other
+business application you can think of. While CICS itself is still
+a very active operating system, it can be considered a &quot;legacy&quot;
+system with respect to the Internet.
+<P>
+IBM, realizing the potential of the Internet, has taken huge strides
+in opening up their products to the Internet. They have created
+gateways for the AS/400 line of computers and have been pushing
+them as Web servers. There is also a TCP/IP gateway available
+for MVS systems, which has been a boon to many MVS shops.
+<P>
+In the area of CICS, IBM has created a CICS Web gateway that allows
+you to create CGI scripts that make calls into CICS. Rather than
+just stick with that, however, IBM took a major step forward and
+created the Java-CICS gateway. The Java-CICS gateway allows a
+Java applet or application to send requests to a CICS system and
+receive responses. This gateway sits between the CICS system and
+your Java programs and translates TCP/IP requests from the Java
+side into SNA or TCP/IP requests on the CICS side. Figure 34.1
+shows the relationship between the Java-CICS gateway, a CICS system,
+and your Java program.
+<P>
+<A HREF="f34-1.html"><B>Figure 34.1 : </B><I>The Java-CICS gateway connects Java programs
+to CICS systems</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The Java-CICS gateway is an excellent example of a non-Java encapsulation program that is Java-friendly.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="AThumbnailSketchofCICS"><FONT SIZE=5 COLOR=#FF0000>
+A Thumbnail Sketch of CICS</FONT></A></H2>
+<P>
+CICS is a transaction-processing system that performs a number
+of very handy functions. First and foremost, it manages multiple
+simultaneous transactions, some of which may be distributed across
+multiple machines.
+<P>
+The main focus of CICS is processing transactions. You group operations
+in a transaction into Logical Units of Work (LUW). You can have
+multiple LUWs in a single transaction. For instance, booking a
+seat on an airplane would be considered an LUW. Your entire reservation
+is a transaction, made up of one or more LUWs (after all, you
+are probably booking seats on multiple flights).
+<P>
+Like other transaction systems, CICS has the ability to abort
+or &quot;roll back&quot; a transaction. For instance, when you
+book a seat on an airplane, you want that booking to be visible
+immediately. If you get the last seat on a plane, you don't want
+someone else booking that same seat. If you suddenly decide that
+you don't want to fly at all, the friendly airline agent helping
+you build the reservation would then abort the transaction. The
+CICS system would undo all your seat bookings. This kind of feature
+is usually associated only with database systems, but CICS is
+not a database system. You still need a database system to use
+CICS-either IBM's DB2 database or a variety of popular relational
+databases.
+<P>
+CICS started out back before personal computers hit the scene,
+so it is well-versed in communicating with older &quot;legacy&quot;
+terminals like the IBM 3270 series. IBM has done a good job in
+keeping CICS up-to-date with clients, and today it supports clients
+on a large number of platforms, including Windows NT, OS/2, and
+various flavors of UNIX. CICS didn't remain stuck in the &quot;character
+mode&quot; frame of mind, either. You can buy automated tools
+for building Graphical User Interfaces for CICS.
+<P>
+CICS also has the ability to communicate with a variety of clients,
+and even other CICS servers. It supports the popular TCP/IP protocol,
+as well as IBM's proprietary SNA protocol and even NetBIOS.
+<P>
+For more information about CICS, visit the CICS home page on the
+Web at <TT><B><A HREF="http://www.hursley.ibm.com/cics/">http://www.hursley.ibm.com/cics/</A></B></TT>.
+<H2><A NAME="TheCICSExternalCallInterface"><FONT SIZE=5 COLOR=#FF0000>
+The CICS External Call Interface</FONT></A></H2>
+<P>
+The External Call Interface (ECI) is a mechanism used by CICS
+to allow non-CICS clients to invoke programs under CICS. CICS
+has a remote procedure call mechanism called DPL (Distributed
+Program Link) which allows a CICS program to start up a CICS program
+on another CICS host. ECI works exactly the same way as DPL, except
+that the program that originates the call is not running under
+CICS.
+<P>
+CICS applications are built as a series of programs, where one
+program runs another program, which is why you can do almost anything
+you need with ECI.
+<P>
+To run a CICS program using ECI, you must supply CICS with a user
+name and password, as well as the name of the program you want
+to run. You pass data to the program via a block of data called
+the <TT>COMMAREA</TT> block. The contents
+of the block vary from program to program. There is no fixed format
+to the block. Typically, however, you pass text information in
+the block. If you have to pass a numeric value, you pass numbers
+as a text string.
+<P>
+You must also pass information about the LUW for your transaction.
+A unit of work can span multiple ECI calls, if it needs to. An
+LUW is similar to a transaction in a relational database. As you
+make changes over the course of an LUW, the changes are not visible
+to the rest of the system until you commit the LUW, that is, until
+you save it. If there is a failure of some kind, CICS will undo
+the changes made so far in the current LUW, but not the previous
+LUWs.
+<P>
+When you make an ECI call, you pass an LUW token, which is like
+a session ID for the LUW. When you start a new LUW, you pass a
+token called <TT>ECU_LUW_NEW</TT>.
+CICS will then generate an LUW token value for subsequent ECI
+calls for this LUW. You must also pass an extend mode parameter
+for the LUW. You pass either a value of <TT>ECI_EXTENDED</TT>
+or <TT>ECI_NO_EXTEND</TT>. It's very
+easy to determine when to use <TT>ECI_EXTENDED</TT>
+and when to use <TT>ECI_NO_EXTEND</TT>.
+You use <TT>ECI_NO_EXTEND</TT> on
+the last ECI call in an LUW, and <TT>ECI_EXTENDED</TT>
+for all others. If you have only one call in the LUW, it's both
+the first and last call, so it is sent with the <TT>ECI_NO_EXTEND</TT>
+parameter.
+<P>
+Sometimes, you realize you want to back out the LUW (undo the
+changes) or commit it without actually calling another program.
+You can use an extend mode of <TT>ECI_COMMIT</TT>
+to commit the current LUW, or <TT>ECI_BACKOUT</TT>
+to back out the changes in the current LUW.
+<P>
+In addition to the preceding parameters, which are part of the
+regular ECI interface, you must pass an additional parameter to
+the Java-CICS gateway. You must supply the name of the CICS server
+you want to talk to, because the gateway can talk to many different
+servers.
+<H2><A NAME="TheJavaCICSGatewayAPI"><FONT SIZE=5 COLOR=#FF0000>
+The Java-CICS Gateway API</FONT></A></H2>
+<P>
+While the ECI may seem fairly complicated to you so far, the Java
+API is actually very simple. In fact, the API consists of only
+two classes-the <TT>JGateConnection</TT>
+class and the <TT>ECIRequest</TT>
+class.
+<P>
+The <TT>JGateConnection</TT> class
+represents a connection to a Java-CICS gateway server. You can
+create multiple connections to a single server, or to different
+servers. You can perform only one ECI call at a time over a single
+connection. You can perform as many ECI calls as you like over
+one connection, just one at a time.
+<P>
+The constructor for the <TT>JGateConnection</TT>
+class takes two parameters-the name and port number of the gateway
+server you are connecting to. For example:
+<BLOCKQUOTE>
+<PRE>
+JGateConnection cicsGateway = new JGateConnection(
+&quot;gateway.myplace.com&quot;, 4321);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Once you have created the connection, you use the <TT>flow</TT>
+method to send ECI requests to the gateway. The <TT>flow</TT>
+method takes an <TT>ECIRequest</TT>
+object as its only parameter. Any information returned from the
+ECI call is stored in the <TT>Commarea</TT>
+array in the <TT>ECIRequest</TT>.
+<P>
+You create an <TT>ECIRequest</TT>
+by passing its constructor the name of the CICS server, the user
+name, password, <TT>Commarea</TT>,
+extend mode, and LUW token.
+<P>
+Suppose you had a CICS program called &quot;BOOKSEAT&quot; that
+booked a seat on an airline flight. Furthermore, assume that the
+name of the CICS server is &quot;RES,&quot; and that the user
+name and password are <TT><B>airjava</B></TT>
+and <TT><B>whee</B></TT>, respectively.
+Also, assume that you must store a 4-digit flight number, a 5-digit
+date in the form DDMMM, and a 3-letter seat number in the <TT>Commarea</TT>.
+The following code segment would create the <TT>ECIRequest</TT>
+to book seat 35B on flight 5050 on January 12. Also, this is a
+one-shot LUW, so use an extend mode of <TT>ECI_NO_EXTEND</TT>,
+and an LUW token of <TT>ECI_LUW_NEW</TT>.
+<BLOCKQUOTE>
+<PRE>
+byte[] commarea = new byte [12];
+// A quickie to copy a string into a byte array
+&quot;505012JAN35B&quot;.getBytes(0, 12, commarea, 0);
+ECIRequest request = new ECIRequest(&quot;RES&quot;, &quot;airjava&quot;, &quot;whee&quot;,
+     &quot;BOOKSEAT&quot;, commarea, ECI_NO_EXTEND, ECI_LUW_NEW);
+</PRE>
+</BLOCKQUOTE>
+<P>
+To send this request to CICS, you use the flow method in the <TT>JGateConnection</TT>
+object, like this:
+<BLOCKQUOTE>
+<PRE>
+cicsGateway.flow(request);    // send the ECI request</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+Once you send the request, you can check the CICS return code,
+which is stored in the <TT>Cics_Rc</TT>
+variable in the <TT>ECIRequest</TT>
+object. If the request completed successfully, the <TT>Cics_Rc</TT>
+value should be 0.
+<H2><A NAME="CreatingMultipleCallLUWs"><FONT SIZE=5 COLOR=#FF0000>
+Creating Multiple-Call LUWs</FONT></A></H2>
+<P>
+The one-shot, or single-call, LUW is very simple to make, and
+will probably cover most situations for you. When you do a multiple-call
+LUW, there are a few extra things you have to deal with:
+<UL>
+<LI>On the first ECI call, you must sent an LUW token of <TT>ECI_LUW_NEW</TT>,
+and the extend mode must be <TT>ECI_EXTENDED</TT>.
+<LI>After the first ECI call completes, you must save the LUW
+token returned by the CICS system, which is stored in the <TT>Luw_Token</TT>
+variable in the <TT>ECIRequest</TT>
+object. You must pass this <TT>Luw_Token</TT>
+variable as the LUW token for subsequent ECI requests for this
+LUW.
+<LI>On the last ECI call, you must set the extend mode to <TT>ECI_NO_EXTEND</TT>.
+<LI>If you want to commit or back out the current LUW, you set
+the extend mode to <TT>ECI_COMMIT</TT>
+or <TT>ECI_BACKOUT</TT>.
+</UL>
+<P>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If you reuse the same ECIRequest object for each ECI call in an LUW, the <TT>Luw_Token</TT> variable will already contain the correct LUW token value. You need to change only the token value when you start a new LUW.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Suppose you want to book a round-trip flight using the BOOKSEAT
+program illustrated previously. Because you want this to be a
+single LUW, that is, you want to book both seats as a single transaction,
+you call <TT>BOOKSEAT</TT> twice as
+part of a single LUW. The following code books seat 35B on flight
+5050 on January 12 and seat 12A on flight 1313 on January 13 as
+a single LUW:
+<BLOCKQUOTE>
+<PRE>
+byte[] commarea = new byte [12];
+// A quickie to copy a string into a byte array
+&quot;505012JAN35B&quot;.getBytes(0, 12, commarea, 0);
+// Book the first flight leg
+ECIRequest request = new ECIRequest(&quot;RES&quot;, &quot;airjava&quot;, &quot;whee&quot;,
+     &quot;BOOKSEAT&quot;, commarea, ECI_EXTENDED, ECI_LUW_NEW);
+cicsGateway.flow(request);     // send the ECI request
+// Now copy in the return flight leg
+&quot;131313JAN12A&quot;.getBytes(0, 12, commarea);
+// Change the extend mode on the ECI request to ECI_NO_EXTEND
+request.Extend_Mode = ECI_NO_EXTEND;
+// Book the second flight leg
+cicsGateway.flow(request);     // send the ECI request<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Be careful when creating multiple-call LUWs. If there is a significant amount of time between calls, you could keep system resources locked unnecessarily. Remember that CICS keeps certain locks on data while an LUW is in progress.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="CreatingWebInterfacestoCICS"><FONT SIZE=5 COLOR=#FF0000>
+Creating Web Interfaces to CICS</FONT></A></H2>
+<P>
+Even before IBM came out with the Java-CICS gateway, you were
+able to provide Web access into CICS systems. Using a CICS TCP/IP
+gateway, you could write CGI scripts that used ECI to run programs
+on the CICS system. Figure 34.2 illustrates this configuration.
+<P>
+<A HREF="f34-2.html"><B>Figure 34.2 : </B><I>A CICS TCP/IP gateway allows CGI programs
+to make ECI calls</I>.</A>
+<P>
+As usual, this solution suffered from the usual problems of CGI-the
+CGI program exited after each request, and you had fairly high
+session-startup costs.
+<P>
+As you might guess, a Java Web server is an excellent alternative
+to CGI when accessing CICS. You could, if you wanted, create a
+servlet that talked to a CICS TCP/IP gateway, but there's no need
+to do this when IBM has already created the Java-CICS gateway.
+<P>
+You can create Java servlets that execute CICS programs. The advantage
+to the servlets is that they can use existing connections to the
+CICS gateway, eliminating the session startup overhead you get
+with CGI. Figure 34.3 illustrates the relationship between the
+servlet, the Java-CICS gateway, and the CICS system.
+<P>
+<A HREF="f34-3.html"><B>Figure 34.3 : </B><I>The Java servlet relating to the Java-CICS
+gateway and the CICS system</I>.</A>
+<P>
+You can use the techniques outlined in <A HREF="ch33.htm" >Chapter 33</A>, &quot;Web-Enabling
+Legacy Systems,&quot; to preserve session information, so you
+can perform multiple-call LUWs via Web requests.
+<P>
+Recall that in <A HREF="ch33.htm" >Chapter 33</A>, you created a session ID variable that
+was used as a lookup value for the session-related information.
+In the CICS case, the session components you are concerned with
+are the <TT>JGateConnection</TT> and
+the <TT>Luw_Target</TT> for the LUW.
+Using these two values, you can create an ECI request for an existing
+LUW. The following class saves the information for the session:
+<BLOCKQUOTE>
+<PRE>
+public class LUWSession
+     public JGateConnection connection;
+     public int LUWTarget;
+     public LUWSession(JGateConnection connection,
+          int LUWTarget)
+     {
+          this.connection = connection;
+          this.LUWTarget = LUWTarget;
+</PRE>
+</BLOCKQUOTE>
+<H2><A NAME="ProvidingaCORBAInterfacetoCICS"><FONT SIZE=5 COLOR=#FF0000>
+Providing a CORBA Interface to CICS</FONT></A></H2>
+<P>
+It would be really nice if there were a standard CORBA interface
+into CICS, but in the meantime, you can provide your own CORBA
+access to CICS in a variety of ways.
+<H3><A NAME="CreatingaCORBACICSGateway">
+Creating a CORBA-CICS Gateway</A></H3>
+<P>
+You may want to use the Java-CICS gateway from a number of CORBA
+clients, maybe even non-Java clients. One way you can do this
+is to define an IDL interface that mimics the ECI interface. The
+following IDL definition creates one such interface:
+<BLOCKQUOTE>
+<PRE>
+module CICS {
+// Define the different values for the extend mode
+     enum ExtendType {
+          ECI_NO_EXTEND,
+          ECI_EXTENDED,
+          ECI_BACKOUT,
+          ECI_COMMIT
+     };
+// Define the constant for a new LUW token
+     const long ECI_LUW_NEW = 0;
+// Set up a data type for the commarea
+     typedef sequence&lt;octet&gt; byteArray;
+     interface ECI {
+// Define the flow method that will send calls to CICS
+          void flow(in string serverName, in string programName,
+               in string userName, in string password,
+               inout byteArray commarea,
+               in long extendMode, inout long luwToken);
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+The preceding interface should look very familiar because it is
+the same as the Java-CICS gateway API. It simply wraps a CORBA
+framework around the old API. You still have to do the work of
+implementing the CORBA server, but all it would do is create an
+ECI request, pass it to a <TT>JGateConnection</TT>
+object, and update the <TT>luwToken</TT>
+value. This is not necessarily the best way to create a CORBA
+interface to CICS, however. Figure 34.4 illustrates how this CORBA-CICS
+gateway fits in with the client, the Java-CICS gateway, and the
+CICS system.
+<P>
+<A HREF="f34-4.html"><B>Figure 34.4 : </B><I>A CORBA-CICS gateway uses the Java-CICS
+gateway to make ECI calls</I>.</A>
+<P>
+The reason you probably want to avoid setting things up this way
+is that you don't want to carry the CICS-specific features into
+your future versions. In other words, an interface like this is
+one of those cases where the remnants of a legacy system can stay
+embedded in your application long after the legacy system has
+departed. For example, suppose you write all your applications
+to use this ECI interface over CORBA. You're now passing all sorts
+of different requests using the same method call. The only difference
+between the requests is the program name and the contents of the
+<TT>Commarea</TT>.
+<P>
+Now, suppose you replace your CICS system with a newer one. If
+you don't want to replace all your existing applications, you
+have to create an encapsulation that maps the program name and
+<TT>Commarea</TT> information to whatever
+the new system needs. Someone looking at an application cannot
+determine what a particular ECI call does without knowing what
+the CICS program did.
+<H3><A NAME="CreatingCORBAInterfacestoCICSPrograms">
+Creating CORBA Interfaces to CICS Programs</A></H3>
+<P>
+Following the encapsulation principles from <A HREF="ch32.htm" >Chapter 32</A>, look at
+the CICS system as an application or group of applications to
+see what it actually does. For example, the BOOKSEAT program from
+earlier in this chapter can be represented by the following IDL
+interface:
+<BLOCKQUOTE>
+<PRE>
+module Reservations {
+     struct Date {
+          short year;
+          short month;
+          short day;
+     };
+     interface Booking {
+          void bookSeat(in short flightNumber,
+               in Date date, in string seat);
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+Your CORBA server for this interface would invoke the BOOKSEAT
+program in the CICS system. Unlike the previous CORBA interface,
+this one is not tied to the CICS system. Remember that the dates
+in the CICS reservations system were specified in DDMMM format,
+like 04JUL or 25DEC. Because other systems may not use a notation
+like that, the CORBA Reservations module defines a generic date
+class that the CORBA server can then convert into whatever format
+it needs to.
+<HR>
+
+<CENTER><P><A HREF="ch33.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch35.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

@@ -1,0 +1,1057 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 33 -- Securing Your Native Method
+Libraries</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 33</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Securing Your Native Method
+Libraries</B>
+</FONT></H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+<UL>
+<LI><A HREF="#SecurityinNativeMethodLibraries" >Security in Native Method Libraries</A>
+<LI><A HREF="#AvoidingtheProblem" >Avoiding the Problem</A>
+<LI><A HREF="#IdentifyingSecuritySensitiveResources" >Identifying Security-Sensitive Resources</A>
+<LI><A HREF="#SecurityChecks" >Security Checks</A>
+<LI><A HREF="#LanguageProtectionMechanisms" >Language Protection Mechanisms</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+Native methods are an important mechanism for extending the base
+functionality of the Java virtual machine. Sometimes they are
+absolutely crucial to an application. However, carelessly written
+native method libraries can open security holes in your application,
+so native methods must be written and used with care. There are
+important safeguards that you need to be aware of, whether you're
+writing a new native method library or simply writing an application
+that uses new native methods. This chapter explains those steps
+and the reasons for them.
+<P>
+Native methods don't stand alone. Typically, some methods of some
+classes in a particular Java package are written as native methods.
+It will be rare for <I>all</I> the methods in a given class to
+be native methods. Usually, several methods that perform core
+functions for a class will be native, but others will be ordinary
+Java methods. This chapter assumes that native methods will be
+associated with a Java package that provides the interface to
+those native methods. When the chapter refers to &quot;a native
+method library,&quot; that phrase includes the Java classes and
+methods that make up the package within which the native methods
+operate. It's possible to write a package that uses more than
+one native method library, or multiple packages that use a single
+native method library, but this chapter assumes (for the sake
+of simplicity) that there is a one-to-one relationship between
+packages and native method libraries.
+<H2><A NAME="SecurityinNativeMethodLibraries"><B><FONT SIZE=5 COLOR=#FF0000>Security
+in Native Method Libraries</FONT></B></A></H2>
+<P>
+As explained in Part 6, &quot;Security,&quot; the Java library
+is partially responsible for making sure that valuable or sensitive
+system resources are secured. The security manager ultimately
+makes decisions about whether access to a resource will be permitted,
+but the classes in the library must ensure that the security manager
+is called at the appropriate times; otherwise, the security manager
+won't have the opportunity to decide. If the <TT>File</TT>
+class, for example, did not call the security manager in the methods
+that provide access to local files, the security manager would
+be unable to deny file access to those classes that should not
+be trusted with such access.
+<P>
+Native methods can provide access to new system resources beyond
+those provided by the core Java library. In fact, that's one of
+the main reasons you might want to write native methods. Because
+native methods are not written in Java, they don't have to abide
+by Java's protection rules, and they aren't required to use the
+existing library classes (although they <I>should</I> do so unless
+there are compelling reasons to do otherwise). This means that
+native methods can open the way for untrusted, malicious code
+to access local system resources, either by providing access to
+new resources and failing to secure them properly or by bypassing
+the existing security checks.
+<P>
+Take, for example, the task of providing access to a database
+management system. Although at the lowest level access to the
+DBMS might be accomplished with the same system interprocess communication
+primitives that are already provided (and secured) by the Java
+library, typical database systems provide a special interface,
+usually in the form of C language routines, to make access easier.
+In fact, the C access routines might be the only documented interface.
+To permit Java programs to access the database, therefore, a native
+method library would be required. The native methods would call
+the C routines to perform database functions and would take care
+of data format conversions to and from appropriate Java formats.
+<P>
+Ultimately, the database is stored in one or more files. Communication
+with the database system might also occur with a socket. Both
+of those resources are protected by the Java library. That doesn't
+matter, however, because the new native methods, which are interfacing
+with the database system, will <I>bypass</I> the security checks
+in the Java library. The native methods (or the Java classes of
+which they are part) must take care to perform the necessary checks.
+<P>
+There's also another issue involved. Although it would be possible
+to treat the security of the database system as an issue of files
+and interprocess communication mechanisms, that would not be a
+good idea. Those are incidental details; the real resources involved
+are the databases, the tables within them, and possibly individual
+records within those tables. Basing your database security model
+on such incidental mechanisms as files and Ipc channels would
+be unnecessarily complicated. It wouldn't be robust (the mapping
+of databases to filenames, for example, might change with a new
+release of the DBMS). It might not be possible, depending on how
+much you can learn about the way the DBMS is implemented. Last,
+but definitely not least, such a strategy would not be useful.
+<P>
+As you have probably realized, there are a lot of issues involved
+in making a native method library secure. You should make good
+use of existing security checks, where possible. If that's not
+possible, you must identify the security-sensitive resources that
+can be accessed using the new native methods, then choose appropriate
+representations of those resources to be the subject of new security
+checks. You must carefully add those checks at all the appropriate
+places and document them so that application authors can add support
+to security managers. Finally, it's important to take care that
+the security-sensitive portions of your library are protected
+using the Java language protection mechanisms so that they cannot
+be defeated by subclassing or overriding.
+<P>
+The rest of this chapter covers all those issues in detail.
+<H2><A NAME="AvoidingtheProblem"><B><FONT SIZE=5 COLOR=#FF0000>Avoiding
+the Problem</FONT></B></A></H2>
+<P>
+The best way to solve any problem, of course, is to avoid it altogether.
+That's certainly possible with some native method libraries. It
+all depends on what the methods are for.
+<P>
+Providing access to local system resources is not the only reason
+to write native methods. You might want to make use of an existing
+library of useful routines, which is written in C or some other
+language that is accessible from C. At least at this early stage
+in the lifetime of the Java language, native methods are the best
+way to implement functionality that is computationally expensive.
+For example, the Java language and core library provide all the
+facilities you need to implement MPEG video or military-grade
+encryption libraries, but until good optimizing compilers for
+Java appear, such mathematically intensive tasks need to be written
+in C-Java is currently too slow.
+<P>
+If those are the kinds of native methods that you will be writing,
+you might not have to worry about security issues at all. If you're
+not providing access to local system resources that could be stolen,
+destroyed, or abused, you don't have anything to worry about.
+<P>
+You might be able to <I>nearly</I> avoid the security issue even
+if your methods do provide access to system resources. If the
+new resources handled by your native methods map nicely to the
+kinds of security checks that are already supported by the Java
+library, you can simply use those built-in security facilities.
+This still requires a little work on your part, and you must consider
+language-level protection facilities to make sure that your security
+checks cannot be bypassed by subclassing, for example. You can
+avoid the most difficult part, however, which is designing and
+implementing entirely new kinds of security facilities.
+<H2><A NAME="IdentifyingSecuritySensitiveResources"><B><FONT SIZE=5 COLOR=#FF0000>Identifying
+Security-Sensitive Resources</FONT></B></A></H2>
+<P>
+Once you decide that your new native methods probably represent
+a security concern, the first step is to identify the ways in
+which your library could be used to access sensitive resources.
+Depending on the complexity and size of your library, those ways
+could be obvious or subtle.
+<P>
+There are two ways to think about sensitive resources. At the
+lowest levels of your library, you think of low-level system resources.
+At the level that interfaces with Java applications, you might
+want to present a completely different, more abstract view. Both
+are important.
+<P>
+No matter how powerful your library or what high-level functions
+it provides, at the low end it must make use of primitive system
+resources such as files, threads, processes, tasks, or communication
+channels. By paying attention to your library's use of such primitive
+resources, you can begin to understand the kinds of security risks
+your library might represent. You can also start to map out part
+of your protection strategy-every place in your library that uses
+those primitive resources must be protected from use by unauthorized,
+untrusted Java classes.
+<P>
+Much of your library's use of system resources might be hidden
+in other high-level C libraries. The database access APIs mentioned
+are a good example of this. The principle is the same, however:
+at the lowest level of your library, you need to be conscious
+of the resources being used.
+<P>
+At the highest level, where your library is called and used by
+Java applications, those low-level resources might be the wrong
+level of abstraction. You can get valuable clues from the low
+end of your implementation, but you should choose the units of
+protection to match the kinds of resources present at the high
+end. This isn't really difficult; if you have designed the library
+interface, you will be comfortable with those application-level
+concepts, and it will probably be easy to see how the security
+architecture should be structured. The hard part is linking the
+two levels so that security policies designed in terms of application-level
+resources result in the proper protection of real, primitive system
+resources.
+<H2><A NAME="SecurityChecks"><B><FONT SIZE=5 COLOR=#FF0000>Security
+Checks</FONT></B></A></H2>
+<P>
+Once you identify the resources that need to be protected and
+decide on the application-level structure of your security support,
+you must implement the security checks. This turns out to be the
+tricky part, due to the lack of flexibility in the current Java
+security architecture.
+<P>
+The Java security manager, which is a part of the core library,
+supports a predefined set of security checks (<A HREF="ch21.htm" >see Chapter 21</A>,
+&quot;Creating a Security Policy,&quot; for details). If the concepts
+implemented by your library map nicely to one of those checks,
+your task will be easy. Chances are, however, that those checks
+won't really be the right ones for your needs. You have to do
+some work to provide security checks that match the concepts your
+library deals with, and even then it's not a perfect solution,
+because other library authors (or application authors) may have
+made their decisions differently. This is one of the things that
+really needs to be done in the same way by everyone, and it's
+unfortunate that the Java library doesn't take the lead (as of
+this writing).
+<P>
+The following sections describe one possible way of providing
+an extensible security manager architecture that can adapt to
+new native method libraries. If you're writing your library for
+use in your own standalone Java application, this solution might
+be good enough for you. If your library is intended for wide use
+in many different applications, however, there will still be problems
+until a standard security manager architecture exists that supports
+at least the features that this example does. Hopefully such a
+standard will emerge.
+<H3><B>Security Manager Support</B></H3>
+<P>
+Because it's best to implement security checks in terms of application-level
+concepts rather than low-level system facilities, there is no
+way to design a good, all-encompassing set of security checks
+that will suit the needs of all native method libraries. Therefore,
+what's required is an extensible security manager, to which each
+native method library can add its own security checks.
+<H4><B>Deficiencies of the Default Security Manager</B></H4>
+<P>
+In one sense, the security manager built into the core Java library
+is extensible, because subclasses can add their own methods to
+perform specialized security checks. In fact, some of the crucial
+methods in the <TT>SecurityManager</TT>
+class (which are used to examine the execution environment before
+making access decisions) are protected, so you can use them only
+by creating a subclass (or by placing your new class within the
+java.lang package, which is not a good idea). However, extending
+<TT>SecurityManager</TT> by subclassing
+isn't really good enough for building specialized security managers
+for native method libraries.
+<P>
+For one thing, security managers built that way don't compose
+well. Consider two security-sensitive native method libraries-let's
+call them DBlib and MIDIlib. DBlib provides access to database
+systems, so it needs to protect the various databases, tables,
+and records managed by the system. MIDIlib provides sound synthesis
+services using the local sound card, so it needs to provide a
+way to restrict access to sound generation facilities. (The resources
+protected by MIDIlib might not seem quite so dangerous as the
+data stored in local databases, but a malicious applet could really
+make a nuisance of itself with free access to the computer's sound
+generation facilities.) Imagine that each of these libraries contains
+a specialized subclass of <TT>SecurityManager</TT>,
+each with a few new methods defining the security checks specific
+to its associated native method library. Let's call those classes
+<TT>DBSecurityManager</TT> and <TT>MIDISecurityManager</TT>
+(in reality, they would probably each be in a separate package,
+along with the other classes in their libraries).
+<P>
+This works well for an application that needs to use only one
+custom library. If the application just needs DBlib, but not MIDIlib
+or any other custom native method library, the authors of the
+application can implement their security policy in a subclass
+of <TT>DBSecurityManager</TT>. If
+the application needs both libraries, the authors of the application
+have a problem. They must create a completely new security manager
+class that contains instances of <TT>DBSecurityManager</TT>
+and <TT>MIDISecurityManager</TT> as
+instance variables. The new class must implement all the specialized
+methods of each, forwarding method calls appropriately. Furthermore,
+there will be typing problems: the methods in DBlib that perform
+security checks will expect the system security manager to be
+a subtype of <TT>DBSecurityManager</TT>,
+and the corresponding methods in MIDIlib will expect a subtype
+of <TT>MIDISecurityManager</TT>. The
+new security manager class cannot be both.
+<P>
+Multiple inheritance is one obvious solution. As implemented in
+C++, it would permit the new class to inherit the implementations
+of <TT>DBSecurityManager</TT> and
+<TT>MIDISecurityManager</TT>, and
+things would be rather easy. The equivalent Java solution would
+be to use interfaces; <TT>DBSecurityManager</TT>
+and <TT>MIDISecurityManager</TT> would
+be interfaces, and the new security manager class would implement
+them while actually inheriting from <TT>SecurityManager</TT>.
+That would solve a lot of the problems; the new class would be
+a subtype of all three security manager classes, and it would
+contain all the necessary methods. In addition to the interfaces,
+the libraries could provide real security manager implementations
+in the form of classes <TT>DBSecurityManagerImpl</TT>
+and <TT>MIDISecurityManagerImpl</TT>,
+which would implement the specialized security manager interfaces.
+The new, combined security manager class for the application could
+implement both interfaces, forwarding the specialized security
+check methods to instances of the implementation classes.
+<P>
+The interface approach has a problem, however: it doesn't work
+well with dynamically linked libraries. The application authors
+must decide in advance which native method libraries they will
+support, and then they must build their security manager to implement
+all the access checks required by those libraries. Extensibility
+through dynamically linked native method libraries is still possible,
+but those libraries won't be covered by the application's security
+policy without rewriting and recompiling the application security
+manager.
+<H4><B>An Extensible Security Manager</B></H4>
+<P>
+Fortunately, there's a solution that solves most of these problems.
+It involves a security manager that is extensible through a more
+dynamic mechanism than inheritance. The native method libraries
+must be written to use the new features of the security manager;
+this interdependence is the reason why it would be best if the
+Java community were to adopt a standard extensible security manager
+architecture. This section describes one possible implementation
+of an extensible security manager.
+<P>
+The <TT>ExtensibleSecurityManager</TT>
+class manages a collection of specialized security managers, each
+of which provides special security checks for a particular native
+method library. (Because the name is so long, I'll refer to it
+as just <TT>ESM</TT>.) <TT>ESM</TT>
+is a subclass of <TT>java.lang.SecurityManager</TT>.
+<P>
+Whenever a new native method library is loaded into the Java virtual
+machine, a specialized security manager that defines a security
+policy for that native method library should be registered with
+the system security manager, which should be a subclass of <TT>ESM</TT>.
+In the case of libraries that are statically linked into the virtual
+machine implementation, the registration should occur during application
+initialization, just after the system security manager is installed.
+For dynamically loaded libraries, the registration should occur
+as soon as the library is loaded, before any untrusted code has
+the opportunity to run. (See the section Registering Specialized
+Security Managers, later in this chapter, for more information
+about the registration process.)
+<P>
+The <TT>ESM</TT> class permits specialized
+security managers to be registered by a name, which is a string,
+and then retrieved using that same name. Once the appropriate
+security manager is registered, methods in the native method library
+that perform security checks can retrieve the security manager
+by name and call the appropriate security check method on that
+specialized security manager.
+<P>
+The Java library faces a chicken-and-egg problem where installation
+of the system security manager is concerned. Obviously, installing
+a new security manager is a security-sensitive operation, but
+there's not yet a security manager to pass judgment on the operation.
+The solution in the Java library is to allow the installation
+the first time, but never to allow the security manager to be
+replaced. The application should initialize the system security
+manager before any untrusted code is run within the virtual machine,
+and once that is done it is <I>always</I> considered a security
+violation to attempt to replace it.
+<P>
+The <TT>ESM</TT> class, however, really
+doesn't face that problem where registration of a new specialized
+security manager is concerned. It would be easy to require that
+an <TT>ESM</TT> be installed as the
+system security manager before any registrations are done, thus
+ensuring that a security manager would be in place to verify all
+registration attempts. It seems a reasonable restriction that
+security managers of all sorts be required to be permanent, however,
+so this version of <TT>ESM</TT> follows
+the same approach as the Java library, while also performing an
+explicit security check if a system security manager has been
+installed. The design ensures that untrusted code cannot install
+specialized security managers, but it also permits the system
+security manager to be configured with registrations for statically
+linked libraries prior to being installed as the system security
+manager, which is a useful flexibility.
+<P>
+One additional design issue concerns the appropriate action to
+take when an attempt is made to register a new specialized security
+manager with an instance of <TT>ESM</TT>,
+but it turns out that another object (possibly not even an <TT>ESM</TT>)
+is installed as the system security manager. Should that be an
+error, or should it be allowed? If it's not allowed, what kind
+of error is it? Because registering a specialized security manager
+with a nonauthoritative <TT>ESM</TT>
+doesn't really make any sense (the registration won't ever be
+used), it should be treated as an error. Because it is an error
+related to modifying the security policy, it seems appropriate
+to throw a <TT>SecurityException</TT>
+to signal the problem. Listing 33.1 contains a sample implementation
+of <TT>ExtensibleSecurityManager</TT>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 33.1. ExtensibleSecurityManager.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*<BR>
+&nbsp;* ExtensibleSecurityManager.java&nbsp;&nbsp;&nbsp;&nbsp;
+1.0 96/02/31 Glenn Vanderburg<BR>
+</TT>&nbsp;<TT>*<BR>
+&nbsp;*/<BR>
+<BR>
+package COM.MCP.Samsnet.tjg;<BR>
+<BR>
+import java.util.Hashtable;<BR>
+<BR>
+/**<BR>
+</TT>&nbsp;<TT>* A Security Manager
+which can manage specialized Security<BR>
+&nbsp;* Managers for native method libraries.<BR>
+</TT>&nbsp;<TT>*<BR>
+&nbsp;* @version&nbsp;&nbsp;&nbsp;&nbsp; 1.0, 02 Feb 1996<BR>
+</TT>&nbsp;<TT>* @author&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Glenn
+Vanderburg<BR>
+&nbsp;*/<BR>
+<BR>
+public abstract<BR>
+class ExtensibleSecurityManager extends SecurityManager {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Specialized security managers are stored
+here<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;private
+Hashtable specials = new Hashtable();<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;/**
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Constructs a new ExtensibleSecurityManager.
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* @exception SecurityException If the security manager cannot
+be created.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;protected
+ExtensibleSecurityManager() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// The superclass
+constructor can take care of everything.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;/**
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Checks whether registration of a new
+specialized security<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* manager is allowed.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param name The name that the security
+manager is being<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* registered under.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param manager The specialized security
+manager object.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* @exception SecurityException If a security error has occurred.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;checkRegisterSpecializedSecurityManager
+(String name,<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&
+nbsp;&nbsp;&nbsp;&nbsp;SecurityManager
+manager) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// As with the
+security checks in java.lang.SecurityManager,<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+the default decision is to disallow it.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new SecurityException(&quot;registering
+a specialized security &quot;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;manager not allowed.&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/**<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* Register a specialized security manager.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param name The name of the security
+manager.&nbsp;&nbsp;This should<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* be related to the library which the security manager serves.
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param manager The specialized security
+manager.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;registerSpecializedSecurityManager(String
+name, SecurityManager manager) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ExtensibleSecurityManager
+security;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// I might not
+be the real security manager!!<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security
+= (ExtensibleSecurityManager) System.getSecurityManager();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (ClassCastException
+e) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+A ClassCastException here means the real security<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+manager is not an ExtensibleSecurityManager, and <BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+that in turn means that this object is not the real<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+security manager.&nbsp;&nbsp;Something's fishy.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new SecurityException(&quot;specialized security &quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;managers not allowed.&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(security != this) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new SecurityException(&quot;attempt to register &quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+p;&nbsp;+
+&quot;specialized security &quot;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&
+nbsp;&nbsp;&nbsp;+
+&quot;manager with &quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+p;&nbsp;+
+&quot;non-authoritative &quot;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&
+nbsp;&nbsp;&nbsp;+
+&quot;security manager.&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Now that we know this is the real security manager,<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+we can call our own methods.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;checkRegisterSpecializedSecurityManager(name,
+manager);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+This object is obviously not the system security manager,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+since there isn't one installed.&nbsp;&nbsp;But it could be that
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+we're being prepared for installation, so go ahead and<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+allow the registration.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// Do nothing.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// We don't allow
+replacing an already registered manager.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(specials.containsKey(name)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new SecurityException(&quot;attempt to replace an existing &quot;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;specialized security manager.&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// The error handling
+is all taken care of, so we finally<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+get to actually perform the registration ...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;specials.put(name,
+manager);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;/**
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * Retrieve a specialized security manager
+for a particular<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* library, if it exists.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; * @param libname The name by which the
+security manager was registered.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+* @return The requested specialized manager, or null if no<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; *&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;manager
+has been registered by that name.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+*/<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public SecurityManager<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;getSpecializedSecurityManager
+(String name) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (SecurityManager)
+specials.get(name);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Each native method library should provide a specialized security
+manager that implements a default, conservative security policy,
+in the same way that <TT>java.lang.SecurityManager</TT>
+provides an extremely conservative security policy for the core
+Java library. Such a policy makes it easier for applications to
+deal with dynamic native method libraries with a minimum of special
+support. Many native method libraries will be able to provide
+significant new functionality even with the extremely conservative
+default security policy in effect.
+<H3><B>Checking Each Access Attempt</B></H3>
+<P>
+Once an instance of <TT>ESM</TT> has
+been installed as the system security manager, and an appropriate
+specialized security manager is registered to handle the security
+policy, the package that contains the native method library will
+use that specialized security manager to implement security checks
+for the library.
+<P>
+The specialized security managers will have special methods that
+implement security checks for their associated native method libraries.
+The libraries must be written to take advantage of those specialized
+checks. Although native method libraries should be written to
+take advantage of the default security checks in the core Java
+library where appropriate, specialized checks will also be necessary
+in most cases.
+<P>
+Security-sensitive methods in the core Java library all use a
+variant of the following code to perform security checks:
+<BLOCKQUOTE>
+<TT>SecurityManager security = System.getSecurityManager();
+<BR>
+if (security != null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;security.<I>checkSomething</I>();
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Security-sensitive methods in native method libraries perform
+a similar procedure, which is slightly more complicated. Assuming
+that the security manager for DBlib is registered under the name
+<TT>DBlibSM</TT>, the code might look
+like this:
+<BLOCKQUOTE>
+<TT>ExtensibleSecurityManager security;<BR>
+try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;security
+= (ExtensibleSecurityManager) System.getSecurityManager();<BR>
+}<BR>
+catch (ClassCastException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Case 1<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;throw
+new SecurityException(&quot;no special access allowed for&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;native method libraries.&quot;);<BR>
+}<BR>
+// No security manager means no security ...<BR>
+if (security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DBlibSecurityManager
+dbsecurity = (DBlibSecurityManager)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security.getSpecializedSecurityManager(&quot;DBlibSM&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;catch (ClassCastException e) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Case 2<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new SecurityException(&quot;registered
+security manager&quot;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;is of inappropriate type.&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (dbsecurity != null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Case 3<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dbsecurity.<I>checkSomething</I>();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Case 4<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// On the other
+hand, if there is a security manager, but<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+no specialized security manager for this library, we'll<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// be conservative
+...<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new SecurityException();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+// Case 5 (fall-through)</TT>
+</BLOCKQUOTE>
+<P>
+This code is written to handle five cases:
+<OL>
+<LI>If there is a system security manager, it is assumed that
+there might be untrusted code executing in the application. If
+that is the case, but the system security manager is not an <TT>ExtensibleSecurityManager</TT>,
+the code assumes that security for native method libraries has
+not been taken into account by the application. The code therefore
+takes a conservative approach and denies the operation.
+<LI>If the system security manager is an <TT>ExtensibleSecurityManager</TT>,
+but the specialized security manager registered for this library
+is not of the expected type, something is amiss. On the assumption
+that there is some mistake, a conservative approach is taken.
+<LI>If there <I>is</I> a system security manager, and if there
+is an appropriate specialized security manager registered, it
+is given the opportunity to make the access decision. This is
+the ideal case.
+<LI>If there is a system security manager, but no specialized
+security manager registered to handle this library, a conservative
+approach is taken, and the operation is denied.
+<LI>If there is no system security manager at all, it is assumed
+that there will be no untrusted code in the application, so no
+security is in force and the operation is allowed. This matches
+the behavior of the core Java library when no system security
+manager is installed.
+</OL>
+<P>
+Compared to the equivalent code in the core Java library, this
+code is pretty complicated. It would be helpful to encapsulate
+the code in one place as much as possible so that it wouldn't
+have to be duplicated for every security check in your native
+method library. The best way to do that is by using a static method.
+<P>
+Let's use the DBlib library for an example and assume that DBlib
+is defined in a package called <TT>COM.MCP.Samsnet.tjg.DBlib</TT>.
+Earlier, I suggested that native method libraries provide a default,
+conservative security policy via a specialized security manager
+supplied with the package. In the case of DBlib, that default
+security manager might be called <TT>COM.MCP.Samsnet.tjg.
+DBlib.DBlibSecurityManager</TT>. That class would make
+a nice repository for the static method that encapsulates most
+of this code, especially because it must be a superclass of any
+valid specialized security manager for that library. Here is a
+sample implementation of the <TT>getSecurityManager</TT>
+method in class <TT>COM.MCP.Samsnet.tjg.DBlib.DBlibSecurityManager</TT>
+(the cases are labeled just as before):
+<BLOCKQUOTE>
+<TT>public static DBlibSecurityManager<BR>
+getSecurityManager() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;ExtensibleSecurityManager
+security;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security
+= (ExtensibleSecurityManager) System.getSecurityManager();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;catch
+(ClassCastException e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Case 1<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new SecurityException(&quot;no special access allowed for&quot;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;native method libraries.&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// No security manager means no security
+...<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DBlibSecurityManager
+dbsecurity = (DBlibSecurityManager)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security.getSpecializedSecurityManager(&quot;DBlibSM&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (ClassCastException
+e) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Case 2<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new SecurityException(&quot;registered security manager is of
+&quot;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+&quot;inappropriate type.&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (dbsecurity
+!= null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Case 3<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+dbsecurity;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Case 4<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+On the other hand, if there is a security manager,<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+but no specialized security manager for this<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+library, we'll be conservative ...<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new SecurityException();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Case 5<BR>
+</TT>T>&nbsp;<TT>&nbsp;&nbsp;&nbsp;return
+null;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Once you have that static method available within the package,
+the code to request a security check within the native method
+library is much simpler-and much closer to the equivalent code
+in the core Java library. Final responsibility for doing the right
+thing in the third and fifth cases listed previously lies here,
+rather than in the static method in <TT>DBlibSecurityManager</TT>,
+so those cases are labeled here as well:
+<BLOCKQUOTE>
+<TT>DBlibSecurityManager security =<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;DBlibSecurityManager.getSecurityManager();
+<BR>
+if (security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Case 3<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;security.<I>checkSomething</I>();
+<BR>
+}<BR>
+// Case 5 (fall-through)</TT>
+</BLOCKQUOTE>
+<P>
+Similar code, with an appropriate method call in place of <TT>checkSomething</TT>,
+should appear in every method that provides access to a security-sensitive
+resource.
+<H3><B>Registering Specialized Security Managers</B></H3>
+<P>
+We've discussed the extensible security manager, specialized library-specific
+security managers, and the mechanism by which library methods
+query the specialized security managers for security authorization.
+There are still a few pieces left to this puzzle: where do the
+specialized security managers come from, and who's responsible
+for registering them? How does the application know that these
+specialized security managers can really be trusted? A complete
+answer to these questions requires the development of a full-fledged
+application security framework, which is beyond the scope of this
+chapter, but here are some tips.
+<P>
+I recommended earlier that native method libraries come with default
+security managers that implement an extremely conservative security
+policy, just as the default security manager in the core Java
+library does. Because native method libraries are not written
+entirely in Java, they must (by definition) be trusted, so it
+makes sense for an application to trust the library's default
+security manager.
+<P>
+When do the specialized security managers get registered? If untrusted
+code can load libraries (by using <TT>System.load</TT>
+or <TT>System.loadLibrary</TT>), it's
+important that the appropriate specialized security manager be
+somehow automatically registered when that happens so that it's
+in place by the time the untrusted code can call any of the newly
+loaded native methods.
+<P>
+The solution to the registration problem involves the application
+security policy. The application security policy should ensure
+that libraries can be loaded only through trusted &quot;gateway&quot;
+methods that take responsibility for registering any specialized
+security managers that are required.
+<P>
+As a part of this scheme, the library can actually register the
+security manager on its own. The Java library documentation recommends
+that native method libraries actually be loaded automatically
+by the Java classes that depend on them, using <TT>static</TT>
+initializers. For example, the network library (a dynamically
+loaded portion of the core Java library) is loaded transparently
+by the following code:
+<BLOCKQUOTE>
+<TT>/*<BR>
+&nbsp;* Load net library into runtime.<BR>
+</TT>&nbsp;<TT>*/<BR>
+static {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.loadLibrary(&quot;net&quot;);
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+That same static initializer appears in three separate class definitions:
+<TT>InetAddress</TT>, <TT>PlainSocketImpl</TT>,
+and <TT>DatagramSocket</TT>. Each
+of those classes depends on having the network library loaded,
+so each ensures through its static initializer that the library
+will be loaded when the class is initialized. Thus, applications
+that use the network facilities don't need to take any special
+action to load the library; they just use the classes, and the
+library is there. Applications that <I>don't</I> use the network
+facilities don't incur the overhead.
+<P>
+Because the network library is a part of the core Java library,
+its security needs are taken care of by the <TT>SecurityManager</TT>
+class. A custom native method library that requires a specialized
+security manager might include the security manager registration
+code in a static initializer along with the code that loads the
+library. Here's how it might look for DBlib:
+<BLOCKQUOTE>
+<TT>/*<BR>
+&nbsp;* Load DBlib library and register security manager<BR>
+</TT>&nbsp;<TT>*/<BR>
+static {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.loadLibrary(&quot;DBlib&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ExtensibleSecurityManager security;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security = (ExtensibleSecurityManager)
+System.getSecurityManager();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;catch (ClassCastException e) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Can't register without an ESM<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security.registerSpecializedSecurityManager(&quot;DBlib&quot;,
+new DBlibSM());<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+If the application security policy prohibits untrusted code from
+loading the library explicitly, ensuring that this code is always
+executed when the library is loaded, the library cannot be used
+without the appropriate security manager registration.
+<P>
+Now there's only one remaining problem: what if the default specialized
+security manager for the library is too conservative, and a different
+one is desired? It turns out that choosing a specialized security
+manager is a good application for a factory object (<A HREF="ch17.htm" >see Chapter 17</A>,
+&quot;Network-Extensible Applications with Factory Objects,&quot;
+for details). The static initializer block could be extended to
+call a factory object first, passing the name of the library,
+to see whether the factory could locate a specialized security
+manager to use instead of the default implementation supplied
+with the library (only trusted locations such as <TT>CLASSPATH</TT>
+would be consulted for this purpose, of course). If the factory
+returned null, the default implementation would be used. The interface
+to the factory might take the form of a <TT>createSpecializedSecurityManager</TT>
+method in the <TT>ESM</TT> class.
+Assuming that <TT>ESM</TT> has been
+modified to include such a factory object interface, the final
+<TT>if</TT> statement in the previous
+example could be rewritten to use the factory as follows:
+<BLOCKQUOTE>
+<TT>if (security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;DBlibSM specialsm = security.createSpecializedSecurityManager(&quot;DBlib&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(specialsm == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;specialsm = new
+DBlibSM();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;security.registerSpecializedSecurityManager(&quot;DBlib&quot;,
+specialsm);<BR>
+}</TT>
+</BLOCKQUOTE>
+<H2><A NAME="LanguageProtectionMechanisms"><B><FONT SIZE=5 COLOR=#FF0000>Language
+Protection Mechanisms</FONT></B></A></H2>
+<P>
+Just as with other security-related Java code, authors of native
+method libraries must take care to ensure that their security
+measures cannot be circumvented by subclassing or creating new
+classes in the same package. Without proper use of Java language
+protection features, untrusted code could use such tactics to
+gain direct access to lower-level methods or fields that could
+be used to bypass the security checks.
+<P>
+For example, methods that actually perform security-sensitive
+operations should be declared <TT>private</TT>
+so that they cannot be accessed from outside the class in which
+they are defined. They should be called by other, <TT>public</TT>
+methods that perform the security checks. Those public methods
+can be overridden in subclasses, but the original versions with
+the security checks must ultimately be called to gain access to
+the methods that do the real work.
+<P>
+The relationship between the Java security architecture and Java's
+language-level access-control features is complex. It pays to
+give careful thought to the ways in which subclasses and other
+classes installed in the same package might be able to bypass
+your carefully written security checks.
+<H2><A NAME="Summary"><B><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></B></A>
+</H2>
+<P>
+Native method libraries are an invaluable means of extending the
+functionality of the Java runtime, but they also pose a danger-they
+can bypass the security checks that protect the local system from
+untrusted Java code. If you are implementing a native method library,
+it is important to integrate that library into the Java security
+model.
+<P>
+You must first identify sensitive resources that might be exposed
+by your library. Then you can design a security interface for
+your library and implement a default, conservative security policy.
+<P>
+Currently, there is no standard way for native method libraries
+to add their own specialized security checks to the Java security
+model.  The <TT>ExtensibleSecurityManager</TT>
+class presented in this chapter is one possible solution; you
+may wish to use it in your own applications and native method
+libraries until a standard mechanism appears.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch32.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch34.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

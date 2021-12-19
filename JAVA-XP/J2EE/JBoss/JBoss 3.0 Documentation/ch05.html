@@ -1,0 +1,71 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter 5. Using container-managed persistence</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="index.html" title="JBoss 3.0 Documentation"><link rel="previous" href="ch04s02.html" title="Sample configuration files"><link rel="next" href="ch05s06.html" title="Container Managed Persistence - CMP"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="index.html"><img src="images\toc.gif" border="0"></a><a href="ch04s02.html"><img src="images\prev.gif" border="0"></a><a href="ch05s06.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="chapter"><div class="titlepage"><div><h2 class="title"><a name="cmp"></a>Chapter 5. Using container-managed persistence</h2></div></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><a href="ch05.html#d0e1780">Introduction</a></dt><dt><a href="ch05s06.html">Container Managed Persistence - CMP</a></dt><dt><a href="ch05s08.html">Creating the Beans</a></dt><dt><a href="ch05s09.html">Packaging and deploying the Beans</a></dt><dt><a href="ch05s10.html">Creating a test client </a></dt><dt><a href="ch05s11.html">Discussion: container-managed persistence</a></dt></dl></div><p>Author:<span class="author">Kevin Boone</span>
+		<tt>&lt;<a href="mailto:k.boone@web-tomorrow.com">k.boone@web-tomorrow.com</a>&gt;</tt>  
+	</p><p>JBoss 2.2 compliance checked by:<span class="author">Vincent Harcq</span>
+		<tt>&lt;<a href="mailto:vincent.harcq@hubmethods.com">vincent.harcq@hubmethods.com</a>&gt;</tt>  
+	</p><div class="section"><a name="d0e1780"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e1780"></a>Introduction</h2></div></div><div class="section"><a name="d0e1783"></a><div class="titlepage"><div><h3 class="title"><a name="d0e1783"></a>What this article is about</h3></div></div><p>This article presents a step-by-step example of creating, deploying and 			  
+        testing an Entity JavaBean that uses
+        "container-managed persistence" with the JBoss EJB server. This        
+        example is very simple, and is a variation of
+        the old favourite "music CD" case study. I have chosen this example    
+        because the application is likely to be
+        familiar to most people without much explanation. In short, the "CD"   
+        EJB models a music CD. Applications
+	will want to add and delete CDs to a collection, and search the collection 		 
+        for specific CDs. There is also a
+        "CDCollection" EJB that lists and searches collections of CDs.</p><p>Download and install the full source code as explain in <a href="ch01s08.html" title="Downloading the Documentation Example Source">the section called &#8220;Downloading the Documentation Example Source&#8221;</a></p><p>The files (sources, build scripts and configuration files) needed for this chapter are under 
+"documentation-example/org/jboss/docs/cmp/cd".  Take the time to review them, as well as how the classpath is set prior
+to compiling/running the sources.</p><p>Be comfortable with <a href="ch01s05.html" title="Installing Ant">the section called &#8220;Installing Ant&#8221;</a> as you will have to run ant to build the ejb jar,
+and run the test clients.</p></div><div class="section"><a name="d0e1797"></a><div class="titlepage"><div><h3 class="title"><a name="d0e1797"></a>Pre-requisites</h3></div></div><p>You will need a fully-functioning JBoss installation to follow this tutorial, 
+which must have a working
+database connection. I will assume that you are basically familiar with EJBs 
+and know how to structure and
+compile JavaBeans as Java packages. Also I will assume you know the basic 
+structure of a deployment
+descriptor, and the run-time descriptor that JBoss uses (jboss.xml). I will 
+assume that you know how to
+package and deploy EJBs using JBoss. If you don't know about these things, you 
+might want to look at the chapter titled &#8220;First Steps&#8221; first.</p></div><div class="section"><a name="d0e1805"></a><div class="titlepage"><div><h3 class="title"><a name="d0e1805"></a>Persistence: review</h3></div></div><p>There are, in essence, two kinds of Enterprise JavaBean: session and entity. 
+Entity EJBs contain information
+that is persistent across different client-Bean interactions, while session 
+EJBs don't. For example, a class
+called "Customer" that represents the customers of a particular service will 
+contain persistent information
+(about the customer). A class called "CustomerFinder", say, that finds 
+Customer instances that match certain
+criteria is likely to be a session EJB, because it does not require 
+information that is maintained between
+different client-server interactions.</p><p>       Session EJBs can be further divided into "stateless" and "stateful". A 
+stateful session EJB has a state that is
+persistent between invocations of its methods. A stateless EJB does not even 
+have to retain its state between
+method invocations. The stateless session EJB is therefore the type of EJB 
+that exhibits the least persistence.</p><p>       The entity EJBs contain information that persists even when no clients 
+are using any of the Bean's
+services; the information should persist even if the server is restarted. 
+There is a high degree of
+correspondence between instances of an entity EJB and rows of a database 
+table. In practice, all EJB servers
+implement entity instances as table rows. This correspondence is so strong 
+that the database notion of a "primary key"
+is relevant to an entity EJB. </p><p>       The persistence of an entity EJB may be managed by the Bean itself, or 
+by the server (technically by the
+"container"). The latter technique is called "Container-managed persistence", 
+and is the subject of the rest of
+this article.</p></div><div class="section"><a name="d0e1816"></a><div class="titlepage"><div><h3 class="title"><a name="d0e1816"></a>When to Use CMP or BMP?</h3></div></div><p>Unlike what many folks believe, the choice of going BMP or CMP is not really 
+one of "trade-off".  If you have
+already schemas deployed you may find that the complexity of the schemas 
+requires you to go with BMP or use
+a BMP generating tool such as "cocobase".  These techniques are what we call 
+"fake CMP" where the work of
+accessing the database is left to the generated classes. </p><p>The breed of CMP that has most value is the "real CMP" or a CMP where you let 
+the container manage the
+persistent representation of your beans entirely.  This might not work right 
+now for you if your object are
+complex but should work in most simple cases. EJB2.0 also goes the extra 
+length to make the persistent
+engines powerful and fast with management of dependencies and relationships.  
+We believe that one day you
+will rely on the engines to manage the schemas, just like you rely on a 
+compiler to optimize assembly code.</p></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="index.html"><img src="images\toc.gif" border="0"></a><a href="ch04s02.html"><img src="images\prev.gif" border="0"></a><a href="ch05s06.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

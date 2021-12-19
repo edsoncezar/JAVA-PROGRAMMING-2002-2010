@@ -1,0 +1,232 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>This EJB doesn&#146;t do anything on Activate, but it closes the log if removed or passivated. Messages to the log are encapsulated in the method logToServer, a discussion of which follows. This method reconnects the DebugLog appropriately.
+</P>
+<PRE>
+    public void ejbActivate()
+     {
+    }
+
+    public void ejbRemove()
+    {
+        try
+        {
+            logger.closeLog();
+            logger = null;
+        }
+        catch(Exception exp)
+        {
+        }
+    }
+
+    public void ejbPassivate()
+    {
+        try
+        {
+            logger.closeLog();
+            logger = null;
+        }
+        catch(Exception exp)
+        {
+        }
+    }
+</PRE>
+<P>When the SessionContext is provided to the bean via the method setSessionContext, it caches all of its configuration properties in instance variables.
+</P>
+<PRE>
+    public void setSessionContext(SessionContext ctx)
+     {
+        Properties env = ctx.getEnvironment();
+        
+        user = env.getProperty(&#147;user&#148;);
+        password = env.getProperty(&#147;password&#148;);
+        url = env.getProperty(&#147;url&#148;);
+        driver = env.getProperty(&#147;driver&#148;);
+        logServer = env.getProperty(&#147;logserver&#148;);
+    }
+</PRE>
+<P>The home interface requires a bean to be created using a name. This name is logged to the debug log in the ejbCreate method, as follows. The create method also instantiates the hash table that the bean uses to store shopping cart items or clears it if one is already assigned.
+</P>
+<PRE>
+    public void ejbCreate(String nm)
+     {
+        cartName = nm;
+        
+        if(items == null) items = new Hashtable();
+        else items.clear();
+
+        logToServer(&#147;Created bean: &#148;+cartName);
+    }
+</PRE>
+<P>The ShoppingCartBean&#146;s first remote method is addItem. This method takes a shopping cart item and adds it to the bean, logging the addition to the debug log. Each time an item is added, the bean connects to the database to check and update the item&#146;s availability and price before adding the item to its items hash table. Although this reconnecting may seem like overkill, it really isn&#146;t. The Application Server hosting the bean is actually storing a pool of database connections. When the bean &#147;connects,&#148; it is really getting a connection from this pool. If your EJB host doesn&#146;t support connection pooling, make this connection in ejbActivate and close it in ejbPassivate to save the connection time. With pooling, open and close the connection as needed, making it available to other beans in the interim.
+</P>
+<P>Because a shopper might add the same item twice, check the database only the first time. Subsequent additions change only the quantity field in the ShoppingCartItem object. The complete implementation for addItem is included below. The primary code for adding items appears in boldface type.</P>
+<PRE>
+    public ShoppingCartItem addItem(ShoppingCartItem item)
+     {
+        ShoppingCartItem test=null;
+        ResultSet rs=null;
+        Statement statement=null;
+        ShoppingCartItem retVal = null;
+        Connection conn=null;
+        double curPrice;
+        int curQuantity;
+    
+        if(items == null) items = new Hashtable();
+        
+        logToServer(&#147;Adding item: &#148;+item);
+        
+<B>        if(item != null)
+            test = (ShoppingCartItem) items.get(item.desc);
+        
+        if(test == null)
+        {</B>
+            try
+            {
+<B>                conn = connectToDB();
+                
+                statement = conn.createStatement();
+                rs =
+                 statement.executeQuery(&#147;select * from inventory&#148;
+                                             +&#147; where item_desc=&#148;
+                                             +&#147;\&#145;&#148;+item.desc+&#147;\&#145;&#148;);</B>
+                
+                //Only take the first one
+<B>                if(rs.next())
+                {
+                    curPrice = item.price;
+                    
+                    //reset price from DB
+                    item.price = rs.getDouble(&#147;PRICE&#148;);
+                    
+                    curQuantity = rs.getInt(&#147;QUANTITY&#148;);
+                    
+                    logToServer(&#147;Adding &#148;+item.desc
+                                  +&#147; at price &#148;+item.price);
+                    
+                    if(curQuantity &lt item.quantity)
+                        item.quantity = curQuantity;
+                        
+                    items.put(item.desc,item);</B>
+                    
+                    retVal = item;
+<B>                }</B>
+                else
+                {
+                    logToServer("Item "+item.desc
+                                    +" not in database.");
+                }
+            }
+            catch(Exception exp)
+            {
+                logToServer(exp.toString());
+                retVal = null;
+            }
+            finally
+            {
+                try
+                {
+                    if(rs!=null) rs.close();
+                    if(statement != null) statement.close();
+                    if(conn!=null) conn.close();
+                }
+                catch(Exception exp)
+                {
+                    logToServer(exp.toString());
+                }
+            }
+        }
+        <B>else
+        {
+            test.quantity+=item.quantity;</B>
+            
+            retVal = test;
+<B>        }</B>
+        
+        return retVal;
+    }
+</PRE>
+<P>The bean&#146;s client can request a list of the current contents using the method getItems, defined as follows. This method returns the ShoppingCartItems stored in the items hash table.
+</P>
+<PRE>
+    public ShoppingCartItem[] getItems()
+     {
+        Enumeration keys;
+        ShoppingCartItem[] retVal=null;
+        int i=0;
+        
+        if(items != null)
+        {
+            retVal = new ShoppingCartItem[items.size()];
+        
+            keys=items.keys();
+        
+            while(keys.hasMoreElements())
+            {
+                retVal[i] = (ShoppingCartItem) 
+                            items.get(keys.nextElement());
+                i++;
+            }
+        }
+        return retVal;
+    }
+</PRE>
+<P>Clients may also want to delete an item using the method deleteItem. Deleting an item updates the quantity of the associated ShoppingCartItem. If the ShoppingCartItem&#146;s quantity goes to 0, the object is removed from the items hash table. The definition for deleteItem is:
+</P>
+<PRE>
+    public boolean deleteItem(ShoppingCartItem item)
+     {
+        ShoppingCartItem test=null;
+        boolean retVal = false;
+        
+        if((items != null)&amp&amp(item != null))
+            test = (ShoppingCartItem) items.get(item.desc);
+        
+        if(test != null)
+        {
+            test.quantity-=item.quantity;
+            
+            if(test.quantity &lt= 0) items.remove(test.desc);
+            
+            retVal = true;
+        }
+        
+        return retVal;
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,193 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Servlet-Based Search Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>IndexBuilder that creates the indexes for the servlet also uses the shared debug log, if the servlet initializes it, the index builder will print messages to the log as well. An updateInterval can be specified as one of the configuration parameters. If this interval is non-zero, it represents the number of seconds between times that the index manager checks whether the index is up to date with the directory it indexes. If it is not up to date, the index is rebuilt.
+</P>
+<PRE>
+public void init(ServletConfig config)
+throws ServletException
+{
+    super.init(config);
+   
+    String logFile,logServer;
+   
+    logger = DebugLog.getSharedLog();
+
+    logFile = getInitParameter("logfile");
+    logServer = getInitParameter("logserver");
+    helpPage = getInitParameter("helppage");
+    noIndexPage = getInitParameter("noindexpage");
+    updateIntervalString = getInitParameter("updateinterval");
+   
+    if(updateIntervalString != null)
+    {
+     try
+     {
+         updateInterval = Long.parseLong(updateIntervalString);
+         IndexManager.updateInterval = updateInterval;
+     }
+     catch(Exception exp)
+     {
+     }
+    }
+    if((logFile != null)||(logServer != null))
+    {
+     
+     //Index builder uses the same log.
+     
+     synchronized(logger)
+     {
+         if(!logger.initialized())
+         {
+          if(logServer != null)
+          {
+              logger.logTo(logServer);
+          }
+          else
+          {
+              logger.logTo(new File(logFile));
+          }
+         }
+     }
+    }
+}
+</PRE>
+<P>The help and no index files are defined relative to the document root for the Web server and are complete URLs for that server. A sample of each file is provided on the CD-ROM. The example help file is called SearchHelp.html. If this file is placed in the Web server&#146;s document root, the helppage configuration parameter should be set to /SearchHelp.html. If you type SearchHelp.html without the slash, the server will try to redirect the client to this file as though it were inside the servlet itself, resulting in an error.
+</P>
+<P>The HTMLSearchServlet processes client requests through the doGet method. The code for this method it listed below. The doGet method does two things: First, it checks whether the client wanted to see the help page or wanted to perform a query. Second, the servlet displays the help page or performs the query and returns the results. This decision relies on the way that the search request is submitted. The form submitting the request is expected to name its submit button SUBMIT_FIELD_NAME. If the value of this name is HELP_NAME, the help page is displayed, using redirect. If the help page was not defined in our configuration, the client is sent an error code indicating that help is unavailable.</P>
+<PRE>
+public void doGet(HttpServletRequest request,
+              HttpServletResponse response)
+throws IOException
+{
+    String requestType;
+ 
+    requestType = request.getParameter(SUBMIT_FIELD_NAME);
+ 
+    /*
+      If the submit field contains the name of the help page,
+      then send the client to the help html page.
+    */
+    <B>if((requestType != null)
+     &amp&amp(requestType.equalsIgnoreCase(HELP_NAME)))</B>
+   {
+     logger.log("Got help request");
+     
+     if(helpPage != null)
+<B>            response.sendRedirect(helpPage);</B>
+     else
+     response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+    }
+    else//null is the same as do query
+    {
+<B>        handleQuery(request,response);</B>
+   }
+}
+</PRE>
+<P>If the submit field retrieved in the doGet method does not contain a request for help, the handleQuery method defined to handle the specifics of the query request is called.
+</P>
+<P>The handleQuery method contains the majority of the HTMLSearchServlet code. The method handleQuery is defined with the same parameters as the doGet method, to make it easy to call. Local variables in the handleQuery method are defined to contain any temporary information that might be necessary. The following code defines the handleQuery method signature and its local variables.</P>
+<PRE>
+protected void handleQuery(HttpServletRequest request,
+                   HttpServletResponse response)
+throws IOException
+{
+    HTMLIndex index;                    // The index
+    String query;                       // The query to execute
+    Vector results;                     // A list of search results
+    int i;                              // A local counter
+    intmax;                             // Maximum return results
+    resultCount=0;                      // Number of query results
+    String maxString;                   // Temporary string
+    int maxHits = DEFAULT_MAX_HITS;     // Max results displayed
+    String curHitStartString;           // Temporary string
+    int curHitStart=0;                  // Where to start displaying
+    PrintWriter writer;                 // Output writer
+    String dir;                         // Directory path
+    String fullDir;                     // Full directory path
+    String curFileName=null;            // Current file to display
+    String myURL;                       // The servlet's URL
+</PRE>
+<P>These local variables are used throughout the handleQuery method.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading3"></A><FONT COLOR="#000077">PathInfo and Query Initialization</FONT></H4>
+<P>Instead of using configuration parameters to indicate the directory to search, the concept of HTTP path information is used. Path information, provided as a file path, appears after the servlet&#146;s name in the URL that the client uses to access the servlet. For example, if the search servlet is installed as htmlsearch and you want to search a directory called doc2, you would use the URL:
+</P>
+<P><A HREF="http://servername/servlet/htmlsearch/doc2">http://servername/servlet/htmlsearch/doc2</A></P>
+<P>This tells the servlet to look in /doc2 for the index and documents. Using path information rather than another mechanism such as a configuration parameter is a good choice because the HttpServletRequest already knows how to convert path information into a real file path on the server. The path information itself is assumed relative to the document root by the HttpServletRequest. This means that both the correct URL and file path for the search directory can be acquired easily. The limitation is that the implementation does not handle spaces in file names.</P>
+<P>The two values for the search directory are stored in local variables and follow the code listed above:</P>
+<PRE>
+    dir = request.getPathInfo();
+    fullDir = request.getPathTranslated();
+</PRE>
+<P>All other values that we may need are then initialized. The response type is set to tell the client that an HTML document is being returned. The writer for the output to the client is stored along with the various client request parameter values. The variable myURL stores the URL from the request for processing later. Then the maxString and curHitStartString variables are converted to integers and stored in maxHits and curHitStart, respectively. The code for this is listed below:
+</P>
+<PRE>
+    response.setContentType("text/html");
+ 
+    writer = response.getWriter();
+    query = request.getParameter(QUERY_FIELD_NAME);
+    maxString = request.getParameter(MAX_FIELD_NAME);
+    curHitStartString = request.getParameter(CURRENT_FIELD_NAME);
+ 
+    myURL = HttpUtils.getRequestURL(request).toString();
+ 
+    if(maxString != null)
+    {
+     try
+     {
+         maxHits = Integer.parseInt(maxString);
+     }
+     catch(Exception exp)
+     {
+         maxHits = DEFAULT_MAX_HITS;
+     }
+    }
+ 
+    if(curHitStartString != null)
+    {
+     try
+     {
+         curHitStart = Integer.parseInt(curHitStartString);
+     }
+     catch(Exception exp)
+     {
+         curHitStart = 0;
+     }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="08-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="08-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

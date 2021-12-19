@@ -1,0 +1,158 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Enterprise JavaBean Business Rules Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>This example shows the tagged nature of the scripting language. In this case, the TREE tags bracket the entire definition for the main action, a decision tree. The PAIR tags bracket each rule-action pair, and the individual rules and actions are defined using singleton tags that use attributes to define their properties. For example, the ALWAYSRULE tag indicates an AlwaysRule object, and the KEY attribute defines its key instance variable. In a moment you will see how a RulesParser object converts these tags into Rule and Action objects. Keep in mind that this tag-based language was chosen because it is familiar. You could define any type of scripting language to define rules and actions.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading7"></A><FONT COLOR="#000077">Using the Example Script</FONT></H4>
+<P>To test the example script, we created a simple Java program that creates a hash table, loads it with data, loads the action from the script file, and executes it on the sample data. The following program also shows how the parser is created and accessed. The parser is implemented to allow use of only a shared instance. The constructor for RulesParser is protected so that it cannot be instantiated.
+</P>
+<PRE>
+package busrules;
+
+import busrules.*;
+import java.util.*;
+import java.io.*;
+
+public class RulesParserTest extends Object
+{
+    public static void main(String args[])
+    {
+	FileReader fileIn;
+	RulesParser parser;
+	Action act;
+	Hashtable data;
+	
+	if(args.length &gt 0)
+	{
+	    try
+	    {
+<B>                parser = RulesParser.sharedRulesParser();</B>
+                fileIn = new FileReader(args[0]);
+		
+		System.out.println(&#147;Preparing Data&#148;);
+		
+<B>                data = new Hashtable();
+		
+		data.put(&#147;message_one&#148;
+		,&#147;The value of false is not equal to true.&#148;);
+		
+		data.put(&#147;message_two&#148;
+			,&#147;The value of true is true.&#148;);
+		
+		data.put(&#147;true&#148;,&#147;true&#148;);
+		data.put(&#147;false&#148;,&#147;false&#148;);</B>
+
+		System.out.println(&#147;Parsing&#148;);
+		
+<B>                act = parser.parseAction(fileIn,null);</B>
+		System.out.println(&#147;Got Action: &#148;&#43;act);
+		
+		//parser closes the stream
+	
+		System.out.println(&#147;Executing&#148;);
+<B>                act.executeOn(data);</B>
+                System.out.println(&#147;Completed&#148;);
+	    }
+	    catch(ParsingException exp)
+	    {
+		System.out.println(&#147;Script exception &#148;
+                                        &#43;&#147;occurred.&#148;);
+		exp.printStackTrace();
+	    }
+	    catch(IOException exp)
+	    {
+		System.out.println(&#147;IO exception occurred.&#148;);
+		exp.printStackTrace();
+	    }
+	    catch(Exception exp)
+	    {
+		System.out.println(&#147;Miscellaneous exception&#148;
+				    &#43;&#147; occurred.&#148;);
+		exp.printStackTrace();
+	    }
+	}
+	else
+	{
+	    System.out.println(&#147;Usage: java RulesParserTest&#148;
+				    &#43;&#147; filename&#148;);
+	}
+    }
+}
+</PRE>
+<P>Once the parser and data are created, the parser is told to parse the script file and return the action defined in it. This will return null if no action is defined, or it will throw a ParsingException if the script file is bad. The parsing operation returns an Action object that is executed on the data. The script file in this example is specified on the command line.
+</P>
+<P>In a larger program, you might parse the script file once and use the action or rule it contains repeatedly on different data sets as needed.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading8"></A><FONT COLOR="#000077">Handling a Tag</FONT></H4>
+<P>When the parser is told to parse a script, it uses a TagParser object to read the script. This tag parser uses a callback-style interface to notify the RulesParser when tags are encountered. More important, regardless of the tags, the parser will parse any tag-based file. In order for the parsing to result in any callbacks, the parser has to be told about two things. First, the parser needs to know which tags are pairs, like &ltHTML&gt and &lt/HTML&gt. All other tags are assumed to be singletons, like &ltBR&gt. Second, the parser needs handlers to tell when a tag is encountered. The interface used to notify an object of a tag is defined by the TagHandler interface.
+</P>
+<PRE>
+public interface TagHandler
+{
+    public String handleTag(String tag,String data
+			    ,String etag,Hashtable atts)
+	throws ParsingException;
+
+    public void registerWith(TagParser parser);
+}
+</PRE>
+<P>This interface defines two methods. The handleTag method is passed a tag, its end tag, the data between the start and end tag, and any attributes from the start tag. For tags that don&#146;t have an end tag, the etag and data parameters are null. The registerWith method should tell what tag it handles and register any end tags that it expects. If the parser is given an end tag, it waits to call handleTag until the end tag is encountered. The data parameter of handleTag contains all of the data between the start and end tag, with the caveat that any subtags may have been handled by another tag handler. In this case, the return value of handleTag for the subtag is inserted in the data passed to the supertag in place of the tags themselves.
+</P>
+<P>For example, the RulesParser acts as a TagHandler for the rules and actions provided in the busrules package. Whenever it handles a rules tag, it replaces the tag with the empty string. If, for example, you run the parser on the script:</P>
+<PRE>
+&ltTREE&gt
+
+&ltPAIR&gt
+&ltCOMPARISONRULE OPERATOR=&#147;11&#148; CONSTANT=&#147;true&#148; KEY=&#147;false&#148;&gt
+&ltPRINTLNACTION KEY=&#147;message_one&#148;&gt
+&lt/PAIR&gt
+
+&ltPAIR&gt
+&ltALWAYSRULE KEY=&#147;true&#148;&gt
+&ltPRINTLNACTION KEY=&#147;message_two&#148;&gt
+&lt/PAIR&gt
+
+&lt/TREE&gt
+</PRE>
+<P>Handle tag is first called for the COMPARISONRULE tag, then the PRINTLNACTION tag is handled. Next the &lt/PAIR&gt tag triggers the PAIR tag handler, which is passed an empty data string because the handler for COMPARISONRULE and PRINTLNACTION returned an empty string. This parsing continues until the &lt/TREE&gt tag triggers the TREE tag handler. Again, the RulesParser handles all of these tags itself. Our check request example demonstrates how custom tag handlers are implemented.
+</P>
+<P>To register with the TagParser, use the methods:</P>
+<PRE>
+public void registerTagHandler(String tag,TagHandler handler);
+public void registerEndTag(String tag,String etag);
+</PRE>
+<P>Looking at the complete code for the RulesParser that follows, you see how it registers itself with a TagParser for all of the tags in the busrules package. Furthermore, see how the RulesParser handles tags by pushing the objects they represent onto a stack. So, in the example script, the COMPARISONRULE is pushed onto the rule stack, then the PRINTLNACTION is pushed onto the action stack. When the pair is encountered, it pops the rule and action, creates a Pair object, and pushes the pair onto the pair stack. The next pair is handled the same way. The tree tag causes a DecisionTree object to be created and all of the pairs to be added to it in order.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

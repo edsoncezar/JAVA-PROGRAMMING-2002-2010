@@ -1,0 +1,253 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Introduction to Java RMI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The main difference between this example and the previous one is that Client is now a subclass of Frame so that a UI can be displayed without introducing more object classes. Client also implements MessageReceiver so that it can behave as a remote object. To handle user input, the client implements both ActionListener and WindowListener. The boldface type in the code that follows indicates the changes to the class:
+</P>
+<P><A NAME="Fig3"></A><A HREF="images\13-03.jpg"><IMG SRC="images\13-03t.jpg"></A>
+<BR><A HREF="images\13-03.jpg"><FONT COLOR="#000077"><B>Figure 13.3</B></FONT></A>&nbsp;&nbsp;Client UI.</P>
+<PRE>
+package client;
+
+import java.awt.*;
+import java.awt.event.*;
+import java.rmi.*;
+import java.rmi.server.*;
+import message.*;
+
+public class Client <B>extends Frame implements MessageReceiver,
+ActionListener, WindowListener</B>
+{
+<B>    TextField tf; // Message text field
+    TextArea ta; // Message server output text area</B>
+    static String name; // name of this client
+    static MessageServer server; //Connection ot the server
+</PRE>
+<P>A constructor was added so that an instance of the class can be initialized. The constructor throws RemoteException so that it can participate as a remote object. The constructor creates the UI elements and installs this object as an action and window listener. Finally, the UnicastRemoteObject static method exportObject is called to enable this object to accept remote calls from the server on an anonymous port. If you do not do this step, the client will not receive remote messages. It would, however, be able to send messages to remote objects.
+</P>
+<PRE>
+    <B>public Client() throws RemoteException
+    {
+     setTitle(name);
+
+     setLayout(new BorderLayout());
+
+     tf = new TextField(30);
+     tf.addActionListener(this);
+     add(&#147;South&#148;,tf);
+
+     ta = new TextArea(20,20);
+     add(&#147;Center&#148;,ta);
+
+     addWindowListener(new WindowCloser());
+
+     UnicastRemoteObject.exportObject(this);
+    }</B>
+</PRE>
+<P>The actionPerformed method that follows reads the value of the text field when the user presses Enter and sends this value to the server. The server then forwards this message to all registered clients.
+</P>
+<PRE>
+<B>    public  void actionPerformed(ActionEvent ae)
+    {
+     try
+     {
+         server.send(name,tf.getText());
+     } catch (Exception e)
+     {
+         System.err.println(&#147;Client exception: &#148; &#43;
+          e.getMessage());
+         e.printStackTrace();
+     }
+     tf.setText(&#147;&#148;);
+     tf.selectAll();
+    }</B>
+</PRE>
+<P>The print method listed here is implemented as part of the MessageReceiver interface. This method is called by the server when a message from any client is sent to the server. The method simply appends the string passed in to the text area in the user interface.
+</P>
+<PRE>
+<B>    public void print(String s)
+    {
+     ta.append(s &#43; &#147;\n&#148;);
+    }</B>
+</PRE>
+<P>The only change to the main method is that it instantiates a Client object and displays its frame so that the user can type in messages and see messages broadcast from the server. It also calls the MessageServer method register that takes a unique name and an instance of a MessageReceiver as a parameter. The register method will fail if a client with the same name is already registered or if either parameter is null.
+</P>
+<PRE>
+public static void main(String args[])
+    {
+     if(args.length&lt1)
+     {
+         System.out.println(
+          &#147;Usage: java client.Client ClientName&#148;);
+         System.exit(-1);
+     }
+
+     name = args[0];
+
+     if (System.getSecurityManager() == null)
+     {
+         System.setSecurityManager(
+          new RMISecurityManager());
+     }
+
+     try
+     {
+<B>         Client cf = new Client();
+         cf.pack();
+         cf.show();</B>
+        server = (MessageServer)Naming.lookup(
+          MessageServer.SERVER_NAME);
+<B>         int s = server.register(args[0],cf);
+         if(s == MessageServer.FAILURE)
+          throw new Exception(
+             &#147;Couldn&#146;t connect to server&#148;);</B>
+       } catch (Exception e)
+     {
+         System.err.println(&#147;Client exception: &#148; &#43;
+          e.getMessage());
+         e.printStackTrace();
+         System.exit(-1);
+     }
+    }
+}
+</PRE>
+<P>A helper class called WindowCloser is listed here. This class is defined in Client.java and handles closing the Client when the user clicks on the window&#146;s close box.
+</P>
+<PRE>
+class WindowCloser extends WindowAdapter
+{
+    public void windowClosing(WindowEvent e)
+    {
+     Window win = e.getWindow();
+     win.setVisible(false);
+     System.exit(0);
+    }
+}
+</PRE>
+<P>To compile and run the client, type the following:
+</P>
+<PRE>
+javac client\*.java
+rmic -d . client.Client
+start java
+    -Djava.security.policy=server.policy client.Client Client1
+</PRE>
+<P>Because this class now acts as a remote object, you must call rmic to generate the Client_Stub.class and Client_Skel.class. These classes must be accessible for the client and network accessible for the server. Another option is to copy the stubs to the server so that a copy resides at both ends. In both of these examples, notice that the server application had to be running in order for the clients to connect. This is not always optimal, because the process could be resource intensive if no clients are connecting and several remote object servers are running.
+</P>
+<H3><A NAME="Heading18"></A><FONT COLOR="#000077">Class Loading</FONT></H3>
+<P>Table 13.4 listed the properties that a server might use to configure itself. One of these properties, java.rmi.server.codebase, is used to define the location for class files that the client may need to access. This value should be a URL and normally points to a Web server from which clients can get class files. However, it can also be a file URL if the server and client share a file system.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>If you want to use the code base, make sure that the registry is run from a directory that doesn&#146;t have direct access to the server-class files to ensure that the class loading all occurs from the specified code base.</FONT><HR>
+</BLOCKQUOTE>
+<P>The following example demonstrates how the server can set the java.rmi.server .codebase variable using the system properties. The server returns an object when the getNextObject method is called. The objects to return are stored in an array and include several objects that are part of the server package. The code base for this server is set using a command-line argument, so that it can be run with or without a Web server. The compile.bat file in the example directory was designed for our installation and copies the server files to a Web server&#146;s document root before running the server with this code base. You could remove all references to the server and insert a file URL instead.
+</P>
+<PRE>
+package server;
+
+import java.util.*;
+import java.rmi.*;
+import java.rmi.server.*;
+import java.rmi.registry.*;
+import objects.*;
+
+public class Server extends UnicastRemoteObject
+                  implements ObjectServer
+{
+    Object[] objects;
+    int curIndex;
+  
+    public Server() throws RemoteException
+    {
+     super();
+     
+     objects = new Object[7];
+     
+     //All of these are serializable.
+     objects[0] = new String(&#147;Hello&#148;);
+     objects[1] = new Vector();
+     objects[2] = new Hashtable();
+     objects[3] = new Object[0];
+<B>     objects[4] = new ClassOne();
+     objects[5] = new ClassTwo();
+     objects[6] = new ClassThree();</B>
+   }
+
+<B>    public Object getNextObject() throws RemoteException
+    {
+         Object retVal = objects[curIndex];
+     
+         curIndex = (curIndex&#43;1)%objects.length;
+     
+         return retVal;
+    }</B>
+
+    public static void main(String[] args)
+    {
+     System.setSecurityManager(new RMISecurityManager());
+
+     if(args.length&lt1)
+     {
+         System.out.println(&#147;usage: java Server codebase&#148;);
+         System.exit(-1);
+     }
+     
+     try
+     {
+         Properties sysProps;
+       
+         //Update the code base property.
+<B>         sysProps = System.getProperties();
+         sysProps.put(&#147;java.rmi.server.codebase&#148; ,args[0]);
+         System.setProperties(sysProps);</B>
+      
+         ObjectServer srv = new Server();
+
+         Naming.rebind(ObjectServer.SERVER_NAME, srv);
+
+         System.out.println(&#147;Server bound and &#148;
+                               &#43;&#147;started&#148;);
+     }
+     catch(Exception e)
+     {
+         System.err.println(&#147;Server exception: &#148;
+                        &#43;  e.getMessage());
+         e.printStackTrace();
+     }
+  }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-09.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

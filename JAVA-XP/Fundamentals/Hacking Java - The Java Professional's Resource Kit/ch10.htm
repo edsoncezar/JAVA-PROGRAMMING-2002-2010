@@ -1,0 +1,1088 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 10 -- Inter-Applet Communication </TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;10</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Inter-Applet Communication </FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#LocatingOtherApplets">
+Locating Other Applets</A>
+<LI><A HREF="#ExchangingDataUsingPipedStreams">
+Exchanging Data Using Piped Streams</A>
+<LI><A HREF="#CreatingMultiClientPipes">
+Creating Multi-Client Pipes</A>
+<LI><A HREF="#SharingInformationwithSingletonObjects">
+Sharing Information with Singleton Objects</A>
+</UL>
+
+<HR>
+<P>
+This chapter deals with the communication between applets running
+within the same browser. It does not address the problem of sending
+information between applets running in separate browsers. The
+two problems are completely different. When two applets are in
+the same browser, they can communicate using any form of inter-object
+communication, including direct method calls. Communication between
+applets in different browsers requires some form of networking
+and usually an intermediate server. One common form of network
+communication is Remote Method Invocation (RMI), which is discussed
+in <A HREF="ch16.htm" >Chapter 16</A>, &quot;Creating 3-Tier Distributed Applications
+with RMI.&quot;
+<H2><A NAME="LocatingOtherApplets"><FONT SIZE=5 COLOR=#FF0000>
+Locating Other Applets</FONT></A></H2>
+<P>
+You will occasionally need to allow two or more applets on a Web
+page to communicate with each other. Because the applets all run
+within the same Java context-that is, they are all in the same
+virtual machine together-applets can invoke each other's methods.
+The one tricky part is getting the applets in touch with each
+other. The <TT>AppletContext</TT>
+class has methods for locating another applet by name, or retrieving
+all the applets in the current runtime environment. Listing 10.1
+shows an applet that examines all the applets in the runtime environment
+and displays them in a scrolling list.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.1&nbsp;&nbsp;Source Code for ListApplets.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.util.*;
+
+// This applet demonstrates the use of the getApplets method to
+// get an enumeration of the current applets.
+
+public class ListApplets extends Applet
+{
+     public void init()
+     {
+
+// Get an enumeration all the applets in the runtime environment
+          Enumeration e = getAppletContext().getApplets();
+
+// Create a scrolling list for the applet names
+          List appList = new List();
+
+          while (e.hasMoreElements()) {
+
+// Get the next applet
+               Applet app = (Applet) e.nextElement();
+
+// Store the name of the applet's class in the scrolling list
+               appList.addItem(app.getClass().getName());
+          }
+
+          add(appList);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 10.1 shows the ListApplets applet on a page with a number
+of other applets.
+<P>
+<A HREF="f10-1.html"><B>Figure 10.1 : </B><I>An applet can see what other applets are
+running on the same page</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Be prepared to check for an applet again if you can't find it the first time. Your browser may not load applets all at once, or you might dynamically load an applet. You may receive a <TT>NullPointerException</TT> if you try to get an applet that doesn't 
+exist-be prepared to catch it. You may have difficulty distinguishing when an applet hasn't been loaded yet from error situations in which it can't be loaded. Try picking a maximum amount of time you'll wait for an applet to be loaded, and then assume that 
+
+there's a problem if the applet you want hasn't been loaded after that time.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+If you already know the name of the applet you want to access,
+you can locate it with the <TT>getApplet</TT>
+method. The following code fragment locates an applet named <TT>findme</TT>:
+<BLOCKQUOTE>
+<PRE>
+Applet findme = getAppletContext().getApplet(&quot;findme&quot;);
+if (findme != null) {
+// do something with findme
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+You might think that the applet name you use in <TT>getApplet</TT>
+is the class name of the applet. This is not the case. You set
+the applet's name in your <TT>&lt;APPLET&gt;</TT>
+HTML tag. For example, here is the <TT>&lt;APPLET&gt;</TT>
+tag for an applet class called <TT>FindMe</TT>,
+which has an applet name of <TT>findme</TT>:
+<BLOCKQUOTE>
+<PRE>
+&lt;APPLET codebase=&quot;.&quot; code=&quot;FindMe.class&quot; name=&quot;findme&quot;&gt;]
+<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Only use lowercase names for applets. Some versions of Netscape convert the applet name to lowercase. The name of the applet is separate from the name of the applet's class, so you can still use uppercase letters in the class name.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="ExchangingDataUsingPipedStreams"><FONT SIZE=5 COLOR=#FF0000>
+Exchanging Data Using Piped Streams</FONT></A></H2>
+<P>
+Once two applets have located each other, their means of communication
+is the same as for any two objects in the system. This means they
+can invoke each other's methods, share common arrays between them,
+or send data over stream pipes.
+<P>
+A stream pipe is a pair of streams: One is an input stream; the
+other is an output stream. Any data written to the input stream
+can be read from the output stream it is connected to. You can
+use this mechanism to pass data between two applets or any two
+objects in the system. One object creates both a <TT>PipedInputStream</TT>
+and a <TT>PipedOutputStream</TT> class,
+and then passes one end of the pipe to the other object. Whichever
+object has the output end of the pipe can then start writing to
+the pipe, while the object that has the input side can start reading.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Since stream pipes are subclasses of <TT>FileInputStream</TT> and <TT>FileOutputStream</TT>, you can use the existing stream filters to pass different kinds of data. The <TT>DataInputStream</TT> and <TT>DataOutputStream</TT> classes are good for passing 
+simple data types over pipes, while the <TT>ObjectInputStream</TT> and <TT>ObjectOutputStream</TT> are excellent for passing whole objects.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Stream pipes are useful for doing sequenced messaging between
+objects. Sometimes one object needs to tell another object to
+perform several tasks in sequence. If some of the tasks take a
+long time, you don't want the requesting object to have to wait
+for all the tasks to be performed, yet you want to ensure that
+they are done in the proper sequence. If the requests are made
+by sending messages over a stream pipe, the sequencing problem
+is solved, as is the waiting problem. The requesting object can
+write all its requests to the <TT>PipedOutputStream</TT>
+and continue on. The object performing the tasks reads each message
+from its <TT>PipedInputStream</TT>,
+performs the requested task, and then reads the next message from
+the pipe. The messages are guaranteed to be read in the same sequence
+they were written.
+<P>
+Listing 10.2 shows an applet that creates a stream pipe and passes
+one end of the pipe to another applet. It demonstrates how to
+create a pipe and how to wait for an applet to appear. The <TT>SenderApplet</TT>
+first looks for its companion applet-<TT>ReaderApplet</TT>.
+Since the sender may be loaded before the reader, it must retry
+the search if it can't find the reader the first time it checks.
+It tries once every second for 30 seconds before deciding that
+the reader isn't going to be loaded.
+<P>
+Once the sender finds the reader, it passes one end of the stream
+pipe to the reader through a simple method call. If you find that
+you frequently need to pass stream pipes this way, you should
+define an interface line this:
+<BLOCKQUOTE>
+<PRE>
+public interface StreamPipeClient
+{
+	public void setInputStream(InputStream);
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+This frees the sender from having to know the exact class name
+of the reader. As you can see in Listing 10.2, the sender knows
+that the reader is an instance of <TT>ReaderApplet</TT>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.2&nbsp;&nbsp;Source Code for SenderApplet.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.io.*;
+
+// This applet creates a stream pipe and uses it to pass
+// data to another applet. It waits for the other applet to
+// be loaded, then invokes a method on that applet to pass it
+// the input side of the pipe.
+
+public class SenderApplet extends Applet implements Runnable
+{
+     protected PipedInputStream inStream;
+     protected PipedOutputStream outStream;
+
+     Thread appletThread;
+
+     public void init()
+     {
+// Create the pipe. It doesn't matter which end you create first, you just
+// pass the first end to the constructor of the other end.
+          try {
+               inStream = new PipedInputStream();
+               outStream = new PipedOutputStream(inStream);
+          } catch (Exception e) {
+               e.printStackTrace();
+          }
+     }
+
+     public void run()
+     {
+          Applet app = null;
+          AppletContext context = getAppletContext();
+
+          int tries = 0;     // how many times we've looked
+
+// Start looking for the reader applet
+
+          while (app == null) {
+
+// Try to locate an applet named &quot;reader&quot;
+
+               try {
+                    app = context.getApplet(&quot;reader&quot;);
+
+// If we get here and app isn't null, we've found it, break out
+// of this while loop
+                    if (app != null) break;
+               } catch (Exception e) {
+               }
+
+// We couldn't find the applet. If we've tried 30 times (at once per second)
+// we assume it isn't coming up.
+
+               tries++;
+               if (tries &gt; 30) {
+                    return;     // time out after 30 seconds
+               }
+
+// Sleep for a second before looking again
+               try {
+                    Thread.sleep(1000);
+               } catch (Exception insomnia) {
+               }
+          }
+
+// Now that we found the applet, cast it to a ReaderApplet so
+// we can invoke setInputStream
+
+          ReaderApplet reader = (ReaderApplet) app;
+
+// Give the ReaderApplet the input end of the stream
+
+          reader.setInputStream(inStream);
+
+          
+          while (true) {
+
+// Write byte values of 0-9 to the stream pipe over and over
+
+               for (int i=0; i &lt; 10; i++) {
+                    try {
+                         outStream.write(i);
+
+                         Thread.sleep(1000);
+
+                    } catch (Exception ignore) {
+                    }
+               }
+          }
+     }
+
+     public void start()
+     {
+          appletThread = new Thread(this);
+          appletThread.start();
+     }
+
+     public void stop()
+     {
+          appletThread.stop();
+          appletThread = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 10.3 shows the reader portion of the pipe demonstration.
+The sender applet had to perform a loop to wait for the reader
+to become active. The reader has a similar problem-it has to wait
+for the sender to give it the input end of the pipe. It looks
+at the input stream once every second, and once the input stream
+is no longer null, it starts reading data.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Rather than continually polling to see when the input stream is no longer <TT>null</TT>, the reader could use the wait/notify mechanism. Basically, if the input stream is <TT>null</TT>, the <TT>run</TT> method calls <TT>wait,</TT>which puts its thread to 
+sleep. Then, the <TT>setInputStream</TT> method could call <TT>notify</TT> to wake the <TT>run</TT> method back up so it can start reading again.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.3&nbsp;&nbsp;Source Code for ReaderApplet.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.io.*;
+
+// This applet is the companion to the SenderApplet. It receives
+// an input stream from the sender and begins reading one byte at
+// a time, changing a label on the screen to the string representation
+// of each byte read so you can see it in action.
+
+public class ReaderApplet extends Applet implements Runnable
+{
+     protected InputStream inStream;
+     protected Thread appletThread;
+     protected Label label;
+
+     public void init()
+     {
+          label = new Label(&quot;X&quot;);
+          add(label);
+     }
+
+// This method will be called by the SenderApplet when it locates this
+// applet.
+
+     public void setInputStream(InputStream inStream)
+     {
+          this.inStream = inStream;
+     }
+
+     public void run()
+     {
+
+// Wait for the input stream
+          while(inStream == null)
+          {
+               try {
+                    Thread.sleep(1000);
+               } catch (Exception insomnia) {
+               }
+          }
+
+// Start reading bytes
+          while (true) {
+
+               try {
+                    int ch = inStream.read();
+
+// If ch &lt; 0, we hit EOF, indicating some type of shutdown
+
+                    if (ch &lt; 0) return;
+
+// Update the label with the byte we just read
+                    label.setText(&quot;&quot;+ch);
+               } catch (Exception e) {
+                    return;
+               }
+          }
+     }
+
+     public void start()
+     {
+          appletThread = new Thread(this);
+          appletThread.start();
+     }
+
+     public void stop()
+     {
+          appletThread.stop();
+          appletThread = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="CreatingMultiClientPipes"><FONT SIZE=5 COLOR=#FF0000>
+Creating Multi-Client Pipes</FONT></A></H2>
+<P>
+One of the problems you occasionally run into when doing inter-process
+communication with streams is that sometimes you need to send
+the same message to a number of clients. It would be nice if you
+had a stream that would write a message to a set of streams rather
+than making you do multiple writes. All you need to do is create
+an output stream that keeps track of the output streams it needs
+to copy data to, and then create a write method that writes the
+same byte to every connected stream.
+<P>
+Listing 10.4 shows a <TT>MultiClientOutputStream</TT>
+class that enables you to connect up multiple output streams to
+a single output stream. Whenever you write to it, it copies the
+data you write to every stream that has been connected.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.4&nbsp;&nbsp;Source Code for MultiClientOutputStream
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.io.*;
+import java.util.*;
+
+// This class implements an output stream that sends its output
+// to any number of client output streams. It allows an object to
+// make one write request that gets forwarded to all streams
+// connected to this one.
+
+public class MultiClientOutputStream extends OutputStream
+{
+     protected Vector clients; // The streams connected to this one
+
+     public MultiClientOutputStream()
+     {
+          clients = new Vector();
+     }
+
+     public synchronized void write(int ch)
+     {
+          Enumeration e = clients.elements();
+
+// It is bad medicine to remove elements from a vector while you are
+// still enumerating through it, but we need to remove output streams
+// from the client vector when we get write errors on them. We create
+// a vector of outputstreams that need to be removed, but it only
+// gets created if at least one stream needs to be removed.
+// Once we finish iterating through the output streams, we remove the
+// dead ones.
+
+          Vector deadElements = null;
+          
+          while (e.hasMoreElements()) {
+
+               OutputStream out = (OutputStream) e.nextElement();
+
+               try {
+
+                    out.write(ch);
+
+               } catch (IOException deadStream) {
+
+// If we haven't created the deadElements vector yet, do it now
+                    if (deadElements == null) {
+                         deadElements = new Vector();
+                    }
+// Flag this stream as needing to be deleted
+                    deadElements.addElement(out);
+               }
+          }
+
+// If we had any dead elements, remove them from the vector of clients
+
+          if (deadElements != null) {
+               e = deadElements.elements();
+               while (e.hasMoreElements()) {
+                    clients.removeElement(e.nextElement());
+               }
+          }
+     }
+
+// addOutputStream connects a new stream up to the set of clients
+
+     public void addOutputStream(OutputStream out)
+     {
+          if (!clients.contains(out)) {
+               clients.addElement(out);
+          }
+     }
+
+// removeOutputStream removes a stream from the set of clients (we no
+// longer send output to it).
+
+     public void removeOutputStream(OutputStream out)
+     {
+          clients.removeElement(out);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 10.5 shows a small test program that illustrates the use
+of the <TT>MultiClientOutputStream</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.5&nbsp;&nbsp;Source Code for TestMulti.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.io.*;
+
+// This class demonstrates the use of the multi-client output stream.
+// It hooks both System.out and System.err to the multi-client stream.
+// It then writes information to the multi-client stream, which causes
+// the information to appear twice - once when it is copied to System.out,
+// the other time when it is copied to System.err.
+
+public class TestMulti extends Object
+{
+     public static void main(String[] args)
+     {
+          try {
+
+// Create the multi-client stream
+               MultiClientOutputStream out =
+                    new MultiClientOutputStream();
+
+// Connect System.out and System.err to the multi-client stream
+
+               out.addOutputStream(System.out);
+               out.addOutputStream(System.err);
+
+// Use a PrintStream to write so we can use print and println
+
+               PrintStream printme = new PrintStream(out);
+
+// Write out some test data, it should appear twice
+
+               printme.println(&quot;Hello there!&quot;);
+               printme.println(&quot;Is there an echo in here?&quot;);
+
+// Test out the fact that if you add a duplicate streams, it still
+// only gets one copy of the data.
+
+               out.addOutputStream(System.out);
+               printme.println(&quot;You should still be seeing double&quot;);
+
+// Test the disconnection of an output stream (stop writing to System.err)
+
+               out.removeOutputStream(System.err);
+               printme.println(&quot;You should only be seeing single&quot;);
+
+          } catch (Exception e) {
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 10.2 shows the output from the TestMulti application.
+<P>
+<A HREF="f10-2.html"><B>Figure 10.2 : </B><I>Using the </I><TT>MultiClientOutputStream</TT><I>,
+you can write data on multiple streams with a single write call</I>.</A>
+<H2><A NAME="SharingInformationwithSingletonObjects"><FONT SIZE=5 COLOR=#FF0000>
+Sharing Information with Singleton Objects</FONT></A></H2>
+<P>
+If you want to do inter-applet communications, you can take advantage
+of the fact that because all the applets run in the same instance
+of the virtual machine, all static class variables are shared
+between applets. This means you can implement singleton classes
+that are shared by all the applets. As you recall from Chapter
+9, a singleton is a class that has only one unique instance. Its
+constructor is hidden so classes cannot create new instances.
+You access the one instance of the class through a static method
+in the class such as <TT>instance()</TT>.
+You can create a singleton class that acts as a registry for all
+the applets in the runtime environment. If the registry is implemented
+as an observable, you can watch for new applets to become available.
+This allows two applets to sync up without having to constantly
+poll the <TT>getApplet</TT> method
+to see when the applet becomes available.
+<P>
+Listing 10.6 shows an implementation of the <TT>AppletRegistry</TT>
+class. The applet registry uses a hash table to store applets
+by name. Whenever you want to find an applet, you call <TT>findApplet</TT>
+with the name of the applet you're looking for:
+<BLOCKQUOTE>
+<PRE>
+Applet findit = AppletRegistry.instance().findApplet(&quot;FindMeApplet&quot;);
+</PRE>
+</BLOCKQUOTE>
+<P>
+When an applet starts up, it calls <TT>addApplet</TT>:
+<BLOCKQUOTE>
+<PRE>
+AppletRegistry.instance().addApplet(&quot;FindMeApplet&quot;, this);
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>AppletRegistry</TT> is observable.
+Whenever an applet is added or removed, it sends an update to
+its observers. This allows any object implementing the <TT>Observer</TT>
+interface to find out whenever an applet is added to the registry.
+This is a nice alternative to polling the registry for particular
+applets.
+<P>
+Since the registry sends a notification when applets are added
+or removed, it uses a simple event mechanism when it sends the
+notification. The object passed to the update method in the observers
+is an instance of <TT>AppletRegistryEvent</TT>.
+This object, in turn, contains the information specific to the
+event (the name of the applet, the applet itself, and whether
+it is being added or removed).
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.6&nbsp;&nbsp;Source Code for AppletRegistry.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.Applet;
+import java.util.*;
+
+// This class implements an applet registry where applets
+// can locate each other. It is an observable, so if you want
+// to wait for a particular class, you can be an observer. This
+// is better than the polling you have to do with getApplet.
+//
+// This class is implemented as a singleton, which means there
+// is only one. The single instance is kept in a protected
+// static variable and returned by the instance() method.
+
+public class AppletRegistry extends Observable
+{
+
+// The single copy of the registry
+     protected static AppletRegistry registry;
+
+// The table of applets
+     protected Hashtable applets;
+
+// Used for generating unique applet names
+     protected int nextUnique;
+
+     protected AppletRegistry()
+     {
+          applets = new Hashtable();
+          nextUnique = 0;
+     }
+
+// Returns the long instance of the registry. If there isn't a registry
+// yet, it creates one.
+
+     public synchronized static AppletRegistry instance()
+     {
+          if (registry == null) {
+               registry = new AppletRegistry();
+          }
+          return registry;
+     }
+
+// Adds a new applet to the registry - stores it in the table and
+// sends a notification to its observers.
+
+     public synchronized void addApplet(String name, Applet newApplet)
+     {
+          applets.put(name, newApplet);
+          setChanged();
+          notifyObservers(new AppletRegistryEvent(
+               AppletRegistryEvent.ADD_APPLET,
+               name, newApplet));
+     }
+
+// Adds a new applet to the registry - stores it in the table and
+// sends a notification to its observers. If uniqueName is false, the
+// applet's name is non-unique. Store the applet in a table with a
+// unique version of the name (appends &lt;#&gt; to the name where # is
+// a constantly increasing number).
+
+     public synchronized void addApplet(String name, Applet newApplet,
+          boolean uniqueName)
+     {
+          if (!uniqueName &amp;&amp; (applets.get(name) != null)) {
+               name = name + &quot;&lt;&quot;+nextUnique+&quot;&gt;&quot;;
+               nextUnique++;
+          }
+
+          applets.put(name, newApplet);
+          setChanged();
+          notifyObservers(new AppletRegistryEvent(
+               AppletRegistryEvent.ADD_APPLET,
+               name, newApplet));
+     }
+
+// removes an applet from the table and notifies the observers
+
+     public synchronized void removeApplet(Applet applet)
+     {
+          Enumeration e = applets.keys();
+
+          while (e.hasMoreElements()) {
+               Object key = e.nextElement();
+
+               if (applets.get(key) == applet) {
+                    applets.remove(key);
+                    setChanged();
+                    notifyObservers(new AppletRegistryEvent(
+                         AppletRegistryEvent.REMOVE_APPLET,
+                         (String)key, applet));
+                    return;
+               }
+          }
+     }
+
+// removes an applet from the table and notifies the observers
+
+     public synchronized void removeApplet(String name)
+     {
+          Applet applet = (Applet) applets.get(name);
+          if (applet == null) return;
+
+          applets.remove(name);
+
+          setChanged();
+          notifyObservers(new AppletRegistryEvent(
+               AppletRegistryEvent.REMOVE_APPLET,
+               name, applet));
+     }
+     
+// finds an applet by name, or returns null if not found
+
+     public Applet findApplet(String name)
+     {
+          return (Applet) applets.get(name);
+     }
+
+// lets you see all the applets in the registry
+
+     public Enumeration getApplets()
+     {
+          return applets.elements();
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 10.7 shows the implementation of the <TT>AppletRegistryEvent</TT>
+object used by the <TT>AppletRegistry</TT>.
+This is an example of how to set up an event that is passed to
+the <TT>update</TT> method in an observable's
+observers.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.7&nbsp;&nbsp;Source Code for AppletRegistryEvent.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.Applet;
+
+public class AppletRegistryEvent extends Object
+{
+     public final static int ADD_APPLET = 1;
+     public final static int REMOVE_APPLET = 2;
+
+     public int id;
+     public String appletName;
+     public Applet applet;
+
+     public AppletRegistryEvent()
+     {
+     }
+
+     public AppletRegistryEvent(int id, String appletName, Applet applet)
+     {
+          this.id = id;
+          this.appletName = appletName;
+          this.applet = applet;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Figure 10.3 shows the relationship between applets, the applet
+registry, and the observers of the registry.
+<P>
+<A HREF="f10-3.html"><B>Figure 10.3 : </B><I>Applets add themselves to the registry,
+which tells its observers about the new applets</I>.</A>
+<P>
+To take advantage of the <TT>AppletRegistry</TT>,
+a new applet must register itself by calling the <TT>addApplet</TT>
+method. Listing 10.8 shows a new version of the <TT>SenderApplet</TT>
+example from earlier in this chapter. The corresponding
+<TT>ReaderApplet</TT> only needs to
+call <TT>addApplet(&quot;reader&quot;, this)</TT>
+in its <TT>init</TT> method to support
+the registry.
+<P>
+Because the new sender applet uses the applet registry, it doesn't
+have to contin-ually check to see when the reader is loaded. Instead,
+it waits until it receives an <TT>AppletRegistryEvent</TT>
+that tells it that the reader applet has been added. Once it learns
+that the reader has been added, it passes one end of the pipe
+stream to the reader and starts a thread that writes data to the
+pipe.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.8&nbsp;&nbsp;Source Code for SenderApplet2.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.io.*;
+import java.util.*;
+
+// This applet creates a stream pipe and uses it to pass
+// data to another applet. It waits for the other applet to
+// be loaded, then invokes a method on that applet to pass it
+// the input side of the pipe.
+
+// Rather than using the standard getApplet method to check
+// for the other applet being loaded, it uses the AppletRegistry.
+// Also, it doesn't start its thread until the applet has been
+// started and an update has been received stating that the
+// other applet has been added.
+
+public class SenderApplet2 extends Applet implements Runnable, Observer
+{
+     protected PipedInputStream inStream;
+     protected PipedOutputStream outStream;
+
+     protected boolean started = false;
+
+     Thread appletThread = null;
+
+     public synchronized void init()
+     {
+// Create the pipe. It doesn't matter which end you create first, you just
+// pass the first end to the constructor of the other end.
+          try {
+               inStream = new PipedInputStream();
+               outStream = new PipedOutputStream(inStream);
+          } catch (Exception e) {
+               e.printStackTrace();
+          }
+
+// Add this applet to the registry
+          AppletRegistry.instance().addApplet(&quot;sender&quot;, this);
+
+// Start watching the registry
+          AppletRegistry.instance().addObserver(this);
+
+// If the reader applet is already in the registry, set it up
+
+          Applet applet = AppletRegistry.instance().findApplet(&quot;reader&quot;);
+
+          if (applet != null) {
+               initReader(applet);
+          }
+     }
+
+// update is called by the registry whenever an applet is added or removed.
+
+     public synchronized void update(Observable obs, Object ob)
+     {
+          if (!(ob instanceof AppletRegistryEvent)) return;
+
+          AppletRegistryEvent evt = (AppletRegistryEvent) ob;
+
+          if (evt.appletName.equals(&quot;reader&quot;)) {
+
+               initReader(evt.applet);
+          }
+     }
+
+     public void initReader(Applet applet)
+     {
+// Now that we found the applet, cast it to a ReaderApplet so
+// we can invoke setInputStream
+
+          ReaderApplet2 reader = (ReaderApplet2) applet;
+
+// Give the ReaderApplet the input end of the stream
+
+          reader.setInputStream(inStream);
+
+          appletThread = new Thread(this);
+
+          if (started) {
+               appletThread.start();
+          }
+     }
+
+     public void run()
+     {
+          while (true) {
+
+// Write byte values of 0-9 to the stream pipe over and over
+
+               for (int i=0; i &lt; 10; i++) {
+                    try {
+                         outStream.write(i);
+
+                         Thread.sleep(1000);
+
+                    } catch (Exception ignore) {
+                    }
+               }
+          }
+     }
+
+     public synchronized void start()
+     {
+          started = true;
+
+// If the applet thread has already been created, start it. This is
+// done to synchronize with the update method. We don't know if start
+// or update will be called first. This method sets the started flag to
+// true, but only starts the thread if it has been created.
+// The update method creates the thread, but only starts it if the
+// started flag is true.
+
+          if (appletThread != null) {
+               appletThread.start();
+          }
+     }
+
+     public void stop()
+     {
+          appletThread.stop();
+          appletThread = null;
+      }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The reader applet that corresponds to <TT>SenderApplet2</TT>
+is not too different from the original reader applet. The main
+difference is that it now adds itself to the applet registry.
+It still uses a polling mechanism to wait for its input stream.
+Again, you could use the wait/notify mechanism to keep from polling.
+Listing 10.9 shows the <TT>ReaderApplet2</TT>
+applet.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 10.9&nbsp;&nbsp;Source Code for ReaderApplet2.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.io.*;
+
+// This applet is the companion to the SenderApplet. It receives
+// an input stream from the sender and begins reading one byte at
+// a time, changing a label on the screen to the string representation
+// of each byte read so you can see it in action.
+
+public class ReaderApplet2 extends Applet implements Runnable
+{
+	protected InputStream inStream;
+	protected Thread appletThread;
+	protected Label label;
+
+	public void init()
+	{
+		label = new Label(&quot;X&quot;);
+		add(label);
+
+		AppletRegistry.instance().addApplet(&quot;reader&quot;, this);
+	}
+
+// This method will be called by the SenderApplet when it locates this
+// applet.
+
+	public void setInputStream(InputStream inStream)
+	{
+		this.inStream = inStream;
+	}
+
+	public void run()
+	{
+
+// Wait for the input stream
+		while(inStream == null)
+		{
+			try {
+				Thread.sleep(1000);
+			} catch (Exception insomnia) {
+			}
+		}
+
+// Start reading bytes
+		while (true) {
+
+			try {
+				int ch = inStream.read();
+
+// If ch &lt; 0, we hit EOF, indicating some type of shutdown
+
+				if (ch &lt; 0) return;
+
+// Update the label with the byte we just read
+				label.setText(&quot;&quot;+ch);
+			} catch (Exception e) {
+				return;
+			}
+		}
+	}
+
+	public void start()
+	{
+		appletThread = new Thread(this);
+		appletThread.start();
+	}
+
+	public void stop()
+	{
+		appletThread.stop();
+		appletThread = null;
+	}
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+
+<CENTER><P><A HREF="ch9.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch11.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

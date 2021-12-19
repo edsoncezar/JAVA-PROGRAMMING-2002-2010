@@ -1,0 +1,206 @@
+<HTML>
+<HEAD>
+<TITLE>Avoid optional clauses in semantic contracts</TITLE>
+<META name="description" content="An object-oriented design idiom from Interface Design: Best Practices in Object-Oriented API Design in Java by Bill Venners.">
+<META name="keywords" content="Java Design, Java Book, Object Oriented Design, Thread Safe Design">
+<LINK rel="stylesheet" type="text/css" href="http://www.artima.com/artima.css">
+</HEAD>
+<BODY text="#000000" alink="#006666">
+<TABLE width="100%" cellspacing="0">
+<TR>
+<TD align="left" valign="bottom">
+<A href="http://www.artima.com/index.jsp"><IMG src="..\images\ac.gif" alt="artima.com" border="0" width="150" height="31"></A>
+</TD>
+<TD align="right">
+<a href="http://www.artima.com/cgi-bin/redirect.cgi/306beeb6?REGION=Cyan&CAMPAIGN=Default&ACCOUNT=Artima&BANNER=ObjDesWkshp" ><img src="..\cgi-bin\getimage.cgi\306beeb6\region=cyan&campaign=default&account=artima&banner" border=0 width=468 height=60 alt="ad" ></a>
+</TD>
+</TR>
+</TABLE>
+<TABLE width="100%" bgcolor="#006666">
+<TR>
+<TD align="center">
+<DIV class="ml">
+<A href="http://www.artima.com/search.html" class="hl">Search</A>&nbsp;|
+<A href="http://www.artima.com/java/index.html" class="hl">Java</A>&nbsp;|
+<A href="http://www.artima.com/javadesign/index.html" class="hl">Design</A>&nbsp;|
+<A href="http://www.artima.com/jvm/index.html" class="hl">JVM</A>&nbsp;|
+<A href="http://www.artima.com/jini/index.html" class="hl">Jini</A>&nbsp;|
+<A href="http://www.artima.com/forums/index.jsp" class="hl">Forums</A>&nbsp;|
+<A href="http://www.artima.com/javaseminars/index.html" class="hl">Seminars</A>&nbsp;|
+<A href="http://lists.artima.com/mailman/listinfo/artima-newsletter/" class="hl">Subscribe</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+<BR>
+<DIV class="vegies">
+<DIV class="tc">
+<SPAN class="sts">Interface Design by Bill Venners</SPAN><BR>
+<SPAN class="ts">Avoid optional clauses in semantic contracts</SPAN><BR>
+</DIV>
+
+<!--BEGIN_PRECISE_OBJECT_LINKS-->
+<CENTER>
+<FONT size="1" face="geneva, arial, sans-serif">
+<STRONG>
+<A href="index.html">Interface&nbsp;Design</A>&nbsp;|
+<A href="contents.html">Contents</A>&nbsp;|
+<A href="subfulfillsuper.html">Previous</A>&nbsp;|
+<A href="deprecation.html">Next</A>
+</STRONG>
+</FONT>
+</CENTER>
+<!--END_PRECISE_OBJECT_LINKS-->
+
+<P>
+Perhaps compare Iterator with LinkMap and ModifiableLinkMap, rather
+than having Removerator.
+
+<H2>Optional Semantics</H2>
+<UL>
+<LI>
+Guideline: <EM>Avoid optional clauses in semantic contracts.</EM>
+<LI>
+The <CODE>iterator</CODE> interface from <CODE>java.util</CODE>:
+<PRE>
+package java.util;
+
+public interface Iterator {
+
+    // Returns true if the iteration has more elements.
+    boolean hasNext();
+
+    // Returns the next element of the iteration.
+    Object next();
+
+    // Removes from the underlying collection the last
+    // element removed by the iterator (optional
+    // operation).
+    void remove();
+}
+</PRE>
+<LI>
+What happens if you call <CODE>remove()</CODE> on an object that
+doesn't support it?
+<BLOCKQUOTE>
+You get an <CODE>UnsupportedOperationException</CODE>
+</BLOCKQUOTE>
+<LI>
+Thus, <CODE>remove()</CODE> could have been named, <CODE>mightRemove()</CODE>
+<LI>
+I have no way to know whether this object can <CODE>remove()</CODE> for
+me, without calling the method.
+</UL>
+
+<HR align="left" width="100%" size="4" noshade>
+<H2>Why Avoid Optional Semantics?</H2>
+<UL>
+<LI>
+A type should mean: "what an object can do for me."
+<LI>
+Here's a different approach:
+<PRE>
+package java.util;
+
+public interface Iterator {
+
+    // Returns true if the iteration has more elements.
+    boolean hasNext();
+
+    // Returns the next element of the iteration.
+    Object next();
+}
+
+package java.util;
+
+public interface Removerator extends Iterator {
+
+    // Removes from the underlying collection the last
+    // element removed by the iterator
+    void remove();
+}
+</PRE>
+<LI>
+Here, <CODE>Removerator</CODE> means an <CODE>Iterator</CODE> that can
+remove elements from the underlying collection
+<LI>
+Optional code is likely slower than types code, because throwing exceptions
+is slow
+<LI>
+Optional code robs you of strong typing at compile time that can help you
+catch errors sooner.
+<LI>
+Optional code has less meaning (less semantically rich) than
+types code (Inaccurate Menu)
+</UL>
+
+<HR align="left" width="100%" size="4" noshade>
+<H2>Collections API Design FAQ</H2>
+<UL>
+<LI>
+<STRONG>Why don't you support immutability directly in the core collection
+interfaces so that you can do away with optional operations (and
+<CODE>UnsupportedOperationException</CODE>)?</STRONG>
+
+<P>
+This is the most controversial design decision in the whole API. Clearly,
+static (compile time) type checking is highly desirable, and is the norm in
+Java. We would have supported it if we believed it were feasible.
+Unfortunately, attempts to achieve this goal cause an explosion in the size
+of the interface hierarchy, and do not succeed in eliminating the need
+for runtime exceptions (though they reduce it substantially).
+
+<P>
+Doug Lea, who wrote a popular Java collections package that did reflect
+mutability distinctions in its interface hierarchy, no longer believes it is
+a viable approach, based on user experience with his collections package. In
+his words (from personal correspondence) "Much as it pains me to say it,
+strong static typing does not work for collection interfaces in Java."
+
+<P>
+...
+
+<P>
+When all was said and done, we felt that it was a sound engineering compromise
+to sidestep the whole [exploding interfaces] issue by providing a very small
+set of core interfaces that can throw a runtime exception.
+<P>
+
+<LI>
+<STRONG>Won't programmers have to surround any code that calls optional
+operations with a try-catch clause in case they throw an
+<CODE>UnsupportedOperationException</CODE>?</STRONG>
+
+<P>
+It was never our intention that programs should catch these exceptions: that's
+why they're unchecked (runtime) exceptions. They should only arise as a result
+of programming errors, in which case, your program will halt due to the
+uncaught exception.
+
+</UL>
+
+Perhaps use <CODE>Place</CODE> and <CODE>ModifiablePlace</CODE> as example, instead of <CODE>Removerator</CODE>.
+
+</TD>
+</TR>
+
+</DIV>
+<HR width="100%">
+<TABLE width="100%">
+<TR>
+<TD align="left">
+<DIV class="sp">
+Last Updated: Sunday, March 3, 2002<BR>
+<A href="http://www.artima.com/copyright.html">Copyright</A> &copy; 1996-2002 Artima Software, Inc. All Rights Reserved.
+</DIV>
+</TD>
+<TD align="right">
+<DIV class="sp">
+URL: http://www.artima.com/interfacedesign/Optional.html<BR>
+Artima.com is created by <A href="http://www.artima.com/consulting.html">Bill Venners</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+</BODY>
+</HTML>

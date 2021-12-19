@@ -1,0 +1,1282 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 16 -- Creating 3-Tier Distributed Applications with RMI
+</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;16</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Creating 3-Tier Distributed Applications
+with RMI</FONT></H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#CreatingTierApplications">
+Creating 3-Tier Applications</A>
+<LI><A HREF="#RMIFeatures">
+RMI Features</A>
+<LI><A HREF="#CreatinganRMIServer">
+Creating an RMI Server</A>
+<UL>
+<LI><A HREF="#DefiningaRemoteInterface">
+Defining a Remote Interface</A>
+<LI><A HREF="#CreatingtheServerImplementation">
+Creating the Server Implementation</A>
+<LI><A HREF="#CreatingtheStubClass">
+Creating the Stub Class</A>
+</UL>
+<LI><A HREF="#CreatinganRMIClient">
+Creating an RMI Client</A>
+<LI><A HREF="#CreatingPeertoPeerRMIApplications">
+Creating Peer-to-Peer RMI Applications</A>
+<LI><A HREF="#GarbageCollectionRemoteObjectsandPeertoPeer">
+Garbage Collection, Remote Objects, and Peer-to-Peer</A>
+</UL>
+
+<HR>
+<P>
+There are many ways that objects can communicate with one another
+over a network. Traditionally, objects would communicate with
+one another using sockets and a custom protocol. Remote procedure
+calls have also been a popular communication mechanism for the
+past few years. Java provides two additional mechanisms for remote
+object-to-object communication. Java provides an interface into
+the CORBA-distributed object architecture, which is discussed
+in <A HREF="ch17.htm" >Chapter 17</A>, &quot;Creating CORBA Clients.&quot; Remote Method
+Invocation (RMI) provides a very simple method for one Java object
+to invoke a method in another Java object across a network with
+very little extra work. Unlike many remote communication systems
+that require you to describe the remote methods in a separate
+file, RMI works right off existing objects, providing seamless
+integration.
+<H2><A NAME="CreatingTierApplications"><FONT SIZE=5 COLOR=#FF0000>
+Creating 3-Tier Applications</FONT></A></H2>
+<P>
+The 2-tier model for applications is the most common model in
+use today. Many application designers think only in terms of the
+database and the application.
+<P>
+The availability of 2-tier application builders has helped perpetuate
+this philosophy. The 2-tier model is not a &quot;bad thing,&quot;
+but there are cases in which the 3-tier model would be a better
+choice.
+<P>
+Just to review, the 2-tier model consists of an application and
+a database. A 3-tier model consists of an application, a layer
+of business logic, and a database. Once you break out of the 2-tier
+mold, you often start adding multiple tiers. Figure 16.1 illustrates
+the difference between a 2-tier and 3-tier application design.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f16-1.gif"><B>Figure 16.1 : </B><I>A 3-tier design adds an extra layer of
+abstraction to improve reuse</I>.</A>
+<P>
+You can also divide your application into an application logic
+tier and a presentation tier (the user interface). In a 2-tier
+model, the business logic is part of the application. In smaller
+applications, this is not a problem because there may be only
+one application implementing a particular business process.
+<P>
+In larger systems, however, many applications use the same areas
+of business logic. In a 2-tier environment, this means that the
+business logic is replicated across every application. If you
+change the business logic, you must change every application.
+<P>
+Durable software systems are designed from the ground up with
+change in mind. A good designer creates modular components with
+well-defined interfaces so that any single component can be changed
+without affecting the rest of the system. The 3-tier and multi-tier
+models are simply the results of modular design.
+<P>
+Before you go off thinking that creating 3-tier designs is simple,
+think again. Identifying business processes in a large company
+and reducing them to a set of methods is not a task for the fainthearted.
+<P>
+Many companies do not have their business logic documented as
+a series of processes. Instead, it is only implied in the code
+of the applications. The identification of business processes
+and business logic is a subject for another book, however.
+<P>
+In practice, the line between 2-tier and 3-tier is often rather
+fuzzy. You may have what is essentially a 2-tier application whose
+user interface is broken out into a separate module.
+<P>
+The application logic and the business logic are still intermixed,
+but a portion of the application is distributed. Just because
+you can't get a handle on the actual business logic doesn't mean
+you can't still work at making your software more modular and
+add the benefits of distributed computing.
+<P>
+RMI is very useful for separating an application from its user
+interface. You define the methods that comprise the interactions
+between the user interface and the client, and then make these
+interactions through remote method invocation (RMI). This allows
+an applet to implement the user interface for an application running
+on a server somewhere, without developing a custom communications
+system.
+<H2><A NAME="RMIFeatures"><FONT SIZE=5 COLOR=#FF0000>
+RMI Features</FONT></A></H2>
+<P>
+RMI is like a remote procedure call (RPC) mechanism in other languages.
+One object makes a method call into an object on another machine
+and gets a result back. Like most RPC systems, RMI requires that
+the object whose method is being invoked (the server) must already
+be up and running.
+<P>
+Remote methods are defined by remote interfaces. That is, a remote
+interface defines a set of methods that can be called remotely.
+Any object that wants some of its methods to be called remotely
+must use one or more remote interfaces. 
+<P>
+An object that uses a remote interface is called a <I>server</I>.
+An object that calls a remote method is called a <I>client</I>.
+An object can be both a client and a server: These names indicate
+only who is calling in a particular instance and who is being
+called.
+<P>
+Once you define a remote interface and create an object that uses
+the interface, you still need a way for the client to invoke methods
+on the server. Unfortunately, it is not quite as easy as instantiating
+a server object. 
+<P>
+You need to create a <I>stub</I> for the client. An object's stub
+is a remote view of that object in that it contains only the remote
+methods of the object. The stub runs on the client side and is
+the representative of the remote object in the client's data space.
+<P>
+The client invokes methods on the stub and the stub then invokes
+the methods on the remote object. This allows any client to invoke
+remote methods through normal Java method invocation. A stub is
+also called a <I>proxy</I>. Figure 16.2 shows the relationship
+between a client, a server, and a stub.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f16-2.gif"><B>Figure 16.2 : </B><I>A stub invokes remote methods on behalf
+of a client</I>.</A>
+<P>
+RMI adds an extra feature that most RPC systems do not have. Remote
+objects can be passed as parameters in remote method calls. When
+you pass a remote object as a parameter, you actually pass a stub
+for the object.
+<P>
+The real object always stays on the machine where it was originally
+started. The stub that is passed then invokes methods back to
+the original object. Stubs can also be passed as parameters and
+work the same way. Figure 16.3 illustrates how a client passes
+a stub to a server so that the server can invoke methods on the
+client.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f16-3.gif"><B>Figure 16.3 : </B><I>A client can pass a stub to a server so
+the server can invoke methods on the client</I>.</A>
+<P>
+In a distributed system, you need a way for clients to find the
+servers they need. RMI provides a simple name lookup object that
+allows a client to get a stub for a particular server based on
+the server's name. The naming service that comes with the RMI
+system is fairly simplistic but is useful for most cases. Figure
+16.4 shows how a client uses the naming service to find a server.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f16-4.gif"><B>Figure 16.4 : </B><I>The naming service allows a client to locate
+a server by name</I>.</A>
+<H2><A NAME="CreatinganRMIServer"><FONT SIZE=5 COLOR=#FF0000>
+Creating an RMI Server</FONT></A></H2>
+<P>
+To create an object whose methods can be called remotely (a server
+object), you need to create a remote interface. All remote interfaces
+must extend the <TT>java.rmi.Remote</TT>
+interface.
+<H3><A NAME="DefiningaRemoteInterface">
+Defining a Remote Interface</A></H3>
+<P>
+When you define a remote interface, pay special attention to the
+interaction between the objects. Remote invocations carry much
+heavier penalties than local invocations. Try to minimize the
+number of method invocations needed to get the job done.
+<P>
+Ideally, you want to do things with a single method call. Every
+method in a remote interface can throw a <TT>java.rmi.RemoteException</TT>.
+This exception is thrown by the underlying RMI system whenever
+there is an error in sending or receiving information.
+<P>
+Listing 16.1 shows a sample remote interface for a simple banking
+application.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.1&nbsp;&nbsp;Source Code for Banking.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+
+// This interface represents a set of remote methods for a
+// banking service. All money amounts are given in cents, so
+// one dollar is represented as 100.
+
+public interface Banking extends java.rmi.Remote
+{
+
+// getBalance returns the current balance in the account
+     public int getBalance(Account account)
+          throws java.rmi.RemoteException, BankingException;
+
+// withdraw subtracts an amount from an account
+     public void withdraw(Account account, int amount)
+          throws java.rmi.RemoteException, BankingException;
+
+// deposit adds an amount to the account
+     public void deposit(Account account, int amount)
+          throws java.rmi.RemoteException, BankingException;
+
+// transfer subtracts an amount from one account and
+// adds it to another.
+     public void transfer(Account fromAccount, Account toAccount,
+          int amount)
+          throws java.rmi.RemoteException, BankingException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Notice that the account information is encapsulated in an <TT>Account</TT>
+object. This allows you to change the way you represent accounts
+without modifying the interface. Of course, you may have to change
+the client and server to understand the new account format.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Try to encapsulate related parameters into a single object, especially if they are subject to change. If a position is given by an x,y coordinate, encapsulate it in a <TT>Position</TT> object so you can later change the position to be x,y,z or even polar 
+coordinates. This allows you to keep the remote interface the same.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Listing 16.2 shows the <TT>Account</TT>
+object used in the <TT>Banking</TT>
+interface.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.2&nbsp;&nbsp;Source Code for Account.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+
+// This class contains the information that defines
+// a banking account.
+
+public class Account extends Object
+{
+// Flags to indicate whether the account is savings or checking
+     public static final int CHECKING = 1;
+     public static final int SAVINGS = 2;
+
+     public String id;     // Account id, or account number
+     public String password;     // password for ATM transactions
+     public int which;     // is this checking or savings
+
+     public Account()
+     {
+     }
+
+     public Account(String id, String password, int which)
+     {
+          this.id = id;
+          this.password = password;
+          this.which = which;
+     }
+
+     public String toString()
+     {
+          return &quot;Account { &quot;+id+&quot;,&quot;+password+&quot;,&quot;+which+&quot; }&quot;;
+     }
+
+// Tests equality between accounts.
+     public boolean equals(Object ob)
+     {
+          if (!(ob instanceof Account)) return false;
+          Account other = (Account) ob;
+
+          return id.equals(other.id) &amp;&amp;
+               password.equals(other.password) &amp;&amp;
+               (which == other.which);
+     }
+
+// Returns a hash code for this object
+
+     public int hashCode()
+     {
+          return id.hashCode()+password.hashCode()+which;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+When encapsulating similar data into an object, always define the <TT>equals</TT> and <TT>hashCode</TT> methods. You may occasionally want to store the objects in hash tables and other structures, and without these methods, two objects containing identical 
+
+data look like two separate objects.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Listing 16.3 shows the <TT>BankingException</TT>
+class for the <TT>Banking</TT> interface.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.3&nbsp;&nbsp;Source Code for BankingException.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+
+// Defines a generic banking exception for the banking interface.
+
+public class BankingException extends Exception
+{
+     public BankingException()
+     {
+     }
+
+     public BankingException(String problem)
+     {
+          super(problem);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Don't lump all your exceptions into one big exception, hiding the specific information in a string. Create exceptions specifically for each separate case. You don't want to parse the exception string to find out what kind of exception it was. Instead, you 
+
+should be using <TT>instanceof</TT>.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+For a simple interface like the <TT>Banking</TT>
+interface, there are only two specific exceptions defined: <TT>InvalidAccountException</TT>
+and <TT>InsufficientFundsException</TT>.
+Listings 16.4 and 16.5 show these exceptions.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.4&nbsp;&nbsp;Source Code for InvalidAccountException.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+
+// Defines an exception for an invalid account and indicates
+// which account was invalid. Also allows an error string.
+
+public class InvalidAccountException extends BankingException
+{
+public Account account;
+// which account was invalid
+
+public InvalidAccountException()
+{
+}
+
+public InvalidAccountException(String str)
+{
+super(str);
+}
+
+public InvalidAccountException(Account account)
+{
+this.account = account;
+}
+
+public InvalidAccountException(Account account, String str)
+{
+super(str);
+this.account = account;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.5&nbsp;&nbsp;Source Code for InsufficientFundsException.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+
+// Defines a simple Insufficent Funds exception for the
+// Banking interface.
+
+public class InsufficientFundsException extends BankingException
+{
+     public InsufficientFundsException()
+     {
+     }
+
+     public InsufficientFundsException(String problem)
+     {
+          super(problem);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="CreatingtheServerImplementation">
+Creating the Server Implementation</A></H3>
+<P>
+The remote interface defines only which methods in an object are
+remote methods. You must still implement the remote object itself.
+<P>
+The implementation of the remote methods is straightforward: It
+is no different from implementing normal methods. Apart from the
+implementation of the methods, you need some startup code to create
+a security manager, create the remote objects, and register them
+with the <TT>Naming</TT> service.
+<P>
+When a server registers itself to the <TT>Naming</TT>
+service, it can call either the <TT>bind</TT>
+or <TT>rebind</TT> methods. The <TT>bind</TT>
+method throws an <TT>AlreadyBoundException</TT>
+if you try to bind an existing name to an object. The <TT>rebind</TT>
+method simply forgets about the old name association and binds
+the name to the new object.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+It is possible for a client or server to send you malicious objects. You should exercise extreme caution when interacting with clients or servers that you did not write.</BLOCKQUOTE>
+<BLOCKQUOTE>
+The RMI system includes a <TT>StubSecurityManager</TT> that implements some security measures to help protect your applications. If you run RMI servers or clients as stand-alone programs and you don't have your own security manager, make sure you set 
+<TT>StubSecurityManager</TT>. The default for stand-alone programs is to have no security manager.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Listing 16.6 shows a sample implementation of a remote banking
+object.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.6&nbsp;&nbsp;Source Code for BankingImpl.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+import java.rmi.Naming;
+import java.rmi.server.UnicastRemoteServer;
+import java.rmi.server.StubSecurityManager;
+
+import java.util.*;
+
+// This class implements a remote banking object. It sets up
+// a set of dummy accounts and allows you to manipulate them
+// through the Banking interface.
+//
+// Accounts are identified by the combination of the account id,
+// the password and the account type. This is a quick and dirty
+// way to work, and not the way a bank would normally do it, since
+// the password is not part of the unique identifier of the account.
+
+public class BankingImpl extends UnicastRemoteServer implements Banking
+{
+     public Hashtable accountTable;
+
+// The constructor creates a table of dummy accounts.
+
+     public BankingImpl()
+     throws java.rmi.RemoteException
+     {
+          accountTable = new Hashtable();
+
+          accountTable.put(
+               new Account(&quot;AA1234&quot;, &quot;1017&quot;, Account.CHECKING),
+               new Integer(50000));     // $500.00 balance
+
+          accountTable.put(
+               new Account(&quot;AA1234&quot;, &quot;1017&quot;, Account.SAVINGS),
+               new Integer(148756));     // $1487.56 balance
+
+          accountTable.put(
+               new Account(&quot;AB5678&quot;, &quot;4456&quot;, Account.CHECKING),
+               new Integer(7742));     // $77.32 balance
+
+          accountTable.put(
+               new Account(&quot;AB5678&quot;, &quot;4456&quot;, Account.SAVINGS),
+               new Integer(32201));     // $322.01 balance
+     }
+
+// getBalance returns the amount of money in the account (in cents).
+// If the account is invalid, it throws an InvalidAccountException
+
+     public int getBalance(Account account)
+     throws java.rmi.RemoteException, BankingException
+     {
+
+// Fetch the account from the table
+          Integer balance = (Integer) accountTable.get(account);
+
+// If the account wasn't there, throw an exception
+          if (balance == null) {
+               throw new InvalidAccountException(account);
+          }
+
+// Return the account's balance
+          return balance.intValue();
+     }
+
+// withdraw subtracts an amount from the account's balance. If
+// the account is invalid, it throws InvalidAccountException.
+// If the withdrawal amount exceeds the account balance, it
+// throws InsufficientFundsException.
+
+     public synchronized void withdraw(Account account, int amount)
+     throws java.rmi.RemoteException, BankingException
+     {
+
+// Fetch the account
+          Integer balance = (Integer) accountTable.get(account);
+
+// If the account wasn't there, throw an exception
+          if (balance == null) {
+               throw new InvalidAccountException(account);
+          }
+
+// If we are trying to withdraw more than is in the account,
+// throw an exception
+
+          if (balance.intValue() &lt; amount) {
+               throw new InsufficientFundsException();
+          }
+
+// Put the new balance in the account
+
+          accountTable.put(account, new Integer(balance.intValue() -
+               amount));
+     }
+
+// Deposit adds an amount to an account. If the account is invalid
+// it throws an InvalidAccountException
+
+     public synchronized void deposit(Account account, int amount)
+     throws java.rmi.RemoteException, BankingException
+     {
+
+// Fetch the account
+          Integer balance = (Integer) accountTable.get(account);
+
+// If the account wasn't there, throw an exception
+          if (balance == null) {
+               throw new InvalidAccountException(account);
+          }
+
+// Update the account with the new balance
+          accountTable.put(account, new Integer(balance.intValue() +
+               amount));
+     }
+
+// Transfer subtracts an amount from fromAccount and adds it to toAccount.
+// If either account is invalid it throws InvalidAccountException.
+// If there isn't enough money in fromAccount it throws
+// InsufficientFundsException.
+
+     public synchronized void transfer(Account fromAccount,
+          Account toAccount, int amount)
+     throws java.rmi.RemoteException, BankingException
+     {
+
+// Fetch the from account
+          Integer fromBalance = (Integer) accountTable.get(fromAccount);
+
+// If the from account doesn't exist, throw an exception
+          if (fromBalance == null) {
+               throw new InvalidAccountException(fromAccount);
+          }
+
+// Fetch the to account
+          Integer toBalance = (Integer) accountTable.get(toAccount);
+
+// If the to account doesn't exist, throw an exception
+          if (toBalance == null) {
+               throw new InvalidAccountException(toAccount);
+          }
+
+// Make sure the from account contains enough money, otherwise throw
+// an InsufficientFundsException.
+
+          if (fromBalance.intValue() &lt; amount) {
+               throw new InsufficientFundsException();
+          }
+
+          
+// Subtract the amount from the fromAccount
+          accountTable.put(fromAccount,
+               new Integer(fromBalance.intValue() - amount));
+
+// Add the amount to the toAccount
+          accountTable.put(toAccount,
+               new Integer(toBalance.intValue() + amount));
+     }
+
+     public static void main(String args[])
+     {
+
+// Need a security manager to prevent malicious stubs
+          System.setSecurityManager(new StubSecurityManager());
+
+          try {
+// Create the bank
+               BankingImpl bank = new BankingImpl();
+
+// Register the bank with the naming service.
+               Naming.rebind(&quot;NetBank&quot;, bank);
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception: &quot;+e);
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="CreatingtheStubClass">
+Creating the Stub Class</A></H3>
+<P>
+You don't have to create the stub class for your remote object
+by hand. The RMI system provides a special utility to automatically
+generate the stub class for you.
+<P>
+To generate the stubs for the <TT>BankingImpl</TT>
+class, the <TT>BankingImpl.class</TT>
+file should be stored in a directory called <TT>banking</TT>
+somewhere on your system. Go to the parent directory of the <TT>banking</TT>
+directory and type:
+<BLOCKQUOTE>
+<PRE>
+rmic -d . banking.BankingImpl
+</PRE>
+</BLOCKQUOTE>
+<P>
+This creates the stubs for the <TT>BankingImpl</TT>
+class and also puts them in the <TT>banking
+<BR>
+</TT>directory.
+<H2><A NAME="CreatinganRMIClient"><FONT SIZE=5 COLOR=#FF0000>
+Creating an RMI Client</FONT></A></H2>
+<P>
+Creating an RMI client is a simple task. When you need to access
+a remote object, you call the <TT>lookup</TT>
+method in the <TT>Naming</TT> service
+(also called the <I>registry</I>). 
+<P>
+The <TT>lookup</TT> method returns
+a stub for the remote object. The contains all the remote methods
+defined for that object. If the stub is not on the client system,
+the RMI system tries to download the stubs from the remote object's
+host or from wherever the remote object was loaded. 
+<P>
+Listing 16.7 shows a very simple application that remotely invokes
+methods in the <TT>BankingImpl</TT>
+object.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.7&nbsp;&nbsp;Source Code for BankingClient.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.rmi.server.StubSecurityManager;
+import java.rmi.Naming;
+
+import banking.*;
+
+// This program tries out some of the methods in the BankingImpl
+// remote object.
+
+public class BankingClient
+{
+
+     public static void main(String args[])
+     {
+
+// Always set up a security manager when running RMI
+          System.setSecurityManager(new StubSecurityManager());
+
+// Create an Account object for the account we are going to access.
+
+          Account myAccount = new Account(
+               &quot;AA1234&quot;, &quot;1017&quot;, Account.CHECKING);
+
+          try {
+
+// Get a stub for the BankingImpl object (the stub implements the
+// Banking interface).
+
+               Banking bank = (Banking)Naming.lookup(&quot;NetBank&quot;);
+
+// Check the initial balance
+               System.out.println(&quot;My balance is: &quot;+
+                    bank.getBalance(myAccount));
+
+// Deposit some money
+               bank.deposit(myAccount, 50000);
+
+// Check the balance again
+               System.out.println(&quot;Deposited $500.00, balance is: &quot;+
+                    bank.getBalance(myAccount));
+
+// Withdraw some money
+               bank.withdraw(myAccount, 25000);
+
+// Check the balance again
+               System.out.println(&quot;Withdrew $250.00, balance is: &quot;+
+                    bank.getBalance(myAccount));
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception: &quot;+e);
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="CreatingPeertoPeerRMIApplications"><FONT SIZE=5 COLOR=#FF0000>
+Creating Peer-to-Peer RMI Applications</FONT></A></H2>
+<P>
+Distributed systems that support only a pure client/server model
+sometimes give system designers fits. In many applications, such
+as banking, the pure client/server model fits quite well, since
+the client always initiates requests, and the server handles them
+and passes the data back until the transaction is completed. 
+<P>
+In other applications, you need the server to be able to invoke
+methods in the client as well. This is called peer-to-peer since
+both objects take on the role of client and server.
+<P>
+The observer-observable model is often needed in distributed systems.
+The interaction in the model occurs in both directions. Consequently,
+you need the observer to behave as a client to register itself
+with the observable and then behave as a server so the observable
+can invoke the <TT>update</TT> method
+in the observer.
+<P>
+If an object can only be a client or a server and not both, you
+can still implement the observer-observable model but the methods
+are ugly. The observer could periodically poll the observable
+to see whether it changes. But this would put a tremendous burden
+on the observable, since it spends a lot of time telling the observers
+that it hasn't changed.
+<P>
+The observable could also set up a <TT>waitForChange</TT>
+method that blocks until the observable changes. This could result
+in a large number of threads on the observable just sitting around
+waiting for a change.
+<P>
+It consumes less network resources than the polling method because
+there are no &quot;have you changed?&quot; &quot;No.&quot; messages
+flying back and forth. This is still a less-than-optimal solution,
+however.
+<P>
+For one thing, suppose the observable changes in the time that
+it takes the observer to call <TT>waitForChange</TT>
+again. Should it keep track of whether things have changed since
+the last call? If so, that's extra work. If not, the observer
+may miss changes.
+<P>
+The RMI system allows an object to be both a client and a server,
+relieving you of many of these headaches. Typically, one object
+starts out as the server and one starts out as the client. At
+some point, the client invokes a method on the server and passes
+a stub back to the client, and the client also becomes a server.
+<P>
+You might, for example, have a server that sends periodic updates
+of information. A client registers with the server telling it
+what information it wants and passes the client's stub to the
+server. Whenever the server has new information, it invokes a
+method in what was originally the client via the stub. Figure
+16.5 shows the relationship between two objects in a peer-to-peer
+stock-quoting system.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f16-5.gif"><B>Figure 16.5 : </B><I>The stock-quote server uses RMI to send
+quotes to its clients</I>.</A>
+<P>
+Listing 16.8 shows a remote interface for a stock-quoting system
+that invokes a method in its clients to deliver stock quotes.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.8&nbsp;&nbsp;Source Code for StockQuoteServer.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package stocks;
+
+// Defines a remote interface for a stock quoting system.
+// Stock quotes are delivered to remote objects through the
+// StockQuoteClient interface.
+
+public interface StockQuoteServer extends java.rmi.Remote
+{
+
+// addWatch tells the server that the client wants quotes for
+// a certain stock.
+
+     public void addWatch(StockQuoteClient client, String stock)
+          throws java.rmi.RemoteException, StockQuoteException;
+
+// removeWatch tells the server that the client no longer wants
+// to watch a certain stock.
+
+     public void removeWatch(StockQuoteClient client, String stock)
+          throws java.rmi.RemoteException, StockQuoteException;
+
+// removeClient tells the server that the client no longer wants
+// to watch any stocks.
+
+     public void removeClient(StockQuoteClient client)
+          throws java.rmi.RemoteException, StockQuoteException;
+
+// getStockList returns an array of all the stocks that can be watched
+
+     public String[] getStockList()
+          throws java.rmi.RemoteException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 16.9 shows the StockQuoteClient interface that the StockQuoteServer
+uses to notify its clients of new quotes
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.9&nbsp;&nbsp;Source Code for StockQuoteClient.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package stocks;
+
+// Defines a callback interface for the StockQuoteServer so
+// it can notify its clients of new stock quotes.
+
+public interface StockQuoteClient extends java.rmi.Remote
+{
+     public void quote(StockQuote quote)
+     throws java.rmi.RemoteException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Rather than putting the individual elements of a stock quote into
+the method definition, the stock quotes are passed around in a
+StockQuote object. If the system expands the information in the
+stock quote, it still works with the existing clients, as long
+as it doesn't remove or rename any fields. This lets you build
+an extensible system without having to change all your existing
+clients at once. If you change the quote method, however, all
+the clients have to change. Listing 16.10 shows the StockQuote
+object.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.10&nbsp;&nbsp;Source Code for StockQuote.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package stocks;
+
+// Defines the information contained in a stock quote for the
+// StockQuoteClient interface.
+
+public class StockQuote
+{
+     public String stock;     // the stock name
+     public double amount;     // the last price
+     public double change;     // the last change
+
+     public StockQuote()
+     {
+     }
+
+     public StockQuote(String stock, double amount, double change)
+     {
+          this.stock = stock;
+          this.amount = amount;
+          this.change = change;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The stock-quote system defines its own exceptions. You should
+always do this for your systems if you intend to throw any exceptions
+outside the standard ones in Java.
+<P>
+StockQuoteException serves as the base class for all specific
+exceptions in the stock-quote system. There is only one specific
+exception defined: UnknownStockException.
+<P>
+Again, if you can define a specific exception, do it. Don't heap
+everything into one generic exception. Listings 16.11 and 16.12
+show StockQuoteException and UnknownStockException.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.11&nbsp;&nbsp;Source Code for StockQuoteException.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package stocks;
+
+// Defines a generic exception for the stock quoting system
+
+public class StockQuoteException extends Exception
+{
+     public StockQuoteException()
+     {
+     }
+
+     public StockQuoteException(String str)
+     {
+          super(str);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.12&nbsp;&nbsp;Source Code for UnknownStockException.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package stocks;
+
+// Defines an exception for an unknown stock.
+
+public class UnknownStockException extends StockQuoteException
+{
+     public UnknownStockException()
+     {
+     }
+
+     public UnknownStockException(String str)
+     {
+          super(str);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Distributed systems have their own unique little problems. When
+you invoke a method on an object locally, you don't worry about
+whether or not the method will be invoked. If you get an exception,
+you know that there was an error within the method and not a problem
+invoking the method.
+<P>
+There are, however, many things in a distributed system that can
+stand between a client and the remote method it is invoking. When
+you get a RemoteException, you don't know what the problem is.
+The network could have had a temporary failure, the server program
+could have died, or the machine the server was running on could
+have died.
+<P>
+Listing 16.13 shows the addWatch method from the StockQuoteServerImpl
+class included on the CD for this book. This method is invoked
+by clients to subscribe to stock quotes. The first parameter to
+the addWatch method is a reference to the client (actually, a
+stub for communicating with the client). The server saves this
+reference for later use when it goes to publish new stock quotes.
+The StockQuoteServerImpl keeps a table of clients for each stock,
+because a stock can have multiple clients (a client of a stock
+receives quotes for that stock).
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.13&nbsp;&nbsp;addWatch Method for StockQuoteServerImpl.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// addWatch adds a client to the list of clients watching a stock
+
+     public void addWatch(StockQuoteClient client, String stock)
+     throws java.rmi.RemoteException, StockQuoteException
+     {
+
+// If we don't know about the stock, throw an exception
+
+          if (stocks.get(stock) == null) {
+               throw new UnknownStockException(stock);
+          }
+
+// Get the container of clients watching this stock
+          Vector clients = (Vector) stockClients.get(stock);
+
+// If no clients are watching, create the container
+          if (clients == null) {
+               clients = new Vector();
+               clients.addElement(client);
+               stockClients.put(stock, clients);
+
+// Only add the client if it isn't already there. We don't want to
+// double-update clients.
+
+          } else if (!clients.contains(client)) {
+               clients.addElement(client);
+          }
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+One of the most important things you must handle when performing
+callbacks is figuring out when a client has disconnected. The
+StockQuoteServerImpl class uses a very simple technique-when the
+server sends a stock quote to a client that results in an exception,
+the server disconnects the client. Listing 16.14 shows the publishQuote
+method from the StockQuoteServerImpl. Notice that when the publishQuote
+method catches an exception when publishing the quote, it does
+not immediately remove the client. Instead, it stores the reference
+to the client in a separate vector. This is necessary because
+an enumeration can become confused if you remove elements from
+a vector while you are enumerating through it.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.14&nbsp;&nbsp;publishQuote Method from StockQuoteServerImpl.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// publishQuote sends a stock quote to every client who is watching
+
+     protected void publishQuote(StockQuote quote)
+     {
+
+// Get the list of clients for the stock
+          Vector v = (Vector) stockClients.get(quote.stock);
+
+// If there are no clients, we're done
+          if (v == null) return;
+
+          Enumeration e = v.elements();
+
+// When we get an exception sending a notification to a client, we
+// remove the client. We don't do it until we've sent all the
+// notifications however. We store them in badClients until then.
+
+          Vector badClients = null;
+
+          while (e.hasMoreElements()) {
+
+               StockQuoteClient client = (StockQuoteClient)
+                    e.nextElement();
+
+// send the quote to the client
+               try {
+                    client.quote(quote);
+
+// If we get an error, add the client to the list of bad clients
+
+               } catch (java.rmi.RemoteException oops) {
+                    if (badClients == null) {
+                         badClients = new Vector();
+                    }
+                    badClients.addElement(client);
+               }
+          }
+
+// If there were any bad clients, remove them
+
+          if (badClients != null) {
+               e = badClients.elements();
+               while (e.hasMoreElements()) {
+                    clearClient(
+                         (StockQuoteClient) e.nextElement());
+               }
+          }
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+To do peer-to-peer RMI from an applet, you have to create another
+object to be the server for method invocations to the applet.
+You can't remotely call methods in a subclass of Applet because
+you must inherit from RemoteServer.
+<P>
+Since Java doesn't allow multiple inheritance, you must define
+another object to handle the incoming remote method invocations.
+If you really want to invoke methods in the applet, the special
+object you create can just turn around and invoke methods in the
+applet.
+<P>
+Listing 16.15 shows a simple stock-quote client that receives
+all stock quotes from the stock-quote server.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 16.15&nbsp;&nbsp;Source Code for StockQuoter.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package stocks;
+
+import java.rmi.server.UnicastRemoteServer;
+import java.rmi.server.StubSecurityManager;
+
+// This class is a client of the StockQuoteServer. It acts as a
+// server too, since the StockQuoteServer invokes the update method
+// in this object.
+
+public class StockQuoter extends UnicastRemoteServer
+implements StockQuoteClient
+{
+     public StockQuoter()
+     throws java.rmi.RemoteException
+     {
+     }
+
+// When we receive a stock quote, just print out the information
+
+     public void quote(StockQuote stockQuote)
+     throws java.rmi.RemoteException
+     {
+          System.out.println(stockQuote.stock+&quot;: &quot;+stockQuote.amount+
+               &quot;(&quot;+stockQuote.change+&quot;)&quot;);
+     }
+
+     public static void main(String[] args)
+     {
+// Always use a security manager for RMI.
+          System.setSecurityManager(new StubSecurityManager());
+
+          try {
+
+// Get a stub to the stock quoting system
+               StockQuoteServer server = (StockQuoteServer)
+                    java.rmi.Naming.lookup(&quot;StockQuotes&quot;);
+
+// Create an instance of this object to receive the incoming stock quotes
+               StockQuoter quoter = new StockQuoter();
+
+// Get a list of all the stock we can watch
+               String[] stocks = server.getStockList();
+
+// Subscribe to each stock
+               for (int i=0; i &lt; stocks.length; i++) {
+                    server.addWatch(quoter, stocks[i]);
+               }
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception: &quot;+e);
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="GarbageCollectionRemoteObjectsandPeertoPeer"><FONT SIZE=5 COLOR=#FF0000>
+Garbage Collection, Remote Objects, and Peer-to-Peer</FONT></A></H2>
+<P>
+RMI has a reference-count, garbage-collection system that works
+with Java's garbage collection. RMI keeps track of the number
+of remote references to an object and prevents it from being collected
+by the Java garbage collector. When an object has no more references,
+it can be collected by the Java garbage collector but only if
+it has no local references, either.
+<P>
+If you are familiar with garbage collection, you know that reference-count
+garbage collection does not work when you can have circular references.
+That is, if A has a reference to B and B has a reference to A,
+neither is ever collected because they each always have at least
+one active reference.
+<P>
+For a straight client/server model, you won't have a problem since
+the references are one-way. Problems can occur whenever an object
+is acting both as a client and a server.
+<P>
+It might be as simple as two objects holding references to each
+other. But it might also be a more complex chain in which A refers
+to B, which refers to C, which refers to D, which refers back
+to A. All of these objects would always have at least one reference,
+even if they were not in use.
+<P>
+If you have this kind of setup, you may have to do a little nudging
+to get objects collected. You can break this uncollectable chain
+by explicitly setting a client reference to null rather than hoping
+the whole object will be collected.
+<P>
+The stock-quoting system takes a good approach in that it allows
+the client to tell the quote server to remove any references to
+the client. When the client shuts down, it should disconnect itself
+from the client by calling <TT>removeClient</TT>.
+That breaks the circular reference chain.
+<HR>
+
+<CENTER><P><A HREF="ch15.htm"><IMG SRC="http://docs.rinet.ru/JSol/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JSol/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JSol/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch17.htm"><IMG SRC="http://docs.rinet.ru/JSol/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

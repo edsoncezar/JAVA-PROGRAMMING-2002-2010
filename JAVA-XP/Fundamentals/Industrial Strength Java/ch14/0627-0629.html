@@ -1,0 +1,189 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Interfacing C/C++ and Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0623-0626.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0630-0633.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-627"><P>Page 627</P></A>
+
+
+<P>You will need to create a debug and a release version of your
+library if you will be running under the Java debugger. The debug version is to be linked to Javai_g.lib, whereas
+the release version is linked to javai.lib. If you use MSVC++ the javai_g.lib_coff
+and javai.lib_coff libraries are used instead. The debug and release libraries have very
+different contents to support debug or release functionality.
+</P>
+
+<P>The debug version has a different extension tacked onto the name of the loadable
+library so that the Java debugger can distinguish which version is to be loaded. In the case of
+a library called MyNative.dll, the debug version would be MyNative_g.dll. The &quot;g&quot;
+version is loaded by java_g and appletviewer_g, while the normal version is loaded by java
+and javaw.
+</P>
+
+<P>If there is no &quot;_g&quot; version in the path, the javag interpreter generates a &quot;library not
+found&quot; exception. Also, the proper javah native library must be linked with the native
+implementation. So the MyNative.dll must be linked with Java_g.lib, while the MyNative_g.dll
+must be linked with MyNative_g.dll.
+</P>
+
+<P>Improper creation of these debug and release versions can be very dangerous! For
+instance, if you run an application on Windows NT, java.exe loads and uses javai.dll.
+A native .dll created for debug loads and uses javai_g.dll. Objects used specifically for
+debug will not be initialized in the javai_g.dll, and this eventually causes Java to crash.
+Unfortunately, the crash may not occur until after the program has been running for some time.
+</P>
+
+<P>It is important to remember that the difference between debug and release versions
+has nothing to do with the debug setting being turned on when compiling Java or C
+code! &quot;Debug&quot; simply means that the native library is linked with a debug library used by
+the debug version of the Java VM (Java_g, javaw_g, and appletviewer_g). Released
+versions are also simply linked with the release version of the native tool library, so that they can
+be run on the release Java VM (Java, javaw, and appletviewer).
+</P>
+
+<H4><A NAME="ch14_ 19">
+Accessing Java from C
+</A></H4>
+
+<P>When developing Java programs with native methods, C code may be required to
+call Java. There are three main reasons to do this:
+</P>
+
+<UL>
+<LI>     Data access
+<LI>     Creating objects
+<LI>     Callbacks
+</UL>
+
+<A NAME="PAGENUM-628"><P>Page 628</P></A>
+
+
+<P>For data access, C can call methods to retrieve class data without breaking the integrity
+of objects by accessing the fields directly, which sometimes is the only way to access
+a class's data. For instance, the Hashtable class can only be accessed through its
+method interface.
+</P>
+
+<P>Sometimes native functions need to create and manipulate Java objects. Often it is
+easier to pass data through these new objects instead of directly manipulating existing objects.
+To do this, objects that represent a collection of data are passed back to the caller for
+processing. For instance, a native method for reading a digital camera's picture creates an
+image object to pass the data to the caller instead of manipulating each bit in the caller's
+object space.
+</P>
+
+<P>Another possibly useful programming technique when C calls Java is to use a
+callback. Callbacks enable one part of the program to asynchronously initiate another process.
+A thread can be started so that the native code can wait or monitor events that are
+inaccessible to normal Java. After the event occurs, a method can be called to register the
+event with the Java program. This frees the main program from the task of monitoring
+events when the thread of control is not conducive to making these periodical checks.
+For instance, a native function that monitors a game port can call a Java method when
+the firing button is pressed, freeing the main program to concentrate on complex
+drawing functions.
+</P>
+
+<B>
+Accessing Object Data
+</B>
+
+<P>Every call to a native method contains a handle to the current instance of the class.
+With this handle, the current object's data can be accessed. The unhand macro is used
+to dereference the object pointer so that the object's fields can be accessed. Only
+normal object fields can be dereferenced. Static fields are not available directly from the
+objects handle (see execute_java_static_method()).
+</P>
+
+<P>With the unhand() macro, an object's primitive types are accessed like fields in a
+structure. For instance, listing 14.16 shows a Java class with its native function that accesses
+the parent object's data field. The two integer fields, a and b, will be read by the native
+print() method and incremented by the native increment() method.
+</P>
+
+<P>Listing 14.16 Example Java Class to Be Accessed from C
+</P>
+<PRE>
+/ Java class
+class Foo{
+      int a;
+      int b;
+</PRE>
+
+<A NAME="PAGENUM-629"><P>Page 629</P></A>
+
+
+<PRE>
+      Foo(){
+            a = 1;
+            b = 1;
+      }
+      native print();
+      native increment();
+}
+</PRE>
+
+<P>The listing of 14.17 contains the implementation of the print() method specified in
+listing 14.16. The function uses the pointer to the
+HFoo structure, which is the &quot;this&quot; pointer
+for the object. The unhand macro is called on the pointer to dereference the pointer to point
+to the structure that points to the objects data. The a and b fields are accessed by
+pointer dereference of the unhand() results, followed by the field identifier.
+</P>
+
+<P>Listing 14.17 The C Implementation of the Native print() Method
+</P>
+<PRE>
+// C native functions accessing back to foo
+void Foo_print(struct HFoo * this){
+      printf(&quot;this objects contents: %d,%d\n&quot;,unhand(this)-
+             &Acirc;&gt;a,unhand(this)-&gt;b);
+}
+</PRE>
+
+<P>Listing 14.18 uses the same dereference technique to access the object fields for
+modification. The increment() method is used to increment the a and b fields. Note in this
+example that the object is being accessed directly. Accessing the objects field directly is much
+more efficient than calling an accessor method written in Java because it requires a costly
+call back into the Java VM to perform the function. An accessor is not required here
+because the native function is actually part of the same class; it is accessing its own data and
+not breaking any class encapsulation guidelines.
+</P>
+
+<P>Listing 14.18 The C Implementation of the Native increment() Method
+</P>
+<PRE>
+void Foo_increment(struct HFoo * this){
+      unhand(this)-&gt;a = unhand(this)-&gt;a + 1;
+      unhand(this)-&gt;b = unhand(this)-&gt;b + 1;
+}
+</PRE>
+
+<P>The procedure for accessing Java object fields from native code is often required
+when data in the object is manipulated. Because there is no way to pass data by reference
+into native C code, the only alternative to passing data is to return it in the method call. Such
+a 
+</P>
+
+<P><CENTER>
+<a href="0623-0626.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0630-0633.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

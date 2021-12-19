@@ -1,0 +1,250 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A JavaServer Page Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="11-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="11-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The initProducts method loads the product list. The code for this method follows. This method is a bit different from the equivalent one in the stores main page because it may be called more than once. In order to have a reasonable object-oriented design, objects were reused where possible rather than recreating them. This method looks at the current directory, using the WebPageFileFilter, and adds product file names to the products vector. The titles for files are determined using another method called titleForFile and placed in the titles vector.
+</P>
+<PRE>
+public void initProducts(String rt)
+     {
+        File rootDir=null;
+        String[] files;
+        int i,max;
+        File curFile;
+        
+        docRoot = rt;
+        
+        if(products == null)
+            filter = new WebPageFileFilter();
+        
+        if(products == null)
+            products = new Vector();
+        else
+            products.removeAllElements();
+        
+        if(titles == null)
+            titles = new Vector();
+        else
+            titles.removeAllElements();
+        
+        try
+        {
+            rootDir = new File(docRoot);
+        
+            if(!rootDir.isDirectory())
+                rootDir = new File(rootDir.getParent());
+        
+            if((rootDir!=null) &amp&amp rootDir.exists())
+            {
+                category = rootDir.getName();
+                
+                files = rootDir.list(filter);
+            
+                max = files.length;
+            
+                for(i=0;i&ltmax;i&#43;&#43;)
+                {
+<B>                    products.addElement(files[i]);
+</B>                    
+                    curFile = new File(rootDir,files[i]);
+<B>                    titles.addElement(titleForFile(curFile));
+</B>                }
+            }
+        }
+        catch(Exception exp)
+        {
+            products.removeAllElements();
+        }
+        
+<B>        lastInitTime = System.currentTimeMillis();
+    }</B>
+</PRE>
+<P>The titleForFile method that follows opens an HTML file and looks for the &lttitle&gt and &lt/title&gt tags. The string between these tags is returned and the file closed.
+</P>
+<PRE>
+protected String titleForFile(File file)
+     {
+        FileReader fileIn;
+        LineNumberReader lineIn;
+        String retVal = null;
+        char cur;
+        StringBuffer curString = new StringBuffer();
+        StringBuffer titleString = new StringBuffer();
+        boolean inTag=false;
+        boolean gotTitle=false;
+        
+        if(file==null) return "";
+        
+        try
+        {
+            fileIn = new FileReader(file);
+            lineIn = new LineNumberReader(fileIn);
+            
+            cur = (char)lineIn.read();
+            
+            while(cur != -1)
+            {
+                if(cur == '&lt')
+                {
+                    inTag = true;
+                    curString.setLength(0);
+                }
+                else if(cur == '&gt')
+                {
+              if(curString.toString().equalsIgnoreCase("title"))
+                    {
+                        gotTitle = true;
+                    }
+                    else 
+                 if(curString.toString().equalsIgnoreCase("/title"))
+                    {
+                        retVal = titleString.toString();
+                        break;
+                    }
+                    
+                    inTag = false;
+                    curString.setLength(0);
+                }
+                else if(gotTitle &amp&amp !inTag)
+                {
+                    titleString.append(cur);
+                }
+                else
+                {
+                    curString.append(cur);
+                }
+                
+                cur = (char) lineIn.read();
+            }
+            
+            lineIn.close();
+            fileIn.close();
+        }
+        catch(Exception exp)
+        {
+            retVal = null;
+        }
+        
+        if("".equals(retVal) || (retVal == null))
+             retVal = file.getName();
+        
+        return retVal;
+    }
+</PRE>
+<P>That concludes the CategoryPageServlet definition. Next, let&#146;s look at the index.jhtml page for each category directory. The category index page in each category lists the items available in that specific category. This page is very similar to the main store page, with the primary exception that it extends a servlet. Here is the JSP for the index page that extends CategoryPageServlet and can be customized based on the product category.
+</P>
+<PRE>
+<B>
+&ltjava type=import&gtCategoryPageServlet&lt/java&gt
+&ltjava type=extends&gtCategoryPageServlet&lt/java&gt</B>
+&ltjava&gt
+<B>    String uri = request.getRequestURI();
+</B>   String realPath=request.getRealPath(uri);
+    int ind;
+    
+    /**
+     * Seconds between checks for updating available
+     * products. Default is 0.
+     */
+<B>    updateInterval = 60;
+</B>    
+<B>    if(needsInit(realPath))
+    {
+        initProducts(realPath);
+    }
+</B>    
+    //Clean off the file name from the requestURI
+    
+    ind = uri.lastIndexOf("/");
+    
+    if(ind != (uri.length()-1))
+    {
+        uri = uri.substring(0,ind);
+    }
+&lt/java&gt
+&ltHTML&gt
+&ltHEAD&gt
+&ltTITLE&gt
+&ltjava type=print&gtcategory&lt/java&gt 4Sale OnLine
+&lt/TITLE&gt
+&lt/HEAD&gt
+&ltBODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#FF0000" VLINK="#800080"&gt
+&ltCENTER&gt
+&ltTABLE WIDTH=500 BORDER=0&gt
+&ltTR&gt
+&ltTD&gt
+&ltCENTER&gt
+&ltservlet name="AdLinkRotator" 
+    code="AdLinkRotatorServlet" 
+    imagedir="d:\\java\\jws1.1\\public_html\\ads" 
+    imageroot="/ads"&gt
+&lt/servlet&gt
+&ltBR&gt
+&ltH3&gtWelcome to Steve and Scott's&ltH3&gt
+&ltH1&gt&ltjava type=print&gtcategory&lt/java&gt 4Sale OnLine&lt/H1&gt
+&ltHR&gt
+&lt/CENTER&gt
+Please choose a product to learn more about it.
+&ltUL&gt
+&ltjava&gt
+    int i,max;
+    max = products.size();
+    
+    for(i=0;i&ltmax;i&#43;&#43;)
+    {
+&lt/java&gt
+    &ltLI&gt
+    &ltA HREF="`uri&#43;"/"&#43;products.elementAt(i)`"&gt
+    &ltjava type=print&gttitles.elementAt(i)&lt/java&gt
+    &lt/A&gt
+    &ltBR&gt
+&ltjava&gt
+    }
+&lt/java&gt
+&lt/UL&gt
+&lt/TD&gt
+&lt/TR&gt
+&lt/TABLE&gt
+&lt/CENTER&gt
+&lt/BODY&gt
+&lt/HTML&gt
+</PRE>
+<P>This page also uses the needsInit method to decide whether the products need to be initialized and sets the update interval to 60 seconds. You can alter this to any number of seconds. A higher number will have the page check less often for changes to the products. Because each check takes time, pick the highest reasonable time. You can add and remove files from the example directory and see that they aren&#146;t removed from the page for one minute from the last update.
+</P>
+<H3><A NAME="Heading5"></A><FONT COLOR="#000077">The Shopping Cart</FONT></H3>
+<P>The servlet created to act as the shopping cart performs two functions. First, it provides a mechanism for adding and removing items from the cart. Second, it displays the current contents of the cart, as pictured in Figure 11.4. The actual shopping cart is a hash table in the session object. This hash table stores ShoppingCartItem objects that are created when the user adds them to the cart. By relying on the session, the store can support multiple users and let the Web server&#146;s session tracking code do a lot of the work.
+</P>
+<P>Each item in the shopping cart is represented by a ShoppingCartItem object and has a description, price, and quantity. So that it&#146;s easier to display a logically organized cart to the user, a quantity field is used instead of adding multiple items of the same type. This holder class also provides a convenient method for determining the total price for all of the items of a particular type.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="11-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="11-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

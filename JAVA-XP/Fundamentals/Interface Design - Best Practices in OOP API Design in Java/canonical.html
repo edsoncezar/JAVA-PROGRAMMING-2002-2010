@@ -1,0 +1,540 @@
+<HTML>
+<HEAD>
+<TITLE>The Canonical Object Idiom</TITLE>
+<META name="description" content="An object-oriented design idiom from The Precise Object: Best Practices in Object Oriented Java Design by Bill Venners.">
+<META name="keywords" content="Java Design, Java Book, Object Oriented Design, Thread Safe Design">
+<LINK rel="stylesheet" type="text/css" href="http://www.artima.com/artima.css">
+</HEAD>
+<BODY text="#000000" alink="#006666">
+<TABLE width="100%" cellspacing="0">
+<TR>
+<TD align="left" valign="bottom">
+<A href="http://www.artima.com/index.jsp"><IMG src="..\images\ac.gif" alt="artima.com" border="0" width="150" height="31"></A>
+</TD>
+<TD align="right">
+<a href="http://www.artima.com/cgi-bin/redirect.cgi/e3553a0a?REGION=Cyan&CAMPAIGN=Default&ACCOUNT=Artima&BANNER=ArtimaTraining" ><img src="..\cgi-bin\getimage.cgi\e3553a0a\region=cyan&campaign=default&account=artima&banner" border=0 width=468 height=60 alt="ad" ></a>
+</TD>
+</TR>
+</TABLE>
+<TABLE width="100%" bgcolor="#006666">
+<TR>
+<TD align="center">
+<DIV class="ml">
+<A href="http://www.artima.com/search.html" class="hl">Search</A>&nbsp;|
+<A href="http://www.artima.com/java/index.html" class="hl">Java</A>&nbsp;|
+<A href="http://www.artima.com/javadesign/index.html" class="hl">Design</A>&nbsp;|
+<A href="http://www.artima.com/jvm/index.html" class="hl">JVM</A>&nbsp;|
+<A href="http://www.artima.com/jini/index.html" class="hl">Jini</A>&nbsp;|
+<A href="http://www.artima.com/forums/index.jsp" class="hl">Forums</A>&nbsp;|
+<A href="http://www.artima.com/javaseminars/index.html" class="hl">Seminars</A>&nbsp;|
+<A href="http://lists.artima.com/mailman/listinfo/artima-newsletter/" class="hl">Subscribe</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+<BR>
+<DIV class="vegies">
+<DIV class="tc">
+<SPAN class="sts">The Precise Object by Bill Venners</SPAN><BR>
+<SPAN class="sts">(Part of) Chapter 10</SPAN><BR>
+<SPAN class="ts">The Canonical Object</SPAN><BR>
+</DIV>
+
+<!--BEGIN_PRECISE_OBJECT_LINKS-->
+<CENTER>
+<FONT size="1" face="geneva, arial, sans-serif">
+<STRONG>
+<A href="index.html">The&nbsp;Precise&nbsp;Object</A>&nbsp;|
+<A href="contents.html">Contents</A>&nbsp;|
+<A href="eventgen.html">Previous</A>&nbsp;|
+<A href="finalizable.html">Next</A>
+</STRONG>
+</FONT>
+</CENTER>
+<!--END_PRECISE_OBJECT_LINKS-->
+
+<P>
+I believe I'm just going to drop this, and split it into other places.
+In the serializable object recipe, mention probably need to override readObject()
+and writeObject() if superclass declares them. Otherwise, if you want
+to do them, how do you do them.
+
+<P>
+I call this object idiom "canonical" because it represents the simplest
+form an object should take. The idea behind this idiom is to suggest a
+baseline functionality that you give by default to any object you
+design. You may adopt this idiom in your own programming practice, or,
+if you are developing a set of style guidelines for a team or
+organization, you may want to make the idiom part of those guidelines.
+The intent of the idiom is not to force programmers to endow every
+object with this baseline functionality, but simply to define a default
+functionality for every object. In other words, programmers would be
+encouraged to make a new object canonical unless they have specific
+reasons to depart from the idiom in a given, specific case.
+
+<P>
+A fundamental tenet of object-oriented programming is that you can
+treat an instance of a subclass as if it were an instance of a
+superclass.  Because all classes in Java are subclasses of
+<CODE>java.lang.Object</CODE>, it follows that another basic tenet of
+Java programming is that you can treat any object as, well, an
+<CODE>Object</CODE>.
+
+<P>
+As a Java programmer, you can treat an object as an <CODE>Object</CODE>
+in many ways. When you invoke any of the methods declared in class
+<CODE>java.lang.Object</CODE> on an object, for example,  you are
+treating that object as an <CODE>Object</CODE>. These methods, some of
+which are <CODE>clone()</CODE>, <CODE>equals()</CODE>,
+<CODE>toString()</CODE>, <CODE>wait()</CODE>, <CODE>notify()</CODE>,
+<CODE>finalize()</CODE>, <CODE>getClass()</CODE>, and
+<CODE>hashCode()</CODE>, provide basic services commonly exercised on
+Java objects of all kinds.  In addition, you may find yourself wanting
+to serialize just about any kind of object.  All of these activities
+are ways you may treat objects of many diverse classes simply and
+uniformly as <CODE>Object</CODE>s.
+
+<P>
+Taken together, all the activities that are commonly performed on Java
+objects constitute a set of services that, in most cases, should be
+built into every class you design. The question raised by this article
+and answered by the idiom is: <EM>What do you need to do, at a minimum,
+to make each object you define support the services commonly expected of
+all objects?</em>
+
+<P>
+This idiom defines a baseline set of requirements for object
+definitions and names objects that implement the baseline "canonical
+objects."
+
+<P>
+<FONT SIZE="+1"><STRONG>Recipe: How to concoct a canonical object</STRONG></FONT><BR>
+You can turn instances of any class into canonical objects by taking
+the following steps with the class:
+
+<P>
+<OL>
+<LI>Implement <CODE>Cloneable</CODE> (unless a superclass already
+implements it or the object is immutable).
+
+<P>
+<LI>If the class includes instance variables that may at some
+point in the lifetime of its instances hold references to mutable
+objects, override <CODE>clone()</CODE>.
+
+<P>
+<LI>Override <CODE>equals()</CODE> and <CODE>hashCode()</CODE>.
+
+<P>
+<LI>Implement <CODE>Serializable</CODE> (unless a superclass already
+implements it).
+</OL>
+
+<P>
+<FONT SIZE="+1"><STRONG>Example code</STRONG></FONT><BR>
+Here's a Java class that illustrates the canonical object idiom:
+
+<P>
+<PRE>
+// In file canonical/ex1/Worker.java
+import java.io.Serializable;
+import java.util.Vector;
+
+public class Worker
+    implements Cloneable, Serializable {
+
+    private String name;
+    private Vector doList;
+
+    public Worker(String name, Vector doList) {
+        if (name == null || doList == null) {
+            throw new IllegalArgumentException();
+        }
+        this.name = name;
+        this.doList = doList;
+    }
+
+    public Worker(String name) {
+        this(name, new Vector());
+    }
+
+    public void setName(String name) {
+        if (name == null) {
+            throw new IllegalArgumentException();
+        }
+        this.name = name;
+    }
+
+    public void addtoList(Object job) {
+        doList.addElement(job);
+    }
+
+    public Object clone() {
+
+        // Do the basic clone
+        Worker theClone = null;
+        try {
+            theClone = (Worker) super.clone();
+        }
+        catch (CloneNotSupportedException e) {
+            // Should never happen
+            throw new InternalError(e.toString());
+        }
+
+        // Clone mutable members
+        theClone.doList = (Vector) doList.clone();
+        return theClone;
+    }
+
+    public boolean equals(Object o) {
+
+        if (o == null) {
+            return false;
+        }
+
+        Worker w;
+        try {
+            w = (Worker) o; // HEY, SUBCLASS WILL STILL PASS! USE REFLECTION?
+        }
+        catch (ClassCastException e) {
+            return false;
+        }
+
+        if (name.equals(w.name) && doList.equals(w.doList)) {
+            return true;
+        }
+        return false;
+    }
+
+    //...
+}
+</PRE>
+
+<P>
+In the code listing above, instances of class <CODE>Worker</CODE> are
+canonical objects because the <CODE>Worker</CODE> objects are ready for
+(1) cloning, (2) serialization, and (3) semantic comparison with
+equals.  To make <CODE>Worker</CODE> objects ready for cloning, class
+<CODE>Worker</CODE> implements <CODE>Cloneable</CODE>.  Implementing
+<CODE>Cloneable</CODE> is necessary in this case because
+<CODE>Worker</CODE> objects are mutable and <CODE>Cloneable</CODE>
+isn't implemented by any superclass. Likewise, to make
+<CODE>Worker</CODE> objects ready for serialization, class
+<CODE>Worker</CODE> implements <CODE>Serializable</CODE>. Because no
+superclass of <CODE>Worker</CODE> implements <CODE>Serializable</CODE>,
+class <CODE>Worker</CODE> itself must implement it. Lastly, class
+<CODE>Worker</CODE>, like any other class with canonical instances are canonical
+objects, overrides <CODE>equals()</CODE> with a method that does an
+appropriate semantic comparison of the two objects.
+
+<P>
+<FONT SIZE="+1"><STRONG>The value of the canonical object idiom</STRONG></FONT><BR>
+The canonical object idiom can be useful to you in several ways.
+First, this idiom can guide you when you are deciding whether to
+support cloning or serialization in a particular class, and which
+<CODE>java.lang.Object</CODE> methods, if any, you should override in
+that class. You can use this idiom as a starting point with each class
+you define, and depart from the idiom only if you feel special
+circumstances justify such a departure.  In addition, knowledge of this
+idiom should make your fellow programmers feel a vague sense of guilt
+in their attempts to avoid thinking about these issues when they design
+a class.  And, hopefully, this guilt will encourage your coworkers to
+design objects that support the baseline object services defined by the
+canonical object idiom, and that should make their objects a bit easier
+for you to use.  Finally, one promising use of this idiom is that it
+can serve as a starting point for discussion when formulating Java
+coding standards for a project or organization.
+
+<P>
+<FONT SIZE="+1"><STRONG>Implementation guidelines</STRONG></FONT><BR>
+Here are some guidelines to help you make the most of the canonical
+object idiom:
+
+<P>
+<STRONG>Make objects canonical by default</STRONG><BR>
+In general, you should implement the canonical object idiom in every
+Java class you define, unless you have a specific reason not to.
+Although you may not be able to imagine why someone would want to use a
+particular class of objects in some of these ways, you have likely met
+coworkers who are capable of surprising you in how they use your
+classes. Besides, predicting the future is a difficult business. One of
+these days even <EM>you</em> may reuse your classes in some ways you
+didn't imagine when you first designed the class.
+
+<P>
+The benefit of canonical objects is that they are more flexible (easy
+to understand, use, and change) than their non-canonical brethren.
+Canonical objects help make code flexible because they are ready to be
+manipulated in the ways objects of any type are commonly manipulated.
+By now you know that canonical objects can be cloned, serialized, and
+semantically compared with equals, but they can also be used in other
+common ways. Invoking <CODE>toString()</CODE> on a canonical object
+will yield a reasonable result provided by the default implementation
+of <CODE>toString()</CODE> in superclass <CODE>Object</CODE>.
+Likewise, <CODE>hashCode()</CODE> works properly thanks to
+<CODE>Object</CODE>'s default implementation. <CODE>getClass()</CODE>
+returns a reference to the appropriate <CODE>Class</CODE> instance, and
+even the <CODE>wait()</CODE> and <CODE>notify()</CODE> methods work.
+Everything works. Canonical objects are ready to do what you want them
+to do.
+
+<P>
+<STRONG>Catch CloneNotSupportedException</STRONG><BR>
+The customary first step in any implementation of <CODE>clone()</CODE>
+is to invoke the superclass's implementation of <CODE>clone()</CODE>.
+If you are writing a <CODE>clone()</CODE> method for a direct subclass
+of class <CODE>Object</CODE>, you will need to either catch
+<CODE>CloneNotSupportedException</CODE> or declare it in your
+<CODE>throws</CODE> clause. If you forget to do either of these two
+things, the compiler will dutifully inform you of your negligence.
+
+<P>
+So, given that the compiler will force you to deal with
+<CODE>CloneNotSupportedException</CODE> in one way or the other, which
+way should you deal with it? In general, you should catch
+<CODE>CloneNotSupportedException</CODE> and throw some kind of
+unchecked exception in the <CODE>catch</CODE> clause, the approach
+demonstrated by the <CODE>Worker</CODE> class. Why? Because if you
+declare <CODE>CloneNotSupportedException</CODE> in your
+<CODE>throws</CODE> clause, anyone who wants to clone your object will
+need to deal with the exception -- either by catching it or declaring
+it in their <CODE>throws</CODE> clause. And you don't want to bother
+clients of your class with all that hard decision-making just because
+they want to clone your object.
+
+<P>
+It turns out that, so long as you implement <CODE>Cloneable</CODE>,
+<CODE>Object</CODE>'s implementation of <CODE>clone()</CODE> will never
+throw <CODE>CloneNotSupportedException</CODE>. <CODE>Object</CODE>'s
+implementation of <CODE>clone()</CODE> checks to see if the object's
+class implements <CODE>Cloneable</CODE>; if it does, it clones the
+object by making a direct field-by-field copy of the original in the
+clone.  Only if the object's class doesn't implement
+<CODE>Cloneable</CODE> will <CODE>Object</CODE>'s implementation of
+<CODE>clone()</CODE> throw <CODE>CloneNotSupportedException</CODE>. So
+if you implement <CODE>Cloneable</CODE>, you may as well catch
+<CODE>CloneNotSupportedException</CODE> just to keep it out of your
+<CODE>clone()</CODE>'s <CODE>throws</CODE> clause.
+
+<P>
+The one risk to heeding this advice is that when you remove
+<CODE>CloneNotSupportedException</CODE> from your
+<CODE>clone()'s</CODE> <CODE>throws</CODE> clause, you tie the hands of
+anyone who ever wants to disallow cloning in a subclass of your class.
+The customary way to disallow cloning in a subclass of some class that
+allows and supports cloning is to override <CODE>clone()</CODE> and
+throw <CODE>CloneNotSupportedException</CODE>. Thus, you should
+consider whether you want to enable subclasses to disallow cloning when
+you implement <CODE>clone()</CODE>.
+
+<P>
+My opinion is that if you are not sure, you should catch
+<CODE>CloneNotSupportedException</CODE>, which effectively sets the
+policy that all subclasses will be clonable. I believe situations in
+which someone will want to disallow cloning in a subclass will be
+rare.  Therefore, the ease of use you gain by not forcing clients to
+deal with <CODE>CloneNotSupportedException</CODE> outweighs the slight
+risk that you will be frustrating someone who wants to disallow cloning
+in a subclass at some point in the future.
+
+<P>
+<STRONG>Don't support cloning in immutable objects</STRONG><BR>
+If the object is immutable, you don't need to (and shouldn't) make it
+clonable. The reason you clone an object is so that the two instances
+can evolve independently thereafter. For example, you may clone an
+object before passing it to a method that alters the object. Because
+immutable objects can't evolve (their state doesn't ever change), there
+is no need to clone them. Everyone can safely share the same immutable
+instance.
+
+<P>
+<STRONG>Make equals() do a semantic compare</STRONG><BR>
+An important aspect of the canonical object idiom is implementing
+<CODE>equals()</CODE> such that it does a <EM>semantic</EM>
+comparison.  Canonical objects override <CODE>equals()</CODE>, because
+the default implementation of <CODE>equals()</CODE> in class
+<CODE>Object</CODE> just returns <CODE>true</CODE> if one object
+'<CODE>==</CODE>' the other object. In other words, comparing two
+objects with <CODE>equals()</CODE> yields the same result, by default,
+as comparing to objects with Java's <CODE>==</CODE> operator. Why are
+there two ways to check objects for equality?  Because they are
+supposed to be <EM>different</EM>.
+
+<P>
+Java's <CODE>==</CODE> operator simply checks to see if two references
+refer to the same object exactly. Invoking <CODE>equals()</CODE> on an
+object is supposed to do a semantic compare: if the two objects "mean
+the same thing," <CODE>equals()</CODE> should return
+<CODE>true</CODE>.
+
+<P>
+What does it mean for an object to "mean the same thing" as another
+object?  Well, that's what you, as designer of a class, get to decide.
+In general, however, two objects are semantically equal when they have
+the same class and their states are equal.  In other words, semantic
+equality means that:
+
+<P>
+<UL>
+<LI>Both objects have the same class.
+
+<P>
+<LI>Corresponding instance variables with primitive types are
+equivalent (as reported by <CODE>==</CODE>).
+
+<P>
+<LI>Corresponding instance variables with reference types are either
+both <CODE>null</CODE> or semantically equivalent
+(as reported by <CODE>equals()</CODE>).
+</UL>
+
+<P>
+For a bit more help on deciding how you should define
+<CODE>equals()</CODE>, consider that any implementation of
+<CODE>equals()</CODE> should have the following properties:
+
+<P>
+<UL>
+<LI>For any object reference <CODE>a</CODE>, <CODE>a.equals(null)</CODE>
+should return <CODE>false</CODE>.
+
+<P>
+<LI>For any object reference value <CODE>a</CODE>,
+<CODE>a.equals(a)</CODE> should return <CODE>true</CODE>.
+(<CODE>equals()</CODE> is <EM>reflexive</EM>.)
+
+<P>
+<LI>For any object references <CODE>a</CODE> and <CODE>b</CODE>,
+<CODE>a.equals(b)</CODE> should return <CODE>true</CODE> if and only if
+<CODE>b.equals(a)</CODE> returns <CODE>true</CODE>.
+(<CODE>equals()</CODE> is <EM>symmetric</EM>.)
+
+<P>
+<LI>For any object references <CODE>a</CODE>, <CODE>b</CODE>, and
+<CODE>c</CODE>, if <CODE>a.equals(b)</CODE> returns  <CODE>true</CODE>
+and <CODE>b.equals(c)</CODE> returns <CODE>true</CODE>, then
+<CODE>a.equals(c)</CODE> should return <CODE>true</CODE>.
+(<CODE>equals()</CODE> is <EM>transitive</EM>.)
+
+<P>
+<LI>For any object references <CODE>a</CODE> and <CODE>b</CODE>,
+multiple invocations of <CODE>a.equals(b)</CODE> consistently return
+<CODE>true</CODE> or consistently return <CODE>false</CODE>.
+(<CODE>equals()</CODE> is <EM>consistent</EM>.)
+</UL>
+
+<P>
+<STRONG>Override hashCode()</STRONG><BR>
+Whenever you override <CODE>equals()</CODE>, you should override
+<CODE>hashCode()</CODE>. <CODE>hashCode()</CODE> should return
+the same hash value for any two objects that are <EM>semantically</EM> equal,
+as determined by <CODE>equals()</CODE>.
+
+<P>
+<FONT SIZE="+1"><STRONG>Alternative ways to implement the idiom</STRONG></FONT><BR>
+If you wish to disallow cloning of an object, you can simply choose not
+to implement <CODE>Cloneable</CODE>, unless a superclass already
+implements <CODE>Cloneable</CODE>. In that case, you'll need to
+override <CODE>clone()</CODE> and throw
+<CODE>CloneNotSupportedException</CODE>.  If a superclass
+implementation of <CODE>clone()</CODE> has removed
+<CODE>CloneNotSupportedException</CODE> from its <CODE>throws</CODE>
+clause, you should either change that superclass or allow cloning in
+the subclass.
+
+<P>
+If you wish to disallow serialization, you can simply choose not to
+implement <CODE>Serializable</CODE>.
+
+<P>
+Note that defining <CODE>finalize()</CODE> is not part of this idiom. A
+finalizer is not appropriate in general cases, although under certain
+circumstances you may want to write a finalizer. For advice on writing
+finalizers, follow the link from the <A href="#resources">Resources
+section</A> to a previous <STRONG>Design Techniques</STRONG> article on
+that subject.
+
+<P>
+Note also that defining <CODE>toString()</CODE> is missing from the
+list above. I left it out because I believe <CODE>Object</CODE> has a
+reasonable default implementation for this method.
+<CODE>Object</CODE>'s <CODE>toString()</CODE> method returns a string
+composed of the name of the class, an "at" sign ("@"), and the unsigned
+hexadecimal representation of the hash code of the object.  If you do
+override <CODE>toString</CODE>, you should return a string that
+"textually represents" the object. The returned result should be
+concise, informative, and easy to read.
+
+<P>
+One other thing missing from the canonical object idiom is a no-arg
+constructor.  Any class that has a no-arg constructor and implements
+<CODE>Serializable</CODE> is a JavaBean. See the <a
+href="#resources">Resources section</A> for a link to a discussion of
+when it is appropriate to make a class into a bean.
+
+<P>
+<FONT SIZE="+1"><STRONG>Idiom issues</STRONG></FONT><BR>
+To help spark some discussion on the Flexible Java Forum, a discussion
+forum devoted to Java design topics, I will throw out some of the
+issues that may present themselves with this idiom (see the <A href="#resources">Resources section</A> for a link to the forum):
+
+<P>
+<UL>
+<LI>Is "canonical object" the best name?
+
+<P>
+<LI>Am I justified in excluding a requirement to override
+<CODE>toString</CODE> from my canonical object recipe?
+
+<P>
+<LI>Should I throw something besides <CODE>InternalError</CODE> from
+the catch clause that catches <CODE>CloneNotSupportedException</CODE>?
+My general advice (given in my "<a
+href="exceptions.html">Designing with
+Exceptions</A>" article) is that programs should throw only exceptions,
+never errors. Usually the VM throws the errors. But in this case, I
+have implemented <CODE>Cloneable</CODE>. Thus, if
+<CODE>Object</CODE>'s  <CODE>clone()</CODE> implementation throws
+<CODE>CloneNotSupported</CODE>, I think that may qualify as an internal
+error to me. Since this "internal error" will likely never happen, what
+I throw  probably isunimportant. But I'd still feel better about
+throwing an exception rather than an error. Perhaps what we need is a
+<CODE>java.lang.ThisWasntSupposedToEverHappenException</CODE>.
+
+<P>
+<LI>I'm a bit concerned about promoting the catching of
+<CODE>CloneNotSupportedException</CODE> at all, because, as I described
+above, it does tie the hands of anyone wishing to disallow cloning in a
+subclass.
+
+<P>
+<LI>Of course, there is that nagging question of the no-arg
+constructor, which, if it is part of the canonical object idiom, would
+make every canonical object into a JavaBean. This question has its own
+forum topic; you can find a link to it in the <a
+href="#resources">Resources section</A>.
+</UL>
+
+</TD>
+</TR>
+
+</DIV>
+<HR width="100%">
+<TABLE width="100%">
+<TR>
+<TD align="left">
+<DIV class="sp">
+Last Updated: Sunday, March 3, 2002<BR>
+<A href="http://www.artima.com/copyright.html">Copyright</A> &copy; 1996-2002 Artima Software, Inc. All Rights Reserved.
+</DIV>
+</TD>
+<TD align="right">
+<DIV class="sp">
+URL: http://www.artima.com/interfacedesign/Canonical.html<BR>
+Artima.com is created by <A href="http://www.artima.com/consulting.html">Bill Venners</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+</BODY>
+</HTML>

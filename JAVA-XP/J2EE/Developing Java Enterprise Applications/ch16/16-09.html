@@ -1,0 +1,292 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The client for the NextPrimeBean is similar to the IsPrimeClient. It is shown here for completeness. In the rest of this book, complete client code is not shown; the complete solutions are available on the CD-ROM but are not repeated in the text. In this case, the method includes code for getting two other command-line flags, so it is actually valuable to examine in this discussion. The important point for this client compared with the other one is that the NextPrimeBean is stateful, so the client can take advantage of the fact that the EJB remembers the last prime number between calls to nextPrime.
+</P>
+<PRE>
+package nextprime;
+
+import javax.ejb.*;
+import javax.naming.*;
+import java.rmi.*;
+import java.util.*;
+import java.io.*;
+
+import nextprime.*;
+
+public class NextPrimeClient
+{
+    static long start = 0;
+    static int max = 10;
+
+    public static void main(String[] args)
+    {
+        Context ctx=null;
+
+        try
+        {
+            <B>ctx = getInitialContext(args);</B>
+            long next;
+            int i;
+
+            <B>NextPrimeHome home = (NextPrimeHome)
+               ctx.lookup(&#147;nextprime.NextPrimeHome&#148;);
+            NextPrime creator;</B>
+
+            <B>if(start != 0) creator = home.create(start);
+            else creator = home.create();</B>
+
+            System.out.println(&#147;The first &#147;&#43;max&#43;&#148; primes are:&#148;);
+
+            for(i=0;i&ltmax;i&#43;&#43;)
+            {
+                System.out.println(<B>creator.nextPrime()</B>);
+            }
+
+            <B>home.remove(creator.getHandle());</B>
+        }
+        catch (CreateException e)
+        {
+            System.out.println(&#147;Error &#148;&#43;e);
+        }
+        catch (Exception e)
+        {
+            System.out.println(&#147;Error.&#148;);
+            e.printStackTrace();
+        }
+        finally
+        {
+            try
+            {
+                ctx.close();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+    }
+    static public Context getInitialContext(String[] args) throws Exception
+    {
+        Properties p = new Properties();
+        String url = &#147;t3://localhost:7001&#148;;
+        String user=null;
+        String password=null;
+
+        if ((args != null) &amp&amp (args.length &gt 1))
+        {
+            for (int i = 0; i &lt args.length; i&#43;&#43;)
+        {
+            if (args[i].equals(&#147;-url&#148;))
+                url = args[&#43;&#43;i];
+            else if (args[i].equals(&#147;-user&#148;))
+                user = args[&#43;&#43;i];
+            else if (args[i].equals(&#147;-password&#148;))
+                password = args[&#43;&#43;i];
+            <B>else if (args[i].equals(&#147;-start&#148;))
+                start = Long.parseLong(args[&#43;&#43;i]);
+            else if (args[i].equals(&#147;-max&#148;))
+                max = Integer.parseInt(args[&#43;&#43;i]);</B>
+            }
+        }
+
+        p.put(Context.INITIAL_CONTEXT_FACTORY,
+                &#147;weblogic.jndi.T3InitialContextFactory&#148;);
+
+        p.put(Context.PROVIDER_URL, url);
+
+        if (user != null)
+        {
+            p.put(Context.SECURITY_PRINCIPAL, user);
+
+            if (password == null) password = &#147;&#148;;
+
+             p.put(Context.SECURITY_CREDENTIALS, password);
+        }
+
+        return new InitialContext(p);
+    }
+}
+</PRE>
+<P>Both of these examples use finally blocks to clean up the context from the server. This is a safety precaution and a reasonable habit for your enterprise applications.
+</P>
+<P>Clients for enterprise beans don&#146;t have to be applications. They can be servlets, as in the example from Chapter 25, other enterprise beans, or any Java program that has access to the beans server. The following example bean implements the same functionality as the preceding NextPrime bean, except this one uses an IsPrime bean to test numbers rather than implementing that code internally. Some of the code for this example is commented out to save space; the important code that links the two beans appears in boldface.</P>
+<PRE>
+package partnerprime;
+
+//imports removed to save space
+
+public class PartnerPrimeBean implements SessionBean
+{
+    transient protected SessionContext context;
+    protected long current;
+    <B>protected IsPrime isprime;</B>
+
+    //Unused Session Bean methods removed to save space
+
+    public void setSessionContext(SessionContext ctx)
+    {
+        Context jndi;
+        IsPrimeHome home;
+
+        context = ctx;
+
+        try
+        {
+            <B>jndi = getInitialContext();
+            home = (IsPrimeHome) jndi.lookup(&#147;isprime.IsPrimeHome&#148;);
+
+            isprime = home.create();</B>
+        }
+        catch(Exception exp)
+        {
+            <B>isprime = null;</B>
+        }
+    }
+    public void ejbCreate()
+    {
+        current = 1;
+    }
+    public void ejbCreate(long start) throws NotPrimeException
+    {
+        if(!isPrime(start))
+        {
+            //Only except primes
+            throw new NotPrimeException(start);
+        }
+        else
+        {
+            current = start;
+        }
+    }
+
+    public long nextPrime()
+    {
+        current = nextPrimeAfter(current);
+        return current;
+    }
+
+    public long nextPrimeAfter(long num)
+    {
+        while((isprime != null) &amp&amp !isPrime(&#43;&#43;num)){}
+
+        return num;
+    }
+    public boolean isPrime(long num)
+    {
+        boolean retVal = false;
+
+        try
+        {
+            <B>if(isprime != null) retVal = isprime.isPrime(num);</B>
+        }
+        catch(Exception exp)
+        {
+            retVal = false;
+        }
+
+        return retVal;
+    }
+
+    public Context getInitialContext() throws Exception
+    {
+        Properties p = new Properties();
+        String url = &#147;t3://localhost:7001&#148;;
+        String user=null;
+        String password=null;
+        Properties environ;
+
+        if(context != null)
+        {
+            environ = context.getEnvironment();
+            url = environ.getProperty(&#147;jndiurl&#148;);
+            user = environ.getProperty(&#147;jndiuser&#148;);
+            password = environ.getProperty(&#147;jndipassword&#148;);
+        }
+
+        p.put(Context.INITIAL_CONTEXT_FACTORY,
+               &#147;weblogic.jndi.T3InitialContextFactory&#148;);
+
+        p.put(Context.PROVIDER_URL, url);
+
+        if (user != null)
+        {
+            p.put(Context.SECURITY_PRINCIPAL, user);
+
+            if (password == null) password = &#147;&#148;;
+
+            p.put(Context.SECURITY_CREDENTIALS, password);
+        }
+
+            return new InitialContext(p);
+        }
+}
+</PRE>
+<P>Notice that the bean uses its environment to create an initial JNDI context for finding the EJBHome of the IsPrime bean.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading20"></A><FONT COLOR="#000077">Other Session Bean Examples</FONT></H4>
+<P>Leveraging the DebugLog object from Chapter 7, &#147;Programming Servlets,&#148; the following example creates a pair of session beans, one stateless and one stateful, that log messages when they receive their life-cycle notifications. A single client that uses both beans is included in this example to activate the beans&#146; life cycles. This is an interesting experiment because it shows the different treatment for each type of bean.
+</P>
+<P>The code for the two beans is analogous, so let&#146;s just look at the stateless version. First, the remote interface:</P>
+<PRE>
+package statelesssessionprint;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import java.rmi.Remote;
+
+public interface <B>StatelessSessionPrint</B> extends <B>EJBObject, Remote</B>
+{
+    <B>public void log(String str) throws RemoteException;</B>
+}
+</PRE>
+<P>When the bean receives the log message, it forwards it to the debug log object.
+</P>
+<P>The home interface uses the simplest create method:</P>
+<PRE>
+package statelesssessionprint;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import sessionprint.*;
+
+public interface <B>StatelessSessionPrintHome</B> extends <B>EJBHome</B>
+{
+    <B>StatelessSessionPrint create()
+        throws CreateException, RemoteException;</B>
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-08.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-10.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

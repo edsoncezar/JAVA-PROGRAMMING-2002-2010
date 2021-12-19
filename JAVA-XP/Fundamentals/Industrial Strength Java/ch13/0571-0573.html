@@ -1,0 +1,218 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0567-0570.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0574-0578.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-571"><P>Page 571</P></A>
+
+
+<P>
+deadlock are beyond the scope of this book; however, following these rules can
+help identify potential deadlock conditions:
+</P>
+
+<UL>
+<LI>          Assume that any code that is not explicitly synchronized can be executed by
+all possible threads at the same time. In other words, assume there are as many
+CPUs as available threads.
+<LI>          Assume that, at any point in executing code, a thread can be descheduled
+enabling other threads to run for a relatively long time. In other words, assume a
+time-sliced preemptive scheduler.
+<LI>          Remember that synchronized blocks don't enforce queueing or &quot;fair shares&quot;
+of execution time on threads.
+</UL>
+
+<P>Listing 13.54, for example, shows a loop containing a synchronized block.
+</P>
+<P>Listing 13.54 Loop Containing a Synchronized Block
+</P>
+<PRE>
+//Loop containing a synchronized block
+while(someCondition) {
+        synchronized(myFlag) {
+                counter++;
+        }
+        //some other work
+        doWork();
+}
+</PRE>
+
+<P>Three threads, A, B, and C, all execute the loop at once. Thread A increments counter to
+1 and proceeds to call doWork(). Before A can enter the synchronized block again,
+threads B and C are both scheduled several times, incrementing counter. When A enters
+the synchronized block again, counter may be much larger than 1.
+</P>
+
+<P>Similarly, in the code in listing 13.55, there's no guarantee that the value placed in
+alpha by thread A in the first synchronized block will be present in the second because
+other threads may intervene during the time period that thread A executes the two blocks.
+</P>
+
+<P>Listing 13.55 Loop Containing a Synchronized Block
+</P>
+<PRE>
+public void myMethod(int value) {
+</PRE>
+
+
+<A NAME="PAGENUM-572"><P>Page 572</P></A>
+
+<PRE>
+
+        synchronized(this) {
+                alpha = value;
+        }
+
+        //some other work
+        doWork();
+
+        synchronized(this) {
+                useValue(alpha);
+        }
+}
+</PRE>
+
+<P>In summary, seriously consider at the very beginning of design whether to
+multithread your application. Also, Java is an inherently multithreaded language, and truly
+reusable classes must be designed to be used in multithreaded systems even if they are not
+threaded themselves.
+</P>
+
+
+
+
+<H3><A NAME="ch13_ 40">
+Threads and Caching
+</A></H3>
+
+<P>The Java Language Specification enables the Java VM a considerable degree of freedom
+when caching variable values. Each thread has its own local working memory and values can
+be stored in this memory space to optimize processing. When a variable is accessed by
+multiple threads, it's possible, on some implementations of the Java VM, that two or more
+different threads can hold different values in their respective working copies of the same variable.
+</P>
+
+<P>The rules governing the exact way that values can be cached are complex, but the
+essential rule to remember is that the Java VM, on entry to any synchronized block or method,
+must flush all unwritten cached values from thread working storage (so that new values must
+be read from main memory). Similarly, on leaving a synchronized block or method, the
+VM must write any unwritten cached values back to main memory.
+</P>
+
+<P>In short, this means that any variables accessed within synchronized code are
+guaranteed to be consistent across multiple threads. Any shared variables should therefore be
+accessed only by synchronized code. If you refer back to the first threaded version of
+FileChecksum (refer to listing 13.8), you can see that the code accessing &quot;finished&quot; isn't
+synchronized, and this should be considered as a potential bug.
+</P>
+
+<H4><A NAME="ch13_ 41">
+Volatile Variables
+</A></H4>
+
+<P>Another way of controlling the caching of variables is by marking them volatile (with
+the Java keyword &quot;volatile&quot;). A thread must reconcile its local copy of a volatile variable
+with the copy in main memory every time it accesses that variable. This ensures that
+multiple threads can safely access individual volatile variables, but only for Boolean, byte, char,
+int,
+</P>
+
+<A NAME="PAGENUM-573"><P>Page 573</P></A>
+
+
+<P>short or float types. The language specification enables long and double types (which
+are 64 bits long) to be updated in two 32-bit chunks, and therefore one thread may read
+a value that another thread is halfway through updating.
+</P>
+
+<P>A case for using volatile variables is where one thread updates a value (for example,
+a timer) that is read by many other threads, all of which need to be sure that they
+always read the latest value. Because one thread writes to the value, and all others read,
+the overhead of synchronizing access to the variable can be avoided by marking it as
+volatile so that all the reading threads will reload the value every time they access it. If,
+however, the value is a long or double, then, because of the possible update problem noted in
+the previous paragraph, access to the variable would need to be synchronized to be safe.
+</P>
+
+<H3><A NAME="ch13_ 42">
+Debugging Threads
+</A></H3>
+
+<P>Debugging multithreaded applications can be complex. Race conditions and other
+timing-related interactions among threads can disappear or be radically altered when a program
+is single-stepped or has breakpoints inserted. It's often easier to add code to the program
+to try to trap bug conditions and to display information about the state of the program.
+It sometimes can be useful to add a thread to an application that monitors the other
+threads, watching for conditions such as deadlock, or a thread that seems to have died in
+an incorrect state (such a monitoring thread is known as a
+watchdog).
+</P>
+
+<P>The Thread class provides a number of methods, shown in listing 13.56, that are
+sometimes useful in this approach to debugging multithreaded applications:
+</P>
+
+<P>Listing 13.56 Thread Class Debugging Methods
+</P>
+<PRE>
+//Count the number of stack frames for this Thread.  The
+//Thread must be suspended when this method is called.
+public int countStackFrames();
+
+//Print a stack trace for the current thread.
+public static void dumpStack();
+
+//Generate a string describing this Thread.
+public String toString();
+</PRE>
+
+<H4><A NAME="ch13_ 43">
+Stack Traces
+</A></H4>
+
+<P>The countStackFrames() method checks how many nested method calls have been
+made by a thread. Each time a method is called,
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+If you want to try to ensure that Throwable won't be caught,
+so that a complete stacktrace is printed (for example,
+when stopping a thread that seems to be locked up), the best method
+is to call stop() with an instance of Throwable rather than
+any subclass. Most code only catches objects of the Exception
+class and its subclasses.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<P><CENTER>
+<a href="0567-0570.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0574-0578.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

@@ -1,0 +1,189 @@
+<HTML>
+<HEAD>
+
+<TITLE>Java 1.2 In Record Time:Working with Multi-Threaded Programs and JAR Files</TITLE>
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="501-505.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="510-513.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Now you will add the code to the <TT>run()</TT> method to put the thread into a wait state if <TT>goFlag</TT> is <TT>false</TT>. Use the <I>synchronized</I> keyword to synchronize your thread actions, and check the flag this way:</P>
+<PRE>
+     public void run() &#123;
+          while(animateFlag)&#123;
+               nowImage = spinImages[spinIndex&#43;&#43;];
+               if(spinIndex &gt; 3)spinIndex = 0;
+               repaint();
+               try &#123;
+                   Thread.sleep(200);
+&#8594;                   synchronized(this)&#123;
+&#8594;                       while(!goFlag)
+&#8594;                           wait();
+&#8594;                   &#125;
+               &#125;
+               catch(InterruptedException e) &#123; &#125;
+          &#125;
+     &#125;
+</PRE>
+<P>That&#146;s all you need to do&#151;when the user clicks the Suspend button, you put the thread into a wait state, and when they click the Resume button, you notify the thread that it should leave the wait state.
+</P>
+<P>Start the applet, as shown below. Clicking the Suspend button suspends the animation thread and thus the animation itself; clicking the Resume button resumes thread execution and makes the colored disk spin around again. The code for this new version of the spinner applet appears in <TT>spinner.java,</TT> <TT>version 3</TT>.</P>
+<P>spinner.java, version 3</P>
+<PRE>
+import java.awt.*;
+import java.awt.event.*;
+import java.applet.Applet;
+
+public class spinner extends Applet implements ActionListener, Runnable &#123;
+
+     Image spinImages[] = new Image[4];
+     Image nowImage;
+     int spinIndex = 0;
+     Thread spinThread;
+     Button suspendButton, resumeButton;
+     boolean animateFlag = true;
+     boolean goFlag = true;
+
+     public void init() &#123;
+          spinImages[0] = getImage(getCodeBase(), "spin1.gif");
+          spinImages[1] = getImage(getCodeBase(), "spin2.gif");
+          spinImages[2] = getImage(getCodeBase(), "spin3.gif");
+          spinImages[3] = getImage(getCodeBase(), "spin4.gif");
+          suspendButton = new Button("Suspend");
+          add(suspendButton);
+          suspendButton.addActionListener(this);
+          resumeButton = new Button("Resume");
+          add(resumeButton);
+          resumeButton.addActionListener(this);
+     &#125;
+
+     public synchronized void actionPerformed(ActionEvent e)&#123;
+          if(e.getSource() == suspendButton)&#123;
+               goFlag = false;
+          &#125;
+          if(e.getSource() == resumeButton)&#123;
+               goFlag = true;
+               notify();
+          &#125;
+     &#125;
+
+     public void start() &#123;
+          spinThread = new Thread(this);
+          spinThread.start();
+     &#125;
+
+     public void stop() &#123;
+          animateFlag = false;
+     &#125;
+
+     public void run() &#123;
+          while(animateFlag)&#123;
+               nowImage = spinImages[spinIndex&#43;&#43;];
+               if(spinIndex &gt; 3)spinIndex = 0;
+               repaint();
+               try &#123;
+                   Thread.sleep(200);
+                   synchronized(this)&#123;
+                       while(!goFlag)
+                           wait();
+                   &#125;
+               &#125;
+               catch(InterruptedException e) &#123; &#125;
+          &#125;
+     &#125;
+
+     public void paint (Graphics g) &#123;
+          if(nowImage != null) g.drawImage(nowImage, 100, 100, this);
+     &#125;
+
+     public void update(Graphics g) &#123;
+          g.clipRect(100, 100, 200, 200);
+          paint(g);
+     &#125;
+&#125;
+</PRE>
+<P>You&#146;ve taken strides toward controlling your threads. Note however, that so far you have worked with only a single thread. What if your applet starts and works with multiple threads? How do you keep them straight? Let&#146;s look into this problem now.
+</P>
+<H3><A NAME="Heading7"></A><FONT COLOR="#000077">Handling Multiple Threads</FONT></H3>
+<P>If you have multiple threads, each of which is supposed to be performing a different task, all these threads execute the same <TT>run()</TT> method. How do you keep these simultaneously-executing threads separate? You can do so by <I>naming</I> them.</P>
+<P>You&#146;ll create a new applet now with two text fields and a button with the caption &#147;Start threads,&#148; as shown in Figure 16.3. You can have two threads in this applet, each of which writes incrementing numbers to a text field, as shown in Figure 16.4, after the user clicks the Start Threads button.</P>
+<P><A NAME="Fig3"></A><A HREF="images\16-03.jpg"><IMG SRC="images\16-03t.jpg"></A>
+<BR><A HREF="images\16-03.jpg"><FONT COLOR="#000077"><B>FIGURE 16.3:</B></FONT></A>&nbsp;&nbsp;Your new applet has two text fields and a button.</P>
+<P><A NAME="Fig4"></A><A HREF="images\16-04.jpg"><IMG SRC="images\16-04t.jpg"></A>
+<BR><A HREF="images\16-04.jpg"><FONT COLOR="#000077"><B>FIGURE 16.4:</B></FONT></A>&nbsp;&nbsp;Each thread writes numbers in a text field.</P>
+<P>You&#146;ll have only one <TT>run()</TT> method, but each thread will write to a different text field. You&#146;ll have to keep the two threads straight. Create a new file named <TT>numbers.java</TT> now and place the standard starting code in it:</P>
+<PRE>
+ import java.awt.*;
+ import java.applet.Applet;
+
+ public class numbers extends Applet &#123;
+          .
+          .
+          .
+ &#125;
+</PRE>
+<P>Add the two threads you&#146;ll use, naming them <TT>Thread1</TT> and <TT>Thread2</TT>, and implement the Runnable interface:</P>
+<PRE>
+ import java.awt.*;
+ import java.awt.event.*; import java.applet.Applet;
+
+&#8594;public class numbers extends Applet implements Runnable &#123;
+
+&#8594;     Thread Thread1, Thread2;
+               .
+               .
+               .
+&#125;
+</PRE>
+<P>You can add your two text fields and the Start Threads button, as well as implementing the ActionListener interface for the button:
+</P>
+<PRE>
+ import java.awt.*;
+ import java.awt.event.*;
+ import java.applet.Applet;
+
+ public class numbers extends Applet implements Runnable,
+&#8594;ActionListener &#123;
+
+      Thread Thread1, Thread2;
+&#8594;     TextField text1, text2;
+&#8594;     Button button1;
+
+&#8594;     public void init() &#123;
+&#8594;          text1 = new TextField(20);
+&#8594;          text2 = new TextField(20);
+&#8594;          add(text1);
+&#8594;          add(text2);
+&#8594;          button1 = new Button("Start threads");
+&#8594;          add(button1);
+&#8594;          button1.addActionListener(this);
+&#8594;     &#125;
+ &#125;
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="501-505.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="510-513.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

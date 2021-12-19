@@ -1,0 +1,128 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch25\25-15.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 26<BR>MiniJMS: A Java Messaging Service Provider
+</FONT></H2>
+<P>This chapter describes the implementation of MiniJMS, a JMS service provider used to test the examples presented in Chapter 20, &#147;Programming with the Java Messaging Service,&#148; and Chapter 21, &#147;A JMS-Based Alarm System.&#148; This service provider is by no means a complete, commercial messaging solution, but it does provide an example of a multitier enterprise application.
+</P>
+<P>Our primary goals for MiniJMS are as follows:</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;Provide an example that integrates multiple Enterprise Java frameworks
+<DD><B>&#149;</B>&nbsp;&nbsp;Support enough of the JMS specification to run interesting and educational examples
+<DD><B>&#149;</B>&nbsp;&nbsp;Trade performance for simplicity in implementation, where necessary
+<DD><B>&#149;</B>&nbsp;&nbsp;Provide an example that is complex enough to challenge readers and test their understanding of the concepts discussed in this book
+<DD><B>&#149;</B>&nbsp;&nbsp;Demonstrate the construction of a multithreaded server in Java
+</DL>
+<P>The root of these goals is to provide a large, real-world example of how the enterprise APIs are used. Of course, including a complete, large enterprise application is beyond the scope of this book. In fact, this example contains about 5,000 lines of code in 35 classes, making it rather large to include in this chapter. As a result, the entire example is not included in text, but it is available on the CD-ROM that accompanies this book. The key code for this example is described in the chapter.
+</P>
+<P>MiniJMS relies on several enterprise APIs. First and foremost, it implements part of the JMS. This implementation relies on JNDI for finding resources, RMI for network connections, and JDBC for message persistence.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Because a basic level of knowledge about the API is assumed in this chapter&#146;s discussions, you should read or at least skim Chapter 20, &#147;Programming with the Java Messaging Service,&#148; to familiarize yourself with the JMS API if you have not already done so.</FONT><HR>
+</BLOCKQUOTE>
+<P>MiniJMS implements the majority of the JMS API, but it is not intended for commercial use. It does not currently support distributed use, in the sense that the JNDI service provider, the file system context, used doesn&#146;t support networked operation. This implementation also doesn&#146;t support the message selectors and is not designed to plug into an application server or use distributed transactions.
+</P>
+<P>Despite these limitations, MiniJMS does provide an example of a JMS provider that uses server-based message management. It provides persistent messaging, saving messages into a JDBC database and the file system. Also, MiniJMS provides an easy testing ground for understanding and testing JMS applications. On top of this, MiniJMS implements both the messaging models defined by JMS, even though this is not required by the specification.</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">Basic Design</FONT></H3>
+<P>JMS breaks messaging into two models: point-to-point and publish-subscribe. MiniJMS minimized the differences between these models as much as possible to centralize code. However, this centralization does add a small amount to the complexity of the core objects, because they do double duty by supporting both models.
+</P>
+<P>The design for MiniJMS is split into three layers and two packages. The first layer provides the client interfaces specified in JMS. The second layer is a set of Remote interfaces for the RMI objects provided by the server. The third and final layer is the server itself. The relationship among these layers is pictured in Figure 26.1.</P>
+<P>The server code is organized into the minijmsserver package; the remaining two layers are part of the minijms package.</P>
+<H3><A NAME="Heading3"></A><FONT COLOR="#000077">Client/Server Interface</FONT></H3>
+<P>MiniJMS defines three Remote interfaces for communication between the client and the server. These interfaces are listed in Table 26.1.
+</P>
+<P>The RemoteMiniServer interface, as shown in the following code, is implemented by the root object that is registered with RMI for access by the client. This object does not take up real resources on the server and is accessed for use by the client to create connections. This interface is also used to define the name MiniJMSServer, used by the server to bind with the RMI registry.</P>
+<P><A NAME="Fig1"></A><A HREF="images\26-01.jpg"><IMG SRC="images\26-01t.jpg"></A>
+<BR><A HREF="images\26-01.jpg"><FONT COLOR="#000077"><B>Figure 26.1</B></FONT></A>&nbsp;&nbsp;MiniJMS design.</P>
+<PRE>
+public interface RemoteMiniServer extends java.rmi.Remote
+{
+    public final static String SERVER_NAME=&#147;MiniJMSServer&#148;;
+
+    //Uses the client machine if id is null
+    RemoteMiniConnection openConnection(String clientId)
+     throws RemoteException,JMSException;
+}
+</PRE>
+<TABLE WIDTH="100%">
+<TD CAPTION COLSPAN="2" ALIGN="LEFT"><B>Table 26.1</B> Client/Server Interfaces
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="35%" ALIGN="LEFT">INTERFACE
+<TH ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>RemoteMiniServer</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The basic interface between the client and server used to create connections.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>RemoteMiniConnection</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Fundamental connection interface used to create client ids and sessions.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>RemoteMiniSession</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The interface between a session on the client and its representation on the server.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>MiniClientSession</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Defines the interface implemented by the client for notifications from the server.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P>Connections to the server are represented on the server by objects that implement RemoteMiniConnection, included in the next batch of code. These objects take up server resources and thus support the close method. Connections are used to create client identifiers that the system uses to tag each client application/computer. By default, the client&#146;s IP address is used. This causes all of the applications on that machine to share some of the resources and messages in the server. In other words, if two applications on the same computer use the same id, they will share the messages for a particular destination. Clients can change this behavior by specifying a username when creating the connection. DurableTopicSubscribers also bypass this default by using their name to register for messages.
+</P>
+<PRE>
+public interface RemoteMiniConnection extends java.rmi.Remote
+{
+    public String getClientId()
+     throws RemoteException;
+
+    public RemoteMiniConnection close()
+     throws RemoteException, JMSException;//should return null
+
+    //Tracks sessions and closes on close.
+    public RemoteMiniSession createSession()
+     throws RemoteException, JMSException;
+}
+</PRE>
+<P>The connection&#146;s main job is to create sessions. Notice that the connection interface doesn&#146;t include all of the methods in javax.jms.Connection. Many of these methods are handled on the client. Only the minimal necessary information travels to the server. Because sessions represent message processors, they have been broken into the client and server portions for better code management.
+</P>
+<P>RemoteMiniSession defines a number of methods. These methods are listed in Table 26.2. Many represent the associated methods in the javax.jms.Session interface and are used by the client&#146;s session object to notify the server of a requested function.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch25\25-15.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,161 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using JNDI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="05-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="05-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<PRE>
+import javax.naming.*;
+import java.util.Hashtable;
+
+// Rename filename1 to filename2
+// example use: java Rename filename1 filename2
+public class Rename
+{
+    public static void main(String[] args)
+    {
+        //This program renames any file you access, so be careful!
+        String initialContextString = &#147;/&#148;;
+
+        if(args.length&lt2)
+        {
+            System.out.println(
+                &#147;Useage: java Rename filename1 filename2&#148;);
+            System.exit(-1);
+        }
+
+        // Create a list of environment settings for our example.
+        Hashtable env = new Hashtable();
+
+        /*
+          By specifying we are using refFSContextFactory, we will 
+          have the ability to access the file system and lookup 
+          and store objects as well.
+        */
+        env.put(Context.INITIAL_CONTEXT_FACTORY,
+            &#147;com.sun.jndi.fscontext.RefFSContextFactory&#148;);
+
+        // Specify the file system to search in this example.
+        env.put(Context.PROVIDER_URL,
+            &#147;file:&#148; &#43; initialContextString);
+
+        try
+        {
+            // Based on our environment, set an initial context.
+            Context initCtx = new InitialContext(env);
+
+            System.out.println(&#147;Renaming &#148; &#43; args[0] &#43; 
+                &#147; to &#148; &#43; args[1]);
+            <B>initCtx.rename(args[0],args[1]);</B>
+            System.out.println(&#147;Done.&#148;);
+
+        }catch(NamingException e)
+        {
+            System.out.println(e);
+            e.printStackTrace(System.out);
+        }
+    }
+}
+</PRE>
+<P>The boldface code in the preceding listing renames the object bound to the name described by args[0]. The new binding for this object may be in a different part of the directory structure, based on the args[2] parameter. For example, the following code actually moves the reports directory (context) to /reportdir. This is because the initial context defined in the Rename program was set to /. If the initial context had been set to /tmp, reports would have been moved to /tmp/reportdir.
+</P>
+<PRE>
+java Rename /tmp/marketing/reports reportdir
+</PRE>
+<P>One thing to note is that if the initial context had been /tmp instead of / in the example, it would not have worked. Remember that the file paths are <I>relative</I> to the initial context. Because there is no file /tmp/tmp/marketing/reports, you would get an exception. Try various combinations of changing the initial context and the file paths to rename files and directories and move them relative to the initial context.</P>
+<P><FONT SIZE="+1"><B><I>Replacing and Adding Objects</I></B></FONT></P>
+<P>Another feature of the context is the ability to add objects. By combining the renaming feature and the ability to add objects, you can replace an object in a context. The following code listing describes a program Changes that does this.
+</P>
+<PRE>
+import javax.naming.*;
+import java.util.Hashtable;
+
+// Rename the report directory and create a new report directory.
+// example use: java Changes
+public class Changes
+{
+public static void main(String[] args)
+    {
+        Hashtable env = new Hashtable();
+env.put(Context.INITIAL_CONTEXT_FACTORY,
+&#147;com.sun.jndi.fscontext.RefFSContextFactory&#148;);
+
+        env.put(Context.PROVIDER_URL,&#147;file:/tmp/marketing&#148;);
+
+        try
+        {
+            Context initCtx = new InitialContext(env);
+
+            // Rename the reports directory.
+            <B>initCtx.rename(&#147;reports&#148;,&#147;oldreports&#148;);</B>
+
+            // Create new reports directory.
+            <B>initCtx.createSubcontext(&#147;reports&#148;);</B>
+        }catch(NamingException e)
+        {
+            System.out.println(e);
+            e.printStackTrace(System.out);
+        }
+    }
+}
+</PRE>
+<P>All the operations in this section equate to simple file operations.
+</P>
+<P>Next, let&#146;s look at how to use the binding operations to bind a Java object to the context. It is important to realize that while the file system has been used as the naming service for the examples, you can simply replace the service provider and, with little else, perform the same operations against an LDAP server, an RMI registry, or other service. For example, given a context for an LDAP server, you can store the report file object from your computer in LDAP using the following code:</P>
+<PRE>
+...
+ldapCtx.bind(&#147;cn=MyFileName&#148;, theFile);
+//To retrieve the file object from LDAP execute:
+File  theFile = (File)ldapCtx.lookup(&#147;cn=MyFileName&#148;);
+...
+</PRE>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>cn=MyfileName is a convention of LDAP and has nothing to do with JNDI specifically.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>Because the File class supports serialization, the LDAP service provider serializes the object into the directory server. However, not all services or service providers support serializing. For example, the file system service provider used thus far will not serialize objects. In this case, you can store objects that implement the Referenceable interface using a class called a <I>reference.</I> A referenceable object is an object that implements the method public Reference getReference() throws NamingException. This method returns information describing this particular object precisely enough that it could be reconstructed later by a factory class. Before exploring a referencing example, let&#146;s look at what a reference actually does for us.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading7"></A><FONT COLOR="#000077">Storing Java Objects as References</FONT></H4>
+<P>Objects are stored in naming and directory services in different ways. Some services can store serialized versions of your Java object. In such a case, you could simply serialize your object and store it for later retrieval. However, some naming and directory services do not support the storing of Java objects. In addition, other applications using the service may not be able to read serialized objects. Therefore, there are cases when a serialized Java object might not be the most appropriate representation of your data.
+</P>
+<P>To handle the cases in which a serialized object cannot be stored, JNDI defines the reference class. A reference contains information on how to construct a copy of your object. JNDI attempts to turn references looked up from the directory into the Java objects they represent. Reference objects provide a way of recording address information about objects that themselves are not directly bound to the naming and directory service. Figure 5.5 illustrates the use of references for retrieving an object. Using references, you can seamlessly store and retrieve objects from your service without focusing on the representation of the data in a particular directory and naming service.</P>
+<P><A NAME="Fig5"></A><A HREF="images\05-05.jpg"><IMG SRC="images\05-05t.jpg"></A>
+<BR><A HREF="images\05-05.jpg"><FONT COLOR="#000077"><B>Figure 5.5</B></FONT></A>&nbsp;&nbsp;Storing and retrieving a Java object reference.</P>
+<P>A reference consists of information to assist in creating an instance of the object to which this reference refers. This information includes:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;The class name of the object being referenced
+<DD><B>&#149;</B>&nbsp;&nbsp;A vector of RefAddr objects representing the addresses
+<DD><B>&#149;</B>&nbsp;&nbsp;The string name of the factory for the object and the location of the factory object
+</DL>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="05-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="05-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,917 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Message Driven Beans and JBoss</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch08.html" title="Chapter 8. JBoss and JMS"><link rel="previous" href="ch08s07.html" title="JMS Provider"><link rel="next" href="ch08s32.html" title="JMS as a managed resource"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch08.html"><img src="images\toc.gif" border="0"></a><a href="ch08s07.html"><img src="images\prev.gif" border="0"></a><a href="ch08s32.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="mdb.config"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="mdb.config"></a>Message Driven Beans and JBoss</h2></div></div><p>Message Driven Beans (MDBs) are a new type of bean added in the EJB 2.0 specification. The reason why these beans were added is that there was no way in EJB 1.1 to handle asynchronous invocation. The primary reason for this is that an EJB bean could never be invoked from other objects through anything other than its remote interface. Therefore a bean could never set itself up as a listener for asynchronous invocation.</p><p>This limitation is overcome by Message Drive Beans. An MDB is a bean without a remote interface; the container sets itself up as a listener for asynchronous invocation of the MDB and handles the invocation of the concrete bean. Otherwise, MDBs follow all the usual roles for EJB beans.</p><p>Message Driven Beans are primarily focused on JMS. An MDB is either a topic or a queue subscriber. One nice feature with MDBs is that one gets multithreaded subscribers (even for topics) without having to deal with the subtle difficulties of writing multithreaded code for JMS message consumers.</p><p>For what purpose should you use an MDB? Basically, you would use an MDB any time you are about to create a JMS subscriber. Typical conditions for doing this are:</p><div class="itemizedlist"><ul><li><p><a name="d0e4650"></a>Decouple an invoker from the invoked code.</p></li><li><p><a name="d0e4653"></a>Make it possible for multiple parties to get your messages.</p></li><li><p><a name="d0e4656"></a>Get asynchronous behavior, i.e. start long-running code without the need to wait for the called code to finish.</p></li></ul></div><p>If you already know how to code a Message Driven Bean, it is quite easy to deploy it in JBoss. The only thing you will have to do is to add a JBoss-specific deployment descriptor, or, if you already have a <tt>jboss.xml</tt> deployment descriptor for you module, add the MDB part to it.</p><p>[<span class="bold"><b>2.4.0</b></span>. It should actually be possible to deploy an MDB without the JBoss-specific deployment descriptor, although this is something that I do not recommend; for more on this, read ahead.]</p><div class="section"><a name="jms-mdb-nirvana"></a><div class="titlepage"><div><h3 class="title"><a name="jms-mdb-nirvana"></a>Five steps to MDB nirvana in JBoss</h3></div></div><p>If you don't need to do any special configuration and already know how to code a Message Driven Bean, here there are five easy steps to get it up and running with JBoss.</p><div class="orderedlist"><ol type="1"><li><p><a name="d0e4675"></a>Write the source code for a Message Driven Bean.</p></li><li><p><a name="d0e4678"></a>Write the <tt>ejb-jar.xml</tt> descriptor.</p><p>Here it is an example for a bean listening on a queue using bean-managed transactions:</p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE ejb-jar&gt;
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloQueueBMTMDB&lt;/ejb-name&gt;
+      &lt;ejb-class&gt;org.jboss.docs.jms.mdb.bean.HelloMDB&lt;/ejb-class&gt;
+      &lt;message-selector&gt;&lt;/message-selector&gt;
+      &lt;transaction-type&gt;Bean&lt;/transaction-type&gt;
+      &lt;acknowledge-mode&gt;Auto-acknowledge&lt;/acknowledge-mode&gt;
+      &lt;message-driven-destination&gt;
+        &lt;destination-type&gt;javax.jms.Queue&lt;/destination-type&gt;
+      &lt;/message-driven-destination&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/ejb-jar&gt;
+</pre><p>And here it is one for a durable topic using container-managed transactions:</p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE ejb-jar&gt;
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloTopicDurableMDB&lt;/ejb-name&gt;
+      &lt;ejb-class&gt;org.jboss.docs.jms.mdb.bean.HelloMDB&lt;/ejb-class&gt;
+      &lt;message-selector&gt;&lt;/message-selector&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;message-driven-destination&gt;
+        &lt;destination-type&gt;javax.jms.Topic&lt;/destination-type&gt;
+        &lt;subscription-durability&gt;Durable&lt;/subscription-durability&gt;
+      &lt;/message-driven-destination&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;assembly-descriptor&gt;
+    &lt;container-transaction&gt;
+      &lt;method&gt;
+        &lt;ejb-name&gt;HelloTopicDurableMDB&lt;/ejb-name&gt;
+        &lt;method-name&gt;*&lt;/method-name&gt;
+      &lt;/method&gt;
+      &lt;trans-attribute&gt;Required&lt;/trans-attribute&gt;
+    &lt;/container-transaction&gt;
+  &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;
+</pre></li><li><p><a name="d0e4692"></a>Write the <tt>jboss.xml</tt> deployment descriptor; note that one does not need to fill in the container configuration for an MDB that has no special requirements.</p><p>[<span class="bold"><b>2.4.0</b></span>. It is possible to avoid doing this, in which case the destination will then be automatically created and named after the bean; this may lead to quite surprising results, so it's not anything I recommend.]</p><p>The <tt>destination-jndi-name</tt> element points to the queue.</p><p>Here it is one the for the queue bean:</p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+&lt;jboss&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloQueueMDB&lt;/ejb-name&gt;
+      &lt;configuration-name&gt;Standard Message Driven Bean&lt;/configuration-name&gt;
+      &lt;destination-jndi-name&gt;queue/testQueue&lt;/destination-jndi-name&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+</pre><p>And here it is the one for the durable topic:</p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+&lt;jboss&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloTopicDurableMDB&lt;/ejb-name&gt;
+      &lt;configuration-name&gt;Standard Message Driven Bean&lt;/configuration-name&gt;
+      &lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+      &lt;mdb-user&gt;john&lt;/mdb-user&gt;
+      &lt;mdb-passwd&gt;needle&lt;/mdb-passwd&gt;
+      &lt;mdb-subscriber-id&gt;DurableSubscriberExample&lt;/mdb-subscriber-id&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+</pre></li><li><p><a name="d0e4716"></a>Edit the file <tt>jbossmq.xml</tt> in directory <tt>conf/default</tt> and add the queue or topic. For example:</p><pre class="programlisting">
+&lt;Queue&gt;
+  &lt;Name&gt;testQueue&lt;/Name&gt;
+&lt;/Queue&gt;
+</pre><p>for a queue and</p><pre class="programlisting">
+&lt;Topic&gt;
+  &lt;Name&gt;testDurableTopic&lt;/Name&gt;
+&lt;/Topic&gt;
+</pre><p>plus</p><pre class="programlisting">
+&lt;User&gt;
+  &lt;Name&gt;john&lt;/Name&gt;
+  &lt;Password&gt;needle&lt;/Password&gt;
+  &lt;Id&gt;DurableSubscriberExample&lt;/Id&gt;
+  &lt;DurableSubscription&gt;
+    &lt;Name&gt;DurableSubscriberExample&lt;/Name&gt;
+    &lt;TopicName&gt;testDurableTopic&lt;/TopicName&gt;
+  &lt;/DurableSubscription&gt;
+&lt;/User&gt;
+</pre><p>for a durable topic.</p><p>[<span class="bold"><b>2.4.1</b></span>. The addition of destinations is done in the <tt>jboss.jcml</tt> file, instead:</p><pre class="programlisting">
+&lt;mbean code="org.jbossmq.server.TopicManager"
+  name="JBossMQ:service=Topic,name=testTopic"/&gt;
+</pre><p>Users are instead configured in the file <tt>jbossmq-state.xml</tt>, also found in directory <tt>conf/default</tt>. The entries look the same as those above.]</p></li><li><p><a name="d0e4755"></a>Deploy the bean, for example, by packing it in a JAR file and copying it into the JBoss <tt>deploy</tt> directory.</p></li></ol></div><p>At this point, your MDB is ready to be used, so you may start sending messages to it.</p></div><div class="section"><a name="jms-mdb-examples"></a><div class="titlepage"><div><h3 class="title"><a name="jms-mdb-examples"></a>Writing Message Driven Beans</h3></div></div><p> Since MDBs are still a recent addition to the EJB portfolio, they are still somewhat unknown and therefore not widely used yet. We will therefore begin by giving you a couple of simple examples of how to write and use Message Driven Beans.</p><div class="section"><a name="jms-mdb-examples-hello"></a><div class="titlepage"><div><h4 class="title"><a name="jms-mdb-examples-hello"></a>Hello World MDB</h4></div></div><p>An MDB follows a typical EJB contract. It must implement the following two interfaces:</p><div class="itemizedlist"><ul><li><p><a name="d0e4774"></a><tt>javax.ejb.MessageDrivenBean</tt></p></li><li><p><a name="d0e4778"></a><tt>javax.jms.MessageListener</tt></p></li></ul></div><p>An MDB must therefore typically contain the following four methods:</p><div class="figure"><p><a name="d0e4784"></a><b>Figure 8.44. Message Driven Bean required methods</b></p><pre class="programlisting">
+public void setMessageDrivenContext(MessageDrivenContext ctx);
+public void ejbCreate();
+public void ejbRemove();
+public void onMessage(Message message);
+
+</pre></div><p>The full program listing of a simple &#8220;Hello World&#8221; bean could look like this:</p><div class="figure"><p><a name="d0e4794"></a><b>Figure 8.45. Hello World Message Driven Bean example, from <tt>HelloMDB.java</tt> in directory <tt>org/jboss/docs/jms/mdb/bean</tt>.</b></p><pre class="programlisting">
+package org.jboss.docs.jms.mdb.bean;
+
+import javax.ejb.MessageDrivenBean;
+import javax.ejb.MessageDrivenContext;
+import javax.ejb.EJBException;
+
+import javax.jms.MessageListener;
+import javax.jms.Message;
+
+/**
+ * Simple HelloWorld Message Driven Bean. May be bound to both a Topic
+ * or a Queue through the deployment descriptor.
+ *
+ * Created: Thu Jul 26 13:20:32 2001
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $ $Date: 2002/01/09 00:29:47 $
+ */
+public class HelloMDB implements MessageDrivenBean, MessageListener {
+
+  private MessageDrivenContext ctx = null;
+
+  public HelloMDB() {
+
+  }
+
+  //--- MessageDrivenBean
+  public void setMessageDrivenContext(MessageDrivenContext ctx)
+    throws EJBException {
+
+    this.ctx = ctx;
+
+  }
+
+  public void ejbCreate() {}
+
+  public void ejbRemove() {ctx=null;}
+
+  //--- MessageListener
+  public void onMessage(Message message) {
+
+    System.err.println("Bean got message" + message.toString());
+
+  }
+
+} // HelloMDB
+
+</pre></div><p>To deploy this MDB into JBoss we will have to write two deployment descriptors. One standard (<tt>ejb-jar.xml</tt>) and one that is specific to JBoss (<tt>jboss.xml</tt>). We will make this bean a Topic subscriber and, since it does not do anything important, we will use container-managed transactions with the <tt>NotSupported</tt> attribute (although this would not be the best thing to do, in most cases).</p><div class="figure"><p><a name="d0e4816"></a><b>Figure 8.46. <tt>ejb-jar.xml</tt> deployment descriptor for topic Hello World MDB, from <tt>HelloMDB-Topic-ejb-jar.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE ejb-jar&gt;
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloTopicMDB&lt;/ejb-name&gt;
+      &lt;ejb-class&gt;org.jboss.docs.jms.mdb.bean.HelloMDB&lt;/ejb-class&gt;
+      &lt;message-selector&gt;&lt;/message-selector&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;message-driven-destination&gt;
+        &lt;destination-type&gt;javax.jms.Topic&lt;/destination-type&gt;
+        &lt;subscription-durability&gt;NonDurable&lt;/subscription-durability&gt;
+      &lt;/message-driven-destination&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;assembly-descriptor&gt;
+    &lt;container-transaction&gt;
+      &lt;method&gt;
+        &lt;ejb-name&gt;HelloTopicMDB&lt;/ejb-name&gt;
+        &lt;method-name&gt;*&lt;/method-name&gt;
+      &lt;/method&gt;
+      &lt;trans-attribute&gt;NotSupported&lt;/trans-attribute&gt;
+    &lt;/container-transaction&gt;
+  &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;
+
+</pre></div><p>We also need to write a small deployment descriptor (<tt>jboss.xml</tt>) that is specific to JBoss. The full-blown version of this is quite big, as it allows to configure the MDB container quite a bit. For most users this is not necessary, so we will use the standard configuration. The most important part of the descriptor is the specification of the destination. We choose the testTopic because it is always available in JBoss.</p><div class="figure"><p><a name="d0e4833"></a><b>Figure 8.47. JBoss-specific deployment descriptor for topic Hello World MDB, from <tt>HelloMDB-Topic-jboss.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+&lt;jboss&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloTopicMDB&lt;/ejb-name&gt;
+      &lt;configuration-name&gt;Standard Message Driven Bean&lt;/configuration-name&gt;
+      &lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+
+</pre></div><p>Then we will have to pack the three files into a JAR file. Here it is a snippet from an Ant build file that shows how to pack the bean:</p><div class="figure"><p><a name="d0e4845"></a><b>Figure 8.48. Ant build example for packing MDB in a JAR file</b></p><pre class="programlisting">
+&lt;target name="hello-topic-jar" depends="compile"&gt;
+  &lt;delete dir="${build.jms.dir}/META-INF"/&gt;
+  &lt;mkdir dir="${build.jms.dir}/META-INF"/&gt;
+  &lt;copy file="${jms.resource.dir}/HelloMDB-Topic-ejb-jar.xml"
+    tofile="${build.jms.dir}/META-INF/ejb-jar.xml" /&gt;
+  &lt;copy file="${jms.resource.dir}/HelloMDB-Topic-jboss.xml"
+    tofile="${build.jms.dir}/META-INF/jboss.xml" /&gt;
+  &lt;jar jarfile="${build.jms.dir}/HelloTopicMDB.jar"&gt;
+    &lt;fileset dir="${build.classes.dir}"&gt;
+      &lt;include name="org/jboss/docs/jms/mdb/bean/HelloMDB.class" /&gt;
+    &lt;/fileset&gt;
+    &lt;fileset dir="${build.jms.dir}"&gt;
+      &lt;include name="META-INF/ejb-jar.xml" /&gt;
+      &lt;include name="META-INF/jboss.xml" /&gt;
+    &lt;/fileset&gt;
+  &lt;/jar&gt;
+&lt;/target&gt;
+
+</pre></div><p>We will need to copy the JAR file to the <tt>deploy</tt> directory of JBoss to get the MDB installed.</p><p>To send messages to the bean you need a JMS publisher. This involves standard JMS programming, so you may use the HelloPublisher example from <a href="ch08s07.html#jms-jms-examples" title="Examples">the section called &#8220;Examples&#8221;</a> to do that.</p><p>The example code for the bean is found in file <tt>HelloMDB.java</tt> in directory <tt>org/jboss/docs/jms/mdb/bean</tt>. Example deployment descriptors are available in files <tt>HelloMDB-Topic-ejb-jar.xml</tt> and <tt>HelloMDB-Topic-jboss.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt>. You may also run the example via the Ant build file:</p><div class="figure"><p><a name="d0e4876"></a><b>Figure 8.49. Running the topic Hello World MDB</b></p><pre class="programlisting">
+ant jms-hello-topic
+
+</pre></div><p>The output in the window where you started JBoss will typically look something similar to this:</p><div class="figure"><p><a name="d0e4883"></a><b>Figure 8.50. Output of running the topic Hello World MDB</b></p><pre class="programlisting">
+[Auto deploy] Auto deploy of file:/home/pra/jboss/deploy/HelloTopicMDB.jar
+[J2EE Deployer Default] Deploy J2EE application: file:/home/pra/jboss/deploy/HelloTopicMDB.jar
+[J2EE Deployer Default] Create application HelloTopicMDB.jar
+[J2EE Deployer Default] install module HelloTopicMDB.jar
+[Container factory] Deploying:file:/home/pra/jboss/tmp/deploy/Default/HelloTopicMDB.jar
+[Verifier] Verifying file:/home/pra/jboss/tmp/deploy/Default/HelloTopicMDB.jar/ejb1028.jar
+[Container factory] Deploying HelloTopicMDB
+[Container factory] Deployed application: file:/home/pra/jboss/tmp/deploy/Default/HelloTopicMDB.jar
+[J2EE Deployer Default] J2EE application: file:/home/pra/jboss/deploy/HelloTopicMDB.jar is deployed.
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 1
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 2
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 4
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 5
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 3
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 8
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 9
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 7
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 6
+[HelloTopicMDB] Bean got messageTextMessage@Hello World no. 10
+[Auto deploy] Auto undeploy of file:/home/pra/jboss/deploy/HelloTopicMDB.jar
+[J2EE Deployer Default] Stopping module HelloTopicMDB.jar
+[Container factory] Undeploying:file:/home/pra/jboss/tmp/deploy/Default/HelloTopicMDB.jar
+[Container factory] Undeployed application: file:/home/pra/jboss/tmp/deploy/Default/HelloTopicMDB.jar
+[J2EE Deployer Default] Destroying application HelloTopicMDB.jar
+
+</pre></div><p>There are several other examples available with alternative configurations. All the deployment files begin with the prefix <tt>HelloMDB-</tt>. The following Ant targets are available to run the examples based on HelloMDB:</p><div class="figure"><p><a name="d0e4893"></a><b>Figure 8.51. Ant targets for the HelloMDB examples</b></p><pre class="programlisting">
+jms-hello-topic
+jms-hello-topic-durable
+jms-hello-topic-fullconf
+jms-hello-queue
+jms-hello-queue-bmt
+
+</pre></div></div><div class="section"><a name="jms-mdb-examples-listener"></a><div class="titlepage"><div><h4 class="title"><a name="jms-mdb-examples-listener"></a>MDB as a listener</h4></div></div><p>Here we will look at an example that does something more real. One nice way to use MDBs is to have them perform the listener pattern. Normally, listeners register themselves with the object emitting events; but, this is not possible for an MDB, since the bean itself may only do some work when it receives an event (a message). The set-up of an MDB as a listener will therefore have to be done outside of the MDB. This could involve something as simple as defining a topic or queue and hardwire it into the event generator to get it to publish its events/messages to that destination. It's also possible to create a more generic framework for message-driven callbacks, something I have done with JMS and JMX. But that is for another document. Let's instead look at things on the MDB side.</p><p>One way to partition the logic with EJBs is to have one bean that does the real work (contains the logic), a stateless session bean or an entity bean, for example, and another bean acting as a listener. Let's write a working, but simplified, version of this pattern. We start with a very simple stateless session bean containing just one method: <tt>doWork</tt>. To make it easy we let it take a <tt>String</tt> as its payload. This is straightforward; first, we need a home interface:</p><div class="figure"><p><a name="d0e4912"></a><b>Figure 8.52. Home interface for worker bean, from <tt>HelloWorkerHome.java</tt> in directory <tt>org/jboss/docs/jms/mdb/interfaces</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.mdb.interfaces;
+
+import java.rmi.RemoteException;
+import javax.ejb.EJBHome;
+import javax.ejb.CreateException;
+
+/**
+ * Home for HelloWorker.
+ *
+ * Created: Thu Jul 26 16:02:46 2001
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $ $Date: 2002/01/09 00:29:47 $
+ */
+public interface HelloWorkerHome extends EJBHome  {
+
+  public HelloWorker create() throws RemoteException, CreateException;
+
+} // HelloWorkerHome
+
+</pre></div><p>We also need a remote interface:</p><div class="figure"><p><a name="d0e4924"></a><b>Figure 8.53. Remote interface for worker bean, from <tt>HelloWorker.java</tt> in directory <tt>org/jboss/docs/jms/mdb/interfaces</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.mdb.interfaces;
+
+import java.rmi.RemoteException;
+import javax.ejb.EJBObject;
+
+/**
+ * Interface for HelloWorker.
+ *
+ * Created: Thu Jul 26 15:50:06 2001
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $ $Date: 2002/01/09 00:29:47 $
+ */
+public interface HelloWorker extends EJBObject {
+
+  /**
+   * Just a demo work method.
+   */
+  public void doWork(String work) throws RemoteException;
+
+} // HelloWorker
+
+</pre></div><p>And, finally, we need the actual implementation bean class:</p><div class="figure"><p><a name="d0e4936"></a><b>Figure 8.54. Listener pattern worker bean, from <tt>HelloWorkerBean.java</tt> in directory <tt>org/jboss/docs/jms/mdb/bean</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.mdb.bean;
+
+import javax.ejb.SessionBean;
+import javax.ejb.SessionContext;
+import javax.ejb.CreateException;
+import java.rmi.RemoteException;
+
+/**
+ * A worker session bean. When invoked through an MDB listener, this
+ * bean will be invoked asynchronously by sending messages to the JMS
+ * destination to which the MDB is configured as a subscriber.
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $
+ */
+public class HelloWorkerBean implements SessionBean {
+
+  private SessionContext ctx;
+
+  public HelloWorkerBean() {
+
+  }
+
+  // The usual sessions ejb methods.
+  public void setSessionContext(javax.ejb.SessionContext ctx)
+    throws RemoteException { this.ctx = ctx; }
+
+  public void unsetSessionContext() throws RemoteException {
+
+    this.ctx = null;
+
+  }
+
+  public void ejbActivate() throws RemoteException {}
+  public void ejbPassivate() throws RemoteException {}
+  public void ejbRemove() throws RemoteException {}
+  public void ejbCreate() throws CreateException {}
+
+  /**
+   * Do the work, invoked from MDB listener. I.e, this bean will be
+   * invoked asynchronously by sending messages to the MDB listener.
+   */
+  public void doWork(String work) {
+
+    System.out.println("WorkerBean doing work: " + work);
+
+  }
+
+} // HelloWorkerBean
+
+</pre></div><p>We will write the deployment descriptor for the bean later, since we will pack it with the listener.</p><p>The next step is to write the listener bean. Here we will add basically one thing: the ability to look up the worker bean and invoke it. We look up the bean through a JNDI reference defined via a <tt>ejb-ref</tt> element. This might be done in <tt>ejbCreate()</tt>:</p><div class="figure"><p><a name="d0e4956"></a><b>Figure 8.55. Looking up the worker bean</b></p><pre class="programlisting">
+Context initCtx = new InitialContext();
+workerHome =
+  (HelloWorkerHome)initCtx.lookup("java:comp/env/ejb/worker");
+
+</pre></div><p>In the <tt>onMessage()</tt> method, we process the message. For example, here we could have sent an object of some kind, known to the listener. For simplicity, we choose to send the content of the <tt>TextMessage</tt> to the worker bean:</p><div class="figure"><p><a name="d0e4969"></a><b>Figure 8.56. Invoke worker bean from the <tt>onMessage()</tt> method</b></p><pre class="programlisting">
+// Get the worker
+HelloWorker worker = workerHome.create();
+
+// Get the message, here we could have an ObjectMessage containing an
+// object of a known class. We use Text here for simplicity
+if (message instanceof TextMessage) {
+
+   TextMessage m = (TextMessage)message;
+
+   // invoke the worker bean
+   worker.doWork(m.getText());
+
+}
+
+</pre></div><p>Here it is the complete listing of the class:</p><div class="figure"><p><a name="d0e4979"></a><b>Figure 8.57. Listener bean, from <tt>HelloListener.java</tt> in directory <tt>org/jboss/docs/jms/mdb/bean</tt></b></p><pre class="programlisting">
+package org.jboss.docs.jms.mdb.bean;
+
+import javax.ejb.MessageDrivenBean;
+import javax.ejb.MessageDrivenContext;
+import javax.ejb.EJBException;
+import javax.ejb.CreateException;
+
+import javax.naming.InitialContext;
+import javax.naming.Context;
+
+import javax.jms.MessageListener;
+import javax.jms.Message;
+import javax.jms.TextMessage;
+
+import org.jboss.docs.jms.mdb.interfaces.HelloWorker;
+import org.jboss.docs.jms.mdb.interfaces.HelloWorkerHome;
+
+/**
+ * Simple MDB showing the listener pattern.
+ * Gets messages from a destination and invokes a worker session bean
+ * (actually it could as well do that work itself).
+ *
+ * Created: Thu Jul 26 13:20:32 2001
+ *
+ * @author Peter Antman
+ * @version $Revision: 3.1 $ $Date: 2002/01/09 00:29:47 $
+ */
+
+public class HelloListener implements MessageDrivenBean, MessageListener {
+
+  /**
+   * Session worker bean
+   */
+  private HelloWorkerHome workerHome = null;
+
+  private MessageDrivenContext ctx = null;
+
+  public HelloListener() {
+
+  }
+
+  //--- MessageDrivenBean
+  public void setMessageDrivenContext(MessageDrivenContext ctx)
+    throws EJBException {
+
+    this.ctx = ctx;
+
+  }
+
+  public void ejbCreate() throws CreateException{
+
+    // Get the worker bean home
+    try {
+
+      Context initCtx = new InitialContext();
+      workerHome =
+        (HelloWorkerHome)initCtx.lookup("java:comp/env/ejb/worker");
+
+    } catch(Exception ex) {
+
+      throw new CreateException("Could not get worker: " + ex);
+
+    }
+
+  }
+
+  public void ejbRemove() {ctx=null;}
+
+  //--- MessageListener
+  public void onMessage(Message message) {
+
+    System.out.println("HelloListen got message " + message.toString());
+
+    try {
+
+      // Get the worker
+      HelloWorker worker = workerHome.create();
+
+      // Get the message, here we could have an ObjectMessage containing
+      // an object of a known class. We use Text here for simplicity
+      if (message instanceof TextMessage) {
+
+        TextMessage m = (TextMessage)message;
+
+        // invoke the worker bean
+        worker.doWork(m.getText());
+
+      }
+
+    } catch(Exception ex) {
+
+      // If a container-managed transaction with required, this will
+      // roll back the message received and also all beans and resource
+      // calls from this one that inherits the transactional context.
+      throw new EJBException("Could not call worker " + ex);
+
+    }
+
+  }
+
+} // HelloListener
+
+</pre></div><p>To deploy this MDB in JBoss we need to write two deployment descriptors, one standard and one specific for JBoss. Lets begin with the standard one. For ease of use we will include both beans into one JAR file. For the Message Driven Bean we have to decide whether it is a topic or not and what kind of transaction mode it should use. In this case, we choose to use a topic and container-managed transactions. We also have to specify an <tt>ejb-ref</tt> element so that the listener can look up the home of the worker bean:</p><div class="figure"><p><a name="d0e4994"></a><b>Figure 8.58. Message Driven Bean part in <tt>ejb-jar.xml</tt> for listener</b></p><pre class="programlisting">
+&lt;message-driven&gt;
+  &lt;ejb-name&gt;HelloListener&lt;/ejb-name&gt;
+  &lt;ejb-class&gt;org.jboss.docs.jms.mdb.bean.HelloListener&lt;/ejb-class&gt;
+  &lt;message-selector&gt;&lt;/message-selector&gt;
+  &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+  &lt;ejb-ref&gt;
+    &lt;description&gt;The Workers home&lt;/description&gt;
+    &lt;ejb-ref-name&gt;ejb/worker&lt;/ejb-ref-name&gt;
+    &lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;
+    &lt;ejb-link&gt;HelloWorkerBean&lt;/ejb-link&gt;
+    &lt;home&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorkerHome&lt;/home&gt;
+    &lt;remote&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorker&lt;/remote&gt;
+  &lt;/ejb-ref&gt;
+  &lt;message-driven-destination&gt;
+    &lt;destination-type&gt;javax.jms.Topic&lt;/destination-type&gt;
+    &lt;subscription-durability&gt;NonDurable&lt;/subscription-durability&gt;
+  &lt;/message-driven-destination&gt;
+&lt;/message-driven&gt;
+
+</pre></div><p>We also have to add an entry for the worker bean:</p><div class="figure"><p><a name="d0e5004"></a><b>Figure 8.59. Session part in <tt>ejb-jar.xml</tt> for listener</b></p><pre class="programlisting">
+&lt;session&gt;
+  &lt;description&gt;Worker bean&lt;/description&gt;
+  &lt;display-name&gt;HelloWorkerBean&lt;/display-name&gt;
+  &lt;ejb-name&gt;HelloWorkerBean&lt;/ejb-name&gt;
+  &lt;home&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorkerHome&lt;/home&gt;
+  &lt;remote&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorker&lt;/remote&gt;
+  &lt;ejb-class&gt;org.jboss.docs.jms.mdb.bean.HelloWorkerBean&lt;/ejb-class&gt;
+  &lt;session-type&gt;Stateless&lt;/session-type&gt;
+  &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+&lt;/session&gt;
+
+</pre></div><p>Here it is the complete deployment descriptor, including definitions of the transaction type.</p><div class="figure"><p><a name="d0e5014"></a><b>Figure 8.60. <tt>ejb-jar.xml</tt> for listener bean example, from <tt>HelloListener-ejb-jar.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE ejb-jar&gt;
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloListener&lt;/ejb-name&gt;
+      &lt;ejb-class&gt;org.jboss.docs.jms.mdb.bean.HelloListener&lt;/ejb-class&gt;
+      &lt;message-selector&gt;&lt;/message-selector&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;ejb-ref&gt;
+        &lt;description&gt;The Workers home&lt;/description&gt;
+        &lt;ejb-ref-name&gt;ejb/worker&lt;/ejb-ref-name&gt;
+        &lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;
+        &lt;ejb-link&gt;HelloWorkerBean&lt;/ejb-link&gt;
+        &lt;home&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorkerHome&lt;/home&gt;
+        &lt;remote&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorker&lt;/remote&gt;
+      &lt;/ejb-ref&gt;
+      &lt;message-driven-destination&gt;
+        &lt;destination-type&gt;javax.jms.Topic&lt;/destination-type&gt;
+        &lt;subscription-durability&gt;NonDurable&lt;/subscription-durability&gt;
+      &lt;/message-driven-destination&gt;
+    &lt;/message-driven&gt;
+    &lt;session&gt;
+      &lt;description&gt;Worker bean&lt;/description&gt;
+      &lt;display-name&gt;HelloWorkerBean&lt;/display-name&gt;
+      &lt;ejb-name&gt;HelloWorkerBean&lt;/ejb-name&gt;
+      &lt;home&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorkerHome&lt;/home&gt;
+      &lt;remote&gt;org.jboss.docs.jms.mdb.interfaces.HelloWorker&lt;/remote&gt;
+      &lt;ejb-class&gt;org.jboss.docs.jms.mdb.bean.HelloWorkerBean&lt;/ejb-class&gt;
+      &lt;session-type&gt;Stateless&lt;/session-type&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;assembly-descriptor&gt;
+    &lt;container-transaction&gt;
+      &lt;method&gt;
+        &lt;ejb-name&gt;HelloListener&lt;/ejb-name&gt;
+        &lt;method-name&gt;*&lt;/method-name&gt;
+      &lt;/method&gt;
+      &lt;trans-attribute&gt;Required&lt;/trans-attribute&gt;
+    &lt;/container-transaction&gt;
+    &lt;container-transaction&gt;
+      &lt;method&gt;
+        &lt;ejb-name&gt;HelloWorkerBean&lt;/ejb-name&gt;
+        &lt;method-intf&gt;Remote&lt;/method-intf&gt;
+        &lt;method-name&gt;*&lt;/method-name&gt;
+      &lt;/method&gt;
+      &lt;trans-attribute&gt;Required&lt;/trans-attribute&gt;
+    &lt;/container-transaction&gt;
+  &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;
+
+</pre></div><p>We also need to write a <tt>jboss.xml</tt> deployment descriptor, specific for JBoss. This is needed because the destination JNDI name must be defined somewhere: we cannot simply use a default.</p><div class="figure"><p><a name="d0e5031"></a><b>Figure 8.61. JBoss deployment descriptor for listener bean, from <tt>HelloListener-jboss.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;jboss&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloListener&lt;/ejb-name&gt;
+      &lt;configuration-name&gt;Standard Message Driven Bean&lt;/configuration-name&gt;
+      &lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+    &lt;/message-driven&gt;
+    &lt;secure&gt;false&lt;/secure&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+
+</pre></div><p>Now we have to compile the beans. You will have to add several JAR files to your classpath to succeed at this. Among the most important, especially for MDB, is <tt>ejb2.0.jar</tt> in the <tt>lib/ext</tt> directory of the standard JBoss installation.</p><p>[<span class="bold"><b>2.4.0</b></span>. It is <tt>jboss-j2ee.jar</tt> in directory <tt>client</tt>.]</p><p>Afterwards, you will need to pack the beans into a JAR file and deploy them by copying the JAR file to the JBoss directory <tt>deploy</tt>. You may use the sample publisher HelloPublisher from <a href="ch08s07.html#jms-jms-examples" title="Examples">the section called &#8220;Examples&#8221;</a> to publish messages to the bean.</p><p>The example code is found in the files <tt>HelloListener.java</tt> and <tt>HelloWorkerBean.java</tt> in directory <tt>org/jboss/docs/jms/mdb/bean</tt> and <tt>HelloWorker.java</tt> and <tt>HelloWorkerHome.java</tt> in directory <tt>org/jboss/docs/jms/mdb/interfaces</tt>. The deployment descriptors are in files <tt>HelloListener-ejb-jar.xml</tt> and <tt>HelloListener-jboss.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt>.</p><p>It is possible to run the example through the Ant build file:</p><div class="figure"><p><a name="d0e5098"></a><b>Figure 8.62. Running the <tt>HelloListener</tt> example</b></p><pre class="programlisting">
+ant jms-hello-listener
+
+</pre></div><p>The output should look somewhat like this:</p><div class="figure"><p><a name="d0e5108"></a><b>Figure 8.63. Output of running the <tt>HelloListener</tt> example</b></p><pre class="programlisting">
+[Default] WorkerBean doing work: Hello World no. 3
+[Default] WorkerBean doing work: Hello World no. 5
+[Default] WorkerBean doing work: Hello World no. 2
+[Default] WorkerBean doing work: Hello World no. 6
+[Default] WorkerBean doing work: Hello World no. 4
+[Default] WorkerBean doing work: Hello World no. 1
+[Default] HelloListen got messageTextMessage@Hello World no. 7
+[Default] WorkerBean doing work: Hello World no. 7
+[Default] HelloListen got messageTextMessage@Hello World no. 8
+[Default] WorkerBean doing work: Hello World no. 8
+[Default] HelloListen got messageTextMessage@Hello World no. 9
+[Default] WorkerBean doing work: Hello World no. 9
+
+</pre></div><p>The example may not always work, since it depends on the deployment of the beans (done by simple copying) being finished before the client starts. If it does not work, run it several times.</p></div><div class="section"><a name="jms-mdb-examples-adaptor"></a><div class="titlepage"><div><h4 class="title"><a name="jms-mdb-examples-adaptor"></a>The adapter pattern</h4></div></div><p>Another way to use an MDB is to employ it as an adapter, for example, between different messaging systems. This is rewarding, especially if you have a J2EE Connector resource adapter for the other system, since you will get then a very effective, multithreaded and pooled system, without having to write any advanced programming. Since I have written such a resource adapter for the messaging server <a href="http://www.xmlblaster.org/" target="_top"><i>XmlBlaster</i></a>, we will look here at one way to adapt JMS to it. To get the source code, check out the XmlBlaster source.</p><p>The adapter uses an MDB to subscribe to a topic. It then republishes the messages to an XmlBlaster server through the XmlBlaster K2 J2EE Connector adapter. The code is fairly simple. A J2EE Connector resource adapter must be deployed in the JBoss server. It is then referenced from within the bean in the same manner you would reference a JDBC resource. You would look it up this way:</p><pre class="programlisting">
+factory = (BlasterConnectionFactory)
+  new InitialContext().lookup("java:comp/env/xmlBlaster");
+
+</pre><p>And use it this way:</p><pre class="programlisting">
+con = factory.getConnection();
+
+// Construct Blaster Headers
+String key = "&lt;key oid=\"" + message.getJMSMessageID() +
+  "\" contentMime=\"text/xml\"&gt;&lt;/key&gt;";
+String qos = "&lt;qos&gt;&lt;/qos&gt;";
+
+con.publish(new MessageUnit(key,msg.getBytes(),qos));
+
+</pre><p>The complete bean is pretty straightforward (almost the same code could be used to write directly to a database, for example):</p><pre class="programlisting">
+package javaclients.j2ee.k2;
+
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
+import javax.ejb.MessageDrivenBean;
+import javax.ejb.MessageDrivenContext;
+import javax.ejb.EJBException;
+
+import javax.jms.MessageListener;
+import javax.jms.Message;
+import javax.jms.TextMessage;
+import javax.jms.JMSException;
+
+import javax.resource.ResourceException;
+
+import org.xmlBlaster.j2ee.k2.client.*;
+
+import org.xmlBlaster.util.XmlBlasterException;
+import org.xmlBlaster.engine.helper.MessageUnit;
+
+public class JmsAdapter implements MessageDrivenBean, MessageListener{
+
+  private MessageDrivenContext ctx = null;
+  private BlasterConnectionFactory factory = null;
+
+  public JmsAdapter() {
+
+  }
+
+  public void setMessageDrivenContext(MessageDrivenContext ctx)
+    throws EJBException {
+
+    this.ctx = ctx;
+
+    try {
+
+      factory = (BlasterConnectionFactory)
+        new InitialContext().lookup("java:comp/env/xmlBlaster");
+
+    } catch (NamingException ex) {
+
+      throw new EJBException ("XmlBlaster not found: " +
+        ex.getMessage());
+
+    } catch(Throwable th) {
+
+      System.err.println("Throwable: " + th);
+      th.printStackTrace();
+      throw new EJBException("Throwable in setContext: " + th);
+
+    }
+
+  }
+
+  public void ejbCreate() {}
+
+  public void ejbRemove() {ctx=null;}
+
+  public void onMessage(Message message) {
+
+    BlasterConnection con = null;
+
+    try {
+
+      // Get message to handle
+      System.err.println("Got message: " + message);
+
+      if (message instanceof TextMessage) {
+
+        String msg = ((TextMessage)message).getText();
+
+        // Get connection
+        con = factory.getConnection();
+
+        // Construct Blaster Headers - how to handle key here?
+        String key = "&lt;key oid=\"" + message.getJMSMessageID() +
+          "\" contentMime=\"text/xml\"&gt;&lt;/key&gt;";
+
+        String qos = "&lt;qos&gt;&lt;/qos&gt;";
+        con.publish(new MessageUnit(key,msg.getBytes(),qos));
+
+      } else {
+
+        System.err.println("Got message type I cant handle");
+
+      }
+
+    } catch(ResourceException re) {
+
+      System.err.println("Resource ex: " + re);
+      re.printStackTrace();
+
+    } catch(XmlBlasterException be) {
+
+      System.err.println("Blaster ex: " + be);
+      be.printStackTrace();
+
+    } catch(JMSException je) {
+
+      System.err.println("JMSException ex: " + je);
+      je.printStackTrace();
+
+    } catch(Throwable th) {
+
+      System.err.println("Throwable: " + th);
+      th.printStackTrace();
+
+    } finally {
+
+      try {
+
+        if (con != null)
+          con.close ();
+
+      }
+      catch (Exception ex) {}
+
+    }
+
+  }
+
+} // MessageBeanImpl
+
+</pre><p>The deployment descriptors for this bean are typical, except that you will have to add entries for the <tt>resource-ref</tt> element. Here it is the standard EJB deployment descriptor:</p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE ejb-jar&gt;
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;JmsAdapter&lt;/ejb-name&gt;
+      &lt;ejb-class&gt;javaclients.j2ee.k2.JmsAdapter&lt;/ejb-class&gt;
+      &lt;message-selector&gt;&lt;/message-selector&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;xmlBlaster&lt;/res-ref-name&gt;
+        &lt;res-type&gt;org.xmlBlaster.j2ee.k2.client.BlasterConnectionFactory&lt;/res-type&gt;
+        &lt;res-auth&gt;Container&lt;/res-auth&gt;
+      &lt;/resource-ref&gt;
+      &lt;message-driven-destination&gt;
+        &lt;destination-type&gt;javax.jms.Topic&lt;/destination-type&gt;
+        &lt;subscription-durability&gt;NonDurable&lt;/subscription-durability&gt;
+      &lt;/message-driven-destination&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;assembly-descriptor&gt;
+    &lt;container-transaction&gt;
+      &lt;method&gt;
+        &lt;ejb-name&gt;JmsAdapter&lt;/ejb-name&gt;
+        &lt;method-name&gt;*&lt;/method-name&gt;
+      &lt;/method&gt;
+      &lt;trans-attribute&gt;Required&lt;/trans-attribute&gt;
+    &lt;/container-transaction&gt;
+  &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;
+
+</pre><p>And here it is the <tt>jboss.xml</tt> descriptor specific to JBoss:</p><pre class="programlisting">
+&lt;?xml version="1.0" encoding="Cp1252"?&gt;
+
+&lt;jboss&gt;
+  &lt;resource-managers&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;xmlBlaster&lt;/res-name&gt;
+      &lt;res-jndi-name&gt;java:/XmlBlasterDS&lt;/res-jndi-name&gt;
+    &lt;/resource-manager&gt;
+  &lt;/resource-managers&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;JmsAdapter&lt;/ejb-name&gt;
+      &lt;configuration-name&gt;Standrad Message Driven Bean&lt;/configuration-name&gt;
+      &lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+      &lt;resource-ref&gt;
+        &lt;res-ref-name&gt;xmlBlaster&lt;/res-ref-name&gt;
+        &lt;resource-name&gt;xmlBlaster&lt;/resource-name&gt;
+      &lt;/resource-ref&gt;
+    &lt;/message-driven&gt;
+    &lt;secure&gt;false&lt;/secure&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/jboss&gt;
+
+</pre></div></div><div class="section"><a name="mdb.config.advanced"></a><div class="titlepage"><div><h3 class="title"><a name="mdb.config.advanced"></a>Advanced MDB configuration</h3></div></div><p>The implementation of MDB support in JBoss has been written in such a way that a user should not need to know a lot about the internals of JBoss to use MDBs. Apart from the few necessary lines in <tt>jboss.xml</tt>, just standard knowledge about Message Driven Beans should suffice.</p><p>Following the design of other parts of JBoss, the MDB implementation is also extremely configurable, if one wants to tune or totally change the default configuration and implementation! Here, there follow some short notes on how to configure MDBs in JBoss.</p><div class="section"><a name="jms-mdb-config-deploy"></a><div class="titlepage"><div><h4 class="title"><a name="jms-mdb-config-deploy"></a>EJB deployment descriptor</h4></div></div><p>All MDBs are quite configurable. Here there are the basic choices that can be made:</p><div class="itemizedlist"><ul><li><p><a name="d0e5173"></a>A bean may be either a <tt>javax.jms.Topic</tt> or a <tt>javax.jms.Queue</tt> bean; this is specified in the <tt>destination-type</tt> element. <span class="emphasis"><i>Up to 2.4.0, this part of JBoss is not standard-compliant. The <tt>message-driven-destination</tt> element is actually an optional element in the EJB 2.0 DTD of the <tt>ejb-jar.xml</tt>, but in JBoss it is required because there is no other way for JBoss to know to which type of JMS destination the bean should be bound.</i></span>. In [<span class="bold"><b>2.4.1</b></span>] this has been solved, and the element is now optional. If no message-driven-destination is given, JBoss will try to deduce one from the given destination in <tt>jboss.xml</tt>. If this is not possible it will default to a topic type.</p><pre class="programlisting">
+&lt;message-driven-destination&gt;
+  &lt;destination-type&gt;javax.jms.Queue&lt;/destination-type&gt;
+  &lt;subscription-durability&gt;NonDurable&lt;/subscription-durability&gt;
+&lt;/message-driven-destination&gt;
+
+</pre></li><li><p><a name="d0e5202"></a>If a bean is a Topic it may be either non-durable or durable, as specified in the <tt>subscription-durability</tt> element.</p><pre class="programlisting">
+&lt;message-driven-destination&gt;
+  &lt;destination-type&gt;javax.jms.Topic&lt;/destination-type&gt;
+  &lt;subscription-durability&gt;Durable&lt;/subscription-durability&gt;
+&lt;/message-driven-destination&gt;
+
+</pre></li><li><p><a name="d0e5210"></a>A bean may be have transactions managed by either the bean or the container, as specified in the <tt>transaction-type</tt> element.</p><pre class="programlisting">
+&lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+
+</pre></li><li><p><a name="d0e5218"></a>A bean with bean-managed transactions may have an acknowledgement type of either <tt>Auto-acknowledge</tt> or <tt>Dups-ok-acknowledge</tt>. This is currently not supported in JBoss since the container is always receiving messages under a transaction, but it is specified in the <tt>acknowledge-mode</tt> element.</p><pre class="programlisting">
+&lt;transaction-type&gt;Bean&lt;/transaction-type&gt;
+&lt;acknowledge-mode&gt;Auto-acknowledge&lt;/acknowledge-mode&gt;
+
+</pre></li><li><p><a name="d0e5232"></a>A bean with container-managed transactions may either specify that requires transactions or that it does not support them, as specified in the <tt>trans-attribute</tt> element.</p><pre class="programlisting">
+&lt;assembly-descriptor&gt;
+  &lt;container-transaction&gt;
+    &lt;method&gt;
+      &lt;ejb-name&gt;HelloTopicDurableMDB&lt;/ejb-name&gt;
+      &lt;method-name&gt;*&lt;/method-name&gt;
+    &lt;/method&gt;
+    &lt;trans-attribute&gt;Required&lt;/trans-attribute&gt;
+  &lt;/container-transaction&gt;
+&lt;/assembly-descriptor&gt;
+
+</pre></li><li><p><a name="d0e5240"></a>An MDB may also use a selector which follows the JMS selector syntax, as specified in the <tt>message-selector</tt> element.</p><pre class="programlisting">
+&lt;message-selector&gt;JMSType='activityCompletion'&lt;/message-selector&gt;
+
+</pre></li></ul></div><p>Of course, inside a <tt>message-driven</tt> stanza one may also specify other elements typical of an EJB deployment descriptor, such as <tt>ejb-ref</tt> and <tt>resource-ref</tt> elements.</p></div><div class="section"><a name="jms-mdb-config-jboss"></a><div class="titlepage"><div><h4 class="title"><a name="jms-mdb-config-jboss"></a>JBoss deployment descriptor</h4></div></div><p>The meat of the MDB configuration options is in the <tt>jboss.xml</tt> deployment descriptor.</p><p>[<span class="bold"><b>2.4.0</b></span>. This file is optional starting with this version of JBoss. In such a case, a destination to which to bind the bean is not specified and JBoss will create a destination for the bean, with the name of the bean. This might be handy, but it is also dangerous since misspelled destinations may get you way wrong; and you will also have to tie the clients to a destination that is only temporarily available, as the destination will be destroyed if the MDB bean is undeployed or redeployed.]</p><p>The configuration in this file may be divided in two parts: The mandatory one to configure a particular bean and the optional one to configure the container, which will default to the contents in <tt>standardjboss.xml</tt>. We will describe both here, but the container configuration will be broken into several parts since it involves stuff outside the <tt>jboss.xml</tt> file.</p><p>In the bean part one always has to specify the JNDI for the JMS destination. In JBossMQ this is always composed of either the prefix <tt>topic/</tt> or the prefix <tt>queue/</tt> followed by the name of the destination.</p><div class="figure"><p><a name="d0e5289"></a><b>Figure 8.64. Defining a destination in <tt>jboss.xml</tt></b></p><pre class="programlisting">
+&lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+
+</pre></div><p>You also have to specify the bean name and the name of the container configuration. To use the one in <tt>standardjboss.xml</tt>, provide the name <tt>Standard Message Driven Bean</tt>.</p><div class="figure"><p><a name="d0e5304"></a><b>Figure 8.65. Example <tt>jboss.xml</tt> for MDB</b></p><pre class="programlisting">
+&lt;message-driven&gt;
+  &lt;ejb-name&gt;HelloTopicMDB&lt;/ejb-name&gt;
+  &lt;configuration-name&gt;Standard Message Driven Bean&lt;/configuration-name&gt;
+  &lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+&lt;/message-driven&gt;
+
+</pre></div><p>It is also possible to use a user name and a password (configurable in <tt>conf/default/jbossmq.xml</tt>) to log in to JBossMQ. If you have specified a <tt>Durable</tt> topic, they are required along with the subscription Id that identifies the durable subsripition that will be used.  Using one of the pre-defined values in <tt>jbossmq.xml</tt> we could have a deployment descriptor looking like this:</p><div class="figure"><p><a name="d0e5323"></a><b>Figure 8.66. Example <tt>jboss.xml</tt> for MDB with durable subscription</b></p><pre class="programlisting">
+&lt;message-driven&gt;
+  &lt;ejb-name&gt;HelloTopicDurableMDB&lt;/ejb-name&gt;
+  &lt;configuration-name&gt;Standard Message Driven Bean&lt;/configuration-name&gt;
+  &lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+  &lt;mdb-user&gt;john&lt;/mdb-user&gt;
+  &lt;mdb-passwd&gt;needle&lt;/mdb-passwd&gt;
+  &lt;mdb-subscriber-id&gt;DurableSubscriberExample&lt;/mdb-subscriber-id&gt;
+&lt;/message-driven&gt;
+
+</pre></div><p>The standard container configuration for MDB is in <tt>standardjboss.xml</tt>. It is possible, however, to override this configuration by specifying other values in the <tt>jboss.xml</tt> deployment descriptor. We will first see the complete set before going through the individual entries.</p><div class="figure"><p><a name="d0e5339"></a><b>Figure 8.67. Container configuration for MDB, from <tt>HelloMDB-Topic-FullConf-jboss.xml</tt> in directory <tt>org/jboss/docs/jms/resources</tt></b></p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;jboss&gt;
+  &lt;enterprise-beans&gt;
+    &lt;message-driven&gt;
+      &lt;ejb-name&gt;HelloTopicMDB&lt;/ejb-name&gt;
+      &lt;configuration-name&gt;My Message Driven Config&lt;/configuration-name&gt;
+      &lt;destination-jndi-name&gt;topic/testTopic&lt;/destination-jndi-name&gt;
+    &lt;/message-driven&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;container-configurations&gt;
+    &lt;container-configuration&gt;
+      &lt;container-name&gt;My Message Driven Config&lt;/container-name&gt;
+      &lt;call-logging&gt;false&lt;/call-logging&gt;
+      &lt;container-invoker&gt;org.jboss.ejb.plugins.jms.JMSContainerInvoker&lt;/container-invoker&gt;
+      &lt;container-interceptors&gt;
+        &lt;interceptor&gt;org.jboss.ejb.plugins.LogInterceptor&lt;/interceptor&gt;
+        &lt;interceptor&gt;org.jboss.ejb.plugins.SecurityInterceptor&lt;/interceptor&gt;
+        &lt;!-- CMT --&gt;
+        &lt;interceptor transaction="Container"&gt;org.jboss.ejb.plugins.TxInterceptorCMT&lt;/interceptor&gt;
+        &lt;interceptor transaction="Container" metricsEnabled="true"&gt;org.jboss.ejb.plugins.MetricsInterceptor&lt;/interceptor&gt;
+        &lt;interceptor transaction="Container"&gt;org.jboss.ejb.plugins.MessageDrivenInstanceInterceptor&lt;/interceptor&gt;
+        &lt;!-- BMT --&gt;
+        &lt;interceptor transaction="Bean"&gt;org.jboss.ejb.plugins.MessageDrivenInstanceInterceptor&lt;/interceptor&gt;
+        &lt;interceptor transaction="Bean"&gt;org.jboss.ejb.plugins.MessageDrivenTxInterceptorBMT&lt;/interceptor&gt;
+        &lt;interceptor transaction="Bean" metricsEnabled="true"&gt;org.jboss.ejb.plugins.MetricsInterceptor&lt;/interceptor&gt;
+      &lt;/container-interceptors&gt;
+      &lt;instance-pool&gt;org.jboss.ejb.plugins.MessageDrivenInstancePool&lt;/instance-pool&gt;
+      &lt;instance-cache&gt;&lt;/instance-cache&gt;
+      &lt;persistence-manager&gt;&lt;/persistence-manager&gt;
+      &lt;transaction-manager&gt;org.jboss.tm.TxManager&lt;/transaction-manager&gt;
+      &lt;container-invoker-conf&gt;
+        &lt;JMSProviderAdapterJNDI&gt;DefaultJMSProvider&lt;/JMSProviderAdapterJNDI&gt;
+        &lt;ServerSessionPoolFactoryJNDI&gt;StdJMSPool&lt;/ServerSessionPoolFactoryJNDI&gt;
+        &lt;MaximumSize&gt;15&lt;/MaximumSize&gt;
+        &lt;MaxMessages&gt;1&lt;/MaxMessages&gt;
+        &lt;Optimized&gt;True&lt;/Optimized&gt;
+      &lt;/container-invoker-conf&gt;
+      &lt;container-pool-conf&gt;
+        &lt;MaximumSize&gt;100&lt;/MaximumSize&gt;
+        &lt;MinimumSize&gt;10&lt;/MinimumSize&gt;
+      &lt;/container-pool-conf&gt;
+    &lt;/container-configuration&gt;
+  &lt;/container-configurations&gt;
+&lt;/jboss&gt;
+
+</pre></div><p>Let's go through some of the configurable attributes of the MDB container</p><div class="section"><a name="d0e5351"></a><div class="titlepage"><div><h5 class="title"><a name="d0e5351"></a>Container invoker</h5></div></div><p>The container invoker is what sends messages into the container system. It is responsible for handling everything that has to do with JMS. The rest of the MDB container parts are basically agnostic regarding what kind of message system the container invoker uses. It is therefore possible to write a new container invoker for other types of message systems. There is currently one limitation to this. The bean class still has to implement the MessageListener interface and the invoker therefore has to adopt this interface. This will be made pluggable in a later release of MDB.</p></div><div class="section"><a name="d0e5356"></a><div class="titlepage"><div><h5 class="title"><a name="d0e5356"></a>Container interceptors</h5></div></div><p>The container interceptors are an integral part of the container system and each of them does some particular thing needed to fulfill the EJB container contract. All of them are pluggable, meaning that it is possible to write new implementations of them and plug them in for a bean with a particular need, even though this should be considered a very advanced task.</p></div><div class="section"><a name="d0e5361"></a><div class="titlepage"><div><h5 class="title"><a name="d0e5361"></a>Container invoker configuration</h5></div></div><p>This is probably the most interesting part to understand. Lets look at it in smaller pieces. First it defines a <tt>JMSProviderAdapterJNDI</tt>:</p><div class="figure"><p><a name="d0e5369"></a><b>Figure 8.68. Configuring the <tt>JMSProviderAdapterJNDI</tt> in <tt>jboss.xml</tt></b></p><pre class="programlisting">
+&lt;JMSProviderAdapterJNDI&gt;DefaultJMSProvider&lt;/JMSProviderAdapterJNDI&gt;
+
+</pre></div><p>It should contain a JNDI name for a JMX bean where one might lookup a provider adapter class. This class is then used by the invoker to find the names of the connection factories; all IntitialContext lookups are done through this class, to make it possible to get access to a JMS provider outside of JBoss.</p><p>The name used by default is bound to the JbossMQProvider in <tt>jboss.jcml</tt>, which looks like this:
+					</p><div class="figure"><p><a name="d0e5386"></a><b>Figure 8.69. Defining a JMSProviderAdapter in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.jms.jndi.JMSProviderLoader"
+  name=":service=JMSProviderLoader,name=JBossMQProvider"&gt;
+  &lt;attribute name="ProviderName"&gt;DefaultJMSProvider&lt;/attribute&gt;
+  &lt;attribute name="ProviderAdapterClass"&gt;org.jboss.jms.jndi.JBossMQProvider&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>[<span class="bold"><b>2.4.0</b></span>. It has some additional information in this version.]</p><div class="figure"><p><a name="d0e5398"></a><b>Figure 8.70. [<span class="bold">2.4.0</span>] Defining a JMSProviderAdapter in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.jms.jndi.JMSProviderLoader"
+  name=":service=JMSProviderLoader,name=JBossMQProvider"&gt;
+  &lt;attribute name="ProviderName"&gt;DefaultJMSProvider&lt;/attribute&gt;
+  &lt;attribute name="ProviderAdapterClass"&gt;org.jboss.jms.jndi.JBossMQProvider&lt;/attribute&gt;
+  &lt;attribute name="QueueFactoryRef"&gt;java:/INVMXAQueueConnectionFactory&lt;/attribute&gt;
+  &lt;attribute name="TopicFactoryRef"&gt;java:/INVMXATopicConnectionFactory&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>[<span class="bold"><b>2.4.1</b></span>. The JNDI strings have changed in this version.]</p><div class="figure"><p><a name="d0e5413"></a><b>Figure 8.71. [<span class="bold">2.4.1</span>] Defining a JMSProviderAdapter in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.jms.jndi.JMSProviderLoader"
+  name=":service=JMSProviderLoader,name=JBossMQProvider"&gt;
+  &lt;attribute name="ProviderName"&gt;DefaultJMSProvider&lt;/attribute&gt;
+  &lt;attribute name="ProviderAdapterClass"&gt;org.jboss.jms.jndi.JBossMQProvider&lt;/attribute&gt;
+  &lt;attribute name="QueueFactoryRef"&gt;java:/INVMXAConnectionFactory&lt;/attribute&gt;
+  &lt;attribute name="TopicFactoryRef"&gt;java:/INVMXAConnectionFactory&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>It is possible, also, to add more JMSProviders to the <tt>jboss.jcml</tt> and use them in the container configuration. One possible reason to do this is to listen to a queue or topic in another JBoss server. In that case, one could define another provider and configure its context. This is done by adding the attribute <tt>ProviderUrl</tt> to the JMSProviderLoader MBean configuration. Let's assume that we have a JBoss server on another machine <tt>remote.com</tt>. We might then add this to <tt>jboss.jcml</tt>:</p><div class="figure"><p><a name="d0e5437"></a><b>Figure 8.72. Defining a remote JMSProviderAdapter in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;attribute name="ProviderUrl"&gt;remote.com:1099&lt;/attribute&gt;
+
+</pre></div><p>Once we added a <tt>ProviderUrl</tt> attribute, we would write in <tt>jboss.xml</tt> the following <tt>JMSProviderAdapterJNDI</tt> element:</p><div class="figure"><p><a name="d0e5455"></a><b>Figure 8.73. Configuring a remote JMSProviderAdapter in <tt>jboss.xml</tt></b></p><pre class="programlisting">
+&lt;JMSProviderAdapterJNDI&gt;RemoteJMSProvider&lt;/JMSProviderAdapterJNDI&gt;
+
+</pre></div><p>Yet another way to use this configuration option is to integrate another JMS provider into JBoss. This was actually how MDB was first implemented in JBoss through the OpenJMS implementation. To do this, one has to implement the interface <tt>org.jboss.jms.jndi.JMSProviderAdapter</tt>. Be aware, though, of the fact that if the JMS provider does not support the full JMS Application Service Facility (ASF, Chapter 8 in the JMS specification), you will have to write a full implementation of both the ProviderAdapter and the ServerSession stuff. Doing this is really an advanced subject and it should probably be handled through contacts on the <tt>jboss-dev</tt> mailing list.</p><p>Next we have the <tt>ServerSessionPoolFactoryJNDI</tt> element:</p><div class="figure"><p><a name="d0e5475"></a><b>Figure 8.74. Configuring the <tt>ServerSessionPool</tt> factory JNDI in <tt>jboss.xml</tt></b></p><pre class="programlisting">
+&lt;ServerSessionPoolFactoryJNDI&gt;StdJMSPool&lt;/ServerSessionPoolFactoryJNDI&gt;
+
+</pre></div><p>This also points to a class loaded through <tt>jboss.jcml</tt>. It is the entry point to the <tt>ServerSessionPool</tt>. If one needs to write a provider-specific pool or do some customization of the existing one, it is possible to load it for a particular bean. The existing one is defined this way in <tt>jboss.jcml</tt>:</p><div class="figure"><p><a name="d0e5496"></a><b>Figure 8.75. Setting up the <tt>ServerSessionPool</tt> factory in <tt>jboss.jcml</tt></b></p><pre class="programlisting">
+&lt;mbean code="org.jboss.jms.asf.ServerSessionPoolLoader"
+  name=":service=ServerSessionPoolMBean,name=StdJMSPool"&gt;
+  &lt;attribute name="PoolName"&gt;StdJMSPool&lt;/attribute&gt;
+  &lt;attribute name="PoolFactoryClass"&gt;org.jboss.jms.asf.\
+StdServerSessionPoolFactory&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+</pre></div><p>The first implementation of MDB for JBoss was based on another server session pool factory, especially written for OpenJMS. Currently, it does not work. What does work is the pluggability of server session pool factories.</p><p>The last two entries look like this:</p><div class="figure"><p><a name="d0e5510"></a><b>Figure 8.76. Server session pool configuration in <tt>jboss.xml</tt></b></p><pre class="programlisting">
+&lt;MaximumSize&gt;15&lt;/MaximumSize&gt;
+&lt;MaxMessages&gt;1&lt;/MaxMessages&gt;
+
+</pre></div><p>The first of these, <tt>MaximumSize</tt>, defines how large the pool will be in terms of how many session it will have ready to serve incoming messages. The second one, <tt>MaxMessages</tt>, is used to configure the maximum number of messages a session is allowed to handle at once. I have never tweaked that option, and I do not know if JBossMQ actually supports it. It might enhance performance, if used.</p></div></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch08.html"><img src="images\toc.gif" border="0"></a><a href="ch08s07.html"><img src="images\prev.gif" border="0"></a><a href="ch08s32.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

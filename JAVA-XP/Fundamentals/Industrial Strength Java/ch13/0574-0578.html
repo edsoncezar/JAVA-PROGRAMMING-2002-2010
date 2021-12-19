@@ -1,0 +1,303 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0571-0573.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0579-0584.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-574"><P>Page 574</P></A>
+
+
+<P>
+another stack frame is counted; each time
+a method returns, a stack frame is discarded. A stack frame is a
+Java VM internal structure that records information about a call to
+a method. You should only call this method for a suspended thread.
+If you suspect a recursive method is not unwinding, suspending
+the thread running it and calling countStackFrames() may provide a
+clue as to whether too many nested method calls have been made.
+</P>
+
+<P>You can also use dumpStack() to generate a complete stack trace
+of all methods called for the current thread (The trace generated is
+the same as that provided by
+java.lang.Exception.printStackTrace()). The only way to cause another thread to generate a stack trace is
+to use the stop(Throwable t) method to generate an exception.
+</P>
+
+<P>In fact, dumpStack() operates by creating an Exception and
+printing its stack trace. To generate a stack trace to a particular
+PrintStream rather than System.out, use code like that shown in listing 13.57.
+</P>
+
+<P>Listing 13.57 Generating a Stack Trace to a PrintStream
+</P>
+<PRE>
+//Generate a stack trace, for the current Thread, on
+//PrintStream p.
+Exception e = new Exception(&quot;Stack Trace&quot;);
+e.printStackTrace(p);
+</PRE>
+
+<H4><A NAME="ch13_ 44">
+Tracing ThreadGroup Hierarchies
+</A></H4>
+
+<P>The Thread.toString() method provides a String that contains the Thread object's
+name, priority value, and the name of the ThreadGroup to which it belongs.
+The ThreadGroup.list() method uses this information to describe each thread in the
+hierarchy. It's a good idea always to provide the Thread object with a descriptive name so that
+the output of list() is meaningful. The ThreadGroup class toString() method generates
+a similar String with the ThreadGroup's name and maximum priority.
+</P>
+
+<P>To generate a listing that displays all the Threads and groups in the system, use code
+like that shown in listing 13.58.
+</P>
+
+<A NAME="PAGENUM-575"><P>Page 575</P></A>
+
+
+<P>Listing 13.58 Listing all Threads and ThreadGroups
+</P>
+<PRE>//First, get the current ThreadGroup.
+ThreadGroup g;
+g = Thread.currentThread().getThreadGroup();
+
+//Now move up the hierarchy of ThreadGroups until
+//we reach the top.
+while(g.getParent() != null) {
+        g = g.getParent();
+}
+
+//Now generate a list for the entire hierarchy.
+g.list();
+</PRE>
+
+<P>Running the code in listing 13.58 from a main() on a Win32 JVM generates output,
+like that shown in listing 13.59.
+</P>
+
+
+
+<P>Listing 13.59 Thread Hierarchy of a Simple Application
+</P>
+<PRE>java.lang.ThreadGroup[name=system,maxpri=10]
+    Thread[Finalizer thread,1,system]
+    java.lang.ThreadGroup[name=main,maxpri=10]
+        Thread[main,5,main]
+</PRE>
+
+<P>The &quot;system&quot; ThreadGroup is the parent of all other Threads and ThreadGroups.
+The &quot;main&quot; ThreadGroup contains the &quot;main&quot; initial Thread that calls main(). &quot;Finalizer&quot;
+is the thread that runs the garbage collector. It's priority is low, set to 1.
+</P>
+
+<P>Running the same code in an applet (under Netscape 3.0) provides output like that
+shown in listing 13.60.
+</P>
+
+<P>Listing 13.60 Thread Hierarchy of a Simple Applet
+</P>
+<PRE>java.lang.ThreadGroup[name=system,maxpri=10]
+    Thread[Finalizer thread,1,system]
+    java.lang.ThreadGroup[name=main,maxpri=10]
+        Thread[main,5,main]
+        Thread[AWT-Windows,5,main]
+
+</PRE>
+
+<A NAME="PAGENUM-576"><P>Page 576</P></A>
+
+
+<PRE>
+        Thread[AWT-Callback,5,main]
+        Thread[ScreenUpdater,4,main]
+        Thread[Image Fetcher 0,8,main]
+        Thread[Image Fetcher 1,8,main]
+        Thread[Image Fetcher 2,8,main]
+        Thread[Image Fetcher 3,8,main]
+        netscape.applet.AppletThreadGroup[name=applet-
+myapplet.class,maxpri=6]
+            Thread[Thread-2,5,applet-myapplet.class]
+</PRE>
+
+
+<P>Again the Finalizer garbage-collector thread is running, but you can also see that the
+AWT package contains a number of Threads to handle screen updates, callbacks, and
+asynchronous loading of Images. The Image Fetcher threads all have a higher priority than
+the applet thread so that image loading takes priority over applet processing.<BR>
+Netscape also uses a separate ThreadGroup for each applet; this could be for
+security reasons or perhaps to make it easier to control applet behavior as the user moves
+from page to page.
+</P>
+
+
+<H3><A NAME="ch13_ 45">
+A Threaded Client/Server<BR>
+Application
+</A></H3>
+
+
+<P>To complete the chapter, an example of threading a simple server class for a
+networked client/server system is provided. The server handles requests from multiple clients for
+files as follows:
+
+
+
+<OL>
+<LI>      Each client connects to the server port and sends the name of a file down
+the socket.
+<LI>      The server responds by opening the file and sending its contents back via the
+same socket.
+</OL>
+
+
+<H4><A NAME="ch13_ 46">
+Client Class
+</A></H4>
+
+<P>Listing 13.61 shows the client class that makes requests from the server. The class contains
+a main() and can be run as a Java application. Multiple instances of this client can be run
+at once to present the server application (in later listings) with multiple requests at once.
+</P>
+
+<P>Listing 13.61 Simple File Transfer Client
+</P>
+
+
+<A NAME="PAGENUM-577"><P>Page 577</P></A>
+
+
+<PRE>
+package industrial;
+
+import java.io.*;
+import java.net.*;
+
+public class Client {
+public static void main(String[] args) {
+    //check arguments.
+    if(args.length &lt; 2)
+        System.out.println(&quot;Usage: java Client &quot;+
+        &quot;servername &lt;filename&gt;&quot;);
+    else {
+        int size, len, total=0;
+
+        Socket s = null;
+
+        System.out.println(args[1]);
+        try {
+            //open a socket to the
+            //server
+            s = new Socket(args[0],
+
+
+            ThreadedServer.SERVER_PORT);
+
+            //get streams to talk to
+            //the server.
+            DataOutputStream dos =
+            new DataOutputStream(s.getOutputStream());
+            DataInputStream dis =
+            new DataInputStream(s.getInputStream());
+
+            //send filename as UTF.
+            dos.writeUTF(args[1]);
+
+            //get data back from server.  First, get
+            //file size, sent as an int.
+            size = dis.readInt();
+            byte[] b = new byte[size];
+
+            do {
+                len = dis.read(b);
+                if(len &gt; 0) {
+                System.out.println(&quot;received &quot;
+                    +len+&quot; bytes&quot;);
+                total += len;
+                }
+            }
+            while((len &gt;= 0) &amp;&amp; (total &lt; size));
+
+            String status = &quot;client received &quot;
+
+</PRE>
+
+<A NAME="PAGENUM-578"><P>Page 578</P></A>
+
+<PRE>
+                +total+&quot; bytes&quot;;
+            System.out.println(status);
+
+            //Send the status string back.
+            dos.writeUTF(status);
+        }
+
+        catch(IOException e) {
+            e.printStackTrace();
+        }
+
+        finally {
+            if(s != null) {
+                try { s.close(); }
+                catch(IOException e) {}
+            }
+        }    //end of finally block
+    }    //end of else clause
+}        //end of main
+}        //end of class
+</PRE>
+
+
+<H4><A NAME="ch13_ 47">
+ThreadedServer Class
+</A></H4>
+
+<P>Listing 13.62 shows the threaded Server application. It's all contained within
+one ThreadedServer class that provides a main() so that a Server can be run as a Java
+application.
+</P>
+
+<P>Listing 13.62 Corresponding Server Class
+</P>
+<PRE>
+package industrial;
+
+import java.io.*;
+import java.net.*;
+
+//A Server which can service multiple clients at once by
+//creating Threads.
+public class ThreadedServer implements Runnable {
+//Class constants.  The port number on which the
+//server listens for clients.
+public static final int SERVER_PORT=6543;
+
+//Class variables.  A count of server threads that
+//we have created.
+private static int serverThreads = 0;
+
+</PRE>
+
+<P><CENTER>
+<a href="0571-0573.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0579-0584.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

@@ -1,0 +1,225 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The init method reads these parameters and uses them to create the list of available ads. This code appears in boldface type in the following example. If there is no ads.txt file, the servlet looks for images instead. These will be displayed without links, because none were defined. This makes the servlet flexible because it can display both read-only and linked advertisements. The complete code for AdRotatorServlet is included here. First, let&#146;s look at the class definition and init method:
+</P>
+<PRE>
+package shopcart.servlets;
+ 
+//imports removed to save space
+
+import DebugLog;
+
+public class AdLinkRotatorServlet extends GenericServlet 
+implements SingleThreadModel
+{
+    protected Vector ads;
+    protected int curIndex;
+    protected String imageURL;
+    protected DebugLog logger;
+    
+    public void init(ServletConfig config) throws ServletException
+    {
+        String imageDirName;
+        String logServer;
+        File imageDir=null;
+        File adSpec=null;
+        
+        super.init(config);
+        
+        curIndex = 0;
+        ads = new Vector();
+
+<B>        imageDirName = getInitParameter(&#147;imagedir&#148;);
+        imageURL = getInitParameter(&#147;imageroot&#148;);
+        logServer = getInitParameter(&#147;logserver&#148;);</B>
+        
+        logger = new DebugLog();
+        logger.logTo(logServer);
+        
+        try
+        {
+<B>            if(imageDirName != null)
+            imageDir = new File(imageDirName);
+    
+            if(imageDir != null)
+             adSpec = new File(imageDir,"ads.txt");</B>
+    
+            logger.log("Looking for adspec at: "+adSpec);
+    
+            //Try to load the ads from a specification file
+            <B>if((adSpec != null)&amp&amp adSpec.exists())
+            {
+                try
+                {
+                    FileReader fileIn = new FileReader(adSpec);
+                    BufferedReader bufIn =
+                                  new BufferedReader(fileIn);
+                    String curLine;
+                    int index;
+                    String link,fileName;
+                    AdFileEntry newEntry;
+            
+                    while((curLine = bufIn.readLine()) != null)
+                    {
+                        index = curLine.indexOf(" ");
+                
+                        if(index &gt 0)
+                        {
+                            link = curLine.substring(0,index);
+                            fileName = curLine.substring(index+1);
+                    
+                            newEntry =
+                             new AdFileEntry(link,fileName);
+                    
+                            ads.addElement(newEntry);
+                        }
+                    }
+        
+                    bufIn.close();
+                }
+                catch(Exception exp)
+                {
+                    logger.log("Invalid ad spec. file.");
+                    ads.removeAllElements();
+                }
+            }</B>
+        
+            //If no spec file, or a bad one, just show ads
+            <B>if((ads.size()==0)
+                &amp&amp (imageDir!=null) 
+                &amp&amp imageDir.exists() 
+                &amp&amp imageDir.isDirectory())
+            {
+                String[] files;
+                int i,max;
+            
+                files = imageDir.list();
+            
+                max = files.length;
+            
+                for(i=0;i&ltmax;i++)
+                {
+                    ads.addElement(
+                         new AdFileEntry(null,files[i]));
+                }
+            }</B>
+            else if(ads.size()==0)
+            {
+                logger.log("Cannot find image dir: "+imageDirName);
+            }
+        }
+        catch(Exception exp)
+        {
+            logger.log(exp);
+        }
+    }
+</PRE>
+<P>The AdRotatorServlet&#146;s service method, which follows, outputs the HTML for a link an or image, depending on the existence of the ads.txt file. The image displayed is based on the current index stored in the curIndex instance variable. At the end of the method, this index is incremented and the modulo operator is used to make sure that the index doesn&#146;t exceed the number of available ads. For example, if there are 10 ads and the current index is 9, it will be 0 the next time the service method is called.
+</P>
+<P>The location for the image is relative to the initialization parameter imageroot, as stored in the imageURL instance variable. This ensures that the servlet outputs the correct link, regardless of its relationship to the images directory.</P>
+<PRE>
+    public void service(ServletRequest request,
+                         ServletResponse response)
+                        throws IOException,ServletException
+    {
+        AdFileEntry curEntry;
+        ServletOutputStream out=null;
+        int len;
+        
+        try
+        {
+            out = response.getOutputStream();
+            len = ads.size();
+        
+            if(len&gt0)
+            {
+                curEntry = (AdFileEntry) ads.elementAt(curIndex);
+            
+                if(curEntry.link != null)
+                {
+                    out.print(&#147;&ltA HREF=\&#148;&#147;);
+                    out.print(curEntry.link);
+                    out.println(&#147;\&#147;&gt&#148;);
+                }
+        
+                out.print(&#147;&ltIMG SRC=&#148;);
+                out.print(imageURL);
+                out.print(&#147;/&#148;);
+                out.print(curEntry.fileName);
+                out.println(&#147;&gt&#148;);
+            
+                if(curEntry.link != null)
+                {
+                    out.println(&#147;&lt/A&gt&#148;);
+                }
+        
+                curIndex= (curIndex+1)%len;
+            }
+            else
+            {
+                //Print a comment to HTML for testing
+                out.println(&#147;&lt!--No ads.--&gt&#148;);
+            }
+        }
+        catch(Exception exp)
+        {
+            logger.log(exp);
+        }
+    }
+}
+</PRE>
+<P>The AdFileEntry objects used by the AdRotator simply store a link-file name pair that is used to output the ads:
+</P>
+<PRE>
+class AdFileEntry
+ {
+    public String link;
+    public String fileName;
+    
+    public AdFileEntry(String l,String file)
+    {
+        link = l;
+        fileName = file;
+    }
+}
+</PRE>
+<P>For testing purposes, this servlet prints a comment to the HTML, indicating that no ads are available if none are available. This comment is not viewed by the user.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading10"></A><FONT COLOR="#000077">Searching</FONT></H4>
+<P>The HTMLSearchServlet used to search the online store is the same one described in detail in Chapter 8, &#147;A Servlet-Based Search Engine.&#148; (Please refer to that chapter for details on the search servlet and the indexing engine behind it.) For this example, a copy of the servlet was made in the shopcart.servlets package. The code for the servlet and the HTML for the help and error pages remain virtually the same.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

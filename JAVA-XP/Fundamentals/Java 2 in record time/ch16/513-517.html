@@ -1,0 +1,191 @@
+<HTML>
+<HEAD>
+
+<TITLE>Java 1.2 In Record Time:Working with Multi-Threaded Programs and JAR Files</TITLE>
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="510-513.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="517-521.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>You can now run the numbers applet, as shown below. The code for this applet appears in <TT>numbers.java</TT>.</P>
+<P><A NAME="Fig5"></A><A HREF="images\16-05.jpg"><IMG SRC="images\16-05t.jpg"></A></P>
+<P>numbers.java
+</P>
+<PRE>
+import java.awt.*;
+import java.awt.event.*;
+import java.applet.Applet;
+
+public class numbers extends Applet implements Runnable,
+ActionListener &#123;
+
+     Thread Thread1, Thread2;
+     TextField text1, text2;
+     Button button1;
+
+     public void init() &#123;
+          text1 = new TextField(20);
+          text2 = new TextField(20);
+          add(text1);
+          add(text2);
+          button1 = new Button("Start threads");
+          add(button1);
+          button1.addActionListener(this);
+     &#125;
+     public void actionPerformed(ActionEvent e)&#123;
+          if(e.getSource() == button1)&#123;
+               Thread1 = new Thread(this, "threadname1");
+               Thread1.start();
+               Thread2 = new Thread(this, "threadname2");
+               Thread2.start();
+          &#125;
+     &#125;
+     public void run() &#123;
+          String out_string;
+          int loop_index;
+          out_string = new String();
+          for(loop_index = 1; loop_index &lt; 1000; loop_index&#43;&#43;)&#123;
+               if(((Thread.currentThread()). getName()).equals
+               &#8658; ("threadname1"))&#123;
+                    text1.setText(out_string. valueOf(loop_index));
+               &#125;
+               if(((Thread.currentThread()). getName()).equals
+               &#8658; ("threadname2"))&#123;
+                    text2.setText(out_string. valueOf(loop_index));
+               &#125;
+          &#125;
+     &#125;
+&#125;
+</PRE>
+<P>You&#146;ve seen how to handle two threads now, but that raises a new issue&#151;what if you want the two threads to work with the same data? For example, if both threads were to work with the same data but execute at different rates (which is determined by the operating system), how would you make sure they didn&#146;t interfere with each other?
+</P>
+<H3><A NAME="Heading10"></A><FONT COLOR="#000077">Setting Up Thread Synchronization</FONT></H3>
+<P>You&#146;ve gotten a brief introduction to thread synchronization above, but now you&#146;re going to dig into the subject deeper. For example, let&#146;s say that you wanted to set up an applet that counts integers steadily from 0 up and displays them. That&#146;s fine as long as you only have one thread in the applet. But if you have two threads that do the counting, incrementing and displaying the value in the <I>same</I> variable, it could be a problem.</P>
+<P>For example, it is possible that thread 1 will be interrupted by thread 2 after incrementing your counter from, say, 1000 to 1001. Thread 2 will then increment your counter from 1001 to 1002 and print, and then control might go back to thread 1, which will print out its value, 1001. This means your series of integers would run: 1000, 1002, 1001..., which is obviously a problem. You will see how to protect the variable that holds the current counter value so that only one thread has access to it at a time until the incrementing and displaying operation is completely finished, thus <I>synchronizing</I> the threads.</P>
+<P>Start by creating the counting applet now. Create a new file called <TT>synchronize.java</TT>, adding the standard code and implementing the Runnable interface for your two threads:.</P>
+<PRE>
+ import java.awt.*;
+ import java.applet.Applet;
+
+ public class synchronize extends Applet implements Runnable&#123;
+          .
+          .
+          .
+&#125;
+</PRE>
+<P>Now add your two new threads, <TT>Thread1</TT> and <TT>Thread2</TT>, and start them as follows:</P>
+<PRE>
+ import java.awt.*;
+ import java.applet.Applet;
+
+ public class synchronize extends Applet implements Runnable&#123;
+
+     Thread Thread1, Thread2;
+          .
+          .
+          .
+     public void start() &#123;
+&#8594;          Thread1 = new Thread(this);
+&#8594;          Thread1.start();
+&#8594;          Thread2 = new Thread(this);
+&#8594;          Thread2.start();
+    &#125;
+               .
+               .
+</PRE>
+<P>Let&#146;s say that you have a data class named <TT>dataClass</TT>, with some internal data member named <TT>internal_data</TT>:</P>
+<PRE>
+ class dataClass&#123;
+     public int internal_data;
+&#125;
+</PRE>
+<P>You can set the <TT>internal_data</TT> member to 0 in the class&#146;s constructor like this:</P>
+<PRE>
+ class dataClass&#123;
+     public int internal_data;
+&#8594;     public void dataClass()&#123;
+&#8594;          internal_data = 0;
+&#8594;     &#125;
+</PRE>
+<P>And we create an object of the <TT>dataClass</TT> class in our applet, named <TT>sensitiveData</TT>:</P>
+<PRE>
+ import java.awt.*;
+ import java.applet.Applet;
+
+ public class synchronize extends Applet implements Runnable&#123;
+
+     Thread Thread1, Thread2;
+     dataClass sensitiveData;
+
+&#8594;     public void init() &#123;
+&#8594;          sensitiveData = new dataClass();
+&#8594;     &#125;         .
+               .
+               .
+</PRE>
+<P>Now, in the <TT>run()</TT> method, which both threads will execute, set up a loop of 1000 iterations:</P>
+<PRE>
+     public void run() &#123;
+          int loop_index;
+&#8594;          for(loop_index = 1; loop_index &lt; 1000; loop_index&#43;&#43;)&#123;
+                    .
+                    .
+                    .
+&#8594;          &#125;
+     &#125;
+</PRE>
+<P>In that loop, each thread will first increment the <TT>sensitiveData</TT> object&#146;s <TT>internal_data</TT> data member:</P>
+<PRE>
+     public void run() &#123;
+          String out_string;
+          int loop_index;
+          out_string = new String();
+          for(loop_index = 1; loop_index &lt; 1000; loop_index&#43;&#43;)&#123;
+&#8594;               sensitiveData.internal_data&#43;&#43;;
+                    .
+                    .
+                    .
+&#8594;          &#125;
+     &#125;
+</PRE>
+<P>Then print out the newly-incremented version of the number in <TT>internal_data</TT>:</P>
+<PRE>
+     public void run() &#123;
+          String out_string;
+          int loop_index;
+          out_string = new String();
+          for(loop_index = 1; loop_index &lt; 1000;
+          loop_index&#43;&#43;)&#123;
+               sensitiveData.internal_data&#43;&#43;;
+&#8594;               System.out.println(&#147;data value = &#147;
+ &#43; &#8658; out_string.valueOf(sensitiveData.internal_data));
+          &#125;
+     &#125;
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="510-513.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="517-521.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

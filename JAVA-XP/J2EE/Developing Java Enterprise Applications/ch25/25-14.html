@@ -1,0 +1,210 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The findHome method uses getInitialContext to access JNDI. Using the context, findHome looks up the ShoppingCartHome object that will create ShoppingCarts for the servlet. The same initialization parameters used by the ShoppingCartServlet are used by the InventoryServlet to create its context. Of course, each servlet must be configured separately.
+</P>
+<PRE>
+    protected void findHome()
+     {        
+        try
+        {
+            String homeName;
+            
+            homeName = getInitParameter(&#147;ShoppingCartHome&#148;);
+            
+            ctx = getInitialContext();
+            
+            if(ctx != null)
+                home = (ShoppingCartHome) ctx.lookup(homeName);
+        }
+        catch(Exception exp)
+        {
+            ctx = null;
+            home = null;
+        }
+    }
+    
+    protected Context getInitialContext() throws Exception
+    {
+        Properties p = new Properties();
+        String url = null;
+        String user=null;
+        String password=null;
+        
+        url = getInitParameter(&#147;url&#148;);
+        user = getInitParameter(&#147;user&#148;);
+        password = getInitParameter(&#147;password&#148;);
+    
+        p.put(Context.INITIAL_CONTEXT_FACTORY,
+                &#147;weblogic.jndi.T3InitialContextFactory&#148;);
+        
+        if(url != null) 
+            p.put(Context.PROVIDER_URL, url);
+        else 
+            p.put(Context.PROVIDER_URL, &#147;t3://localhost:7001&#148;);
+    
+        if (user != null)
+        {
+            p.put(Context.SECURITY_PRINCIPAL, user);
+    
+            if (password == null) password = &#147;&#148;;
+        
+            p.put(Context.SECURITY_CREDENTIALS, password);
+        } 
+    
+        return new InitialContext(p);
+    }
+</PRE>
+<P>The doGet method contacts the ShoppingCart EJB, gets the inventory, and displays it in an HTML table. Each item is displayed in its own row, with the total sales included by item.
+</P>
+<PRE>
+    public void doGet(HttpServletRequest request
+                       , HttpServletResponse response)
+    throws ServletException, IOException
+    {        
+        ShoppingCartItem curItem;
+        Object items[]=null;
+        int i,max=0;
+        String cartName;
+        ShoppingCart cart=null;
+        PrintWriter out;
+        HttpSession session;
+          
+        //Try to use the remote user login
+        cartName = request.getRemoteUser();
+    
+        if(cartName == null)
+        {
+            session = request.getSession(true);
+        
+            if(session != null) cartName = session.getId();
+        }
+            
+        if(home == null) findHome();
+        
+        //Get the EJB shopping cart
+        if((home != null)&amp&amp(cartName != null))
+        {            
+            try
+            {
+                cart = home.create(cartName);
+            }
+            catch(Exception ex)
+            {
+                //perhaps home is gone, reset
+                home = null;
+                ctx = null;
+            
+                logger.log(ex);
+            }
+        }
+            
+        response.setContentType(&#147;text/html&#148;);
+        out = response.getWriter();
+        
+        out.println(&#147;&ltHTML&gt&#148;);
+        out.println(&#147;&ltHEAD&gt&#148;);
+        out.println(&#147;&ltTITLE&gt&#148;);
+        out.println(&#147;Inventory&#148;);
+        out.println(&#147;&lt/TITLE&gt&#148;);
+        out.println(&#147;&lt/HEAD&gt&#148;);
+        out.println(&#147;&ltBODY TEXT=\&#148;#000000\&#147; BGCOLOR=\&#148;#FFFFFF\&#147;&#148;);
+        out.println(&#147; LINK=\&#148;#FF0000\&#147; VLINK=\&#148;#800080\&#147;&gt&#148;);
+        out.println(&#147;&ltCENTER&gt&#148;);
+        out.println(&#147;&ltTABLE WIDTH=500 BORDER=0&gt&#148;);
+        out.println(&#147;&ltTR&gt&#148;);
+        out.println(&#147;&ltTD&gt&#148;);
+        
+        out.println(&#147;&ltCENTER&gt&ltH1&gtInventory&lt/H1&gt&lt/CENTER&gt&#148;);
+        out.println(&#147;The online store contains the&#148;
+                        +&#147; following items:&ltBR&gt&#148;);
+        out.println(&#147;&ltTABLE&gt&#148;);
+        out.println(&#147;&ltTR&gt&#148;);
+        out.println(&#147;&ltTH&gtDescription&lt/TH&gt&#148;);
+        out.println(&#147;&ltTH&gtPrice&lt/TH&gt&#148;);
+        out.println(&#147;&ltTH&gtQuantity&lt/TH&gt&#148;);
+        out.println(&#147;&ltTH&gtSales&lt/TH&gt&#148;);
+        out.println(&#147;&ltTH&gtRevenue From Sales&lt/TH&gt&#148;);
+        out.println(&#147;&lt/TR&gt&#148;);
+        
+        if(cart != null) items = cart.getInventory();
+        
+        if(items != null) max = items.length;
+        
+        for(i=0;i&ltmax;i++)
+        {
+            curItem = (ShoppingCartItem)items[i];
+            
+            out.println(&#147;&ltTR&gt&#148;);
+            out.print(&#147;&ltTD&gt&#148;);
+            out.print(curItem.desc);
+            out.println(&#147;&lt/TD&gt&#148;);
+            out.print(&#147;&ltTD&gt&#148;);
+            out.print(formatter.format(curItem.price));
+            out.println(&#147;&lt/TD&gt&#148;);
+            out.print(&#147;&ltTD&gt&#148;);
+            out.print(curItem.quantity);
+            out.println(&#147;&lt/TD&gt&#148;);
+            out.print(&#147;&ltTD&gt&#148;);
+            out.print(curItem.sales);
+            out.println(&#147;&lt/TD&gt&#148;);
+            out.print(&#147;&ltTD&gt&#148;);
+            out.print(formatter.format(curItem.price
+                                       *curItem.sales));
+            out.println(&#147;&lt/TD&gt&#148;);
+            out.println(&#147;&lt/TR&gt&#148;);
+        }
+
+        out.println(&#147;&lt/TABLE&gt&#148;);
+        
+        out.println(&#147;&lt/TD&gt&#148;);
+        out.println(&#147;&lt/TR&gt&#148;);
+        out.println(&#147;&lt/TABLE&gt&#148;);
+        out.println(&#147;&lt/CENTER&gt&#148;);
+        out.println(&#147;&lt/BODY&gt&#148;);
+        out.println(&#147;&lt/HTML&gt&#148;);
+        out.close();
+    }
+}
+</PRE>
+<P>This example shows how a servlet can act as a report engine, generating HTML from the database and included calculated values.
+</P>
+<H3><A NAME="Heading13"></A><FONT COLOR="#000077">Building and Running the Store</FONT></H3>
+<P>In order to run the online store example, you need to create a database for it. A class called shopcart.BuildDB is included on the CD-ROM and takes a URL, driver, name, and password as command-line arguments. These values are then used to build the database. A Microsoft Access database file is included on the CD-ROM for use with this example as well. In this case, create an ODBC data source for it.
+</P>
+<P>Next, the servlets must be installed, and the parameters discussed in this chapter must be configured.</P>
+<P>Finally, install the ShoppingCart EJB. A script called build.bat is available on the CD-ROM. The NT script builds the source code and copies the .class files to the specified directory. This batch file also runs the BEAWebLogic deployment tools and EJB compiler on the bean. A deploymentDescriptor.txt file is included to support this automated deployment. If you are using another EJB host, please refer to that host&#146;s documentation to determine the steps required to load the ShoppingCartBean.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

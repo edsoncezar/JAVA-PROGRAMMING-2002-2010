@@ -1,0 +1,352 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0431-0436.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0442-0446.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-437"><P>Page 437</P></A>
+
+
+<PRE>
+      out.write(buf, 0, cnt);
+    }
+    in.close();
+    out.println(&quot;.&quot;);
+    out.flush();
+    out.setLinemode(true);
+    }
+</PRE>
+<P>
+<B>
+Deleting Messages
+</B>
+<P>
+
+<P>In response to a DELE command, mark the indicated message for deletion:
+</P>
+
+<PRE>
+    void handleDELE() throws IOException {
+    if (in.hasMoreArgs()) {
+      md.delete(Integer.parseInt(in.nextArg()) - 1);
+      out.println(&quot;+OK&quot;);
+    }
+    else
+      out.println(&quot;-ERR msg number needed&quot;);
+    }
+
+  }
+</PRE>
+
+<P>You do not actually delete the message until the POP session
+has been closed.
+</P>
+
+<H3><A NAME="ch11_ 36">
+Querying the Name/<BR>
+Address Database
+</A></H3>
+
+
+<P>You might decide to forgo complex query protocols for the simpli-
+city of a CGI-style query using HTTP. HTTP defines two
+different approaches for sending a query to the server: GET and POST.
+Using GET, you include the query information as part of the URL,
+which is separated from the CGI information with a &quot;?&quot;. Using POST,
+you send the query information as a content body appended to
+the request. Because of the simple nature of the name queries, you
+use the much simpler ISINDEX form of GET. To retrieve a user's
+e-mail address, your client sends a &quot;GET&quot; request to the server with a
+URL of &quot;/address&quot;, followed by a &quot;?&quot; and the user's name.<BR>
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+When implementing the same approach using Jeeves, define
+a servlet rather than a completely different HTTP service.
+Servlets are the server-side equivalents of
+applets; that is, Java programs designed to execute
+in an environment provided by an HTTP server and intended
+as a Java-style replacement for Common Gateway
+Interface (CGI) programs. The servlet queries the name database
+and returns the answer to the client.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<A NAME="PAGENUM-438"><P>Page 438</P></A>
+
+
+
+<H4><A NAME="ch11_ 37">
+Implementing the NameQueryFactory
+</A></H4>
+
+<P>Because you want the query server to run concurrently with other normal HTTP
+servers, you cannot use the standard port 80. Instead, assign it port 1234 in your factory class.
+The factory class for the NameQuery server follows:
+</P>
+
+<PRE>
+  public class NameQueryFactory extends ClientHandlerFactory {
+    public NameQueryFactory() {
+    this(1234);
+    }
+
+    public NameQueryFactory(int port) {
+    this.port = port;
+    }
+
+    String getName() {
+    return &quot;NameQuery&quot;;
+    }
+
+    ClientHandler createClientHandler(Socket connection) {
+    return new NameQueryHandler(connection);
+    }
+  }
+</PRE>
+
+<H4><A NAME="ch11_ 38">
+Implementing the NameQueryHandler
+</A></H4>
+
+<P>Your NameQueryHandler simply subclasses the basic HTTPHandler:
+</P>
+
+<PRE>
+  class NameQueryHandler extends HTTPHandler {
+
+    public NameQueryHandler(Socket connection) {
+    super(connection);
+    }
+</PRE>
+
+<P>Override handleGet() to parse the URL of the query, look up the answer, and then return
+it as plain text. The &quot;content-type&quot; field tells the browser how to handle the data in
+the response. &quot;Text/plain&quot; indicates that the data is text, instead of sound or some
+other information type, and preformatted ASCII, instead of HTML. By using the
+content-type information, web browsers display the information you send as if it was printed to the
+Java console. Any substantial user database is stored on disk as a file or database. The
+following example provides an outline to which you can add your specific database access
+</P>
+
+
+<A NAME="PAGENUM-439"><P>Page 439</P></A>
+
+<P>
+code:
+</P>
+<PRE>
+    void handleGET(String arg) throws IOException {
+    StringTokenizer st = new StringTokenizer(arg, &quot; ?\n\r&quot;);
+    if (&quot;/address&quot;.equalsIgnoreCase(st.nextToken())) {
+      if (st.hasMoreTokens()) {
+        String user = st.nextToken();
+        out.println(&quot;HTTP/1.0 200 OK&quot;);
+        out.println(&quot;server: ISJhttpd/1.0&quot;);
+        out.println(&quot;content-type: text/plain&quot;);
+        out.println();
+
+        // lookup and output user's information
+
+        out.flush();
+      }
+      else {
+        out.println(&quot;HTTP/1.0 200 OK&quot;);
+        out.println(&quot;server: ISJhttpd/1.0&quot;);
+        out.println(&quot;content-type: text/plain&quot;);
+        out.println();
+
+        // lookup and output everything in database
+
+        out.flush();
+      }
+    }
+    else {
+      out.println(&quot;HTTP/1.0 404 not found&quot;);
+      out.println();
+      out.flush();
+    }
+    }
+
+  }
+</PRE>
+
+<H3><A NAME="ch11_ 39">
+The Complete E-Mail Server
+</A></H3>
+
+<P>After completing the implementation of the protocol-specific server code, you can
+proceed to put the pieces together to form the complete e-mail server application. First,
+however, you must deal with the non-network protocol problems of operating and maintaining
+a practical server environment. These functions include monitoring server status, logging
+of events, and configuring the server.
+</P>
+
+<A NAME="PAGENUM-440"><P>Page 440</P></A>
+
+
+
+<H4><A NAME="ch11_ 40">
+Monitoring
+</A></H4>
+
+<P>Network management and monitoring is a complex subject with its own suite of
+protocols, such as SNMP or CMIP, and specialized client software. Instead of writing
+another complex server, however, you can reuse existing server code and client applications
+to provide some simple status-monitoring functions. Use HTTP instead of a
+network management protocol to turn any web browser into a status display console. Follow
+the same approach as the NameQueryServer, and subclass HTTPHandler.
+</P>
+
+<P>By default, your factory places the StatusServer on port 1235
+to avoid conflict with normal HTTP or the NameQuery server:
+</P>
+
+<PRE>
+  public class ServerStatusFactory extends
+ ClientHandlerFactory {
+    public ServerStatusFactory() {
+    this(1235);
+    }
+
+    public ServerStatusFactory(int port) {
+    this.port = port;
+    }
+
+    String getName() {
+    return &quot;Status&quot;;
+    }
+
+    ClientHandler createClientHandler(Socket connection) {
+    return new ServerStatusHandler(connection);
+    }
+  }
+</PRE>
+
+<P>This sample server supports two URLs or commands:
+</P>
+
+<UL>
+<LI>          View server-specific status
+<LI>          View general runtime status.
+</UL>
+
+<P>For server-specific status, obtain the list of servers maintained as a Server class
+variable, and go through the list getting infomation about each service. The exact information
+is server-specific and not defined in this example.
+</P>
+
+<P>The runtime status response uses a client-pull technique to periodically update the
+display. The &quot;refresh:&quot; attribute of the response instructs your browser to automatically reload
+the page after the indicated interval. In this case, ask for reloads every 30 seconds.
+The &quot;content-type: text/plain&quot; indicates that preformatted ASCII is returned. The code for
+the server follows:
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Implementing the same approach using Jeeves, define
+a servlet instead of a completely different HTTP service.
+The servlet computes the status information and returns it to the
+client. As a separate HTTP server, the status service can run at
+a different (and probably lower) thread priority than other
+HTTP-based services.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<A NAME="PAGENUM-441"><P>Page 441</P></A>
+
+
+
+
+<PRE>
+  class ServerStatusHandler extends HTTPHandler {
+
+    public ServerStatusHandler(Socket connection) {
+    super(connection);
+    }
+
+    void handleGET(String arg) throws IOException {
+    if (&quot;/status&quot;.equalsIgnoreCase(arg)) {
+      out.println(&quot;HTTP/1.0 200 OK&quot;);
+      out.println(&quot;server: ISJhttpd/1.0&quot;);
+      out.println(&quot;content-type: text/plain&quot;);
+      out.println();
+      Enumeration enum = Server.elements();
+      while (enum.hasMoreElements()) {
+        Server s = (Server)(enum.nextElement());
+
+        // compute and format status information
+
+      }
+      out.flush();
+    }
+    else {
+      out.println(&quot;HTTP/1.0 200 OK&quot;);
+      out.println(&quot;server: ISJhttpd/1.0&quot;);
+      out.println(&quot;content-type: text/plain&quot;);
+      out.println(&quot;refresh: 0&quot;);
+      out.println();
+      Runtime r = Runtime.getRuntime();
+      out.println(new InetDate());
+      out.println(&quot;free memory: &quot; + r.freeMemory());
+      out.println(&quot;total memory: &quot; + r.totalMemory());
+      out.flush();
+      }
+    }
+  }
+</PRE>
+
+<P>Using HTTP, it is simple to define additional commands. You can extend the
+&quot;/status&quot; URL to an ISINDEX query with the name of a specific server, or you can add
+additional URLs for other types of status information.
+</P>
+
+<H4><A NAME="ch11_ 41">
+Logging Messages
+</A></H4>
+
+<P>In the previous examples, you print status and error messages to System.out.
+Although useful for debugging, you want to log status and error messages to a file for later
+analysis
+</P>
+
+<P><CENTER>
+<a href="0431-0436.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0442-0446.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

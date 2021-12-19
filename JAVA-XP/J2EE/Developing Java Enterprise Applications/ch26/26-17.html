@@ -1,0 +1,236 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-16.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-18.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<PRE>
+    protected String messageToFile(Message m,long msgNum)
+    {
+        String retVal = null;
+        FileOutputStream fileOut;
+        BufferedOutputStream bufOut;
+        ObjectOutputStream objOut;
+        File file;
+        String fileName;
+
+        if(m==null) return retVal;
+
+        try
+        {
+            fileName = msgNum&#43;&#147;.ser&#148;;
+            file = new File(objDir,fileName);
+            fileOut = new FileOutputStream(file);
+            bufOut = new BufferedOutputStream(fileOut);
+            objOut = new ObjectOutputStream(bufOut);
+
+            objOut.writeObject(m);
+
+            objOut.close();
+
+            retVal = fileName;
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            retVal = null;
+        }
+
+        return retVal;
+    }
+
+    protected Message messageFromFile(String s)
+    {
+        Message retVal = null;
+        FileInputStream fileIn;
+        BufferedInputStream bufIn;
+        ObjectInputStream objIn;
+        File file;
+
+        if(s==null) return retVal;
+
+        try
+        {
+            file = new File(objDir,s);
+
+            if(!file.exists())
+                file = new File(s);
+
+            fileIn = new FileInputStream(file);
+            bufIn = new BufferedInputStream(fileIn);
+            objIn = new ObjectInputStream(bufIn);
+
+            retVal = (Message) objIn.readObject();
+
+            objIn.close();
+        }
+        catch(Exception exp)
+        {
+            retVal = null;
+        }
+
+        return retVal;
+    }
+
+    protected Message copyMessage(Message m)
+    {
+        Message retVal = m;
+        ByteArrayOutputStream byteOut;
+        BufferedOutputStream bufOut;
+        ObjectOutputStream objOut;
+        ByteArrayInputStream byteIn;
+        BufferedInputStream bufIn;
+        ObjectInputStream objIn;
+
+        try
+        {
+            byteOut = new ByteArrayOutputStream();
+            bufOut = new BufferedOutputStream(byteOut);
+            objOut = new ObjectOutputStream(bufOut);
+
+            objOut.writeObject(m);
+
+            objOut.close();
+
+            byteIn =
+              new ByteArrayInputStream(byteOut.toByteArray());
+            bufIn = new BufferedInputStream(byteIn);
+            objIn = new ObjectInputStream(bufIn);
+
+            retVal = (Message) objIn.readObject();
+
+            objIn.close();
+        }
+        catch(Exception exp)
+        {
+            retVal = m;
+        }
+
+        return retVal;
+    }
+}
+</PRE>
+<P>As you can see, the message store represents a lot of code and ties together several enterprise frameworks. By changing the store implementation, MiniJMS can alter its persistence mechanism or support other JMS specifications and versions.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading15"></A><FONT COLOR="#000077">The Remote Server Objects</FONT></H4>
+<P>The object that the client initially connects to using RMI is an instance of MiniJMSServerImp, which implements the RemoteMiniServer interface. This object is used to create objects that implement the RemoteMiniConnection interface. These connections are implemented in the class RemoteMiniConnectionImp. Both classes extend the UnicastRemoteObject interface and are provided on the CD-ROM. The only non-obvious aspect of either object is that the remote connection keeps track of the sessions it creates and closes them when it closes, in the same way as the MiniConnection object does.
+</P>
+<P>The RemoteMiniSession implementation, called RemoteMiniSessionImp, is far more complex than the server or connection and requires some in-depth discussion. The code for RemoteMiniSessionImp is included here, with discussions inserted as needed to clarify various techniques and concepts.</P>
+<P>This remote session uses a vector called toSend to store messages that it has been told to send but hasn&#146;t sent. This vector is used when the session is running in transacted mode. As messages are sent to the client, they are stored in vectors contained in the histories hash table. These histories are used to implement rollback and recover.</P>
+<P>Temporary destinations need to be cleaned up when a session closes, so they are stored in a vector called unregOnClose. The session also keeps a flag indicating whether it is transacted, a reference to the message store, its client ID, and a reference to the thread that it uses to poll for new messages in the store.</P>
+<P>The constructor for RemoteMiniSessionImp initializes all of these variables, including the thread. However, the thread is initially suspended because no destinations have been registered for. When a destination is registered, the thread begins polling for messages.</P>
+<PRE>
+package minijmsserver;
+
+//Imports removed to save space.
+
+public class RemoteMiniSessionImp
+ extends UnicastRemoteObject
+ implements RemoteMiniSession, Runnable, Unreferenced
+{
+    protected Vector toSend;
+    protected Vector unregOnClose;
+    protected Hashtable histories;
+    protected boolean transacted;
+    protected MiniJMSMessageStore store;
+    protected Thread checker;
+    protected String clientId;
+    protected MiniClientSession client;
+
+    public RemoteMiniSessionImp(MiniJMSMessageStore s, String id)
+        throws RemoteException
+    {
+        store = s;
+        clientId = id;
+        unregOnClose = new Vector();
+        toSend = new Vector();
+        histories = new Hashtable();
+        checker = new Thread(this);
+        checker.start();
+        checker.suspend();
+    }
+</PRE>
+<P>The setClient method is used by the MiniSession to tell its remote session to whom to send messages. Shown here, this method simply stores the client&#146;s reference in the client instance variable.
+</P>
+<PRE>
+    public void setClient(MiniClientSession c)
+{
+        client = c;
+    }
+</PRE>
+<P>Internally, the remote session uses the addMessage method to notify the client of new messages using RMI and the MiniClientSession interface. Messages being sent are added to a history vector in case the client doesn&#146;t acknowledge it and calls recover or the session is in transaction mode and is rolled back.
+</P>
+<PRE>
+    public synchronized void addMessage(Message msg)
+    {
+        if(client != null)
+        {
+            try
+            {
+                client.addMessage(msg);
+
+                Vector history = historyFor(msg);
+
+                if(history != null) history.addElement(msg);
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+    }
+</PRE>
+<P>The session can be transacted or rely on normal acknowledgments. The client will send the setTransacted message to the server to indicate whether transactions should be used.
+</P>
+<PRE>
+    public void setTransacted(boolean tf)
+      throws RemoteException, JMSException
+    {
+        transacted = tf;
+    }
+</PRE>
+<P>Because the remote session uses resources, it should be closed when not in use. Normally, the client sends the close message, but the session also implements unreferenced, from the Unreferenced interface. This is called if the remote object has no more RMI clients. Unreferencing the session causes it to close.
+</P>
+<PRE>
+    public void unreferenced()
+    {
+        try
+        {
+            close();
+        }
+        catch(Exception ignore)
+        {
+        }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-16.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-18.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

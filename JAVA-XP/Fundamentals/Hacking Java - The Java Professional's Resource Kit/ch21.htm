@@ -1,0 +1,1196 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 21 -- Download Strategies </TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp; 21</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Download Strategies </FONT></H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#HuffmanCodingandLempelZivCompression">
+Huffman Coding and Lempel-Ziv Compression</A>
+<LI><A HREF="#DelayedDownloading">
+Delayed Downloading</A>
+<UL>
+<LI><A HREF="#DelayedInstantiation">
+Delayed Instantiation</A>
+<LI><A HREF="#DownloadingintheBackground">
+Downloading in the Background</A>
+</UL>
+<LI><A HREF="#ProvidingLocalLibraries">
+Providing Local Libraries</A>
+<UL>
+<LI><A HREF="#InstallingLocalLibrariesforHotjavaandAppletviewer">
+Installing Local Libraries for Hotjava and Appletviewer</A>
+<LI><A HREF="#InstallingLocalLibrariesforNetscape">
+Installing Local Libraries for Netscape</A>
+<LI><A HREF="#InstallingLocalLibrariesforInternetExplorer">
+Installing Local Libraries for Internet Explorer</A>
+</UL>
+<LI><A HREF="#DownloadingClassesinZippedFormat">
+Downloading Classes in Zipped Format</A>
+<UL>
+<LI><A HREF="#ZipDownloadinginNetscapeNavigatorVersion">
+Zip Downloading in Netscape Navigator Version 3</A>
+<LI><A HREF="#AZipfileClassLoader">
+A Zipfile Class Loader</A>
+</UL>
+<LI><A HREF="#PackagingClassesinJarsandCabinets">
+Packaging Classes in Jars and Cabinets</A>
+</UL>
+
+<HR>
+<P>
+Waiting for an applet to finish downloading can be annoying at
+times, especially for a big applet. A quote like, &quot;Great
+applet, but it takes five minutes to download,&quot; does not
+inspire people to run out and try it.
+<P>
+Although there aren't any tricks to shove bits through the network
+any faster, you can make your applets aware that things may take
+a while and give the user something to do while they wait.
+<P>
+It would certainly be a boon to many users, but the ability to
+download classes in compressed form does not necessarily give
+a big speed boost to everyone. In fact, maybe not at all for the
+people who need it the most-the modem users.
+<P>
+Most modems these days are able to do data compression by themselves.
+This saves you some time when downloading text files and other
+uncompressed data at rates faster than the modem's communication
+speed.
+<P>
+For compressed zip files and to some extent GIF files, however,
+you transfer data only at the modem's normal speed. Data compression
+removes the redundancy in a file. The more redundant the file,
+the better it compresses.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Since images usually contain a high amount of redundancy, the GIF and JPEG standards also include data compression. This is why you don't get much speed gain by transmitting images over a compressing modem.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Text data compresses very well because it is fairly redundant.
+Binary data does not usually compress as well as text, but certain
+types of binary data do. Once you compress a file and remove that
+redundancy, you cannot compress it any more.
+<P>
+When a compressing modem is trying to send a compressed file,
+it can't find anything to compress: All the redundant information
+has already been removed.
+<P>
+Although you probably won't have to write your own compression
+or decompression routines, it is helpful to have an idea of how
+a data compression routine goes about compressing data. This may
+give you a better idea of why some things compress better than
+others. The most common form of compression today is actually
+a combination of two popular compression algorithms-Huffman coding
+and Lempel-Ziv (LZ) compression.
+<H2><A NAME="HuffmanCodingandLempelZivCompression"><FONT SIZE=5 COLOR=#FF0000>
+Huffman Coding and Lempel-Ziv Compression</FONT></A></H2>
+<P>
+The idea behind Huffman coding is that you use different length
+bit patterns to encode different pieces of data. The patterns
+that occur most often are given the shortest bit patterns, while
+the patterns that occur more frequently are given longer bit patterns.
+If you were encoding 8-bit bytes with Huffman coding, you would
+have many Huffman codes that were less than 8 bits in length,
+and probably some that were more than 8 bits. When a compression
+program performs Huffman encoding, it builds a lookup tree. Figure
+21.1 shows a sample Huffman tree.
+<P>
+<A HREF="f21-1.html"><B>Figure 21.1 : </B><I>A Huffman tree stores the bit patterns
+for pieces of data</I>.</A>
+<P>
+By looking at this Huffman tree, you can see that the letter D
+was the most frequently occurring letter in the original data
+file. The way you can tell this is that it has the shortest bit
+sequence. The letter A, which has a sequence length of 2, is the
+second most frequent letter. B and C have bit lengths of 3, and
+are the least frequent characters. You can get a better understanding
+of how this tree works by watching how a Huffman decoder uncompresses
+a stream of data. Suppose you had the Huffman tree in Figure 21.1
+and the following stream of bits:
+<BLOCKQUOTE>
+<PRE>
+1001100010011
+</PRE>
+</BLOCKQUOTE>
+<P>
+The Huffman decoder would look at the first bit in the sequence,
+which is 1, and start at the top of the tree and take the branch
+labeled 1, which goes directly to D. This means that the first
+letter in the decompressed data is D. The next bit in the sequence
+is 0. Taking the 0 branch in the Huffman tree, you see that you
+need another bit in order to make a decision. The next bit is
+0, which leads you to A, which has a bit pattern of 00. The decoded
+sequence is DA so far. Next comes two more 1s. You already know
+that a 1 by itself is a D, so the next two letters are both D,
+making the decoded sequence DADD. Another two 0s mean that the
+next letter is A, so you are up to DADDA. Next comes 0 followed
+by a 1. You can see on the tree that 0-1 leads you to another
+branch, so you look at the third bit, which is 0. This leads you
+to B (whose code is 010). The next sequence, 0-1-1, leads you
+to C, making the final decompressed string DADDABC.
+<P>
+If you had written this string using normal 8-bit ASCII characters,
+you would have used 56 bits (7 characters of 8 bits each). The
+more unbalanced the Huffman tree is, the more compression you
+get, because the most frequent characters have very short encoding
+sequences. If you are encoding binary data, where the bytes are
+more spread out, the Huffman tree is more balanced. If you had
+a tree that covered all 256 bytes and each byte occurred at roughly
+the same frequency, you would end up with 8-bit sequences for
+every byte, which would mean that you couldn't really compress
+the data with Huffman coding. This is one reason why text tends
+to compress better than binary data. In addition, text generally
+uses less than half of the 256 ASCII characters, meaning that
+even if every text character occurred an identical number of times,
+they would still have bit sequences of only 7 bits (maybe 6 if
+there were few enough characters).
+<P>
+The Lempel-Ziv (LZ) compression algorithm goes a step beyond Huffman
+coding. Whereas Huffman coding usually looks at only single characters,
+LZ compression looks for repeating patterns within a stream of
+bytes. Whenever there is a repeating pattern, LZ compression removes
+the repeated copies and inserts a pointer to the original pattern.
+For example, suppose you had the original DADDABC pattern. The
+LZ compression would take DA and call it sequence 1. Then, the
+next D would be replaced with a code for &quot;repeat sequence
+1 for 1 character.&quot; The next two characters, DA again, would
+be replaced with &quot;repeat sequence 1.&quot; And, then, BC
+would stay by itself. For a short sequence like this, it would
+probably take longer to encode the repeat information than it
+would to encode the original sequence. LZ compression programs
+tend to look for longer patterns, though. Some of them look at
+patterns that are 12 characters, often even more than that. This
+is another way to eliminate the redundancy. Where Huffman coding
+gets rid of extra bits in characters, LZ compression shortens
+the repetition of patterns. If you combine these two features
+together, you get a powerful form of compression. Most of the
+common compression programs use this combination in the form of
+an algorithm called <TT>Deflate</TT>.
+<P>
+If you were to compress a file that had already been compressed,
+the Huffman coding would not be able to come up with a better
+sequence of bits, since it had already generated the optimal set.
+Chances are, it would come up with a balanced tree resulting in
+no compression. The LZ compression would not be able to find any
+repeating sequences because they had already been eliminated the
+first time. This is why you don't get a performance boost when
+you download a compressed file with a compressing modem.
+<H2><A NAME="DelayedDownloading"><FONT SIZE=5 COLOR=#FF0000>
+Delayed Downloading</FONT></A></H2>
+<P>
+One of the many nice features of Java is that it can load classes
+while a program is running. There are some limits on this, however.
+<P>
+If a method references a class, that class must be loaded before
+the method is executed. Java uses a one-time lookup mechanism
+for efficiency.The first time an instruction referencing another
+class is executed, the Java runtime does a lookup on the referenced
+class. Once the class is found, the instruction is changed to
+refer directly to the referenced class, bypassing the lookup.
+If you never execute the lookup instruction, the instruction is
+never changed. You cannot count on this exact behavior, however.
+<P>
+Some Just-In-Time (JIT) compilers resolve all the references when
+a method is executed. This means that all the referenced classes
+must be loaded before the method is called.
+<P>
+Once a method is compiled, any unresolved references remain unresolved,
+even if the referenced class is loaded later.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Almost any operation involving an object of a particular class will cause that class to be loaded. If you declare an object of a particular class, that class is not immediately loaded. You can even safely test that object to see if it is <TT>null</TT> 
+without causing a load. Almost anything else, however, will trigger a load. Some of the things that require a load are using <TT>instanceof</TT>, invoking a method, or passing the object as a parameter to a method. In the last case, you may not need to 
+load the class if the parameter type is the same class as the object. If they are different classes, the object's class must be loaded to determine if that object is an instance of the parameter's class.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="DelayedInstantiation">
+Delayed Instantiation</A></H3>
+<P>
+If you know that you won't be needing an object until a certain
+time, you can delay the instantiation of that object. For example,
+suppose you have a spreadsheet applet that can create nice graphs
+of the data. The graphing class may be fairly large.
+<P>
+Someone who just wants to enter data in the spreadsheet doesn't
+want to wait for the graphing class to be downloaded before they
+can begin. Rather than instantiating the <TT>graphing</TT>
+class in the <TT>init</TT> method,
+you wait until someone really wants to do graphing before downloading
+the graphing code.
+<P>
+Your applet might look something like this:
+<BLOCKQUOTE>
+<PRE>
+public class SpreadsheetApplet extends Applet
+{
+     SpreadsheetGraphing graphing;     // will be loaded later
+
+     public void init()
+     {
+          // perform setup
+     }
+
+     public void createGraph()
+     {
+          if (graphing == null) {
+               graphing = new SpreadsheetGraphing();
+          }
+          .
+          .
+          .
+</PRE>
+</BLOCKQUOTE>
+<P>
+If the <TT>createGraph</TT> method
+is never called, the graphing software is never loaded. Much of
+the early excitement about Java was over this very feature. 
+<P>
+The idea that you grab only the code you need as you need it is
+a refreshing alternative to the huge pieces of software on the
+market today with millions of bytes dedicated to features used
+only by a small percentage of people.
+<H3><A NAME="DownloadingintheBackground">
+Downloading in the Background</A></H3>
+<P>
+While delayed instantiation allows an applet to start running
+quickly, you still have to wait for a class to be instantiated
+when you go to use it. You may have saved users the five-minute
+hit up front by not loading the graphing software. But when they
+go to create a graph, they'll have to wait.
+<P>
+You can alleviate this problem by downloading classes in a background
+thread. Basically, you create a thread that takes a list of classes
+and loads them into the runtime environment.
+<P>
+By running this in the background, you can keep your main applet
+going while loading in extra features that are likely to be needed.
+You might even keep track of the features a particular user favors
+and download the code for those features first.
+<P>
+This is an interesting trade-off between a big, do-everything
+software package and a load-as-you-go system. It starts off as
+a bare-bones system but gradually grows.
+<P>
+Listing 21.1 shows a class that loads other classes in the background.
+It uses the <TT>Class.forName()</TT>
+method to load the class so that it doesn't have to create an
+instance.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.1&nbsp;&nbsp;Source Code for BackgroundLoader.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This class loads other classes in the background so they
+// are ready for you when you need them. It supports a callback
+// mechanism to let you know when a class has been loaded.
+
+public class BackgroundLoader extends Object implements Runnable
+{
+     Thread loaderThread;
+
+     String[] classes;     // the classes to load
+
+     LoaderCallback callback;     // who to notify
+
+// This constructor just loads one class with no notification
+// The loading doesn't take place until you call the start method.
+
+     public BackgroundLoader(String oneClass)
+     {
+          this.classes = new String[1];
+          this.classes[0] = oneClass;
+     }
+     
+// This constructor loads a single class, and performs a callback
+// when the class is loaded. It doesn't start loading until start is called.
+
+     public BackgroundLoader(String oneClass, LoaderCallback callback)
+     {
+          this.classes = new String[1];
+          this.classes[0] = oneClass;
+          this.callback = callback;
+     }
+     
+// This constructor loads a whole set of classes with no callback.
+// Again, it doesn't start loading until start is called.
+
+     public BackgroundLoader(String[] classes)
+     {
+          this.classes = classes;
+     }
+
+// This constructor loads a whole set of classes and performs a callback
+// It doesn't start loading until start is called.
+
+     public BackgroundLoader(String[] classes, LoaderCallback callback)
+     {
+          this.classes = classes;
+          this.callback = callback;
+     }
+
+     public void run()
+     {
+// If there's nothing to load, we're done
+          if (classes == null) return;
+
+          for (int i=0; i &lt; classes.length; i++) {
+
+               try {
+
+// Class.forname will initiate the loading of a class
+                    Class.forName(classes[i]);
+
+// If there's a callback, call it.
+                    if (callback != null) {
+                         callback.classLoaded(classes[i]);
+                    }
+               } catch (Exception e) {
+// Ignore any errors in loading the class. Let the error occur when
+// the program tries to instantiate the class. You never know, it
+// might not try.
+               }          
+          }
+     }
+
+     public void start()
+     {
+          loaderThread = new Thread(this);
+          loaderThread.start();
+     }
+
+     public void stop()
+     {
+          loaderThread.stop();
+          loaderThread = null;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 21.2 shows the <TT>LoaderCallback</TT>
+interface used by the <TT>BackgroundLoader</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.2&nbsp;&nbsp;Source Code for LoaderCallback.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public interface LoaderCallback
+{
+     public void classLoaded(String className);
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 21.3 shows a sample applet that uses the background loader.
+It doesn't start the downloading until you click a button.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.3&nbsp;&nbsp;Source Code for TestLoadApplet.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.net.*;
+import java.applet.*;
+import java.awt.*;
+
+// This class tests the use of the BackgroundLoader. It presents
+// a button that, when pressed, initiates the downloading of
+// a class called &quot;Fooble&quot;. When the class is successfully loaded,
+// it presents a new button that lets you use the Fooble class.
+//
+// It uses the LoaderCallback mechanism to detect when the Fooble
+// class has been loaded.
+
+public class TestLoadApplet extends Applet implements LoaderCallback
+{
+     Button loadButton;
+     Button useButton;
+
+     Fooble foo;
+
+     public void init()
+     {
+          loadButton = new Button(&quot;Push to start loading&quot;);
+          add(loadButton);
+     }
+
+// classLoaded is called when a class is loaded successfully.
+
+     public void classLoaded(String className)
+     {
+          useButton = new Button(&quot;Push to use fooble&quot;);
+          remove(loadButton);     // remove the old button
+          add(useButton);          // add the new button
+          validate();          // update the layout
+     }
+
+     public boolean action(Event evt, Object which)
+     {
+          if (evt.target == loadButton) {
+// Start loading &quot;Fooble&quot; in the background, and use this class
+// as the callback
+               BackgroundLoader bl = new BackgroundLoader(
+                    &quot;Fooble&quot;, this);
+
+// Start the loader (most important!)
+               bl.start();
+          } else if (evt.target == useButton) {
+
+// If useButton exists and is pushed, we know the Fooble has been loaded
+// so we can now instantiate it and invoke methods on it
+               foo = new Fooble();
+
+               foo.bar();
+          }
+
+          return true;
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 21.4 shows the <TT>Fooble</TT>
+class used by the <TT>TestLoadApplet</TT>
+applet.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.4&nbsp;&nbsp; Source Code for Fooble.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public class Fooble
+{
+     public void bar()
+     {
+          System.out.println(&quot;Fooble sez: Bar!&quot;);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="ProvidingLocalLibraries"><FONT SIZE=5 COLOR=#FF0000>
+Providing Local Libraries</FONT></A></H2>
+<P>
+Admittedly, this next trick violates the concept of downloaded
+code. If you have a large library of Java code that you don't
+want someone to have to download every time they go to run your
+applets, you can provide them with a library they can install
+in their local system. Although you may want to zip the library
+up into a single file, it may have to be unzipped on the user's
+file system if you use data compression when you create the zip
+archive.
+<P>
+The procedure for installing local libraries varies from browser
+to browser. For this example, assume you have a class named <TT>Graphing</TT>
+in a package called <TT>spreadsheet</TT>.
+<P>
+To create a zip file to export to users, create a directory called
+<TT>spreadsheet</TT> and copy the
+<TT>Graphing.class</TT> file into
+the directory. Next, go to the parent directory of the spreadsheet
+directory and type
+<BLOCKQUOTE>
+<PRE>
+zip -0 graphing.zip spreadsheet/Graphing.class
+</PRE>
+</BLOCKQUOTE>
+<P>
+Now, you have a zipped archive file that you can distribute to
+your users. You can put as many classes into the zip archive as
+you like. 
+<P>
+By using the <TT>-0</TT> option, you
+store the classes in uncompressed form. This allows Hotjava and
+Appletviewer users to use the archive without unzipping it.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Although Java's security model reduces the danger of malicious programs, you should be wary when installing local libraries, and only install libraries from sites, companies, or people you trust. Security restrictions are more relaxed for locally installed 
+
+classes.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="InstallingLocalLibrariesforHotjavaandAppletviewer">
+Installing Local Libraries for Hotjava and Appletviewer</A></H3>
+<P>
+For the Hotjava and Appletviewer browsers, you can choose to leave
+the archive file in zipped format, or you can unpack it. You can
+put the file anywhere you like, either packed or unpacked.
+<P>
+All you have to do is set your <TT>CLASSPATH</TT>
+environment variable to include either the directory where you
+unpacked the zip file or the full pathname of the zip file.
+<P>
+To change your <TT>CLASSPATH</TT>
+variable on Windows 95, you need to edit the autoexec.bat file.
+There may already be an entry that sets the class path.
+<P>
+If you put the .zip file in C:\Spreadsheet\lib, but did not unpack
+it, you need to add C:\Spreadsheet\lib\graphing.zip to the class
+path. If you unpacked the zip file in that directory, just add
+C:\Spreadsheet\lib to the class path.
+<P>
+Under Windows 95 and Windows NT, the class path entries are separated
+by semicolons. Here is an example entry for a <TT>CLASSPATH</TT>
+setting under Windows 95:
+<BLOCKQUOTE>
+<PRE>
+set CLASSPATH=.;C:\JAVA\LIB\CLASSES.ZIP;C:\Spreadsheet\lib
+</PRE>
+</BLOCKQUOTE>
+<P>
+The philosophy is the same for Windows NT but instead of editing
+autoexec.bat, you go to your control panel, select the System
+icon, and enter or change the <TT>CLASSPATH</TT>
+environment variable there.
+<P>
+If you use Symantec Caf&eacute;, there is yet a third place to
+set the <TT>CLASSPATH</TT> (Caf&eacute;
+does not recognize the <TT>CLASSPATH</TT>
+environment variable). You must edit the <TT>CLASSPATH</TT>
+setting in C:\Caf&eacute;\bin\sc.ini (assuming you installed Caf&eacute;
+into C:\Caf&eacute;).
+<P>
+For UNIX systems, the unpacking procedure is the same, but the
+format and location of the <TT>CLASSPATH</TT>
+variable is slightly different. Under UNIX, the class path entries
+are separated by colons instead of semicolons.
+<P>
+The command to set an environment variable depends on your login
+shell. If you use the Korn shell (ksh) or the Bourne shell (sh),
+the command looks like this (assuming graphing.zip was unpacked
+in /home/mark/spreadsheet/lib, and Java is in /usr/local/java):
+<BLOCKQUOTE>
+<PRE>
+export CLASSPATH=.:/usr/local/java/lib/classes.zip:/home/mark/spreadsheet/lib
+</PRE>
+</BLOCKQUOTE>
+<P>
+This variable is probably set in your .profile file. If you use
+C-shell (csh) or its variants, the command is:
+<BLOCKQUOTE>
+<PRE>
+setenv CLASSPATH .:/usr/local/java/lib/classes.zip:/home/mark/spreadsheet/lib
+</PRE>
+</BLOCKQUOTE>
+<P>
+It is probably set in your .login or .cshrc file (or maybe .tcshrc
+if you use tcsh). Different UNIX sites set things up differently,
+which is why these file names are not as definite as you might
+like. 
+<P>
+If you can't find the <TT>CLASSPATH</TT>
+variable anywhere and you are successfully running Java already,
+it has to be there somewhere. If you are the one who installed
+your Java system, look back at the installation instructions for
+your Java system. They will probably refresh your memory. If someone
+else installed Java for you, you need to either find them or find
+the installation instructions.
+<H3><A NAME="InstallingLocalLibrariesforNetscape">
+Installing Local Libraries for Netscape</A></H3>
+<P>
+If you are running Netscape on a UNIX system, follow the preceding
+instructions for setting the <TT>CLASSPATH</TT>
+variable, but make sure you include Netscape's class archive in
+your class path. 
+<P>
+Under Netscape version 2, the class file is called moz2_0.zip
+and is in the directory where you unpacked Netscape. Under Netscape
+3, it is either in the file moz3_0.zip or java3_0.zip. 
+<P>
+These files may also have other version numbers like 2_01 or 2_02.
+You can leave the archive zipped for the UNIX version of Netscape.
+<P>
+To install a set of classes locally for the Windows NT/95 Netscape
+Navigator, you must unpack the archive in Netscape's class library
+directory. If your Netscape is installed in C:\Netscape\Navigator,
+you need to unpack the zip file in the directory called C:\Netscape\Navigator\Program\Java\Classes.
+<P>
+When you have unpacked the graphing.zip file, you should end up
+with a directory called C:\Netscape\Navigator\Program\Java\Classes\spreadsheet.
+<H3><A NAME="InstallingLocalLibrariesforInternetExplorer">
+Installing Local Libraries for Internet Explorer</A></H3>
+<P>
+Microsoft's Internet Explorer treats Java as a separate package
+and already anticipates the use of locally stored class files.
+When you install the package, it creates a directory called C:\WINDOWS\JAVA,
+where it stores Java-related files.
+<P>
+You will find the CLASSES.ZIP file in the CLASSES subdirectory.
+To install the graphing.zip file in C:\WINDOWS\JAVA, create a
+subdirectory called ISVCLASS (that is, C:\WINDOWS\JAVA\ISVCLASS),
+then unpack graphing.zip in the ISVCLASS directory.
+<P>
+When you're done, you should have a directory called C:\WINDOWS\JAVA\ISVCLASS\spreadsheet
+that was created when you unpacked the zip file. Now when you
+run Internet Explorer, it can use classes from the ISVCLASS directory.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The Java environment installed by Internet Explorer also contains a stand-alone Java interpreter called JVIEW, which is installed in C:\WINDOWS. JVIEW_ is the equivalent of the java command that comes with the Java Development Kit.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="DownloadingClassesinZippedFormat"><FONT SIZE=5 COLOR=#FF0000>
+Downloading Classes in Zipped Format</FONT></A></H2>
+<P>
+Since Java classes are normally packaged in zip files, it would
+be nice if an applet could load in a single zip file holding the
+classes it needs, rather than download them one at a time.
+<P>
+The use of zip downloading is fairly new in browsers. If your
+browser doesn't use it, you still have an option.
+<H3><A NAME="ZipDownloadinginNetscapeNavigatorVersion">
+Zip Downloading in Netscape Navigator Version 3</A></H3>
+<P>
+Netscape Navigator Version 3 allows you to specify a zip archive
+in the <TT>&lt;APPLET&gt;</TT> tag,
+which it uses to get classes before trying to download them one
+at a time. 
+<P>
+If you package all the classes for myapplet.class into the file
+myclasses.zip, your <TT>&lt;APPLET&gt;</TT>
+tag would look like this:
+<BLOCKQUOTE>
+<PRE>
+&lt;APPLET codebase=&quot;.&quot; archive=&quot;myclasses.zip&quot; code=&quot;myapplet.class&quot; width=100 height=100&gt;
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>archive</TT> parameter is
+the new addition for zip use. It should be in the same directory
+as your other .class files. You should use both zipped and unzipped
+classes, since not everyone has Netscape.
+<H3><A NAME="AZipfileClassLoader">
+A Zipfile Class Loader</A></H3>
+<P>
+You can use the loading of zip files in any browser by creating
+a special class loader that understands zip files. The only trick
+is that the class loader has to be installed on the local machine.
+<P>
+You cannot download a class loader over the network because of
+security restrictions. Since not everyone who runs your applet
+has the zip class loader installed, your applet should check to
+see if it is available before using it.
+<P>
+Writing a zip class loader is fairly simple once you know the
+format of zip files. Since Java zip files cannot use compression,
+you don't have to worry about all the messy code involved with
+decompression. 
+<P>
+A zip archive is actually a collection of data blocks. There are
+three types of blocks in a zip file-a local block, a central directory
+block, and an end block. At the beginning of each block is a 4-byte
+signature value that identifies what type of block it is. If you
+just want to read files from the zip file, you are really interested
+only in local blocks. The only thing you have to pay attention
+to in the other blocks is their size. Each block has its own header
+that contains the important information about the block, including
+its size. If you read a block's header and want to skip the block,
+you have to look at the header to figure out how many bytes to
+skip.
+<P>
+Listing 21.5 shows the <TT>readZipStream</TT>
+method from the <TT>ZipClassLoader</TT>
+class. The full source to the <TT>ZipClassLoader</TT>
+is on the CD that comes with this book. Since you won't be using
+compression in the zip files, it is fairly simple to scan through
+the zip file looking for local blocks. Whenever the <TT>readZipStream</TT>
+method finds a local block, it grabs the block's filename and
+the actual bytes in the block and sticks them in a hash table
+for later use.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.5&nbsp;&nbsp;readZipStream Method from ZipClassLoader.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// readZipStream is the heart of this class. It reads the class files from
+// an input stream in zip format. It only pays attention to the local blocks
+// and ignores the central and end blocks (if you know about the zip format).
+// Once it reads in a class it stores it in a hash table, but does NOT load
+// the classes automatically. You must call loadClass to do this.
+
+     protected void readZipStream(DataInputStream zipStream)
+     throws IOException
+     {
+          byte[] localHeader = new byte[LOCALLEN];
+          byte[] centralHeader = new byte[CENTRALLEN];
+          byte[] endHeader = new byte[ENDLEN];
+          byte[] signature = new byte[SIGLEN];
+
+          try {
+               while (true) {
+
+// Figure out what type of block we are reading
+                    zipStream.readFully(signature);
+
+// Convert the signature to an integer
+                    int sig = getInt(signature, 0);
+
+// If it's a central block, skip the whole block
+                    if (sig == CENTRALSIG) {
+
+// Read in the central header bytes
+                         zipStream.readFully(centralHeader);
+
+// Figure out how many extra bytes follow the central header
+                         int skipLen =
+                              getShort(centralHeader, 24) +
+                              getShort(centralHeader, 26) +
+                              getShort(centralHeader, 28);
+
+// Skip those extra bytes
+                         zipStream.skipBytes(skipLen);
+
+// Go process the next block
+                         continue;
+
+// If this is an end block, skip the block and process the next one
+                    } else if (sig == ENDSIG) {
+
+// read the full end block header
+                         zipStream.readFully(endHeader);
+
+// figure out how many extra bytes there are
+                         int skipLen = getShort(endHeader, 16);
+// skip the extras
+                         zipStream.skipBytes(skipLen);
+                         continue;
+
+// If we get any other signature other than local, there's an error
+                    } else if (sig != LOCALSIG) {
+                         throw new IOException(
+                              &quot;Invalid Block Signature&quot;);
+                    }
+
+// read the local header
+                    zipStream.readFully(localHeader);
+
+// get the length of the data for this file
+                    int dataLen = getInt(localHeader, 14);
+
+// get the length of the file name
+                    int nameLen = getShort(localHeader, 22);
+
+// Figure out how many extra bytes there are
+                    int skipLen = getShort(localHeader, 24);
+
+// Read in the file name
+                    byte[] nameBuf = new byte[nameLen];
+                    zipStream.readFully(nameBuf);
+
+// Convert the file name to a string
+                    String className = new String(nameBuf, 0);
+
+// Skip any extra bytes
+                    zipStream.skipBytes(skipLen);
+
+// If this is an empty file, just go to the next block
+                    if (dataLen == 0) continue;
+               
+// Read in the actual bytes for the file
+                    byte[] dataBytes = new byte[dataLen];
+                    zipStream.readFully(dataBytes);
+
+// Add the class to the hash table
+                    classData.put(className, dataBytes);
+               }
+          } catch (EOFException e) {
+               return;
+          }
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Since the Zip format originated on the PC platform, all numbers
+in a zip file are stored in Intel byte order (also known as little-endian).
+The <TT>readZipFile</TT> method uses
+the methods <TT>getShort</TT> and
+<TT>getInt</TT> to read little-endian
+numbers from a byte array. Listing 21.6 shows these methods.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.6&nbsp;&nbsp;getShort and getInt Methods from ZipClassLoader.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// getShort reads two bytes from a byte array starting at offset &lt;offset&gt;
+// and converts them to an integer using Intel byte ordering.
+
+     protected int getShort(byte[] bytes, int offset)
+     {
+          return ((bytes[offset+1]&amp;255) &lt;&lt; 8) + (bytes[offset+0]&amp;255);
+     }
+
+// getInt reads four bytes from a byte array starting at offset &lt;offset&gt;
+// and converts them to an integer using Intel byte ordering.
+
+     protected int getInt(byte[] bytes, int offset)
+     {
+          return ((bytes[offset+3]&amp;255) &lt;&lt; 24) + ((bytes[offset+2]&amp;255) &lt;&lt; 16) +
+               ((bytes[offset+1]&amp;255) &lt;&lt; 8) + (bytes[offset+0]&amp;255);
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If you do enough work with different byte orders, it won't take you long to realize that you need a utility class for converting to and from little-endian byte order. If you write such a class, you might consider methods to transfer to and from byte 
+arrays, as well as just rearranging the bytes within a short or integer number.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The <TT>readZipStream</TT> method
+reads only the individual .class files from a zip archive and
+stores them in a hash table. It doesn't actually do any class
+loading. For that, you must call the <TT>loadClass</TT>
+method in the class loader. Normally, the <TT>loadClass</TT>
+method in a class loader is a protected method. In this case,
+however, you need to tell the class loader to begin loading a
+class, and the only way to do that is to expose the <TT>loadClass</TT>
+method. Listing 21.7 shows the <TT>loadClass</TT>
+method from the <TT>ZipClassLoader</TT>
+class. It expects the classes to have been loaded into a hash
+table called <TT>classData</TT>. Once
+it loads a class, it caches the loaded class in a table called
+<TT>loadedClasses</TT>. If the class
+loader is asked to load a class that it doesn't know about, it
+calls the system class loader to see if it is a local class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.7&nbsp;&nbsp;loadClass Method from ZipClassLoader.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public synchronized Class loadClass(String className,
+          boolean resolve) throws ClassNotFoundException
+     {
+          Class newClass = (Class) loadedClasses.get(className);
+     
+// If the class was in the loadedClasses table, we don't
+// have to load it again, but we better resolve it, just
+// in case.
+          if (newClass != null)
+          {
+               if (resolve) // Should we resolve?
+               {
+                    resolveClass(newClass);
+               }
+               return newClass;
+          }
+               
+// The classes are stored in the classData table by their original filename
+// which will be the class name followed by &quot;.class&quot;
+
+          byte[] classBytes = (byte[]) classData.get(className+&quot;.class&quot;);
+          if (classBytes != null) {
+// Define the new class
+               newClass = defineClass(classBytes, 0,
+                    classBytes.length);
+          } else {
+
+// Before we throw an exception, see if the system already knows
+// about this class
+               try {
+                    newClass = findSystemClass(className);
+                    return newClass;
+               } catch (Exception any) {
+                    throw new ClassNotFoundException(className);
+               }
+          }
+
+// Store the class in the table of loaded classes
+          loadedClasses.put(className, newClass);
+
+// If we are supposed to resolve this class, do it
+          if (resolve)
+          {
+               resolveClass(newClass);
+          }
+
+          return newClass;
+     }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Listing 21.8 shows a modified version of the QuickLoader applet
+from <A HREF="ch2.htm" >Chapter 2.</A> The ZipLoader applet tries to load a class from
+a zip archive. In addition to the <TT>applet</TT>
+parameter that tells it which applet to run, it accepts the <TT>zipfile</TT>
+parameter that tells it the name of the zip file to use. 
+<P>
+Also notice that there are no method calls to the zip class loader
+from inside the <TT>run</TT> method.
+If the class doesn't exist and you run your applet with a JIT,
+the JIT may choke on the <TT>run</TT>
+method if the zip class loader isn't installed locally. 
+<P>
+If you isolate the references to the zip class loader, the <TT>run</TT>
+method is able to function in the absence of the zip class loader.
+<P>
+To see why this could happen, imagine that you did make direct
+references to the class loader from the run method. Before the
+run method is called, the JIT compiles the run method into native
+code, resolving any class references. Since the run method directly
+references the ZipClassLoader class, the JIT is unable to resolve
+all the references and it refuses to execute the method. Even
+if it executed the method, and the method loaded the ZipClassLoader
+class successfully, it would still not be able to invoke methods
+in <TT>ZipClassLoader</TT>, because
+all the method calls had already been compiled by the JIT.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 21.8&nbsp;&nbsp;Source Code for ZipLoader.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.Applet;
+import java.applet.AppletStub;
+import java.awt.Graphics;
+import java.awt.GridLayout;
+import java.awt.Label;
+import java.net.URL;
+
+// This applet is responsible for loading another applet in the
+// background and displaying the applet when it finishes loading.
+// The name of the applet to load is supplied by a &lt;PARAM&gt; tag.
+// For example:
+// &lt;PARAM name=&quot;applet&quot; value=&quot;RealApplet&quot;&gt;
+// which would load an applet class called RealApplet
+// It uses the ziploader.ZipClassLoader, if available, to load
+// in the classes. The &quot;zipfile&quot; param supplies the name of the
+// zip file to read. For example:
+// &lt;PARAM name=&quot;zipfile&quot; value=&quot;real.zip&quot;&gt;
+
+public class ZipLoader extends Applet implements Runnable, AppletStub
+{
+     String appletToLoad;
+     String zipArchive;
+     Label label;
+     Thread appletThread;
+
+     ziploader.ZipClassLoader loader;
+
+     public void init()
+     {
+// Get the name of the applet to load
+          appletToLoad = getParameter(&quot;applet&quot;);
+
+// Get the name of the zip archive
+          zipArchive = getParameter(&quot;zipfile&quot;);
+
+// If there isn't one, print a message
+          if (appletToLoad == null) {
+               label = new Label(&quot;No applet to load.&quot;);
+          } else {
+               label = new Label(&quot;Please wait - loading applet &quot;+
+                    appletToLoad);
+          }
+          add(label);
+     }
+
+// Have to do this in a method separate from the run method, otherwise
+// some JITs get upset if the ziploader package isn't installed.
+// This method check to see if the ZipClassLoader exists, and if so,
+// instantiates it.
+
+     public void tryLoader(String zipArchive)
+     {
+          try {
+// See if the class exists
+               Class.forName(
+                    &quot;ziploader.ZipClassLoader&quot;);
+// Try to load the zip loader
+               loader = new ziploader.ZipClassLoader(
+                    new URL(getCodeBase(), zipArchive));
+          } catch (Exception ignore) {
+          }
+     }
+
+// This method loads a class that is stored in the ZipClassLoader.
+// It must be a separate method from run to keep some JITs from
+// getting upset when the loader isn't installed.
+
+     public Class loadZipClass(String className)
+     throws ClassNotFoundException, InstantiationException,
+          IllegalArgumentException
+     {
+          return loader.loadClass(className, true);
+     }
+          
+     public void run()
+     {
+// If there's no applet to load, don't bother loading it!
+          if (appletToLoad == null) return;
+
+          Class appletClass = null;
+
+          try {
+
+// See if the zip class loader is installed
+
+               if (zipArchive != null) {
+                    tryLoader(zipArchive);
+               }
+
+               if (loader != null) {
+// Try loading the class from the zip file
+                    appletClass = loadZipClass(appletToLoad);
+               }
+          
+// If the class wasn't created from the zip loader, try a regular load
+               if (appletClass == null) {
+                    appletClass = Class.forName(appletToLoad);
+               }
+
+// Create an instance of the applet
+               Applet realApplet = (Applet)appletClass.newInstance();
+
+// Set the applet's stub - this will allow the real applet to use
+// our document base, code base, and applet context.
+               realApplet.setStub(this);
+
+// Remove the old message and put the applet up
+
+               remove(label);
+
+// The grid layout maximizes the components to fill the screen area - we
+// want the real applet to be maximized to our size.
+
+               setLayout(new GridLayout(1, 0));
+
+// Add the real applet as a child component
+               add(realApplet);
+
+// Crank up the real applet
+               realApplet.init();
+               realApplet.start();
+          } catch (Exception e) {
+
+// If we got an error anywhere, print it
+               label.setText(&quot;Error loading applet.&quot;);
+               e.printStackTrace();
+          }
+
+// Make sure our screen layout is redrawn
+          validate();
+     }
+
+     public void start()
+     {
+          appletThread = new Thread(this);
+          appletThread.start();
+     }
+
+     public void stop()
+     {
+          appletThread.stop();
+          appletThread = null;
+     }
+
+// appletResize is the one method in the AppletStub interface that
+// isn't in the Applet class. We'll just use the applet resize
+// method and hope it works.
+
+     public void appletResize(int width, int height)
+     {
+          resize(width, height);
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="PackagingClassesinJarsandCabinets"><FONT SIZE=5 COLOR=#FF0000>
+Packaging Classes in Jars and Cabinets</FONT></A></H2>
+<P>
+With coffee metaphors running out, Sun and other vendors have
+branched out into a more general kitchen motif. For Java 1.1,
+Sun has created an alternative to a zip archive called a JAR (Java
+ARchive). Unlike the current zip archive constraints under Java,
+a JAR can contain compressed data. Because the JAR format is a
+part of the core Java 1.1 specification, you can expect all Java-enabled
+browsers to support this format when they become Java 1.1 compliant.
+<P>
+Microsoft has also created an alternative to the zip archive called
+a cabinet. <A HREF="ch14.htm" >Chapter 14</A>, &quot;Creating Your Own Class Archive Files,&quot;
+tells you everything you need to know about packaging classes
+and other files into cabinets. Like the JAR format, the Cabinet
+format supports data compression, allowing you to download your
+classes faster if you aren't already compressing your download
+with a compressing modem.
+<HR>
+
+<CENTER><P><A HREF="ch20.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch22.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

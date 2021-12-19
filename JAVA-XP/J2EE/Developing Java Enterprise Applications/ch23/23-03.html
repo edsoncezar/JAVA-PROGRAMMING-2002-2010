@@ -1,0 +1,123 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using Transactions with Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P><FONT SIZE="+1"><B><I>Transaction Maintenance</I></B></FONT></P>
+<P>The container for a stateful session bean tries to maintain the same transaction context across the entire session. This transaction maintenance is governed by the following rules:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;If the client request is not associated with a transaction and the instance is not associated with a transaction, the container invokes the instance with no transaction context.
+<DD><B>&#149;</B>&nbsp;&nbsp;If the client is associated with a transaction and the instance is not associated with a transaction, the container suspends the client&#146;s transaction association and invokes the method with no transaction context.
+<DD><B>&#149;</B>&nbsp;&nbsp;If the client request is not associated with a transaction and the instance is already associated with a transaction, the container invokes the instance with the transaction that is associated with the instance.
+<DD><B>&#149;</B>&nbsp;&nbsp;If the client is associated with a transaction and the instance is already associated with a transaction, the container suspends the client&#146;s transaction association and invokes the method with the transaction context that is associated with the instance.
+</DL>
+<P>In cases in which the client has its transaction scope suspended for the EJBs method, the transaction is resumed when the method returns. Stateless beans and entity beans do not share a transaction across messages from the client. However, they could make several transacted calls to other resources using the transaction assigned to them.
+</P>
+<P>Because stateful beans exist for more than one method, they may want to receive notifications from their containers when transaction operations are used on them. In this case, the bean can implement the SessionSynchronization interface. This interface includes these three methods:</P>
+<PRE>
+public void afterBegin() throws RemoteException;
+public void beforeCompletion() throws RemoteException;
+public void afterCompletion() throws RemoteException;
+</PRE>
+<P>These methods are called to tell the bean that a transaction was begun, that it is going to completed, and that it has completed. Completion for a transaction is either commit or roll back. If a bean wants to ensure that the transaction operating on it rolls back, it can throw an exception in beforeCompletion or call setRollbackOnly on its context.
+</P>
+<P>All bean&#150;managed transactions should be committed or rolled back before the bean completes its interaction with the client. For a stateful session bean, this means the transaction should be completed before the session ends. For all other beans, the transaction should end before the method called by the client returns.</P>
+<P><FONT SIZE="+1"><B><I>Transaction Status</I></B></FONT></P>
+<P>A transaction&#146;s status can be obtained using the getStatus method. This method returns a value defined in a UserTransaction static variable. The possible status values are listed in the documentation and include flags for whether or not the transaction has begun, is rolled back, or has been committed. This status might be used in advanced situations to determine what the bean should do based on a change in status. Possibly the status will change when the bean calls another resource, such as another EJB. In most cases, you as a programmer should not need to access this information.
+</P>
+<H3><A NAME="Heading5"></A><FONT COLOR="#000077">An Example for Testing Transactions</FONT></H3>
+<P>As both an example of how to use transactions and a test program, we have created a set of EJBs that are to be deployed with a variety of transaction options. The first bean manages its own transactions and calls two other beans that use different options for each method. When the secondary beans are called, they try to insert data into a database. This relationship is shown in Figure 23.1. Each secondary bean is provided a different database URL so that two separate databases are accessed.
+</P>
+<P>The client for this example, pictured in Figure 23.2, allows the user to enter a message. This message is sent to the primary bean using one of three methods. The first method uses no transactions, the second commits its transaction, and the third rolls back its transaction. Each method calls one of the secondary bean&#146;s methods based on the selected radio button in the client. Once the primary method returns, the client asks the bean to check whether the data was inserted in the database. A resulting string indicates success or failure for beans one and two.</P>
+<P><A NAME="Fig1"></A><A HREF="images\23-01.jpg"><IMG SRC="images\23-01t.jpg"></A>
+<BR><A HREF="images\23-01.jpg"><FONT COLOR="#000077"><B>Figure 23.1</B></FONT></A>&nbsp;&nbsp;Parent and child beans.</P>
+<P><A NAME="Fig2"></A><A HREF="images\23-02.jpg"><IMG SRC="images\23-02t.jpg"></A>
+<BR><A HREF="images\23-02.jpg"><FONT COLOR="#000077"><B>Figure 23.2</B></FONT></A>&nbsp;&nbsp;EJBTransTest.</P>
+<P>The databases for this example can be built using the provided BuildDB script. This program simply creates a single table called MESSAGES with a single column named MESSAGE. Microsoft Access database files that contain this table are provided on the CD&#150;ROM. The CD&#150;ROM also includes an NT build script that compiles the examples and runs the WebLogic deployment tools on them. Edit this script for your installation or use the tools for your EJB host.
+</P>
+<P>The majority of the code for this example is involved in creating the insert bean that adds data to a database and the client that is mainly user interface code. To save space, these classes are not included here. The class that does have several new techniques is the Enterprise JavaBean implementation called TestBeanBean. This is the primary bean in our example description.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading6"></A><FONT COLOR="#000077">TestBeanBean</FONT></H4>
+<P>TestBeanBean performs three interesting operations. First, it manages its own transactions. Second, it uses JBDC to access the database. Third, it uses JNDI to access the HOME for the InsertBean that we are using as the secondary bean in this example. Once the InsertBean is created, the TestBean sends messages to it, demonstrating how two EJBs can communicate.
+</P>
+<P>The TestBeanBean implementation stores relevant data in instance variables. This data is obtained from the environment provided by the EJBContext. The following code is taken from the TestBeanBean .java file and lists the bean&#146;s instance variables, required SessionBean methods, and the implementation for setSessionContext.</P>
+<PRE>
+package testbean;
+
+//imports removed to save space
+
+public class TestBeanBean implements SessionBean
+{
+    transient protected SessionContext context;
+    transient protected javax.naming.Context jndi;
+    public String url1 = null;//url for database 1
+    public String url2 = null; //url for database 2
+    public String user=null; //database user name
+    public String password=null; //database password
+    public String driver=null; //database driver
+    public String insertHome=null; //JNDI lookup name
+
+    public void ejbActivate()
+    {
+    }
+    public void ejbRemove()
+    {
+    }
+    public void ejbPassivate()
+    {
+    }
+    public void setSessionContext(SessionContext ctx)
+    {
+        context = ctx;
+        Properties env = context.getEnvironment();
+
+        user = env.getProperty(&#147;user&#148;);
+        password = env.getProperty(&#147;password&#148;);
+        url1 = env.getProperty(&#147;url1&#148;);
+        url2 = env.getProperty(&#147;url2&#148;);
+        driver = env.getProperty(&#147;driver&#148;);
+        insertHome = env.getProperty(&#147;inserthome&#148;);
+
+        try
+        {
+            jndi = getInitialContext(env);
+        }
+        catch(Exception exp)
+        {
+            jndi = null;
+        }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-02.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-04.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

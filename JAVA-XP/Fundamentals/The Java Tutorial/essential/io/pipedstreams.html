@@ -1,0 +1,218 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>How to Use Pipe Streams</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="filestreams.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="processing.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=bottom border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Reading and Writing (but no 'rithmetic)</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    How to Use Pipe Streams
+</h2>
+<p>
+<blockquote>
+
+<a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedReader.html"><code>PipedReader</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedReader.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a> and
+<a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedWriter.html"><code>PipedWriter</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedWriter.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a> (and their input and output stream counterparts
+<a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedInputStream.html"><code>PipedInputStream</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedInputStream.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a> and
+<a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedOutputStream.html"><code>PipedOutputStream</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.1/api/java.io.PipedOutputStream.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>)
+implement the input and output components of a pipe.
+Pipes are used to channel the output from one program
+(or thread) into the input of another.
+Why is this useful?
+<p>
+Consider a class that implements various string manipulation utilities
+such as sorting and reversing text. It would be nice if the output of
+one of these methods could be used as the input for another so that you
+could string a series of method calls together to perform some
+higher-order function. For example, you could reverse each word in a
+list, sort the words, and then reverse each word again to create a list
+of rhyming words.
+<p>
+Without pipe streams, the program would have to store the results
+somewhere (such as in a file or in memory) between each step, as shown
+here:
+
+<blockquote><IMG SRC="http://docs.rinet.ru/Jtuta/figures/essential/27list.gif" WIDTH="468" HEIGHT="118" ALIGN="BOTTOM" NATURALSIZEFLAG="3" ALT=""></blockquote>
+With pipe streams, the output from one method
+could be piped into the next, as shown in this figure:
+
+<blockquote><IMG SRC="http://docs.rinet.ru/Jtuta/figures/essential/28listofw.gif" WIDTH="351" HEIGHT="115" ALIGN="BOTTOM" NATURALSIZEFLAG="3" ALT=""></blockquote>
+Next, we investigate a program that implements what's represented by
+the diagram in the previous figure.
+This program uses <code>PipedReader</code> and <code>PipedWriter</code>
+to connect the input and output of its <code>reverse</code>
+and <code>sort</code> methods in
+order to create a list of rhyming words. Several classes make up this
+program. This section shows and discusses only the elements of the
+program that read from and write to the pipes. Follow the code
+links presented here to see the whole program.
+<p>
+First, let's look at the calling sequence of the <code>reverse</code>
+and <code>sort</code> methods from the <code>main</code> method
+in the
+<a href="http://docs.rinet.ru/Jtuta/essential/io/example-1dot1/RhymingWords.java"><code>RhymingWords</code></a>
+class:
+<blockquote>
+<pre>
+FileReader words = new FileReader("words.txt");
+Reader rhymingWords = reverse(sort(reverse(words)));
+</pre>
+</blockquote>
+The innermost call to <code>reverse</code> takes a
+<code>FileReader</code> opened on the file
+<a href="example-1dot1\words.txt"><code>words.txt</code></a> that
+contains a list of words. The return value of <code>reverse</code> is
+passed to <code>sort</code>, whose return value is then passed to
+another call to <code>reverse</code>.
+<p>
+Let's look at the <code>reverse</code> method; the <code>sort</code>
+method is similar and you will understand it once you understand
+<code>reverse</code>.
+<blockquote>
+<pre>
+public static Reader reverse(Reader source) {
+    BufferedReader in = new BufferedReader(source);
+
+    PipedWriter pipeOut = new PipedWriter();
+    PipedReader pipeIn = new PipedReader(pipeOut);
+    PrintWriter out = new PrintWriter(pipeOut);
+
+    new ReverseThread(out, in).start();
+
+    return pipeIn;
+}
+</pre>
+</blockquote>
+The bold statements in <code>reverse</code> create both ends of a
+pipe--a <code>PipedWriter</code> and a <code>PipedReader</code>--
+and connects them by constructing
+the <code>PipedReader</code> "on" the <code>PipedWriter</code>.
+Whatever's written to the
+<code>PipedWriter</code> can be read from the <code>PipedReader</code>.
+The connection forms a
+pipe, as illustrated here:
+
+<blockquote><IMG SRC="http://docs.rinet.ru/Jtuta/figures/essential/29revers.gif" WIDTH="413" HEIGHT="59" ALIGN="BOTTOM" NATURALSIZEFLAG="3" ALT=""></blockquote>
+<code>reverse</code> starts a
+<a href="http://docs.rinet.ru/Jtuta/essential/io/example-1dot1/ReverseThread.java"><code>ReverseThread</code></a>
+that writes its output to the <code>PipedWriter</code>
+and then returns the <code>PipedReader</code> to the caller.
+The caller then arranges for a sorting thread to read from it.
+The <code>sort</code> method is exactly the same,
+except that it creates and starts a
+<a href="http://docs.rinet.ru/Jtuta/essential/io/example-1dot1/SortThread.java"><code>SortThread</code></a>.
+
+<h4>Using Streams to Wrap Other Streams</h4>
+<blockquote>
+The <code>reverse</code> method contains some other interesting code;
+in particular, these two statements:
+<blockquote>
+<pre>
+BufferedReader in = new BufferedReader(source);
+...
+PrintWriter out = new PrintWriter(pipeOut);
+</pre>
+</blockquote>
+The first line opens a <code>BufferedReader</code> on <code>source</code>,
+the argument to reverse (a <code>Reader</code>).
+This essentially "wraps" <code>source</code> in a
+<code>BufferedReader</code>.
+The program reads from the <code>BufferedReader</code>,
+which in turn reads from <code>source</code>.
+The program does this so that it can use
+<code>BufferedReader</code>'s convenient <code>readLine</code> method.
+Similarly, the <code>PipedWriter</code>
+is wrapped in a <code>PrintWriter</code>
+so that the program can use <code>PrintWriter</code>'s
+convenient <code>println</code> method.
+You will often see streams wrapped in this
+way so as to combine the various features of the many streams.
+</blockquote>
+
+<hr>
+<strong>Try this</strong>:
+Write another version of this program that uses input streams and
+output streams in place of readers and writers.
+See 
+<ul>
+<li>
+<a href="http://docs.rinet.ru/Jtuta/essential/io/example/RhymingWords.java"><code>RhymingWords</code></a>
+<li>
+<a href="http://docs.rinet.ru/Jtuta/essential/io/example/ReverseThread.java"><code>ReverseThread</code></a>
+<li>
+<a href="http://docs.rinet.ru/Jtuta/essential/io/example/SortThread.java"><code>SortThread</code></a>
+</ul>
+for the solution.
+<hr>
+<p>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="filestreams.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="processing.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=top border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Reading and Writing (but no 'rithmetic)</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

@@ -1,0 +1,365 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Enterprise JavaBean Business Rules Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The RulesParser uses three stacks to manage the rules, actions, and pairs encountered. These are all defined as instance variables.
+</P>
+<PRE>
+package busrules;
+
+import busrules.*;
+import java.util.*;
+import java.io.*;
+
+public class RulesParser
+implements TagHandler
+{
+    protected Stack rules;
+    protected Stack actions;
+    protected Stack pairs;
+</PRE>
+<P>Programs should use the shared rules parser to ensure that all of the tag handlers have access to the same rules, actions, and pairs.
+</P>
+<PRE>
+    protected static RulesParser shared;
+
+    public static RulesParser sharedRulesParser()
+    {
+	if(shared == null)
+	    shared = new RulesParser();
+	
+	return shared;
+    }
+
+    protected RulesParser()
+    {
+	rules = new Stack();
+	actions = new Stack();
+	pairs = new Stack();
+    }
+</PRE>
+<P>The RulesParser provides methods to parse a script as a Reader or a string and return either a rule or an action. All of the parse methods accept a list of handlers to register.
+</P>
+<PRE>
+    public Action parseAction(String script, Enumeration handlers)
+	throws ParsingException
+    {
+	TagParser parser;
+	
+	parser = new TagParser();
+	registerHandlers(parser,handlers);
+	parser.parse(new StringReader(script));
+	
+	return popAction();
+    }
+
+    public Action parseAction(Reader r, Enumeration handlers)
+	throws ParsingException
+    {
+	TagParser parser;
+	
+	parser = new TagParser();
+	registerHandlers(parser,handlers);
+	parser.parse(r);
+	
+	return popAction();
+    }
+    public Rule parseRule(String script, Enumeration handlers)
+	throws ParsingException
+    {
+	TagParser parser;
+	
+	parser = new TagParser();
+	registerHandlers(parser,handlers);
+	parser.parse(new StringReader(script));
+	
+	return popRule();
+    }
+
+    public Rule parseRule(Reader r, Enumeration handlers)
+	throws ParsingException
+    {
+	TagParser parser;
+	
+	parser = new TagParser();
+	registerHandlers(parser,handlers);
+	parser.parse(r);
+	
+	return popRule();
+    }
+</PRE>
+<P>Handlers are registered with the parser before the actual parsing is performed. Each handler is responsible for telling the parser the tags it handles and any end tags it uses. The RulesParser uses the handler&#146;s registerWith method to trigger this registration.
+</P>
+<PRE>
+    protected void registerHandlers(TagParser parser
+				     ,Enumeration handlers)
+    {
+	TagHandler cur;
+	
+	/*
+	 * Register ourself first, so others can override.
+	 */
+	registerWith(parser);
+	
+	if(handlers == null) return;
+	
+	while(handlers.hasMoreElements())
+	{
+	    cur = (TagHandler) handlers.nextElement();
+	
+	    cur.registerWith(parser);
+	}
+    }
+</PRE>
+<P>As a convenience, the RulesParser provides a method to manipulate the rules, actions, and pairs stacks.
+</P>
+<PRE>
+    public void pushRule(Rule r)
+    {
+	rules.push(r);
+    }
+    public Rule popRule()
+    {
+	Rule retVal = null;
+	
+	try
+	{
+	    retVal = (Rule) rules.pop();
+	}
+	catch(EmptyStackException exp)
+	{
+	    retVal = null;
+	}
+	
+	return retVal;
+    }
+
+    public void pushAction(Action a)
+    {
+	actions.push(a);
+    }
+
+    public Action popAction()
+    {
+	Action retVal = null;
+	
+	try
+	{
+	    retVal = (Action) actions.pop();
+	}
+	catch(EmptyStackException exp)
+	{
+	    retVal = null;
+	}
+	
+	return retVal;
+    }
+
+    public void pushPair(Pair p)
+    {
+	pairs.push(p);
+    }
+
+    public Pair popPair()
+    {
+	Pair retVal = null;
+	
+	try
+	{
+	    retVal = (Pair) pairs.pop();
+	}
+	catch(EmptyStackException exp)
+	{
+	    retVal = null;
+	}
+	
+	return retVal;
+    }
+</PRE>
+<P>The shared RuleParser object is the tag handler for all of the rules and actions included in the busrules package. As a result, its handleTag method is quite lengthy because it has to check for a number of possible tags. Custom handlers will probably only check for the one or two tags that they handle.
+</P>
+<PRE>
+    /******* Tag Handler Methods **********/
+
+    public String handleTag(String tag,String data
+			    ,String etag,Hashtable atts)
+    throws ParsingException
+    {
+	if(tag.startsWith(&#147;&ltPAIR&#148;))
+	{
+	    Pair newPair = new Pair();
+	
+	    newPair.setRule(popRule());
+	    newPair.setAction(popAction());
+	
+	    pushPair(newPair);
+	}
+	else if(tag.startsWith(&#147;&ltBOOLEANRULE&#148;))
+	{
+	    BooleanRule r = new BooleanRule();
+	    String type;
+	
+	    type = (String) atts.get(&#147;TYPE&#148;);
+	
+	    if(type != null)
+	    {
+		r.setType(type);
+		
+		if(!&#147;not&#148;.equals(type))
+		{
+		    r.setRule2(popRule());
+		}
+		
+		r.setRule1(popRule());
+		
+		pushRule(r);
+	    }
+	}
+	else if(tag.startsWith(&#147;&ltALWAYSRULE&#148;))
+	{
+	    AlwaysRule r = new AlwaysRule();
+	    String key;
+	
+	    key = (String) atts.get(&#147;KEY&#148;);
+	
+	    if(key != null)
+	    {
+		r.setKey(key);
+		
+		pushRule(r);
+	    }
+	}
+	else if(tag.startsWith(&#147;&ltCOMPARISONRULE&#148;))
+	{
+	    ComparisonRule r = new ComparisonRule();
+	    String op,comp,val;
+	
+	    op = (String) atts.get(&#147;OPERATOR&#148;);
+	    comp = (String) atts.get(&#147;CONSTANT&#148;);
+	    val = (String) atts.get(&#147;KEY&#148;);
+	
+	    if((op != null)
+		&amp&amp(comp != null)
+		&amp&amp(val != null))
+	    {
+		try
+		{
+		    r.setOperator(Integer.parseInt(op));
+		    r.setConstant(comp);
+		    r.setValueKey(val);
+		
+		    pushRule(r);
+		}
+		catch(NumberFormatException exp)
+		{
+		    throw
+			new ParsingException(&#147;Operator should &#148;
+					     &#43;&#147;be int.&#148;);
+		}
+	    }
+	}
+	else if(tag.startsWith(&#147;&ltRULES&#148;))
+	{
+	    RuleGroup grp = new RuleGroup();
+	    Rule cur;
+	    String type;
+	
+	    type = (String) atts.get(&#147;TYPE&#148;);
+	
+	    if(type != null)
+	    {
+		grp.setType(type);
+	    }
+	
+	    while((cur = popRule())!= null)
+	    {
+		grp.insertItem(cur);
+	    }
+	
+	    pushRule(grp);
+	}
+	else if(tag.startsWith(&#147;&ltTASK&#148;))
+	{
+	    Task grp = new Task();
+	    Action cur;
+	
+	    while((cur = popAction())!= null)
+	    {
+		grp.insertItem(cur);
+	    }
+	
+	    pushAction(grp);
+	}
+	else if(tag.startsWith(&#147;&ltQUALIFIEDACTION&#148;))
+	{
+	    QualifiedAction act = new QualifiedAction();
+	
+	    act.setRule(popRule());
+	    act.setAction(popAction());
+	
+	    pushAction(act);
+	}
+	else if(tag.startsWith(&#147;&ltPRINTLNACTION&#148;))
+	{
+	    PrintLnAction r = new PrintLnAction();
+	    String key;
+	
+	    key = (String) atts.get(&#147;KEY&#148;);
+	
+	    if(key != null)
+	    {
+		r.setKey(key);
+		
+		pushAction(r);
+	    }
+	}
+	else if(tag.startsWith(&#147;&ltTREE&#148;))
+	{
+	    DecisionTree tree = new DecisionTree();
+	    Pair cur;
+	
+	    while((cur = popPair())!= null)
+	    {
+		tree.insertPair(cur);
+	    }
+	
+	    pushAction(tree);
+	}
+	
+	return &#147;&#148;;
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

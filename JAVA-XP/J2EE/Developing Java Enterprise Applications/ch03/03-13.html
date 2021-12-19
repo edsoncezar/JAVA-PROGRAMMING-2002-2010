@@ -1,0 +1,202 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Basic JDBC Programming</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+</P>
+<P>As part of this example, we check the results of requesting the model commit or rollback transaction because these could fail if the database doesn&#146;t support transactions, if the records are locked by someone else, and so on. The start transaction isn&#146;t checked because in this case it won&#146;t affect much. However, you could easily add that feature.
+</P>
+<PRE>
+import java.awt.swing.*;
+import java.awt.event.*;
+import java.awt.*;
+import java.io.*;
+import java.util.*;
+
+public class JDBCTable extends JPanel implements ActionListener
+{
+    JDBCTableModel model;
+    JTable table;
+
+    static String queryStr = &#147;Query Database&#148;;
+    static String deleteStr =&#147;Delete Current Row&#148;;
+    static String insertStr = &#147;Insert Row&#148;;
+    static String startTranStr = &#147;Start Transaction&#148;;
+    static String commitTransStr = &#147;Commit Transaction&#148;;
+    static String rollbackStr = &#147;Rollback Transaction&#148;;
+
+    public JDBCTable()
+    {
+        File root;
+        Font f;
+        JPanel tmpPanel;
+  
+        setLayout(new BorderLayout());
+
+        <B>// Instantiate the model passing in URL for the JDBC driver.
+        model = new JDBCTableModel(&#147;jdbc:odbc:Inventory&#148;
+                                    ,&#147;sun.jdbc.odbc.JdbcOdbcDriver&#148;
+                                    ,&#147;&#148;
+                                    ,&#147;&#148;);
+</B>  
+        table = new JTable();
+<B>        table.setModel(model);
+</B>        table.createDefaultColumnsFromModel();
+        table.setRowSelectionAllowed(true);
+        add(JTable.createScrollPaneForTable(table),&#147;Center&#148;);
+      
+        // Create set of buttons for controlling the interface.
+        tmpPanel = new JPanel();
+        tmpPanel.setLayout(new GridLayout(2,3));
+  
+        this.addButtonWithTitleToPanel(queryStr,tmpPanel);
+        this.addButtonWithTitleToPanel(deleteStr,tmpPanel);
+        this.addButtonWithTitleToPanel(insertStr,tmpPanel);
+          
+        this.addButtonWithTitleToPanel(startTranStr,tmpPanel);
+        this.addButtonWithTitleToPanel(commitTransStr,tmpPanel);
+        this.addButtonWithTitleToPanel(rollbackStr,tmpPanel);
+      
+        add(tmpPanel,&#147;South&#148;);
+    }
+
+    // Convenience method to install button and action.
+    private void addButtonWithTitleToPanel(String title,
+                                           JPanel panel)
+    {
+        JButton button = new JButton(title);
+        button.addActionListener(this);  
+        panel.add(button);
+    }
+
+    // Handle action based on button pressed.
+    public void actionPerformed(ActionEvent evt)
+    {  
+        String ac = evt.getActionCommand();
+        if(ac.compareTo(queryStr) == 0)
+            model.executeQuery();
+        else if(ac.compareTo(insertStr) == 0)
+            model.executeInsert();
+        else if(ac.compareTo(deleteStr) == 0)
+            model.executeDelete(table.getSelectedRow());
+        else if(ac.compareTo(startTranStr) == 0)
+        {
+<B>            model.startTransaction();
+</B>            JOptionPane.showMessageDialog(this,
+                    &#147;Transaction is now in progress.&#148;,
+                    &#147;&#148;, JOptionPane.INFORMATION_MESSAGE);
+        }
+        else if(ac.compareTo(commitTransStr) == 0)
+        {
+<B>            // Make sure commit succeeds first.
+            if(model.commitTransaction())
+</B>                JOptionPane.showMessageDialog(this,
+                    &#147;Transaction has been commited. &#148;,
+                    &#147;&#148;, JOptionPane.INFORMATION_MESSAGE);
+            else
+                JOptionPane.showMessageDialog(this,
+                     &#147;Transaction could not be commited. &#148;,
+                     &#147;&#148;, JOptionPane.INFORMATION_MESSAGE);
+        }
+        else if(ac.compareTo(rollbackStr) == 0)
+        {
+<B>            if(model.rollbackTransaction())
+</B>                JOptionPane.showMessageDialog(this,
+                     &#147;Transaction has been rolled back. &#148;,
+                     &#147;&#148;, JOptionPane.INFORMATION_MESSAGE);
+            else
+                JOptionPane.showMessageDialog(this,
+                     &#147;Transaction could not\n be rolled back. &#148;,
+                     &#147;&#148;, JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+    public Dimension getPreferredSize()
+    {
+        return new Dimension(600, 300);
+    }
+
+    public static void main(String s[])
+    {
+        JFrame frame = new JFrame(&#147;JDBC Table Example&#148;);
+        JDBCTable panel = new JDBCTable();
+  
+        System.setErr(System.out);
+  
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        frame.setForeground(Color.black);
+        frame.setBackground(Color.lightGray);
+        frame.getContentPane().add(panel,&#147;Center&#148;);
+  
+        frame.setSize(panel.getPreferredSize());
+        frame.setVisible(true);
+        frame.addWindowListener(new WindowCloser());
+    }
+}
+</PRE>
+<P><FONT SIZE="+1"><B><I>JDBCTableModel</I></B></FONT></P>
+<P>JDBCTableModel class does all the database access. Let&#146;s take this class one method at a time. First, initialize some strings and variables, including static variables for the queries used in this example.
+</P>
+<PRE>
+import java.util.*;
+ import java.util.*;
+import java.sql.*;
+import java.awt.swing.table.*;
+import java.awt.swing.event.*;
+
+public class JDBCTableModel extends AbstractTableModel
+{
+    //JDBC objects
+    Connection connection;
+    Statement statement;
+    PreparedStatement delStatement;
+    ResultSet resultSet;
+    ResultSetMetaData metaData;
+    //Default strings used for accessing the Access databases.
+    static String queryStr = &#147;SELECT ProductId, ProductName, &#148; &#43;
+                             &#147;ProductDescription, Price, &#148; &#43;
+                             &#147;ReorderLevel, quantity, &#148; &#43;
+                             &#147;IIf(quantity &#150; reorderlevel &gt 0,&#148; &#43;
+                             &#147;&#145;NO&#146;,&#145;YES&#146;) AS &#148; &#43;
+                             &#147;[Need To Reorder] FROM Inventory&#148;;
+    static String insertStr = &#147;INSERT INTO Inventory(ProductName) &#148; &#43;
+                              &#147;Values (&#145;New Product&#146;)&#148;;
+    // Table objects
+    Vector names;
+    Vector types;
+    Vector data;
+</PRE>
+<P><FONT SIZE="+1"><B>JDBCTableModel</B></FONT></P>
+<P>The constructor for JDBCTableModel creates a connection with the database. This connection persists until the application ends. By keeping the connection and the associated resources open, database resources are being used up, but keeping them open makes the example shorter. If the connection is not expected to be open long or if you are not concerned about resource constraints, it is reasonable to leave it open for the duration of your application. After creating a connection, create PreparedStatement for deleting records. This object passes a single value, the product id, and deletes the associated row. After creating these resources, executeQuery is called, which initially loads the records from the database and displays them in the table.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

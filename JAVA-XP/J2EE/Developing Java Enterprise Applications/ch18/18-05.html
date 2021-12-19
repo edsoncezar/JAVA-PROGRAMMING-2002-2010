@@ -1,0 +1,208 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Enterprise JavaBean Business Rules Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The shared RulesParser registers all of the rules and actions from the busrules example, along with their end tags. The method registerTagHandler is used to register handlers; the method registerEndTag associates tags and their associated end tags.
+</P>
+<PRE>
+    public void registerWith(TagParser parser)
+    {
+	parser.registerTagHandler(&#147;TREE&#148;,this);
+	parser.registerTagHandler(&#147;PAIR&#148;,this);
+	parser.registerTagHandler(&#147;QUALIFIEDACTION&#148;,this);
+	parser.registerTagHandler(&#147;TASK&#148;,this);
+	parser.registerTagHandler(&#147;PRINTLNACTION&#148;,this);
+	parser.registerTagHandler(&#147;ALWAYSRULE&#148;,this);
+	parser.registerTagHandler(&#147;BOOLEANRULE&#148;,this);
+	parser.registerTagHandler(&#147;COMPARISONRULE&#148;,this);
+	parser.registerTagHandler(&#147;RULES&#148;,this);
+	
+	parser.registerEndTag(&#147;RULES&#148;,&#147;&lt/RULES&gt&#148;);
+	parser.registerEndTag(&#147;TASK&#148;,&#147;&lt/TASK&gt&#148;);
+	parser.registerEndTag(&#147;QUALIFIEDACTION&#148;
+				,&#147;&lt/QUALIFIEDACTION&gt&#148;);
+	parser.registerEndTag(&#147;PAIR&#148;,&#147;&lt/PAIR&gt&#148;);
+	parser.registerEndTag(&#147;TREE&#148;,&#147;&lt/TREE&gt&#148;);
+	parser.registerEndTag(&#147;BOOLEANRULE&#148;,&#147;&lt/BOOLEANRULE&gt&#148;);
+    }
+}
+</PRE>
+<P>Notice that the main drawback of the simple parser is that the RuleGroup, Task, and DecisionTree are very greedy. They will pop everything off the stack. This means that you can&#146;t put two RuleGroups into a RuleGroup, using the existing parser. In addition, see from the code how the parseRule and parseAction methods simply return the last object on the stack. If no object is available, null is returned or an exception is thrown.
+</P>
+<H3><A NAME="Heading9"></A><FONT COLOR="#000077">Check Request Example</FONT></H3>
+<P>Given this generic rules engine, let&#146;s look at the specific example of a check request application. First, define an EJB that provides an interface for applications wanting to make check requests. However, we don&#146;t want everyone to be able to request a check, so we&#146;ll use a rule script to determine if a request is valid. We&#146;ll also use an action script to implement the request mechanism.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading10"></A><FONT COLOR="#000077">CheckRequest: The Interface</FONT></H4>
+<P>The interface for the CheckRequest bean defines a single method for making a check request.
+</P>
+<PRE>
+package checkreq;
+
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import java.rmi.Remote;
+
+public interface CheckRequest
+ extends EJBObject, Remote
+{
+    public boolean requestCheck(String payee
+				,String project
+				,double amount
+				,String desc)
+    throws RemoteException;
+}
+</PRE>
+<P>Notice that clients only provide the necessary information to make a request; they don&#146;t interact with the script file or the rules implementation.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading11"></A><FONT COLOR="#000077">CheckRequestHome: The Home Interface</FONT></H4>
+<P>Because a check request is a basic stateless operation, a stateless session bean is used to implement it. This allows a very simple home interface.
+</P>
+<PRE>
+public interface CheckRequestHome extends EJBHome
+{
+    CheckRequest create()
+	 throws CreateException, RemoteException;
+}
+</PRE>
+<P>The CheckRequestHome simple creates a CheckRequest bean and returns it. The standard exceptions are declared to account for a problem during creation or an RMI exception.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading12"></A><FONT COLOR="#000077">CheckRequest: The Bean</FONT></H4>
+<P>The bean itself is more complex. Let&#146;s look at the bean in three sections. First, there are the import statements and some basic methods required by the SessionBean interface. Also defined is an instance variable to hold the SessionContext for use in all of the methods. Notice that the java.security package is included in order to use the Identity provided by the SessionContext to identify the client. The actual client login is managed by the JNDI interface, as shown in the client code.
+</P>
+<PRE>
+import javax.ejb.*;
+import java.security.*;
+import java.io.Serializable;
+import java.util.*;
+import java.io.*;
+
+import checkreq.*;
+import busrules.*;
+
+public class CheckRequestBean implements SessionBean
+{
+    protected SessionContext context;
+
+    public void ejbActivate()
+    {
+    }
+    public void ejbRemove()
+    {
+    }
+    public void ejbPassivate()
+    {
+    }
+    public void setSessionContext(SessionContext ctx)
+    {
+	context = ctx;
+    }
+    public void ejbCreate()
+    {
+    }
+</PRE>
+<P>Next, implement a convenience method called buildRule to build the rule used to determine whether a request is valid. This method uses an environmental variable to determine the script file from which to load the rule. This environmental variable is defined at deployment time. On the CD-ROM, these variables are included as part of the DeploymentDescriptor.txt file used to build a deployment descriptor for the WebLogic server.
+</P>
+<P>The buildRule method also registers a custom tag handler called IdentityRuleHandler with the RulesParser. This handler and the custom rule it generates are discussed in the &#147;IdentityRuleHandler: A Custom Handler&#148; section.</P>
+<PRE>
+    protected Rule buildRule()
+    {
+	Properties env;
+	Rule retVal = null;
+	String scriptFile;
+	FileReader fileIn;
+	RulesParser parser;
+	Vector handlers;
+	
+	try
+	{
+	    env = context.getEnvironment();
+	    parser = RulesParser.sharedRulesParser();
+	
+	    scriptFile = env.getProperty(&#147;rulesScriptFile&#148;);
+	
+	    fileIn = new FileReader(scriptFile);
+	
+	    handlers = new Vector();
+	    handlers.addElement(new IdentityRuleHandler());
+	
+	    retVal = parser.parseRule(fileIn
+			     ,handlers.elements());
+	}
+	catch(Exception exp)
+	{
+	    retVal = null;
+	}
+	
+	return retVal;
+    }
+</PRE>
+<P>In the same way we created a method for building the rule for validating a request, the method buildAction is used to create an action for handling the request. This method also uses an environmental variable to determine the script file and registers a custom tag handler.
+</P>
+<P>Although these custom handlers have been hard-coded here, you could also read them from a file, making the entire parsing process highly dynamic.</P>
+<PRE>
+    protected Action buildAction()
+    {
+	Properties env;
+	Action retVal = null;
+	String scriptFile;
+	FileReader fileIn;
+	RulesParser parser;
+	Vector handlers;
+	
+	try
+	{
+	    env = context.getEnvironment();
+	    parser = RulesParser.sharedRulesParser();
+	
+	    scriptFile = env.getProperty(&#147;actionScriptFile&#148;);
+	
+	    fileIn = new FileReader(scriptFile);
+	
+	    handlers = new Vector();
+	    handlers.addElement(new LogRequestHandler());
+	
+	    retVal = parser.parseAction(fileIn
+					,handlers.elements());
+	}
+	catch(Exception exp)
+	{
+	    retVal = null;
+	}
+	
+	return retVal;
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

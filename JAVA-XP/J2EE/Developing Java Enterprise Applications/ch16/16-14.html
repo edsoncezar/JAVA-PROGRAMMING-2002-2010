@@ -1,0 +1,206 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H4 ALIGN="LEFT"><A NAME="Heading27"></A><FONT COLOR="#000077">Using an Entity Bean</FONT></H4>
+<P>Clients should think of entity beans as persistent objects on the server. Depending on the available create and find methods, you may treat these persistent objects differently, but you should not treat them like session beans that you create and remove all the time.
+</P>
+<P>The client created to test this shopping cart bean allows the user to enter a name for the cart and then add items. When the user quits the program, the list of items is printed. Again, the getInitialContext method has been left out because it is the same as the ones used in previous examples.</P>
+<PRE>
+package containercart;
+
+import javax.ejb.*;
+import javax.naming.*;
+import java.rmi.*;
+import java.util.*;
+import java.io.*;
+
+import containercart.*;
+
+public class ShoppingCartClient
+{
+    public static void main(String[] args)
+    {
+        Context ctx=null;
+
+        try
+        {
+            <B>ctx = getInitialContext(args);</B>
+
+            InputStreamReader readIn;
+            BufferedReader bufIn;
+            String testStr;
+            Object[] items;
+            <B>ShoppingCartHome home = (ShoppingCartHome)
+                 ctx.lookup(&#147;containercart.ShoppingCartHome&#148;);
+            ShoppingCart cart=null;
+            CartPK pk;</B>
+
+            readIn = new InputStreamReader(System.in);
+            bufIn = new BufferedReader(readIn);
+
+            System.out.print(&#147;Please enter a name&#148;);
+            System.out.println(&#147; or \&#145;q\&#146; to quit.&#148;);
+
+            testStr = bufIn.readLine();
+
+            if(!testStr.equals(&#147;q&#148;))
+            {
+                <B>pk = new CartPK();
+                pk.cartName = testStr;
+
+                try
+                {
+                    cart = home.findByPrimaryKey(pk);
+                }
+                catch(Exception exp)
+                {
+                    cart = home.create(testStr);
+                }</B>
+            }
+
+            while(cart != null)
+            {
+                System.out.print(&#147;Please enter an item&#148;);
+                System.out.println(&#147; or \&#145;q\&#146; to quit.&#148;);
+
+                testStr = bufIn.readLine();
+
+                if(testStr.equals(&#147;q&#148;)) break;
+
+                <B>cart.addItem(testStr);</B>
+            }
+
+            if(cart != null)
+            {
+                <B>items = cart.getItems();</B>
+
+                System.out.println(&#147;The items in the cart are:&#148;);
+
+                int i,max;
+                max = items.length;
+
+                for(i=0;i&ltmax;i&#43;&#43;)
+                {
+                    System.out.println(items[i]);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            System.out.println(&#147;Error.&#148;);
+            e.printStackTrace();
+        }
+        finally
+        {
+            try
+            {
+                ctx.close();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+    }
+    static public Context getInitialContext(String[] args)
+      throws Exception
+    {
+        ...
+    }
+}
+</PRE>
+<P>One interesting technique used in this example is that a bean is created if it is not found. Therefore, the first try is to find a bean with the given name, and if that fails, create a new one.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading28"></A><FONT COLOR="#000077">Entity Bean Programming Rules</FONT></H4>
+<P>Based on the specification, the following rules indicate the guidelines you should follow when creating session beans:
+</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Entity beans must implement the javax.ejb.EntityBean interface.
+<DD><B>2.</B>&nbsp;&nbsp;Entity beans must not be abstract.
+<DD><B>3.</B>&nbsp;&nbsp;Entity beans must define a custom primary key class.
+<DD><B>4.</B>&nbsp;&nbsp;The entity bean should have an instance variable for the primary key with the same name as the variable in the primary key class that stores the same key.
+<DD><B>5.</B>&nbsp;&nbsp;Container-managed fields should be public.
+<DD><B>6.</B>&nbsp;&nbsp;Entity beans must implement all of the necessary ejbCreate methods described in their home interfaces. These methods must be public, and the return type must be the primary key type. However, an entity bean does not have to have any create methods.
+<DD><B>7.</B>&nbsp;&nbsp;Entity beans must implement all of the necessary ejbPostCreate methods described in their home interfaces. These methods must be public, and the return type must be void. However, an entity bean does not have to have any create methods.
+<DD><B>8.</B>&nbsp;&nbsp;Entity beans must implement all of the necessary ejbFind methods described in their home interfaces. These methods must be public, and the return type must be the primary key. However, an entity bean might be able to rely on the container for these methods.
+<DD><B>9.</B>&nbsp;&nbsp;Entity beans must implement their remote interfaces, including any Exception throws declarations. These methods must be public.
+<DD><B>10.</B>&nbsp;&nbsp;The home interface for an entity bean must define create methods that take RMI-safe arguments and use the remote interface for their return type.
+<DD><B>11.</B>&nbsp;&nbsp;The home interface must define findByPrimaryKey and can define other find methods. These methods must start with find and can throw FinderExceptions.
+<DD><B>12.</B>&nbsp;&nbsp;All find methods must return a primary key or an enumeration of primary keys.
+<DD><B>13.</B>&nbsp;&nbsp;The home interface must extend EJBHome.
+<DD><B>14.</B>&nbsp;&nbsp;Remote methods must be declared to throw RemoteException.
+<DD><B>15.</B>&nbsp;&nbsp;The remote interface must extend EJBObject.
+</DL>
+<P>Again, this is not a complete list of every convention in Java programming. It is a list of the guidelines based on the EJB specification and represents a standard set of rules to use in addition to your normal Java programming conventions.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading29"></A><FONT COLOR="#000077">Container Responsibilities</FONT></H4>
+<P>The container for a session bean has a number of responsibilities::
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;The container provider should also provide tools to create the classes that implement the remote and home interfaces. These classes should forward methods appropriately, that is, create messages to the home object that should initiate ejbCreate messages to the bean. These methods should also manage any container-managed fields.
+<DD><B>&#149;</B>&nbsp;&nbsp;A serializable handle must be provided.
+</DL>
+<P>In general, these requirements are met by the EJB host&#146;s deployment tools, although they may be part of another tool as well.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading30"></A><FONT COLOR="#000077">Pros and Cons</FONT></H4>
+<P>Why are there two kinds of entity beans? To answer this question, let&#146;s look at the pros and cons of each type of entity bean. Container-managed persistence is easier to code, because you don&#146;t have to code anything. However, the EJB host imposes limits on container management, so you may not be able to do everything that you need to do with this mechanism. Bean-managed persistence requires that the programmer implement persistence code. This code may have to be ported between hosts, but the bean can be much more flexible than a container-managed bean can be. These issues are summarized in Table 16.7.
+</P>
+<TABLE WIDTH="100%"><TD VALIGN="TOP" ALIGN="LEFT" COLSPAN="3"><B>Table 16.7</B> Pros/Cons of Bean- and Container-Managed Entity Beans
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TH WIDTH="25%" VALIGN="TOP" ALIGN="LEFT">
+<TH WIDTH="35%" VALIGN="TOP" ALIGN="LEFT">PROS
+<TH VALIGN="TOP" ALIGN="LEFT">CONS
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><B>Bean managed</B>
+<TD VALIGN="TOP" ALIGN="LEFT">Bean can optimize resource usage. Arbitrary find methods.
+<TD VALIGN="TOP" ALIGN="LEFT">May have to port bean if you change platforms. Requires more code.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><B>Container managed</B>
+<TD VALIGN="TOP" ALIGN="LEFT">Less code in the bean. Container may allow you to change the persistence without recompiling. Can change containerswithout recompiling.
+<TD VALIGN="TOP" ALIGN="LEFT">Less control over persistence. May not support all find methods.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+</TABLE>
+<H3><A NAME="Heading31"></A><FONT COLOR="#000077">Metadata, Handles, and Exceptions</FONT></H3>
+<P>One of the mechanisms provided in the EJB specification for tools vendors is the ability to get some metadata from beans. This EJBMetaData actually comes from the bean&#146;s home and includes the home interface class, the remote interface class, the primary key, and whether or not the bean is a session bean.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

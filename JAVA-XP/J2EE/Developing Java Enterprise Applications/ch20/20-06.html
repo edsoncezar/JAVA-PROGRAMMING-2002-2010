@@ -1,0 +1,155 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming with the Java Messaging Service</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Unlike the session&#146;s message listener, which is not really intended for client use, message consumer message listeners are a core part of the client API and should be used freely.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>Depending on your application design, choose to either receive messages or listen for them. Receiving messages is synchronous, so use that option when you want to wait for a message to arrive or want to control the thread in which messages arrive. Listeners are notified in a thread managed by the session. Use the listeners option when you want asynchronous notification of a message. Do not mix these two mechanisms, because a session is not expected to hold messages for receiving if they have already been sent to a listener. Also, if two consumers are created using the same session and the same destinations, they will not both receive messages. Instead, the session will randomly distribute the messages between the consumers. In general, you should create only one consumer to deal with a particular destination.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading12"></A><FONT COLOR="#000077">Messages</FONT></H4>
+<P>All of this discussion and design would be moot without the fundamental concept of a message. Messages represent the key abstraction in JMS; they are items to be sent or received. Depending on the JMS provider, message implementations can be blandly generic or highly optimized for a specific delivery system. Regardless of messages&#146; implementation, JMS specifies that all messages be represented by objects that implement the Message interface.
+</P>
+<P>The Message interface separates a JMS message into three pieces:</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;<B>Header.</B> This is the JMS-specific information included with a message. For example, the expiration date, priority, and delivery mode are attributes of a message.
+<DD><B>&#149;</B>&nbsp;&nbsp;<B>Properties.</B> Optional, often provider-specific, message attributes. These properties can be of any primitive type, a string, or an object. For example, the MiniJMS provider uses a property to keep track of the database id assigned to messages by the persistent store.
+<DD><B>&#149;</B>&nbsp;&nbsp;<B>Body.</B> This is the content of the message. The type of content provided depends on the message type, as discussed in the next section on message subclasses.
+</DL>
+<P>The JMS message header fields are described in Table 20.6. These headers can be defined at different times, and their assignment times are also listed in the same table. A message object provides methods for accessing all of these headers using the standard naming convention. For example, the method setJMSDestination is used to set the JMSDestination header field.
+</P>
+<P>A message can also have arbitrary properties assigned to it in addition to these header values. These properties might be provider specific and may even be required by the provider. They can also be used by the client to configure the message or indicate its body contents for the receiver. In general, properties may require more resources than the message body and should be used sparingly.</P>
+<TABLE WIDTH="100%"><TR>
+<TD CAPTION ALIGN="LEFT" COLSPAN="3"><B>Table 20.6</B> Message Headers
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TH VALIGN="TOP" WIDTH="20%" ALIGN="LEFT">HEADER
+<TH VALIGN="TOP" WIDTH="50%" ALIGN="LEFT">DESCRIPTION
+<TH VALIGN="TOP" ALIGN="LEFT">ASSIGNMENT
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSDestination</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The Destination object to which the message will be, or was, sent.
+<TD VALIGN="TOP" ALIGN="LEFT">Assigned as part of the send method.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSDeliveryMode</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The delivery mode for this message. Possible values are DeliveryMode.PERSISTENT and DeliveryMode.NON_PERSISTENT.
+<TD VALIGN="TOP" ALIGN="LEFT">Assigned as part of the send method.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSExpiration</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The expiration time for this message. A value of 0 implies no expiration and is the default.
+<TD VALIGN="TOP" ALIGN="LEFT">Assigned as part of the send method.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSPriority</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The priority for a message. The value can range from 0 (the lowest priority) to 9 (the highest priority).
+<TD VALIGN="TOP" ALIGN="LEFT">Assigned as part of the send method.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSMessageID</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The unique id, within the messaging system, for the message. May not be set if the producer is told to skip assignment.
+<TD VALIGN="TOP" ALIGN="LEFT">Assigned as part of the send method.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSTimestamp</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The time at which the message was sent. May not be set if the producer is told to skip assignment.
+<TD VALIGN="TOP" ALIGN="LEFT">Assigned as part of the send method.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSCorrelationID</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Used by the client to link messages; can be a message id, a string, or a byte array. This value is for client use and can be assigned to indicate related messages.
+<TD VALIGN="TOP" ALIGN="LEFT">May be set by the client.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSReplyTo</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">A specific Destination to which the client expects responses to this message.
+<TD VALIGN="TOP" ALIGN="LEFT">May be set by the client.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSType</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Used by some providers to indicate the message definition to use for this message. This value can be highly provider dependent, and clients should use the provider documentation to determine if it is required.
+<TD VALIGN="TOP" ALIGN="LEFT">May, sometimes must, be set by the client.
+<TR>
+<TD COLSPAN="3"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>JMSRedeliverd</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Indicates whether the message was delivered previously and not acknowledged.
+<TD VALIGN="TOP" ALIGN="LEFT">Set by the JMS provider during redelivery.
+<TR>
+<TD COLSPAN="3"><HR>
+</TABLE>
+<P>Properties can be of a variety of types, and methods are provided to get and set properties by name for each type listed in Table 20.7. For example:
+</P>
+<PRE>
+public int getIntProperty(String name) throws JMSException
+</PRE>
+<P>returns an integer property, and
+</P>
+<PRE>
+public void setStringProperty(String name, String value)
+                                        throws JMSException
+</PRE>
+<P>assigns a string property. Table 20.7 also shows the conversions that a message should support when assigning properties. The Xs indicate that a property written with the type in the first column of the row can be read with the type at the top of the column containing the X. So, strings can be used for all types, and floats can be read as floats or doubles.
+</P>
+<P>Properties can also be set as objects using setObjectProperty and getObjectProperty. In this case, the primitive types such as Integer can be used to assign an integer property. This property can be accessed as either an int or an Integer object once assigned.</P>
+<P>Clients can test whether a property exists using the method:</P>
+<PRE>
+public boolean propertyExists(String name) throws JMSException
+</PRE>
+<P>To iterate over the entire list of properties, use the method:
+</P>
+<PRE>
+public Enumeration getPropertyNames() throws JMSException
+</PRE>
+<P>to get the available property names, as strings, and use these names to access the properties. You can even remove all of the properties from a message using the method:
+</P>
+<PRE>
+public void clearProperties() throws JMSException
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-05.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-07.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

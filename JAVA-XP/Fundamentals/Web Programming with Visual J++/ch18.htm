@@ -1,0 +1,1464 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 18 -- Networking with Datagrams and Sockets</TITLE>
+
+<META NAME="GENERATOR" CONTENT="Internet Assistant for Microsoft Word 2.0z">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;18</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Networking with Datagrams and Sockets</FONT>
+</H1>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#TCPIPBasics">
+TCP/IP Basics</A>
+<LI><A HREF="#TheInetAddressClass">
+The InetAddress Class</A>
+<LI><A HREF="#TheDatagramPacketClass">
+The DatagramPacket Class</A>
+<LI><A HREF="#TheDatagramSocketClass">
+The DatagramSocket Class</A>
+<LI><A HREF="#ADatagramExampleALiveUSNationalDebtApplet">
+A Datagram Example: A Live U.S. National Debt Applet</A>
+<LI><A HREF="#TheSocketClass">
+The Socket Class</A>
+<LI><A HREF="#ASocketExampleAPOPClientApplication">
+A Socket Example: A POP Client Application</A>
+<LI><A HREF="#Summary">
+Summary</A>
+</UL>
+</UL>
+<HR>
+<P>
+In <A HREF="ch17.htm" >Chapter 17</A>, &quot;Accessing URLs,&quot; you gained access to
+resources on the Internet using only the URL group of classes.
+When a higher level of control is necessary to communicate across
+a network, you can use the <TT>datagram</TT> and <TT>socket</TT>
+classes. In this chapter, we will discuss these two primary methods
+of socket communication using Java, and the advantages and disadvantages
+of each approach.
+<P>
+Socket programming is usually a complex task that requires in-depth
+knowledge of the protocols and networking subsystems involved.
+Java, however, comes to the rescue again by providing intuitively
+designed classes that allow you to hit the ground running with
+low-level Internet programming. To set the stage, a brief overview
+of the TCP/IP protocol suite and sockets is needed.
+<H2><A NAME="TCPIPBasics"><FONT SIZE=5 COLOR=#FF0000>
+TCP/IP Basics</FONT></A></H2>
+<P>
+The Internet, as we know it today, had its beginning in the late
+1960s as a research project of the U.S. Department of Defense.
+The Advanced Research Projects Agency (ARPA) was commissioned
+to design a communications network that would allow computers
+on independent and dissimilar networks to share information. Although
+the original ARPANET has grown and changed tremendously since
+its inception, it laid the groundwork for what is known today
+as the Internet.
+<P>
+Over the years many contributions were made to the development
+of the Internet, but arguably the most valuable of these was the
+creation of the Transmission Control Protocol and Internet Protocol
+(TCP/IP) suite. TCP/IP services provide the transportation mechanisms
+for routing and delivering data across the network. When a stream
+of data is transmitted, it is divided into individual data packets
+called datagrams. In addition to the data itself, each datagram
+includes routing information that identifies the computer that
+is sending the data as well as the computer that should receive
+the data-an electronic envelope of sorts. As datagrams are relayed
+from network to network on the Internet, it is the job of IP to
+inspect the address of the destination computer and ensure that
+the data is traveling down the right path to reach its intended
+host.
+<P>
+To identify computers on the Internet, each is given a unique
+number called an IP address. IP addresses are 32-bit numbers that
+are commonly shown in dotted decimal notation (for example, <TT>206.99.100.177</TT>).
+Because each computer is also a member of its own local network,
+its IP address is broken into two parts: the network and the host.
+The network portion identifies the network that the computer belongs
+to, and the host portion identifies the computer on that network.
+The sizes of the network and host components vary depending on
+the class of the address, but the overall size is always 32 bits.
+This scheme is similar to the street address of a business, with
+the street name representing a network and the number representing
+the building on that street.
+<P>
+Although dotted decimal notation is easier to remember than the
+numeric representation, it is still a lot to ask for humans to
+remember a series of numbers. To solve this problem, each IP address
+can also be given an alphanumeric alias. Because computers like
+to work with numbers, aliases must be converted to the IP address
+they represent before data can actually be sent. These translation
+services are most often provided by Domain Name System (DNS) servers
+located on the Internet. Like IP addresses, aliases also have
+logical components. Instead of a host being identified as part
+of a network, however, under DNS a host is a member of a domain.
+Domains form a hierarchical chain that defines each host's logical
+membership in the network. Consider the alias of <TT>www.jory.com</TT>,
+which defines a host called <TT>www</TT>, which is a member of
+the <TT>jory</TT> domain, which is a member of the <TT>com</TT>
+domain. Domain names move from general to specific as you read
+from right to left. The <TT>com</TT> domain is by far the largest
+and includes all commercial organizations. Other common base domains
+include <TT>edu</TT> for educational entities and <TT>gov</TT>
+for government institutions.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>NOTE</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+A host's IP address or alias can be used interchangeably with most Internet services. When an alias is used, however, an extra step must be performed before data can be sent to resolve the alias to its actual IP address.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+As already mentioned, IP is responsible for routing individual
+data packets across the network. IP is not concerned with the
+content of each datagram or even whether the data reaches its
+intended destination. Higher-level protocols that work with IP
+assume this role. The User Datagram Protocol (UDP) is used when
+the amount of data being transmitted can fit within one datagram.
+Because UDP does not need to be concerned with segmenting and
+reassembling multiple datagrams on each end of a connection, it
+is known for being fast and efficient. UDP, however, makes no
+guarantee that the datagram will reach its target. Because most
+data transfer tasks involve more data than can fit in one datagram
+and function naturally with network connections as streams, TCP
+is the most common protocol used with IP. TCP provides a reliable
+connection between two nodes and ensures that the data will be
+reassembled in the proper sequence and be delivered error free.
+With a TCP connection, the sending and receiving of data is very
+similar to reading and writing to a file or pipe. For this reason,
+TCP connections are often referred to as sockets. This added abstraction,
+however, comes with a price. TCP adds overhead to the connection
+that results in slower transfer rates. Just as TCP builds on IP,
+the next level of protocols, including HTTP, FTP, and SMTP, build
+on TCP to provide familiar Internet services.
+<P>
+Java provides several classes that can be used to deal with IP
+and IP addresses, datagrams and datagram connections, and TCP
+connections that integrate cleanly with the stream classes covered
+in <A HREF="ch13.htm" >Chapter 13</A>, &quot;Using Java Streams.&quot;
+<H2><A NAME="TheInetAddressClass"><FONT SIZE=5 COLOR=#FF0000>
+The InetAddress Class</FONT></A></H2>
+<P>
+The <TT>InetAddress</TT> utility class provides a handy interface
+for dealing with Internet addresses and their peculiar nomenclature.
+Because <TT>InetAddress</TT> does not have a public constructor,
+it cannot be created directly. It does, however, provide three
+static methods that return instances of <TT>InetAddress</TT>.
+The three public static methods of <TT>InetAddress</TT> as well
+as some of its other public methods are listed in Table 18.1.
+<BR>
+<P>
+<CENTER><B>Table 18.1. The InetAddress methods of interest.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=240><I>Method</I></TD><TD WIDTH=336><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>InetAddress getByName(String)</TT></TD>
+<TD WIDTH=336>Static method used to retrieve the address for the host name passed as the parameter.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>InetAddress[] getAllByName(String)</TT>
+</TD><TD WIDTH=336>Static method used to retrieve all the addresses for the host name passed as a parameter.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>InetAddress getLocalHost()</TT></TD><TD WIDTH=336>Static method used to retrieve the address for the current, or local, host.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>String getHostName()</TT></TD><TD WIDTH=336>Returns the host name.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>byte[] getAddress()</TT></TD><TD WIDTH=336>Returns the IP address.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>String getHostAddress()</TT></TD><TD WIDTH=336>Returns the IP address as a string.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The host name passed to <TT>getByName()</TT> and <TT>getAllByName()</TT>
+can be the host's full name, alias, or IP address. Consider the
+following examples, which return equal <TT>InetAddress</TT> objects:
+<BLOCKQUOTE>
+<PRE>
+try
+{
+    InetAddress fullname = InetAddress.getByName(&quot;tigger.jory.com&quot;);
+    InetAddress alias = InetAddress.getByName(&quot;tigger&quot;);
+    InetAddress octets = InetAddress.getByName(&quot;199.42.65.1&quot;);
+
+    if (fullname.equals(alias) &amp;&amp; fullname.equals(octets))
+        // All is right with the world!
+}
+catch (UnknownHostException e)
+{
+    // Exception handling here.
+}<BR>
+</PRE>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>NOTE</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Normally, each call to get an address for a host involves a DNS lookup across the network, which can degrade performance when done repetitively. <TT>InetAddress</TT>, however, mitigates the delays caused by DNS lookups by keeping an internal cache of 
+addresses as they are looked up. The cache is always checked first to see whether the address can be returned immediately.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="TheDatagramPacketClass"><FONT SIZE=5 COLOR=#FF0000>
+The DatagramPacket Class</FONT></A></H2>
+<P>
+As already mentioned, communicating over a network using datagrams
+is an unreliable method of sending self-contained pieces of information.
+It is unreliable because the protocol does not guarantee that
+datagram packets will reach their intended destination. Furthermore,
+even if they do reach their destination, there is no guarantee
+that they will arrive in the same order in which they were sent.
+Datagrams are still valuable, however, for certain types of communication,
+especially those dealing with small amounts of data that are sent
+using a broadcast scheme. In addition, because datagrams don't
+include the overhead of guaranteed packet delivery and sequencing,
+they are typically much faster than data sent using TCP (that
+is, streaming sockets).
+<P>
+Java provides two classes to perform datagram communication. The
+<TT>DatagramPacket</TT> class encapsulates the information, or
+data, for each packet of information sent across the network,
+and <TT>DatagramSocket</TT> is responsible for actually sending
+the data. After <TT>DatagramSocket</TT> is discussed, an example
+that illustrates the use of both classes will be covered. Table
+18.2 lists the methods of the <TT>DatagramPacket</TT> class.<BR>
+<P>
+<CENTER><B>Table 18.2. The DatagramPacket methods.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=240><I>Method</I></TD><TD WIDTH=336><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>DatagramPacket(byte[], int)</TT></TD><TD WIDTH=336>Creates a <TT>DatagramPacket</TT> that can be used to receive packets from a network connection. The byte array passed as a parameter is used to hold the incoming packet.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>DatagramPacket(byte[], int,InetAddress, int)</TT>
+</TD><TD WIDTH=336>Creates a <TT>DatagramPacket</TT> that is suitable for sending packets across a network connection. The byte array passed as a parameter should contain the data to be sent, and the <TT>InetAddress</TT> and port specifying the destination 
+address and port.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>InetAddress getAddress()</TT></TD><TD WIDTH=336>Returns the <TT>InetAddress</TT> of the host that sent or received the data packet.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>int getPort()</TT></TD><TD WIDTH=336>Returns the port number used to send or receive the data packet.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>byte[] getData()</TT></TD><TD WIDTH=336>Returns the packet data.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>int getLength()</TT></TD><TD WIDTH=336>Returns the length of the packet data.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Datagrams can be created in two forms: those used for sending
+packets and those used for receiving packets. The only difference
+between the two is the constructor used to create them. Consider
+the following code fragment, in which both types of <TT>DatagramPacket</TT>
+are created:
+<BLOCKQUOTE>
+<PRE>
+Byte buffer[] = new byte[128];
+DatagramPacket recvPacket = new DatagramPacket(buffer, buffer.length);
+// ... Receive some data from a network connection into recvPacket.
+// Load buffer with data and create packet to send on port 9000.
+DatagramPacket sendPacket = new DatagramPacket(buffer, buffer.length,
+        InetAddress.getByName(&quot;somehost.somewhere.com&quot;), 9000);
+// ... send data in buffer across network connection.
+</PRE>
+</BLOCKQUOTE>
+<P>
+The work of receiving and sending <TT>DatagramPacket</TT>s is
+performed by the <TT>DatagramSocket</TT> class.
+<H2><A NAME="TheDatagramSocketClass"><FONT SIZE=5 COLOR=#FF0000>
+The DatagramSocket Class</FONT></A></H2>
+<P>
+A <TT>DatagramSocket</TT> object can be created to send or receive
+data encapsulated in <TT>DatagramPacket</TT>s. Because the routing
+information is included in the <TT>DatagramPacket</TT> being sent
+or received, the <TT>DatagramSocket</TT> is simple to use. Table
+18.3 lists the methods of <TT>DatagramSocket</TT>.<BR>
+<P>
+<CENTER><B>Table 18.3. The public DatagramSocket methods.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=199><I>Method</I></TD><TD WIDTH=367><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>DatagramSocket()</TT></TD><TD WIDTH=367>Creates a <TT>DatagramSocket</TT> connected to the first available port. Used for sending packets.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>DatagramSocket(int)</TT></TD><TD WIDTH=367>Creates a <TT>DatagramSocket</TT> connected to the specified port. Generally used for receiving data packets.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>send(DatagramPacket)</TT></TD><TD WIDTH=367>Sends the <TT>DatagramPacket</TT> passed as a parameter.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>receive(DatagramPacket)</TT></TD><TD WIDTH=367>Receives a packet into the <TT>DatagramPacket</TT> passed as a parameter. This method blocks until a packet is received.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>int getLocalPort()</TT></TD><TD WIDTH=367>Returns the port number being used on the local host for this socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>close()</TT></TD><TD WIDTH=367>Closes the socket.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The reason the first constructor is used to send datagrams is
+that a port is not specified. In these cases, the first available
+port is used. Rest assured that the datagram socket will attempt
+to deliver the datagram to the proper port on the other end of
+the connection based on the host and port embedded in the <TT>DatagramPacket</TT>
+being sent. The following example ties together the use of the
+<TT>InetAddress</TT>, <TT>DatagramPacket</TT>, and <TT>DatagramSocket</TT>
+classes.
+<H2><A NAME="ADatagramExampleALiveUSNationalDebtApplet"><FONT SIZE=5 COLOR=#FF0000>
+A Datagram Example: A Live U.S. National Debt Applet</FONT></A></H2>
+<P>
+Because datagram network connections deal with small pieces of
+data, let's consider a datagram client applet and datagram server
+application that exchange datagrams. The server application accepts
+subscriptions from one or more applets that are interested in
+receiving a live feed of the current national debt for the United
+States. Every three seconds the application broadcasts datagrams
+containing the current national debt to all subscribed applets.
+The user can subscribe and unsubscribe from the server at any
+time. Figures 18.1 and 18.2 show the applet and server application
+in action.
+<P>
+<A HREF="http://docs.rinet.ru/WebJPP/f18-1.gif"><B> Figure 18.1 : </B><I>The National Debt Applet.
+</I></A><P>
+<P>
+The applet uses two buttons to allow the user to subscribe and
+unsubscribe from the live feed from the server. When the Subscribe
+button is pressed, the applet opens a <TT>DatagramSocket</TT>
+connection to the server, sends one <TT>DatagramPacket</TT> containing
+the <TT>SUBSCRIBE</TT> command, starts a thread to wait for a
+confirmation from the server, and also starts a timer in case
+the server never responds. If the server is accepting subscriptions,
+it responds by echoing the datagram back to the applet. The timer
+class is discussed a bit later.
+<P>
+When subscribed, the applet begins to receive datagrams from the
+server every three seconds that contain the current national debt.
+The debt display is updated with the contents of each debt datagram.
+To stop the feed of datagrams from the server, the applet must
+unsubscribe from the server. This is achieved when the user either
+presses the I've Seen Enough button or changes to another Web
+page, causing the applet to stop. In both situations, a datagram
+is sent to the server with the <TT>UNSUBSCRIBE</TT> command. The
+server also echoes the unsubscribe datagram back to the applet.
+After the confirmation is received, the applet's thread ends.
+It is started back up, however, if the user subscribes again.
+Listing 18.1 includes some of the source code for the applet.
+The classes used to create and lay out the controls of the applet
+are not listed here but are included on the accompanying CD-ROM.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.1. EX18A.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.net.*;
+import java.io.*;
+import NationalDebtRes;    // Applet controls created by Resource Wizard.
+import SimpleTimer;
+import SimpleTimerClient;
+
+public class EX18A extends Applet implements Runnable, SimpleTimerClient
+{
+    static final int DEBT_PORT = 1996;
+    static final String SUB_CMD = &quot;SUBSCRIBE&quot;;
+    static final String UNSUB_CMD = &quot;UNSUBSCRIBE&quot;;
+    InetAddress host;
+    Thread thread = null;
+    boolean subscribed;
+    NationalDebtRes resource;
+    SimpleTimer timer = null;
+
+    public void init()
+    {   // Create the resource from the Resource Wizard and
+        // initialize the controls.
+        resource = new NationalDebtRes(this);
+        resource.CreateControls();
+        resource.IDC_DEBT.setFont(new Font(&quot;Helvetica&quot;, Font.BOLD, 18));
+        resource.IDC_DEBT.setText(&quot;$ 0.00&quot;);
+
+        subscribed = false;
+    }
+
+    public void start()
+    {   // Due to security, server must be running on the same
+        // system as the document.
+        try
+            host = InetAddress.getByName(getDocumentBase().getHost());
+        catch (UnknownHostException e)
+            getAppletContext().showStatus(&quot;Unable to find host.&quot;);
+    }
+
+    public boolean handleEvent(Event evt)
+    {
+        boolean retval = false;
+
+        if (evt.target == resource.ID_SUBSCRIBE &amp;&amp; !subscribed)
+        {   // Attempt to subscribe to server.
+            getAppletContext().showStatus(&quot;Subscribing to host...&quot;);
+            if (sendCommand(SUB_CMD))
+                subscribed = true;
+            retval = true;
+        }
+        else if (evt.target == resource.ID_UNSUBSCRIBE &amp;&amp; subscribed)
+        {   // Attempt to unsubscribe from server.
+            getAppletContext().showStatus(&quot;Unsubscribing from host...&quot;);
+            if (sendCommand(UNSUB_CMD))
+                subscribed = false;
+            retval = true;
+        }
+
+        return retval;
+    }
+
+    // Sends a command to the server using a datagram.
+    protected boolean sendCommand(String cmd)
+    {
+        boolean retval = false;
+        byte buf[] = new byte[cmd.length()];
+        cmd.getBytes(0, cmd.length(), buf, 0);
+        DatagramSocket socket = null;
+
+        try
+        {   // Kill any running timer.
+            if (timer != null)
+                timer.stop();
+            if (thread == null)
+            {   // Start up listening thread.
+                thread = new Thread(this);
+                thread.start();
+            }
+            // Create a datagram destined for the server containing the command.
+            DatagramPacket packet = new DatagramPacket(buf, buf.length, 
+                    host, DEBT_PORT);
+            socket = new DatagramSocket();
+            socket.send(packet);    // Send it.
+            // Wait 5 seconds for a response.
+            timer = new SimpleTimer(this, 5000);
+
+            retval = true;
+        }
+        catch (SocketException se)
+            getAppletContext().showStatus(&quot;Unable to communicate with host.&quot;);
+        catch (IOException e)
+            getAppletContext().showStatus(&quot;Error communicating with host.&quot;);
+
+        if (socket != null)
+            socket.close();
+        return retval;
+    }
+
+    public void run()
+    {   // Listen on DEBT_PORT for debt updates.
+        DatagramSocket listen;
+        try
+            listen = new DatagramSocket(DEBT_PORT);
+        catch (SocketException se)
+        {
+            getAppletContext().showStatus(&quot;Unable to open socket to host.&quot;);
+            return;
+        }
+
+        String msg;
+
+        while (true)
+        {
+            try
+            {
+                DatagramPacket recv = new DatagramPacket(new byte[128], 128);
+                listen.receive(recv);
+                msg = new String(recv.getData(), 0, 0, recv.getLength());
+            }
+            catch (IOException e)
+            {
+                getAppletContext().showStatus(&quot;Error communicating with host.&quot;);
+                break;
+            }
+            if (msg.equals(UNSUB_CMD))
+            {   // Received unsubscribe confirmation, drop out.
+                getAppletContext().showStatus(&quot;Unsubscribe confirmation &quot; +
+                        &quot;received.&quot;);
+                break;
+            }
+            else if (msg.equals(SUB_CMD))
+            {   // Received subscription confirmation, stop timer 
+                // and keep listening.
+                if (timer != null)
+                {
+                    timer.stop();
+                    timer = null;
+                }
+                getAppletContext().showStatus(&quot;Subscription confirmation &quot; +
+                        &quot;received.&quot;);
+            }
+            else if (msg.charAt(0) == '$')
+                resource.IDC_DEBT.setText(msg);
+        }
+        // Kill any running timer.
+        if (timer != null)
+        {
+           timer.stop();
+           timer = null;
+        }
+
+        listen.close();
+        thread = null;
+    }
+
+    // Called by SimpleTimer when a timer expires.
+    public synchronized void timeOut()
+    {
+        if (subscribed)
+        {   // Trying to subscribe so reset flag.
+            getAppletContext().showStatus(&quot;Subscription confirmation not &quot; +
+                    &quot;received; server may not be active.&quot;);
+            subscribed = false;
+        }
+        else
+        {   // Trying to unsubscribe so reset flag.
+            getAppletContext().showStatus(&quot;Unsubscription confirmation &quot; +
+                    &quot;not received.  Try again.&quot;);
+            subscribed = true;
+        }
+        timer = null;
+    }
+
+    public void stop()
+    {   // Make sure we unsubscribe before leaving 
+        // (don't bother waiting for response).
+        if (subscribed)
+        {
+            sendCommand(UNSUB_CMD);
+            subscribed = false;
+        }
+        if (thread != null)
+        {
+            thread.stop();
+            thread = null;
+        }
+  }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The timer used by the national debt applet is provided by a simple
+utility class called <TT>SimpleTimer</TT>. <TT>SimpleTimer</TT>,
+shown in Listing 18.2, runs in its own thread and sleeps for a
+specified number of milliseconds. If the timer thread is not stopped
+before the call to <TT>sleep()</TT> returns, <TT>SimpleTimer</TT>
+calls the <TT>timeOut()</TT> method implemented by the user of
+the timer.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.2. SimpleTimer.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// Implements a basic timer that runs in its own
+// thread and calls an interface method when it expires.
+public class SimpleTimer extends Thread
+{
+    long duration = 0;
+    SimpleTimerClient client = null;
+
+    public SimpleTimer(SimpleTimerClient client, long duration)
+    {
+        this.client = client;
+        this.duration = duration;
+        start();
+    }
+
+    public void run()
+    {
+        try
+            sleep(duration);
+        catch (InterruptedException e) {}
+
+        if (client != null)
+            client.timeOut();
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+As already mentioned, if the timer expires, it calls the <TT>timeOut()</TT>
+method of the object that started the timer. The <TT>timeOut()</TT>
+method is defined in the <TT>SimpleTimerClient</TT> interface
+shown in Listing 18.3.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.3. SimpleTimerClient.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// Client interface for SimpleTimer.
+// The timeOut() method is called when a timer expires.
+public interface SimpleTimerClient
+{
+    public void timeOut();
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The national debt server is implemented as a multithreaded Java
+application. It uses two numbers provided by the user to calculate
+the current debt: the previous day's balance and the average daily
+increase of the debt. Every three seconds the debt is recalculated
+and broadcast in datagrams to all subscribed applets. To keep
+things simple, the server assumes that the debt balance provided
+by the user is current as of the previous day. The daily average
+is used to calculate the increase per second. The current debt
+is then calculated as the sum of the previous day's balance plus
+the number of seconds elapsed today multiplied by the increase
+in the debt every second. Unfortunately, it is also assumed that
+the debt will always be increasing.
+<P>
+To manage the subscription requests of multiple applets, the server
+uses the <TT>SubscriptionManager</TT> utility class. The <TT>SubscriptionManager</TT>
+runs in its own thread and listens on the predefined national
+debt port (1996) for new subscriptions and cancellations. It maintains
+a list of <TT>InetAddress</TT> objects in a <TT>Vector</TT> object
+to represent the currently subscribed applets. The <TT>SubscriptionManager</TT>
+informs the server when the subscription count changes and when
+datagrams are sent and received through the methods defined in
+the <TT>SubscriptionManagerClient</TT> interface. The server uses
+this information to update the statistics shown in the main window
+in Figure 18.2.
+<P>
+<A HREF="http://docs.rinet.ru/WebJPP/f18-2.gif"><B> Figure 18.2 : </B><I>The National Debt Server.
+</I></A><P>
+<P>
+Listing 18.4 shows part of the source code for the server application
+and <TT>SubscriptionManager</TT>. As in the national debt applet,
+the classes used to implement the interface of the server application
+are not listed here but are included on the accompanying CD-ROM.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.4. EX18B.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.awt.*;
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import DialogLayout;
+import MainMenuRes;
+import MainWinRes;
+import OptionsRes;
+import HelpAboutRes;
+import MessageBoxRes;
+import MessageBox;
+
+public class EX18B extends Frame implements Runnable, SubscriptionClient
+{
+    static final int DEBT_PORT = 1996;
+    MainMenuRes menu;
+    MainWinRes mainWin;
+    SubscriptionManager manager = null;
+    int packetsSent = 0, packetsRecd = 0;
+    Thread running = null;
+
+    public static void main(String args[])
+    {
+        new EX18B(&quot;National Debt Server&quot;);
+    }
+
+    public EX18B(String caption)
+    {
+        super(caption);
+
+        // Create main menu built using Resource Wizard.
+        menu = new MainMenuRes(this);
+        menu.CreateMenu();
+
+        // Set up font to use.
+        setFont(new Font(&quot;Dialog&quot;, Font.PLAIN, 8));
+        mainWin = new MainWinRes(this);
+        mainWin.CreateControls();
+
+        // Initialize main window fields.
+        mainWin.IDC_CURRENTDEBT.setText(&quot;0.00&quot;);
+        mainWin.IDC_DAILYAVERAGE.setText(&quot;0.00&quot;);
+        mainWin.IDC_PORTNUMBER.setText(String.valueOf(DEBT_PORT));
+        mainWin.IDC_CLIENTCOUNT.setText(&quot;0&quot;);
+        mainWin.IDC_DATAGRAMSENT.setText(String.valueOf(packetsSent));
+        mainWin.IDC_DATAGRAMRECD.setText(String.valueOf(packetsRecd));
+
+        // Start up the subscription manager to listen for applets.
+        manager = new SubscriptionManager(this, DEBT_PORT);
+
+        show();
+
+        // Start up application thread to broadcast debt updates.
+        running = new Thread(this);
+        running.start();
+    }
+
+    public boolean handleEvent(Event event)
+    {
+        boolean retval = true;
+
+        if (event.target == menu.ID_FILE_OPTIONS)
+        {   // Show options dialog.
+            new OptionsDlg(this, 
+                    new OptionsData(mainWin.IDC_CURRENTDEBT.getText(),
+                    mainWin.IDC_DAILYAVERAGE.getText()));
+        }
+        else if (event.target == menu.ID_FILE_EXIT || 
+                event.id == Event.WINDOW_DESTROY)
+        {   // Kill manager and broadcast threads.
+            if (manager != null)
+                manager.stop();
+            if (running != null)
+                running.stop();
+            dispose();
+            System.exit(0);
+        }
+        else if (event.target == menu.ID_HELP_ABOUT)
+        {   // Display help|about.
+            new HelpAboutDlg(this);
+        }
+        else if (event.arg instanceof OptionsData)
+        {   // Update options data based on values from options dialog.
+            OptionsData data = (OptionsData)event.arg;
+            mainWin.IDC_CURRENTDEBT.setText(data.currentDebt);
+            mainWin.IDC_DAILYAVERAGE.setText(data.dailyAvg);
+        }
+        else
+            retval = false;
+
+        return retval;
+    }
+
+    public void run()
+    {   // Thread responsible for broadcasting debt updates to 
+        // subscribing applets.
+        DatagramSocket socket = null;
+        while (true)
+        {
+            try
+            {   // Broadcast every 3 seconds.
+                Thread.sleep(3000);
+                if (manager.getSubscriberCount() &gt; 0)
+                {   // Have subscribers so get debt, set up socket 
+                    // and send datagrams.
+                    String debt = getCurrentDebt();
+                    byte buf[] = new byte[debt.length()];
+                    debt.getBytes(0, debt.length(), buf, 0);
+                    socket = new DatagramSocket(DEBT_PORT);
+                    for (Enumeration e = manager.subscribers(); 
+                            e.hasMoreElements();)
+                    {   // Send datagram to each applet.
+                        InetAddress addr = (InetAddress)e.nextElement();
+                        DatagramPacket packet = new DatagramPacket(buf, 
+                                buf.length, addr, DEBT_PORT);
+                        socket.send(packet);
+                        datagramSent();
+                    }
+                }
+            }
+            catch (InterruptedException e)
+                break;
+            catch (Exception e)
+            {
+                new MessageBox(this, &quot;Communications error.  Server stopping.&quot;,
+                        &quot;Error&quot;);
+                break;
+            }
+        }
+        if (socket != null)
+            socket.close();
+    }
+
+    public synchronized void subscriberCountChange(int count)
+    {   // Called by SubscriptionManager when count changes.
+        mainWin.IDC_CLIENTCOUNT.setText(String.valueOf(count));
+        mainWin.IDC_CLIENTLIST.clear();
+        for (Enumeration e = manager.subscribers(); e.hasMoreElements();)
+            mainWin.IDC_CLIENTLIST.addItem(e.nextElement().toString());
+    }
+
+    public synchronized  void datagramSent()
+    {   // Called by SubscriptionManager when a datagram is sent.
+        mainWin.IDC_DATAGRAMSENT.setText(String.valueOf(++packetsSent));
+    }
+
+    public synchronized void datagramRecd()
+    {   // Called by SubscriptionManager when a datagram is received.
+        mainWin.IDC_DATAGRAMRECD.setText(String.valueOf(++packetsRecd));
+    }
+
+    protected String getCurrentDebt()
+    {   // Calculate current debt based on previous day's balance plus
+        // amount of increase up to current time.  Note: assumes that
+        // debt will always increase (pretty reliable).
+        String retval;
+        try
+        {
+            Date now = new Date();
+            double debt = Double.valueOf(mainWin.IDC_CURRENTDEBT.
+                    getText()).doubleValue();
+            double avg = Double.valueOf(mainWin.IDC_DAILYAVERAGE.
+                    getText()).doubleValue();
+            double perSecond = avg / 86400;
+            int seconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + 
+                    now.getSeconds();
+            double currDebt = (perSecond * seconds) + debt;
+            retval = formatBigCurrency(currDebt);
+        }
+        catch (NumberFormatException e)
+            retval = &quot;$ 0.00&quot;;
+
+        return retval;
+    }
+
+    protected String formatBigCurrency(double value)
+    {   // Formats a big double as a currency string since
+        // toString() returns exponential notation.
+        double power = 1000000000000.00d;
+        String s = &quot;$ &quot;;
+
+        while ((long)value &gt; 0)
+        {
+            double work = value / power;
+            if ((long)work &gt; 0)
+            {
+                if (work &lt; 100 &amp;&amp; s.length() &gt; 2)
+                    s += &quot;0&quot;;
+                if (work &lt; 10 &amp;&amp; s.length() &gt; 2)
+                    s += &quot;0&quot;;
+                int piece = (int)work;
+                s += piece;
+                value -= (piece * power);
+                if ((long)value &gt; 0)
+                    s += &quot;,&quot;;
+            }
+            else if (s.length() &gt; 2)
+                s += &quot;000,&quot;;
+            power /= 1000f;
+        }
+        s += &quot;.&quot;;
+        int cents = (int)(value * 100);
+        if (cents &lt; 10)
+            s += &quot;0&quot;;
+        s += cents;
+
+        return s;
+    }
+}
+
+// Interface used by SubscriptionManager to communicate with client object.
+interface SubscriptionClient
+{
+    public void subscriberCountChange(int count);
+    public void datagramSent();
+    public void datagramRecd();
+}
+
+// Monitors given port for subscription requests and cancellations.
+class SubscriptionManager extends Thread
+{
+    SubscriptionClient client;  // Client object for subscription services.
+    Vector subscribers;         // List of subscribers.
+    DatagramSocket socket;
+    int port = 0;
+    static final String SUB_CMD = &quot;SUBSCRIBE&quot;;
+    static final String UNSUB_CMD = &quot;UNSUBSCRIBE&quot;;
+
+    public SubscriptionManager(SubscriptionClient client, int port)
+    {
+        this.client = client;
+        this.port = port;
+        subscribers = new Vector();
+        start();
+    }
+
+    public int getSubscriberCount()
+    {
+        return subscribers.size();
+    }
+
+    public Enumeration subscribers()
+    {
+        return subscribers.elements();
+    }
+
+    protected void addSubscriber(InetAddress newAddr)
+    {   // Add a subscriber if not already in list.
+        if (!subscribers.contains(newAddr))
+        {
+            subscribers.addElement(newAddr);
+            // Notify client object.
+            client.subscriberCountChange(subscribers.size());
+        }
+    }
+
+    protected void removeSubscriber(InetAddress existAddr)
+    {   // Remove a subscriber if in list.
+        int idx = subscribers.indexOf(existAddr);
+        if (idx != -1)
+        {
+            subscribers.removeElementAt(idx);
+            // Notify client object.
+            client.subscriberCountChange(subscribers.size());
+        }
+    }
+
+    public void run()
+    {   // Process subscription requests and cancellations.
+        try
+        {
+            DatagramPacket recv, send;
+            socket = new DatagramSocket(port);
+            String cmd;
+
+            while (true)
+            {
+                recv = new DatagramPacket(new byte[128], 128);
+                socket.receive(recv);
+                client.datagramRecd();
+                cmd = new String(recv.getData(), 0, 0, recv.getLength());
+                if (cmd.equals(SUB_CMD))
+                    addSubscriber(recv.getAddress());
+                else if (cmd.equals(UNSUB_CMD))
+                    removeSubscriber(recv.getAddress());
+                // Return command received as a form of confirmation so
+                // applet knows we're here.
+                send = new DatagramPacket(recv.getData(), recv.getLength(),
+                        recv.getAddress(), port);
+                socket.send(send);
+                client.datagramSent();
+            }
+        }
+        catch (SocketException se)
+            System.err.println(&quot;Socket error: &quot; + se);
+        catch (IOException e)
+            System.err.println(&quot;IO Error: &quot; + e);
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="TheSocketClass"><FONT SIZE=5 COLOR=#FF0000>
+The Socket Class</FONT></A></H2>
+<P>
+Communicating using datagrams severely limits the type of network
+services that can be written. Datagrams are used to carry small
+amounts of information and cannot be used as a reliable form of
+exchanging data. For the previously shown national debt example,
+it did not matter much if a datagram never reached an applet because
+another would be sent three seconds later. The <TT>Socket</TT>
+class offers a better alternative for applications that need to
+communicate using a more reliable connection. <TT>Socket</TT>
+takes care of sending data across the network to give the illusion
+that the data is sent and received using a stream or socket. <TT>Socket</TT>
+also performs any error correction needed for data packets that
+are corrupted or never received.
+<P>
+Table 18.4 lists the methods of interest from the <TT>Socket</TT>
+class.<BR>
+<P>
+<CENTER><B>Table 18.4. The Socket methods of interest.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=199><I>Method</I></TD><TD WIDTH=377><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>Socket(String, int)</TT></TD><TD WIDTH=377>Creates a streaming socket and binds it to the host and port specified as parameters.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>Socket(String, int, boolean)</TT></TD><TD WIDTH=377>Creates a socket and binds it to the host and port specified as parameters. The last parameter is used to indicate whether the socket should be a stream or datagram 
+socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>Socket(InetAddress, int)</TT></TD><TD WIDTH=377>Creates a streaming socket connected to the specified host and port.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>Socket(InetAddress, int, boolean)</TT></TD>
+<TD WIDTH=377>Creates a socket connected to the specified host and port. The last parameter specifies whether the socket should be a stream or datagram socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>InetAddress getInetAddress()</TT></TD><TD WIDTH=377>Returns an <TT>InetAddress</TT> object representing the host for this socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>Int getPort()</TT></TD><TD WIDTH=377>Returns the port number on the remote host for this socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>Int getLocalPort()</TT></TD><TD WIDTH=377>Returns the port number on the local host for this socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>InputStream getInputStream()</TT></TD><TD WIDTH=377>Returns an input stream for the socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>OutputStream getOutputStream()</TT></TD>
+<TD WIDTH=377>Returns an output stream for the socket.</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>Close()</TT></TD><TD WIDTH=377>Closes the socket.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=199><TT>SetSocketImplFactory (SocketImplFactory)</TT>
+</TD><TD WIDTH=377>Sets the socket factory that will be used tocreate all sockets.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+<TT>Socket</TT> objects are created slightly different from <TT>DatagramSocket</TT>
+objects because the host and port are not encapsulated in a <TT>DatagramPacket</TT>.
+A socket can be created using either a host name or an <TT>InetAddress</TT>
+object. As with <TT>DatagramSocket</TT>, the port can also be
+specified, and it defaults to the first available port if initialized
+to <TT>-1</TT>. Create sockets with a port number when originating
+a connection with a host rather than waiting for a host to initiate
+a connection. Input and output streams can also be retrieved from
+a socket to create a flexible mechanism for reading and writing
+data across the connection. Consider the following code fragment,
+which illustrates how easy it is to create, open, and perform
+I/O using a socket.
+<BLOCKQUOTE>
+<PRE>
+try
+{
+    Socket socket = new Socket(&quot;somehost.somewhere.com&quot;, -1);
+    // Always a good idea to buffer the stream to mitigate blocking.
+    PrintStream out = new PrintStream(
+            new BufferedOutputStream(socket.getOutputStream()));
+    out.println(&quot;Are you listening?&quot;);
+    DataInputStream in = new DataInputStream(
+            new BufferedInputStream(socket.getInputStream()));
+    in.readLine();
+    // ...
+    // Don't forget to close the socket!
+    socket.close()
+}
+catch (Exception e)
+    // Exception handling logic.
+</PRE>
+</BLOCKQUOTE>
+<H2><A NAME="ASocketExampleAPOPClientApplication"><FONT SIZE=5 COLOR=#FF0000>
+A Socket Example: A POP Client Application</FONT></A></H2>
+<P>
+To illustrate how the socket class can be used, consider the following
+example, which implements an electronic mail program that uses
+the post office protocol (POP) to retrieve mail from a POP server.
+As the protocol name implies, POP servers are used as electronic
+post offices to hold mail for users who might not have permanent
+connections to the network. The program can be run as a Java applet
+or application but can be used only as an applet if the POP server
+is running on the same server that served the Web page containing
+the applet. Remember that Web browser security prohibits applets
+from communicating with hosts other than the originating host.
+The POP client running as an application is shown in Figure 18.3.
+<P>
+<A HREF="http://docs.rinet.ru/WebJPP/f18-3.gif"><B> Figure 18.3 : </B><I>The POP client.
+</I></A><P>
+<P>
+POP is a very simple protocol. After a connection has been established,
+the client issues a series of commands to log on, check for new
+mail, request each new message, and optionally have each message
+removed from the server. The POP server replies in the affirmative
+by returning <TT>+OK</TT>. A typical conversation between a POP
+client and server might look like this:
+<BLOCKQUOTE>
+<PRE>
+Server: +OK pop.server.com ready
+Client: USER jjory
+Server: +OK
+Client: PASS lemmein
+Server: +OK
+Client: STAT
+Server: +OK 1 847
+Client: RETR 1
+Server: +OK 847 bytes
+Server: [...message is sent...]
+Client: DELE 1
+Server: +OK
+Client: QUIT
+Server: +OK
+</PRE>
+</BLOCKQUOTE>
+<P>
+To retrieve new messages from a POP server using the program,
+the user clicks the Check Messages... button. This action causes
+an object of type <TT>MailRetriever</TT> to start running. <TT>MailRetriever</TT>
+is a subclass of <TT>Thread</TT> and is used to manage the connection
+and conversation with the POP server. It uses the <TT>MailRetrieverClient</TT>
+interface to retrieve information from the program and update
+the program with status information and new messages. Listing
+18.5 includes the source code for the applet and mail retriever
+classes. The classes used for the interface, however, are not
+listed here but are included on the accompanying CD-ROM.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 18.5. EX18C.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.net.*;
+import java.io.*;
+import java.util.*;
+// Classes created by Resource Wizard for interface.
+import DialogLayout;
+import ConnectDlgRes;
+import MainMenu;
+import MainWinRes;
+import NoteRes;
+import ViewMessageRes;
+import MessageBox;
+
+public class EX18C extends Applet implements MailRetrieverClient
+{
+    MainWinRes mainWin = null;      // Main window resource.
+    ConnectData connectData = null; // Used to exchange data with dialog.
+    MailRetriever retriever = null; // Responsible for retrieving messages.
+    Vector messages = new Vector(); // Holds retrieved messages.
+
+    public EX18C()
+    {
+        connectData = new ConnectData();
+    }
+
+    public static void main(String args[])
+    {   // Called when run as an application.
+        EX18C applet = new EX18C();
+        // Set up frame and main window.
+        EX18CApplicationFrame frame = new EX18CApplicationFrame(applet);
+        applet.mainWin = frame.resource;
+        applet.mainWin.IDC_STATUS.setText(&quot;&quot;);
+        applet.mainWin.IDC_VIEWMESSAGE.disable();
+        applet.start();
+    }
+
+    public void init()
+    {   // Running as an applet.
+        mainWin = new MainWinRes(this);
+        mainWin.CreateControls();
+        mainWin.IDC_TITLE.setFont(new Font(&quot;Helvetica&quot;, Font.BOLD, 18));
+        mainWin.IDC_STATUS.setText(&quot;&quot;);
+        mainWin.IDC_VIEWMESSAGE.disable();
+    }
+
+    public void stop()
+    {
+        if (retriever != null)
+        {
+            retriever.stop();
+            retriever = null;
+        }
+    }
+
+    public boolean handleEvent(Event event)
+    {
+        boolean retval = false;
+        if (event.target == mainWin.IDC_CHECKMSGS)
+        {   // Only allow connect dialog to come up if not already retrieving.
+            if (retriever == null || !retriever.isAlive())
+                new ConnectDialog(this, connectData);
+            retval = true;
+        }
+        else if (event.target == mainWin.IDC_VIEWMESSAGE &amp;&amp;
+                mainWin.IDC_MESSAGES.countItems() &gt; 0)
+        {   // Bring up message viewer for current message.
+            int sel = mainWin.IDC_MESSAGES.getSelectedIndex();
+            if (sel &gt;= 0)
+                new ViewMessageDialog((String)(messages.elementAt(sel)));
+            else
+                mainWin.IDC_STATUS.setText(&quot;Please select a &quot; +
+                        &quot;message to display.&quot;);
+        }
+        else if (event.arg instanceof ConnectData)
+        {   // User selected OK from connect dialog, start retriever.
+            mainWin.IDC_STATUS.setText(&quot;Retrieving new messages...&quot;);
+            retriever = new MailRetriever(this);
+            retval = true;
+        }
+        return retval;
+    }
+
+    public String getPopAccount()
+    {   // Called by retriever to get POP account name.
+        return connectData.acctName;
+    }
+
+    public String getPopPassword()
+    {   // Called by retriever to get password for POP account.
+        return connectData.acctPassword;
+    }
+
+    public String getPopServer()
+    {   // Called by retriever to get the name of POP server.
+        return connectData.popServer;
+    }
+
+    public synchronized void popStatus(String status)
+    {   // Called by retriever to update app or applet on progress.
+        mainWin.IDC_STATUS.setText(status);
+    }
+
+    public void popMessage(String message)
+    {   // Called by retiever for each message retrieved.
+        boolean fromFound = false, subjectFound = false;
+        mainWin.IDC_VIEWMESSAGE.enable();
+
+        // Parse message looking for whom the message is from and
+        // the subject so we can format line in message listbox.
+        StringTokenizer parse = new StringTokenizer(message, &quot;\n&quot;);
+        int lines = parse.countTokens();
+        String from = &quot;&lt;Unknown From&gt; &quot;, subject = &quot;&lt;Unknown Subject&gt; &quot;;
+
+        while (parse.hasMoreTokens())
+        {
+            String line = parse.nextToken();
+            if (line.regionMatches(true, 0, &quot;From&quot;, 0, 4) &amp;&amp; !fromFound)
+            {
+                from = line + &quot; &quot;;
+                fromFound = true;
+            }
+            else if (line.regionMatches(true, 0, &quot;Subject&quot;, 0, 4) &amp;&amp; 
+                    !subjectFound)
+            {
+                subject = line + &quot; &quot;;
+                subjectFound = true;
+            }
+        }
+        // Add this message to list of messages.
+        messages.addElement(message);
+
+        mainWin.IDC_MESSAGES.addItem(from + subject + lines + &quot; lines.&quot;);
+    }
+}
+
+// Interface used between retriever and client applicaton/applet.
+interface MailRetrieverClient
+{
+    public String getPopAccount();
+    public String getPopPassword();
+    public String getPopServer();
+    public void popStatus(String status);
+    public void popMessage(String message);
+}
+
+// Threaded POP mail retriever.
+class MailRetriever extends Thread
+{
+    static final int POP_PORT = 110;
+    Socket socket;
+    PrintStream out;
+    DataInputStream in;
+    MailRetrieverClient client;
+    String popResponse; // Holds last command/response from server.
+
+    public MailRetriever(MailRetrieverClient client)
+    {
+        this.client = client;
+        start();
+    }
+
+    public void run()
+    {
+        if (popConnect())
+        {   // Connection established.
+            client.popStatus(&quot;Logging on to POP server...&quot;);
+            int messages = 0;
+            if (popLogon())
+            {   // Successfully logged on to server.
+                client.popStatus(&quot;Checking for new messages...&quot;);
+                messages = getWaitingMessageCount();
+		for (int i = 1; i &lt;= messages; i++)
+                {
+                    client.popStatus(&quot;Retrieving message &quot; + i + &quot; of &quot; + 
+                            messages + &quot;.&quot;);
+                    getMessage(i);
+                }
+
+                client.popStatus(&quot;Disconnecting from POP server...&quot;);
+                popQuit();
+
+                if (messages &gt; 0)
+                    client.popStatus(&quot;Retrieved &quot; + messages + 
+                            &quot; new messages.&quot;);
+                else
+                    client.popStatus(&quot;No new messages retrieved.&quot;);
+            }
+            else
+            {
+                client.popStatus(&quot;Error logging on to POP server.&quot;);
+                popQuit();
+            }
+        }
+    }
+
+    protected boolean popConnect()
+    {
+        boolean retval = true;
+        String server = client.getPopServer();
+
+        client.popStatus(&quot;Opening connection to &quot; + server + &quot;...&quot;);
+        try
+        {   // Make connection and set up buffered i/o streams.
+            socket = new Socket(server, POP_PORT);
+            in = new DataInputStream(
+                    new BufferedInputStream(socket.getInputStream()));
+            out = new PrintStream(
+                    new BufferedOutputStream(socket.getOutputStream()), true);
+            client.popStatus(&quot;Connection successfully established with &quot; + 
+                    server + &quot;.&quot;);
+        }
+        catch (UnknownHostException e)
+        {
+            client.popStatus(&quot;Unable to resolve POP server's name.&quot;);
+            retval = false;
+        }
+        catch (IOException e1)
+        {
+            client.popStatus(&quot;Error opening connection to POP server.&quot;);
+            if (socket != null)
+            {   // Close down socket.
+                try
+                    socket.close();
+                catch (IOException e2) {}
+            }
+            retval = false;
+        }
+        return retval;
+    }
+
+    protected boolean waitForOk()
+    {   // Waits for an OK response from server.
+        boolean retval = true;
+        try
+        {
+            do
+            {
+                popResponse = in.readLine();
+            } while (!popResponse.startsWith(&quot;+OK&quot;));
+        }
+        catch (Exception e)
+            retval = false;
+        return retval;
+    }
+
+    protected boolean popLogon()
+    {   // Logs user on to server.
+        boolean retval = false;
+        if (waitForOk())
+        {
+            out.println(&quot;USER &quot; + client.getPopAccount());
+
+            if (waitForOk())
+            {
+                out.println(&quot;PASS &quot; + client.getPopPassword());
+                retval = waitForOk();
+            }
+        }
+        return retval;
+    }
+
+    protected void popQuit()
+    {   // Send QUIT command and close socket.
+        out.println(&quot;QUIT&quot;);
+        try
+            socket.close();
+        catch (IOException e) {}
+    }
+
+    protected int getWaitingMessageCount()
+    {   // Get the number of messages waiting at server.
+        int retval = 0;
+        out.println(&quot;STAT&quot;);
+
+        if (waitForOk())
+        {
+            StringTokenizer stats = new StringTokenizer(popResponse);
+            stats.nextToken();
+            retval = Integer.parseInt(stats.nextToken());
+        }
+        return retval;
+    }
+
+    protected boolean getMessage(int number)
+    {   // Set the specified message number from server.
+        boolean retval = false;
+        out.println(&quot;RETR &quot; + number);
+        if (waitForOk())
+        {
+            String line, message = &quot;&quot;;
+            try
+            {
+                while ((line = in.readLine()) != null)
+                {
+                    if (line.equals(&quot;.&quot;))
+                        break;
+                    message += line;
+                    message += &quot;\n&quot;;    // Put newline back on.
+                }
+                // Pass message along to client.
+                client.popMessage(message);
+                // Delete message from server.
+                out.println(&quot;DELE &quot; + number);
+                retval = waitForOk();
+            }
+            catch (IOException e)
+                client.popStatus(&quot;Error retrieving message &quot; + number + 
+                        &quot; from POP server.&quot;);
+        }
+        return retval;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Although this simple example does not compare to today's powerful
+mail applications, it does illustrate the ease with which Java
+can be used to communicate using sockets. Possible enhancements
+include support for MIME attachments (discussed in <A HREF="ch17.htm" >Chapter 17</A>)
+and saving messages to disk for later viewing.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>
+Summary</FONT></A></H2>
+<P>
+One of Java's strong points is the ease with which network-capable
+programs can be written. Indeed, most programmers typically don't
+need to get down to the level of datagrams and sockets, but it
+is nice to know that Java provides an intuitive set of classes
+that integrates well with Java's other classes and is extensible.
+In the next chapter, &quot;Client/Server Programming,&quot; we
+will take a closer look at socket programming from the server
+side, as well as other alternatives for developing client/server
+solutions.
+<HR>
+
+<CENTER><P><A HREF="ch17.htm"><IMG SRC="http://docs.rinet.ru/WebJPP/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/WebJPP/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="contents.htm"><IMG SRC="http://docs.rinet.ru/WebJPP/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch19.htm"><IMG SRC="http://docs.rinet.ru/WebJPP/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

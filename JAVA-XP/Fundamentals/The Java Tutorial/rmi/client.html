@@ -1,0 +1,334 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Creating A Client Program</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="implementing.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="example.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=bottom border=0 alt="RMI | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Using Java RMI</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Creating A Client Program
+</h2>
+<p>
+<blockquote>
+
+The compute engine is a pretty simple program: it runs tasks that are
+handed to it. The clients for the compute engine are more complex. A
+client needs to call the compute engine, but it also has to define the
+task to be performed by the compute engine.
+<P>
+Two separate classes make up the client in our example. The first
+class, <CODE>ComputePi</CODE>, looks up and calls a
+<CODE>Compute</CODE> object. The second class, <CODE>Pi</CODE>,
+implements the <CODE>Task</CODE> interface and defines the work to be
+done by the compute engine. The job of the <CODE>Pi</CODE> class is to
+compute the value of
+<IMG SRC="..\figures\rmi\pi.gif" WIDTH="9" HEIGHT="9" ALT=""> to some number of decimal places.
+<P>
+As you recall, the nonremote
+<a href="example-1dot2\compute\task.java"><CODE>Task</CODE></a>
+interface is defined as follows:
+<BLOCKQUOTE>
+<pre>
+package compute;
+
+public interface Task extends java.io.Serializable {
+    Object execute();
+}
+</pre>
+</BLOCKQUOTE>
+<P>
+The <CODE>Task</CODE> interface extends
+<CODE>java.io.Serializable</CODE> so that an object that implements the
+interface can be serialized by the RMI runtime and sent to a remote
+virtual machine as part of a remote method invocation. We could have
+chosen to have our implementation classes implement both the <CODE>Task</CODE>
+interface and the <CODE>Serializable</CODE> interface and gotten the
+same effect. However, the whole purpose of the <CODE>Task</CODE>
+interface is to allow implementations of that interface to be passed to
+a <CODE>Compute</CODE> object, so having a class that implements the
+<CODE>Task</CODE> interface that does not also implement the
+<CODE>Serializable</CODE> interface doesn't make sense. Therefore we
+associate the two interfaces explicitly in the type system, ensuring
+that all <CODE>Task</CODE> objects are serializable.
+<P>
+The code that calls a <CODE>Compute</CODE> object's methods must obtain
+a reference to that object, create a <CODE>Task</CODE> object, and then
+request that the task be executed. The definition of the task
+<CODE>Pi</CODE> is shown later. A <CODE>Pi</CODE> object is constructed
+with a single argument, the desired precision of the result. The result
+of the task execution is a <CODE>java.math.BigDecimal</CODE>
+representing
+<IMG SRC="..\figures\rmi\pi.gif" WIDTH="9" HEIGHT="9" ALT=""> calculated to the specified precision.
+<P>
+The client class
+<a href="http://docs.rinet.ru/Jtuta/rmi/example-1dot2/client/ComputePi.java"><CODE>client.ComputePi</CODE></a>
+is as follows.
+<BLOCKQUOTE>
+<pre>
+package client;
+
+import java.rmi.*;
+import java.math.*;
+import compute.*;
+
+public class ComputePi {
+    public static void main(String args[]) {
+        if (System.getSecurityManager() == null) {
+            System.setSecurityManager(new RMISecurityManager());
+        }
+        try {
+            String name = &quot;//&quot; + args[0] + &quot;/Compute&quot;;
+            Compute comp = (Compute) Naming.lookup(name);
+            Pi task = new Pi(Integer.parseInt(args[1]));
+            BigDecimal pi = (BigDecimal) (comp.executeTask(task));
+            System.out.println(pi);
+        } catch (Exception e) {
+            System.err.println(&quot;ComputePi exception: &quot; + 
+                               e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+</pre>
+</BLOCKQUOTE>
+<P>
+Like the <CODE>ComputeEngine</CODE> server, the client begins by
+installing a security manager. This is necessary because RMI could be
+downloading code to the client. In this example the
+<CODE>ComputeEngine</CODE>'s stub is downloaded to the client. Any time
+code is downloaded by RMI, a security manager must be present. As with
+the server, the client uses the security manager provided by the RMI
+system for this purpose.
+<P>
+After installing a security manager, the client constructs a name used
+to look up a <CODE>Compute</CODE> remote object. The value of the first
+command line argument, <CODE>args[0]</CODE>, is the name of the remote
+host on which the <CODE>Compute</CODE> object runs. The client uses the
+<CODE>Naming.lookup</CODE> method to look up the remote object by name
+in the remote host's registry. When doing the name lookup, the code
+creates a URL that specifies the host where the compute server is
+running. The name passed in the <CODE>Naming.lookup</CODE> call has the
+same URL syntax as the name passed in the <CODE>Naming.rebind</CODE>
+call, which was discussed earlier.
+<P>
+Next, the client creates a new <CODE>Pi</CODE> object, passing to the
+<CODE>Pi</CODE> constructor the second command line argument,
+<CODE>args[1]</CODE>, which indicates the number of decimal places to
+use in the calculation. Finally, the client invokes the
+<CODE>executeTask</CODE> method of the <CODE>Compute</CODE> remote
+object. The object passed into the <CODE>executeTask</CODE> call
+returns an object of type <CODE>java.math.BigDecimal</CODE>, so the
+program casts the result to that type and stores the return value in
+the variable <CODE>result</CODE>. Then, the program prints out the
+result. The following figure depicts the flow of messages among the
+<CODE>ComputePi</CODE> client, the <CODE>rmiregistry</CODE>, and the
+<CODE>ComputeEngine</CODE>.
+
+<blockquote><IMG SRC="http://docs.rinet.ru/Jtuta/figures/rmi/rmi-4.gif" WIDTH="406" HEIGHT="139" ALIGN="BOTTOM" NATURALSIZEFLAG="3" ALT=""></blockquote>
+<P>
+Finally, let's look at the reason for all of this in the first place:
+the <CODE>Pi</CODE> class. This class implements the <CODE>Task</CODE>
+interface and computes the value of
+<IMG SRC="..\figures\rmi\pi.gif" WIDTH="9 " HEIGHT="9  " ALT=""> to a specified number of decimal places. For this example the actual
+algorithm is unimportant except, of course, for the accuracy of the
+computation. All that is important is that the computation is
+numerically rather expensive and thus the sort of thing that you would
+want to have occur on a more capable server.
+<P>
+Here is the code for the class <CODE>client.Pi</CODE>, which implements
+<CODE>Task</CODE>.
+<BLOCKQUOTE>
+<pre>
+package client;
+
+import compute.*;
+import java.math.*;
+
+public class Pi implements Task {
+
+    /** constants used in pi computation */
+    private static final BigDecimal ZERO = 
+        BigDecimal.valueOf(0);
+    private static final BigDecimal  ONE = 
+        BigDecimal.valueOf(1);
+    private static final BigDecimal FOUR = 
+        BigDecimal.valueOf(4);
+
+    /** rounding mode to use during pi computation */
+    private static final int roundingMode = 
+        BigDecimal.ROUND_HALF_EVEN;
+
+    /** digits of precision after the decimal point */
+    private int digits;
+    
+    /**
+     * Construct a task to calculate pi to the specified
+     * precision.
+     */
+    public Pi(int digits) {
+        this.digits = digits;
+    }
+
+    /**
+     * Calculate pi.
+     */
+    public Object execute() {
+        return computePi(digits);
+    }
+
+    /**
+     * Compute the value of pi to the specified number of 
+     * digits after the decimal point.  The value is 
+     * computed using Machin's formula:
+     *
+     *          pi/4 = 4*arctan(1/5) - arctan(1/239)
+     *
+     * and a power series expansion of arctan(x) to 
+     * sufficient precision.
+     */
+    public static BigDecimal computePi(int digits) {
+        int scale = digits + 5;
+        BigDecimal arctan1_5 = arctan(5, scale);
+        BigDecimal arctan1_239 = arctan(239, scale);
+        BigDecimal pi = arctan1_5.multiply(FOUR).subtract(
+                                  arctan1_239).multiply(FOUR);
+        return pi.setScale(digits, 
+                           BigDecimal.ROUND_HALF_UP);
+    }
+    /**
+     * Compute the value, in radians, of the arctangent of 
+     * the inverse of the supplied integer to the speficied
+     * number of digits after the decimal point.  The value
+     * is computed using the power series expansion for the
+     * arc tangent:
+     *
+     * arctan(x) = x - (x^3)/3 + (x^5)/5 - (x^7)/7 + 
+     *     (x^9)/9 ...
+     */   
+    public static BigDecimal arctan(int inverseX, 
+                                  int scale) 
+    {
+        BigDecimal result, numer, term;
+        BigDecimal invX = BigDecimal.valueOf(inverseX);
+        BigDecimal invX2 = 
+            BigDecimal.valueOf(inverseX * inverseX);
+
+        numer = ONE.divide(invX, scale, roundingMode);
+
+        result = numer;
+        int i = 1;
+        do {
+            numer = 
+                numer.divide(invX2, scale, roundingMode);
+            int denom = 2 * i + 1;
+            term = 
+                numer.divide(BigDecimal.valueOf(denom),
+                             scale, roundingMode);
+            if ((i % 2) != 0) {
+                result = result.subtract(term);
+            } else {
+                result = result.add(term);
+            }
+            i++;
+        } while (term.compareTo(ZERO) != 0);
+        return result;
+    }
+}
+</pre>
+</BLOCKQUOTE>
+<P>
+The most interesting feature of this example is that the
+<CODE>Compute</CODE> object never needs <CODE>Pi</CODE>'s class
+definition until a <CODE>Pi</CODE> object is passed in as an argument
+to the <CODE>executeTask</CODE> method. At that point the code for the
+class is loaded by RMI into the <CODE>Compute</CODE> object's virtual
+machine, the <CODE>execute</CODE> method is called, and the task's code
+is executed. The resulting <CODE>Object</CODE>, which in the case of
+the <CODE>Pi</CODE> task is a <CODE>java.math.BigDecimal</CODE> object,
+is handed back to the calling client, where it is used to print out the
+result of the calculation.
+<P>
+The fact that the supplied <CODE>Task</CODE> object computes the value
+of <CODE>Pi</CODE> is irrelevant to the <CODE>ComputeEngine</CODE>
+object. You could also implement a task that, for example, generated a
+random prime number by using a probabilistic algorithm. That would also
+be numerically intensive and therefore a candidate for being shipped
+over to the <CODE>ComputeEngine</CODE>, but it would involve very
+different code. This code could also be downloaded when the
+<CODE>Task</CODE> object was passed to a <CODE>Compute</CODE> object.
+In just the way that the algorithm for computing <CODE>Pi</CODE> is
+brought in when needed, the code that generates the random prime would
+be brought in when needed. The <CODE>Compute</CODE> object knows only
+that each object it receives implements the <CODE>execute</CODE>
+method; it does not know, and does not need to know, what the implementation does.
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="implementing.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="example.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=top border=0 alt="RMI | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Using Java RMI</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

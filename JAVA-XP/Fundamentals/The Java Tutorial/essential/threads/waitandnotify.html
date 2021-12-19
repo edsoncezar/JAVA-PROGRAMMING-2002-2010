@@ -1,0 +1,211 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Using the notifyAll and wait Methods</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="reentrant.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="deadlock.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=bottom border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Using the notifyAll and wait Methods
+</h2>
+<p>
+<blockquote>
+
+The <code>CubbyHole</code> stores its value in a private member
+variable called <code>contents</code>.
+<code>CubbyHole</code> has another private
+member variable, <code>available</code>, that is a <code>boolean</code>.
+<code>available</code> is <code>true</code> when
+the value has just been put but not yet gotten and is false when the
+value has been gotten but not yet put. So, here's one possible
+implementation for the <code>put</code> and <code>get</code> methods:
+<blockquote>
+<pre>
+public synchronized int get() {    // won't work!
+    if (available == true) {
+        available = false;
+        return contents;
+    }
+}
+public synchronized int put(int value) {    // won't work!
+    if (available == false) {
+        available = true;
+        value = ;
+    }
+}
+</pre>
+</blockquote>
+As implemented, these two methods won't work. Look at the
+<code>get</code> method. What happens if the <code>Producer</code>
+hasn't put anything in the <code>CubbyHole</code> and
+<code>available</code> isn't <code>true</code>? <code>get</code> does
+nothing. Similarly, if the <code>Producer</code> calls <code>put</code>
+before the <code>Consumer</code> got the value, <code>put</code>
+doesn't do anything.
+<p>
+You really want the <code>Consumer</code> to wait until the
+<code>Producer</code> puts something in the <code>CubbyHole</code> and
+the <code>Producer</code> must notify the <code>Consumer</code> when
+it's done so. Similarly, the <code>Producer</code> must wait until the
+<code>Consumer</code> takes a value (and notifies the
+<code>Producer</code> of its activities) before replacing it with a new
+value. The two threads must coordinate more fully
+and can use <code>Object</code>'s
+<code>wait</code> and <code>notifyAll</code> methods to do so.
+<p>
+Here are the new implementations of <code>get</code> and
+<code>put</code> that wait on and notify each other of their
+activities:
+<blockquote>
+<pre>
+public synchronized int get() {
+    while (available == false) {
+        try {
+            // wait for Producer to put value
+            wait();
+        } catch (InterruptedException e) {
+        }
+    }
+    available = false;
+    // notify Producer that value has been retrieved
+    notifyAll();
+    return contents;
+}
+public synchronized void put(int value) {
+    while (available == true) {
+        try {
+            // wait for Consumer to get value
+            wait();
+        } catch (InterruptedException e) {
+        }
+    }
+    contents = value;
+    available = true;
+    // notify Consumer that value has been set
+    notifyAll();
+} 
+</pre>
+</blockquote>
+The code in the <code>get</code> method loops until the
+<code>Producer</code> has produced a new value. Each time through the
+loop, <code>get</code> calls the <code>wait</code> method. The
+<code>wait</code> method relinquishes the lock held by the
+<code>Consumer</code> on the <code>CubbyHole</code> (thereby allowing
+the <code>Producer</code> to get the lock and update the
+<code>CubbyHole</code>) and then waits for notification from the
+<code>Producer</code>. When the <code>Producer</code> puts something in
+the <code>CubbyHole</code>, it notifies the <code>Consumer</code> by
+calling <code>notifyAll</code>. The <code>Consumer</code> then comes
+out of the wait state, <code>available</code> is now <code>true</code>,
+the loop exits, and the <code>get</code> method returns the value in
+the <code>CubbyHole</code>.
+<p>
+The <code>put</code> method works in a similar fashion, waiting for the
+<code>Consumer</code> thread to consume the current value before
+allowing the <code>Producer</code> to produce a new one.
+<p>
+The <code>notifyAll</code> method wakes up all threads waiting on the
+object in question (in this case, the <code>CubbyHole</code>). The
+awakened threads compete for the lock. One thread gets it, and the
+others go back to waiting. The <code>Object</code> class also defines the notify
+method, which arbitrarily wakes up one of the threads waiting on this
+object.
+<p>
+The <code>Object</code> class contains not only the version of
+<code>wait</code> that is used in the producer/consumer example and
+which waits indefinitely for notification, but also two other versions
+of the <code>wait</code> method:
+<dl>
+<dt>
+<strong>wait(long <em>timeout</em>)</strong>
+<dd>
+Waits for notification or until the <code>timeout</code> period has elapsed.
+<code>timeout</code> is measured in milliseconds.
+<dt>
+<strong>wait(long <em>timeout</em>, int <em>nanos</em>)</strong>
+<dd>
+Waits for notification or until <code>timeout</code> milliseconds plus
+<code>nanos</code> nanoseconds have elapsed.
+</dl>
+<hr>
+<strong>Note</strong>:
+Besides using these timed <code>wait</code> methods to synchronize
+threads, you also can use them in place of <code>sleep</code>. Both
+<code>wait</code> and <code>sleep</code> delay
+for the requested amount of time, but
+you can easily wake up <code>wait</code> with a notify but a sleeping
+thread cannot be awoken prematurely. This doesn't matter too much for
+threads that don't sleep for long, but it could be important for
+threads that sleep for minutes at a time.
+<hr>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="reentrant.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="deadlock.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=top border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

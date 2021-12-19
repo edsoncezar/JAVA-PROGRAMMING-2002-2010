@@ -1,0 +1,1200 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 25 -- Writing Web Services for Jigsaw </TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter 25</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Writing Web Services for Jigsaw</FONT>
+</H1>
+<P>
+<I><B>by David P. Boswell</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#ArchitecturalOverview">
+Architectural Overview</A>
+<UL>
+<LI><A HREF="#HandlingtheHTTPProtocolwiththeDaemonModule">
+Handling the HTTP Protocol with the Daemon Module</A>
+<LI><A HREF="#ManagingtheServerInformationSpacewiththeResourceModule">
+Managing the Server Information Space with the Resource Module
+</A>
+<LI><A HREF="#MaintainingServerStateviaObjectPersistence">
+Maintaining Server State via Object Persistence</A>
+<LI><A HREF="#PreandPostRequestProcessingwithResourceFilters">
+Pre and Post Request Processing with Resource Filters</A>
+</UL>
+<LI><A HREF="#JigsawInterface">
+Jigsaw Interface</A>
+<UL>
+<LI><A HREF="#TheTTFONTSIZEFACECourierHTTPResourceFONTTTFONTSIZEClassFONT">
+The <TT>HTTPResource</TT>
+Class</FONT></A>
+<LI><A HREF="#TheTTFONTSIZEFACECourierFilteredResourceFONTTTFONTSIZEClassFONT">
+The <TT>FilteredResource </TT>Class</FONT>
+</A>
+<LI><A HREF="#TheTTFONTSIZEFACECourierDirectoryResourceFONTTTFONTSIZEClassFONT">
+The <TT>DirectoryResource</TT>
+Class</FONT></A>
+<LI><A HREF="#TheTTFONTSIZEFACECourierFileResourceFONTTTFONTSIZEClassFONT">
+The <TT>FileResource</TT>
+Class</FONT></A>
+</UL>
+<LI><A HREF="#InstallationandSetupoftheJigsawHTTPServer">
+Installation and Setup of the Jigsaw HTTP Server</A>
+<LI><A HREF="#AddingContenttotheJigsawServer">
+Adding Content to the Jigsaw Server</A>
+<LI><A HREF="#ExtendingtheServerwithJava">
+Extending the Server with Java</A>
+<LI><A HREF="#WritingResourceFiltersinJava">
+Writing Resource Filters in Java</A>
+<LI><A HREF="#HandlingFormsandthePOSTMethodinJava">
+Handling Forms and the POST Method in Java</A>
+</UL>
+
+<HR>
+<P>
+Jigsaw is the first Web server written entirely in Java that is
+freely available and uses HyperText Transport Protocol (HTTP).
+Two of its major design goals are portability and extensibility.
+The Jigsaw server runs on most machines for which a Java environment
+is available. The author has tested the server in a number of
+these environments. Some examples are Microsoft Windows 95/NT,
+SunMicrosystems Solaris, and Linux. This chapter was developed
+using Jigsaw running on Linux 2.0 and a port of the Sun JDK. It
+was also tested with the Kaffe Java interpreter. The Jigsaw server
+can be extended by writing new resource objects in Java. One possible
+extension would be a replacement for CGI scripts. Using this extension
+does not preclude the use of normal CGI scripts. The support of
+regular CGI scripts allows you to migrate existing CGI applications
+into Jigsaw. Portability adds tremendous value to the Jigsaw server
+when you select a hardware and software base for your Web applications.
+This chapter focuses on the extensibility of the server.
+<H2><A NAME="ArchitecturalOverview"><FONT SIZE=5 COLOR=#FF0000>
+Architectural Overview</FONT></A></H2>
+<P>
+Jigsaw is an object-oriented Web server. Each resource exported
+by the server is mapped to a Java object. Each resource can be
+configured independently and maintains its own state through a
+persistency mechanism provided by the Jigsaw runtime.
+<P>
+The major components of the Jigsaw server are the daemon module
+and the resource module.
+<H3><A NAME="HandlingtheHTTPProtocolwiththeDaemonModule">
+Handling the HTTP Protocol with the Daemon Module</A></H3>
+<P>
+The daemon module deals with HTTP. It handles incoming connections
+creates new client objects, decodes requests, and sends replies.
+<P>
+The most important part of the daemon module is the HTTPD object.
+This object runs the main processing loop of the server handling
+incoming connections and managing other objects in the server
+process, such as:
+<UL>
+<LI>The authentication realm manager, which handles authentication
+of selected server resources.
+<LI>The client pool, which handles accepted connections.
+<LI>The logger, which logs server activity.
+<LI>The root resource of the server, which links the protocol
+module to the resource modules.
+<LI>The resource store manager, which is responsible for wrapping
+each file or directory into a Resource instance. This module also
+keeps track of all the loaded resources and unloads them when
+they do not appear to be needed.
+</UL>
+<H3><A NAME="ManagingtheServerInformationSpacewiththeResourceModule">
+Managing the Server Information Space with the Resource Module
+</A></H3>
+<P>
+The resource module is responsible for managing the information
+space of the server. Each exported resource is mapped to an instance
+of an <TT>HTTPResource</TT>. Each
+instance is created at configuration time, either manually or
+by the resource factory.
+<P>
+The resource factory creates <TT>HTTPResource</TT>
+instances out of existing data. Jigsaw can handle files and directories
+provided by the underlying file system. Like the rest of Jigsaw,
+you can extend the resource factory to handle more objects.
+<P>
+The resource module uses two databases, accessible via a forms-based
+interface. The extension database /Admin/Extensions and the directory
+template database are accessible at /Admin/DirectoryTemplates.
+<H3><A NAME="MaintainingServerStateviaObjectPersistence">
+Maintaining Server State via Object Persistence</A></H3>
+<P>
+Jigsaw resources are persistent objects. They maintain their state
+across server invocations. A resource that wraps an existing object
+is created only once during the lifetime of the server. Changing
+the configuration after a resource has been indexed has no effect
+on resources that have already been created.
+<P>
+This design feature speeds up the server because indexing an existing
+object into a resource is a costly process involving the querying
+of multiple databases, such as the extensions and directory templates
+database.
+<P>
+If you want to change the configuration of a resource and reindex
+a selected part of your information space, the <TT>DirectoryResourceEditor</TT>
+object accessible via<TT> <B>http://your-host.your-domain:9999/Admin</B></TT>
+allows you to reindex resources as needed.
+<P>
+If you want the whole site to be reindexed, stop the server, delete
+all .jigidx files, and restart it. This causes the server to reindex
+the whole site when it is restarted.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+To do this quickly under UNIX, change to the root of your Jigsaw tree.<BR>
+Then issue the following command:</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>find . -name .jigidx -exec rm {} \;</TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Under Windows: Start the Windows Explorer and select your Jigsaw directory. Select Tools, Find Files or Folders. Type <TT><B>.jigidx</B></TT> in the Names dialog box (note the leading &quot;dot&quot;). Choose Edit Select All and File Delete.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="PreandPostRequestProcessingwithResourceFilters">
+Pre and Post Request Processing with Resource Filters</A></H3>
+<P>
+The final important concept of Jigsaw is resource filters. A resource
+filter is a Java resource that contains a set of attributes and
+one or more methods. Like all other Jigsaw resources, its attributes
+are persistent. This provides some powerful possibilities, as
+you will see later in the filter example
+<P>
+Each HTTP request is processed by a target resource instance.
+Most resource classes provided by Jigsaw inherit from the <TT>FilteredResource</TT>
+class. All instances of this class inherit a set of filters that
+are subclasses of <TT>ResourceFilter</TT>.
+<P>
+This provides a callback to the filter twice during resource processing.
+Once during lookup, before the target has been selected, the <TT>ingoingFilter</TT>
+method is called with the request as a parameter. After the request
+has been processed by the target resource, the <TT>outgoingFilter</TT>
+method is called with both the request and reply as parameters.
+<H2><A NAME="JigsawInterface"><FONT SIZE=5 COLOR=#FF0000>
+Jigsaw Interface</FONT></A></H2>
+<P>
+Jigsaw provides many classes and attributes, listed in Table 25.1,
+that you can use to extend and control the behavior of the server.
+For the sake of space, you will only look at classes central to
+the Jigsaw server design, or those needed by the examples.
+<H3><A NAME="TheTTFONTSIZEFACECourierHTTPResourceFONTTTFONTSIZEClassFONT">
+The <TT>HTTPResource</TT>
+Class</FONT></A></H3>
+<P>
+<TT>HTTPResource</TT> is the base
+class of all resources accessible through HTTP. It does not provide
+any implementation of the HTTP methods.<BR>
+<P>
+<CENTER><B>Table 25.1&nbsp;&nbsp;Attributes Defined by HTTPResource</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=177><I>Attribute</I></TD><TD WIDTH=413><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>parent</TT>
+</TD><TD WIDTH=413>The <TT>parent</TT> of a resource is the resource that is responsible for its loading in memory. All resources should have a <TT>parent</TT>, except for the server's root resource, whose parent is <TT>null</TT>. type: This attribute is a 
+
+computed <TT>ObjectAttribute</TT>.default value: This attribute defaults to that of the resource that loaded it into memory.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Url</TT></TD>
+<TD WIDTH=413>This is the location of this resource within the servers exported name-space. It is a string that is parseable into a Java URL.type: This attribute is a computed <TT>StringAttribute</TT>. default value: This attribute defaults to the 
+concatenation of the resource's parent URL attribute with its own name or identifier.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Server</TT>
+</TD><TD WIDTH=413>This is the name of the server that makes this resource accessible through HTTP.type: This attribute is a computed <TT>ObjectAttribute</TT>.default value: This attribute defaults to its parent's server attribute value.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Quality</TT>
+</TD><TD WIDTH=413>This is a rating of the quality of this resource's content. The rating is a number between 0.0 and 1.0. It is used by the <TT>NegotiatedResource</TT> to select among its set of variants. type: This attribute is a editable 
+<TT>DoubleAttribute</TT>. default value: This attribute defaults to 1.0.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>title</TT></TD>
+<TD WIDTH=413>This is the title of this resource. This attribute can be computed from the resource content if the content is an HTML file that has some &lt;<TT>META&gt;</TT> tag, or if it is provided for informational purposes even if the resource's 
+content type is not text/html. type: This attribute is a computed and/or editable <TT>StringAttribute</TT>. default value: This attribute is undefined.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Content-language</TT>
+</TD><TD WIDTH=413>This is the language of the resource. It is used by the <TT>NegotiatedResource</TT> to select among its set of variant resources.The value of this attribute can be extracted from the resource content if it is an HTML file that includes 
+some appropriate <TT>&lt;META&gt;</TT> tag. Otherwise, it is provided for informational purposes.type<TT><B>: </B></TT>This attribute is a computed and/or editable <TT>LanguageAttribute</TT>. default value<TT><B>:</B></TT> This attribute is undefined.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Content-encoding</TT>
+</TD><TD WIDTH=413>This is the encoding method. This can only be a single token as described in the HTTP/1.0 protocol specification. type<TT><B>:</B></TT> This attribute is a computed and/or editable <TT>EncodingAttribute</TT>. default 
+value<TT><B>:</B></TT> This attribute is undefined.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Content-type</TT>
+</TD><TD WIDTH=413>This is the <TT>MIME</TT> type of the resource. type<TT><B>:</B></TT> This attribute is a computed and/or editable <TT>MIMETypeAttribute</TT>.default value: This attribute is undefined.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Content-length</TT>
+</TD><TD WIDTH=413>This is the length of the resource's content. type: This attribute is a computed <TT>IntegerAttribute</TT>. default value: This attribute is undefined. It is up to subclasses of this resource to either generate it dynamically or cache it 
+
+from the <TT>FileResource</TT>. The <TT>FileResource</TT> gets this information from calls to the file system.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Last-modified</TT> 
+</TD><TD WIDTH=413>This is the date of the last modification to this resource. type: This attribute is a computed and/or editable <TT>DateAttribute</TT>. default value: This attribute is undefined. See the default value of content-length above for 
+additional information.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Expires</TT>
+</TD><TD WIDTH=413>This is the date on which this resource expires. type: This attribute is a computed and/or editable <TT>DateAttribute</TT>. default value: This attribute is undefined. See the default value of content-length above for additional 
+information.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Icon</TT> </TD>
+<TD WIDTH=413>This is any icon to be associated with this resource. type: This attribute is an editable <TT>StringAttribute.</TT> default value: This attribute is undefined.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=177><TT>Maxage</TT>
+</TD><TD WIDTH=413>This attribute defines the allowed drift between the real content of a resource and the one that is sent as request replies. The bigger this value, the more efficient the server can be, since it can reuse cached request replies for a 
+longer time. This attribute takes affect only if it is defined and if the resource provides a meaningful last-modified attribute value. type: This attribute is an editable <TT>IntegerAttribute.</TT> default value: This attribute is undefined.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="TheTTFONTSIZEFACECourierFilteredResourceFONTTTFONTSIZEClassFONT">
+The <TT>FilteredResource </TT>Class</FONT>
+</A></H3>
+<P>
+A filtered resource is the resource that supports filters. By
+itself, a filtered resource does not define any new attributes.
+However, each of the filters attached to the resource maintain
+a shadow copy of the target resource attribute values.
+<P>
+So a filtered resource attribute value is looked up this way:
+First, all its filters are queried to locate the attribute needed.
+If one of them defines the attribute, then this value is returned.
+<P>
+This allows filters to shadow attribute values based on the processing
+they do on the resource reply. Otherwise, the appropriate filtered
+resource attribute value is returned. The <TT>FilteredResource</TT>
+class inherits from <TT>HTTPResource.</TT>
+<H3><A NAME="TheTTFONTSIZEFACECourierDirectoryResourceFONTTTFONTSIZEClassFONT">
+The <TT>DirectoryResource</TT>
+Class</FONT></A></H3>
+<P>
+The directory resource is the basic resource to export file-system
+directories. It keeps track of all its children resources, creates
+them dynamically if needed, and is also able to create negotiated
+resources on-the-fly. The <TT>DirectoryResource</TT>
+class inherits <TT>HTTPResource</TT>
+and <TT>FilteredResource</TT> (see
+Table 25.2).<BR>
+<P>
+<CENTER><B>Table 25.2&nbsp;&nbsp;Attributes of DirectoryResource</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=175><I>Attribute</I></TD><TD WIDTH=415><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>directory</TT>
+</TD><TD WIDTH=415>This is the physical directory that this resource exports. type: This attribute is a computed <TT>FileAttribute</TT> and is not saved.default value: This attribute is computed by concatenating, in the appropriate file-system-dependent 
+way, the parent's resource directory value with this directory identifier.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>storeid</TT>
+</TD><TD WIDTH=415>This is the name of the file to be used as the resource store database in this directory. type: This attribute is an editable <TT>FilenameAttribute</TT> and is mandatory. default value: This attribute is computed by concatenating, in the 
+
+appropriate file-system-dependent way, the parent's resource directory value with this directory identifier.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>relocate</TT>
+</TD><TD WIDTH=415>Should the directory produce a relocation reply when accessed through an invalid URL? A common way of handling invalid directory access is to produce a relocation reply so that the browser gets access to the directory through a valid 
+URL. The URL <TT><B>http://www.w3.org/pub</B></TT> is invalid because pub is a directory. The correct URL is <TT><B>http://www.w3.org/pub/</B></TT>. When this flag is set to <TT>true</TT>, the directory resource produces the appropriate relocation reply. 
+type: This attribute is an editable <TT>BooleanAttribute</TT> and is not saved. default value: This attribute value defaults to <TT>true</TT>.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>extensible</TT>
+</TD><TD WIDTH=415>Should this directory automatically stay in sync with the underlying physical directory?  The directory resource maintains a cache of its list of children, which may be outdated if you change the directory through direct file system 
+access.When this flag is <TT>true</TT>, the directory resource makes its best effort to stay in sync with the file system by adopting the following lookup algorithm. First, look up children in the cache list. If this fails, check to see if an appropriate 
+file exists. If such a file exists, hand it to the <TT>ResourceIndexer</TT> and install the resulting resource, if any, as a new child of the directory resource.type: This attribute is an editable <TT>BooleanAttribute</TT>. default value: This attribute 
+defaults to <TT>true</TT>.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>index</TT></TD>
+<TD WIDTH=415>This attribute should name an existing child resource that will be used as the index resource of the directory. All accesses to the directory will be delegated this resource. type: This attribute is an editable <TT>StringAttribute</TT>. 
+default value: This attribute is computed by concatenating, in the appropriate file-system-dependent way, the parent's resource directory value with this directory identifier.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>icondir</TT>
+</TD><TD WIDTH=415>This is the name of a directory that holds the icons for this directory. Each <TT>HTTPResource</TT> has an optional icon attribute. When a directory resource needs to produce a listing it dereferences each icon relative to its icon 
+directory. type: This attribute is an editable <TT>StringAttribute</TT>, specifying the path tothe icon directory. default value: This attribute defaults to /icons.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>dirstamp</TT>
+</TD><TD WIDTH=415>This is the date on which the directory resource last checked its consistency against the underlying physical directory. type: This attribute is a computed <TT>DateAttribute</TT> that is noneditable.default value: This attribute defaults 
+
+to <TT>-1</TT> (undefined).
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>negotiable</TT>
+</TD><TD WIDTH=415>Should the directory resource automatically create a <TT>NegotiatedResource</TT>? If this flag is true, the directory resource automatically creates negotiable resources on top of normal resources. Each time a new resource is added to 
+the directory, the resource looks for a resource having the new child name with possibly different extensions. If it succeeds, either the resource found is already a negotiated resource, in which case the new child is added as one of its variant resources, 
+
+or the negotiated resource must not already exist. The directory resource then creates it with only one variant, the new child resource. type: This attribute is an editable <TT>BooleanAttribute</TT>. default value: This attribute defaults to 
+<TT>false</TT>.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="TheTTFONTSIZEFACECourierFileResourceFONTTTFONTSIZEClassFONT">
+The <TT>FileResource</TT>
+Class</FONT></A></H3>
+<P>
+This is the basic resource to process files. It allows you to
+export files and can be configured to handle the HTTP <TT>PUT</TT>
+method. The <TT>FileResource</TT>
+class inherits from  <TT>HTTPResource </TT>and
+<TT>FilteredResource</TT>. The <TT>FileResource</TT>
+defines three attributes <TT>filename</TT>,
+<TT>putable</TT>, and <TT>filestamp</TT>,
+as shown in Table 25.3.<BR>
+<P>
+<CENTER><B>Table 25.3&nbsp;&nbsp;Attributes of FileResource</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=175><I>Attribute</I></TD><TD WIDTH=415><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>filename</TT> 
+</TD><TD WIDTH=415>This is the optional name of the file to be served by the file resource. By default, the file resource serves the file having the same name as the resource. You can define this attribute to modify the URL to file mapping. For example, 
+you can serve the file foo.html through the name oof.html by setting the foo.html filename attribute to oof.html. type: This attribute is an editable <TT>FilenameAttribute</TT>. default value: This attribute is undefined.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>putable</TT> 
+</TD><TD WIDTH=415>Should the file resource support <TT>PUT</TT> requests? If this flag is true, the file resource object handles the HTTP <TT>PUT</TT> method by overwriting the resource's file with the new content. The old content is saved using the emacs 
+
+backup convention (a ~ is appended to the original file name). Take care when enabling this feature. You'll probably want to use an authentication filter to ensure that only authorized users are allowed to change files on the server. type: This attribute 
+is an editable <TT>BooleanAttribute</TT>.default value: This attribute defaults to <TT>false</TT>.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=175><TT>Filestamp</TT>
+</TD><TD WIDTH=415>This is the date on which the file resource last checked its consistency against the underlying physical file. type: This attribute is a computed <TT>DateAttribute</TT> which is noneditable.default value: This attribute defaults to 
+<TT>-1</TT> (undefined).
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="InstallationandSetupoftheJigsawHTTPServer"><FONT SIZE=5 COLOR=#FF0000>
+Installation and Setup of the Jigsaw HTTP Server</FONT></A></H2>
+<P>
+Jigsaw is an easy server to install and set up. If you don't already
+have the Jigsaw server running, the following information will
+help you get a server installed and running as painlessly as possible.
+<P>
+Start your favorite browser and go to URL
+<BLOCKQUOTE>
+<TT><B><A HREF="http://www.w3.org/pub/WWW/Jigsaw/#Getting">http://www.w3.org/pub/WWW/Jigsaw/#Getting</A></B></TT>.
+</BLOCKQUOTE>
+<P>
+Select jigsaw.zip for Microsoft Windows 95/NT or jigsaw.tar.gz
+for UNIX.
+<P>
+When the file has finished downloading, unzip or gunzip and un-tar,
+as needed. Both archives unpack into a directory structure starting
+at Jigsaw. The archive has long filenames so make sure you have
+an unzip that can handle this situation correctly.
+<P>
+In the following discussion, the term <TT><I>Windows</I></TT>
+refers to Microsoft Windows 95/NT. Similarly, <TT><I>UNIX</I></TT>
+refers to the UNIX operating system.
+<P>
+In this sample setup, unpack the Windows archive to D:\ and /usr/www
+in UNIX. Call this BASEDIR for short. Make sure to replace BASEDIR
+as appropriate for your setup. In this example, use D:\ or /usr/www
+instead of BASEDIR.
+<P>
+Now let the Java interpreter know where to find the Jigsaw classes.
+<P>
+On Windows, type the command:
+<BLOCKQUOTE>
+<TT><B>SET CLASSPATH=BASEDIR\Jigsaw\classes\jigsaw.zip</B></TT>
+</BLOCKQUOTE>
+<P>
+And on UNIX, choose one of the following, depending on your shell:
+<BLOCKQUOTE>
+SH: CLASSPATH=BASEDIR/Jigsaw/classes/jigsaw.zip ; export CLASSPATH
+</BLOCKQUOTE>
+<P>
+or
+<BLOCKQUOTE>
+CSH: setenv CLASSPATH BASEDIR/Jigsaw/classes/jigsaw.zip.
+</BLOCKQUOTE>
+<P>
+You are now ready to run the server for the first time. On Windows,
+type the following command:
+<BLOCKQUOTE>
+<TT><B>java w3c.jigsaw.http.httpd -host your-host.your-domain
+-root BASEDIR\Jigsaw\Jigsaw</B></TT>.
+</BLOCKQUOTE>
+<P>
+If you are running UNIX, type:
+<BLOCKQUOTE>
+<TT><B>java w3c.jigsaw.http.httpd -host your-host.your-domain
+-root BASEDIR/Jigsaw/Jigsaw</B></TT>.
+</BLOCKQUOTE>
+<P>
+Replace your-host.your-domain with the host name and domain of
+your machine.
+<P>
+Jigsaw starts executing, and you should see one of the following:
+<P>
+In Windows:
+<BLOCKQUOTE>
+loading properties from: d:\Jigsaw\Jigsaw\config\httpd.props<BR>
+[httpd]: listening at:http://your-host.your-domain:9999
+</BLOCKQUOTE>
+<P>
+In UNIX:
+<BLOCKQUOTE>
+loading properties from: /usr/WWW/Jigsaw/Jigsaw/config/httpd.props
+<BR>
+[httpd]: listening at:http://your-host.your-domain:9999
+</BLOCKQUOTE>
+<P>
+Now start your favorite browser and go to URL
+<BLOCKQUOTE>
+<TT><B>http://your-host.your-domain:9999</B></TT>.
+</BLOCKQUOTE>
+<P>
+Finally, read the configuration tutorial and other documentation
+that comes with the server. No configuration changes are needed
+to follow along with the examples in this chapter.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+If your server will be accessible by others, you'll want to use the section on protecting the Admin resource in the Jigsaw documentation.</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><B>(http://your-host.your-domain:9999/User/Tutorials/<br>configuration.html#authentication)</B></TT>
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+There is a security problem in the current version of Jigsaw. Make sure you understand the implications, especially if you are running UNIX. </BLOCKQUOTE>
+<BLOCKQUOTE>
+As of version 1.0, Jigsaw does not give up its root privileges, so you may want to use another port such as 8080 or the default 9999, and run the server as a normal user. There are plans to add system calls to switch to a nonprivileged user in the next 
+Jigsaw release.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Using the telnet program, you can verify that your server is working without having to access a browser. On UNIX, type <TT><B>telnet your-host.your-domain 9999</B></TT> when you see:
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>Connected to your-host.your-domain<BR>
+Escape character is &quot;^]&quot;.</TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+type <B>HEAD / HTTP/1.0</B> and press Enter twice.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The server should return:</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>HTTP/1.0 200 OK<BR>
+Content-Length: 701<BR>
+Content-Type: text/html<BR>
+Last-Modified: 25 May 1996 15:05:56 GMT<BR>
+Server: Jigsaw/1.0a<BR>
+Date: 22 Aug 1996 23:00:33 GMT</TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+You can also start the Windows telnet program and select <TT>Connect Remote </TT>ystem. Enter the Host Name and replace the telnet Port with <B>9999</B> in the dialog box. Then type the line: <B>HEAD / HTTP/1.0</B> and press Enter twice.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="AddingContenttotheJigsawServer"><FONT SIZE=5 COLOR=#FF0000>
+Adding Content to the Jigsaw Server</FONT></A></H2>
+<P>
+Now that you have the server running, you can add some content.
+By default, additional content is added to Jigsaw in the BASEDIR/Jigsaw/Jigsaw/WWW
+directory tree. Be sure you change your directory to the one listed
+above before continuing.
+<P>
+Obtain either example.zip or example.tar. Unzip or untar the archives
+as appropriate. This extracts a small collection of html and gif
+files under the que directory.
+<P>
+Now start your browser and go to <TT><B>HTTP://your-host.your-domain/que/</B></TT>.
+This brings up a directory-style listing of the files just extracted,
+as seen in Figure 25.1-not quite what you wanted, so now open
+the URL <TT><B>HTTP://your-host.your-domain/Admin/Editor/que</B></TT>.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-1.gif"><B>Figure 25.1 : </B><I>Results of opening <TT>http://your-host.Your-domain: 9999/que/</TT></I>.</A>
+<P>
+Move on to the form now displayed and change the entry index:
+to index.html. Then click the OK button at the bottom of the page
+as shown in Figure 25.2. Reopen the URL <TT><B>HTTP://your-host.your-domain/que/</B></TT>.
+This time you see the content of index.html shown in Figure 25.3
+instead of the directory listing.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-2.gif"><B>Figure 25.2 : </B><I>Form to add index.html as the index for
+the que resource</I>.</A>
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-3.gif"><B>Figure 25.3 : </B><I>Browser rendered contents of que/index.html</I>.</A>
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You may need to clear your browser's cache so the URL is displayed correctly.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Finally, add an existing Java class to your que resource.
+<P>
+Open URL <TT><B>HTTP://your-host.your-domain/Admin/Editor/que</B></TT>
+and select the AddingResources link at the bottom of the page.
+Enter <TT><B>Memory</B></TT> in the
+<TT>name</TT>: field. Enter <TT><B>w3c.jigsaw.status.GcStat</B></TT>
+in the <TT>class</TT>: field and press
+the OK button as seen in Figure 25.4.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-4.gif"><B>Figure 25.4 : </B><I>Form to add a Java resource to the server
+namespace</I>.</A>
+<P>
+Opening the URL  <TT><B>HTTP://your-host.your-domain/que/Memory</B></TT>
+should now show the memory status for your server, as seen in
+Figure 25.5.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-5.gif"><B>Figure 25.5 : </B><I>Results of accessing the Java resource
+added as <TT>Que/Memory</TT>    </I>.</A>
+<P>
+As you can see, it is easy to add existing document trees to the
+server and specify a start page for the tree.
+<H2><A NAME="ExtendingtheServerwithJava"><FONT SIZE=5 COLOR=#FF0000>
+Extending the Server with Java</FONT></A></H2>
+<P>
+You can now get down to writing your own Java classes to extend
+your server. Start off with something simple.
+<P>
+The first step in writing your resource is choosing a super class,
+as follows:
+<UL>
+<LI>If you are adding a dynamic resource like the <TT>GcStat</TT>
+class, as described in the previous section, create a subclass
+of <TT>HTTPResource</TT>.
+<LI>If the intent is to serve files, create a subclass of <TT>FileResource</TT>.
+<LI>If your resource is being designed to handle forms, create
+a subclass of <TT>PostableResource</TT>.
+<LI>If your new resource will have child resources, create a subclass
+of <TT>DirectoryResource</TT>.
+</UL>
+<P>
+For this example, use <TT>HTTPResource</TT>.
+The only other initial decision you need to make is the package
+name for your new resource. Jigsaw does not impose any restrictions
+on the name you assign your package as long as the Java interpreter
+can find it via the <TT>CLASSPATH</TT>
+environment variable.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Security Note: Keep in mind the possibility of someone adding code to your server via <TT>CLASSPATH</TT> if it points to a world/group writable directory.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Unzip or untar the classes.zip or classes.tar file to BASEDIR/Jigsaw.
+This creates files under BASEDIR/Jigsaw/que/que/examples.
+<P>
+You now know enough to create the BASEDIR/Jigsaw/que/que/examples/HelloJigsaw.java
+(refer to Listing 25.1) source file, as follows:
+<BLOCKQUOTE>
+<TT>package que.examples <BR>
+</TT>import w3c.jigsaw.http.*;<BR>
+import w3c.jigsaw.resources.*;<BR>
+import w3c.jigsaw.html.*;<BR>
+<TT>public class HelloJigsaw extends HTTPResource
+{</TT>
+</BLOCKQUOTE>
+<P>
+Now you need to decide on the attributes for your new resource.
+To keep things simple, only deal with the message text returned
+by your resource.
+<BLOCKQUOTE>
+<PRE>
+// message attribute index
+protected static int ATTR_MESSAGE = -1 ;
+
+static {
+   Attribute attrib  = null ;
+   Class   HelloClass = null ;
+         
+   try {
+       HelloClass = Class.forName(&quot;que.examples.HelloJigsaw&quot;);
+   } catch (Exception ex) {
+       ex.printStackTrace() ;
+       System.exit(1) ;
+   }
+</PRE>
+</BLOCKQUOTE>
+<P>
+After declaring your attributes, register them with the <TT>AttributeRegistery</TT>.
+The registry keeps track of all the attributes of all resource
+classes. For each class the registry knows about, it maintains
+an ordered list of the attributes declared by the class.
+<P>
+The attribute registry returns an index for each attribute that
+is registered. You can use the index as a parameter to the <TT>setValue</TT>
+and <TT>getValue</TT> methods of the
+<TT>AttributeHolder</TT> class to
+obtain the attribute value.
+<BLOCKQUOTE>
+<PRE>
+         // register our message attribute:
+         attrib = new StringAttribute(&quot;message&quot;, &quot;Hello Jigsaw World!&quot;,
+ Attribute.EDITABLE);
+         ATTR_MESSAGE = AttributeRegistery.registerAttribute
+ (HelloClass, attrib) ;
+     }
+</PRE>
+</BLOCKQUOTE>
+<P>
+Now, implement the behavior of your resource. The only HTTP method
+this resource allows is the <TT>GET</TT>
+method. Generate a reply at each invocation of this resource using
+the <TT>HtmlGenerator</TT> class provided
+by Jigsaw.
+<BLOCKQUOTE>
+<PRE>
+     // Print our message in response to the HTTP GET request
+
+   public Reply get(Request request)
+    throws HTTPException {
+   // create HTML generator and fill in titles:
+       HtmlGenerator gen = new HtmlGenerator(&quot;HelloJigsaw&quot;);
+       gen.append(&quot;&lt;h1&gt;Our first Jigsaw extension demo&lt;/h1&gt;&quot;);
+       // print our message:
+       gen.append(&quot;&lt;p&gt;&quot;+getValue(ATTR_MESSAGE, null));
+
+       // finish off the reply
+     Reply rep = request.makeReply(HTTP.OK) ;
+     rep.setStream(gen) ;
+     return rep ;
+  }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 25.1&nbsp;&nbsp;HelloJigsaw.java-A Class to Respond
+to the HTTP GET Method<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package que.examples ;
+
+import w3c.jigsaw.http.*;
+import w3c.jigsaw.resources.*;
+import w3c.jigsaw.html.*;
+
+public class HelloJigsaw extends HTTPResource {
+ // message attribute index
+ protected static int ATTR_MESSAGE = -1;
+
+ static {
+  Attribute attrib  = null;
+  Class   HelloClass = null;
+         
+  try {
+   HelloClass = Class.forName(&quot;que.examples.HelloJigsaw&quot;);
+  } catch (Exception ex) {
+   ex.printStackTrace();
+   System.exit(1);
+  }
+  // register our message attribute:
+  attrib = new StringAttribute(&quot;message&quot;, &quot;Hello Jigsaw World!&quot;, Attribute.EDITABLE);
+  ATTR_MESSAGE = AttributeRegistery.registerAttribute(HelloClass, attrib);
+ }
+
+ // Print our message in response to the HTTP GET request
+
+ public Reply get(Request request)
+  throws HTTPException {
+   // create HTML generator and fill in titles:
+   HtmlGenerator gen = new HtmlGenerator(&quot;HelloJigsaw&quot;);
+   gen.append(&quot;&lt;h1&gt;Our first Jigsaw extension demo&lt;/h1&gt;&quot;);
+   // print our message:
+   gen.append(&quot;&lt;p&gt;&quot;+getValue(ATTR_MESSAGE, null));
+
+ 
+   // finish off the reply
+   Reply rep = request.makeReply(HTTP.OK) ;
+   rep.setStream(gen);
+   return rep;
+ }
+
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now add your new resource to the server. First, stop the server
+and update the <TT>CLASSPATH</TT>
+environment variable so the server can find your new class.
+<P>
+Under Windows:
+<BLOCKQUOTE>
+<TT>SET CLASSPATH=BASEDIR\Jigsaw\classes\jigsaw.zip;BASEDIR\Jigsaw\que</TT>
+</BLOCKQUOTE>
+<P>
+And on UNIX:
+<BLOCKQUOTE>
+<TT>SH: CLASSPATH=BASEDIR/Jigsaw/classes/jigsaw.zip:BASEDIR/Jigsaw/que
+; <BR>
+</TT><FONT FACE="ZapfDingbats">&Acirc;</FONT><TT>export
+CLASSPATH</TT>
+</BLOCKQUOTE>
+<P>
+or
+<BLOCKQUOTE>
+<TT>CSH: setenv CLASSPATH BASEDIR/Jigsaw/classes/jigsaw.zip:BASEDIR/Jigsaw/que</TT>.
+</BLOCKQUOTE>
+<P>
+Restart the server.
+<BLOCKQUOTE>
+Open the URL <TT><B>http://your-host.your-domain:9999/Admin/Editor/que</B></TT>.
+<BR>
+Select the <TT>AddingResources</TT>
+link at the bottom of the page.<BR>
+Type <TT><B>Hello</B></TT> in the
+name: field.<BR>
+Type <TT><B>que.examples.HelloJigsaw</B></TT>
+in the <TT>class:</TT> field and click
+OK as shown in Figure 25.6.
+</BLOCKQUOTE>
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-6.gif"><B>Figure 25.6 : </B><I>Form to add your <TT>Hello
+Java</TT> resource to the server's namespace</I>.</A>
+<P>
+If Jigsaw returns the error message &quot;The field class has
+an incorrect value,&quot; verify that the class name was entered
+correctly. If the class value is correct, check the <TT>CLASSPATH</TT>
+variable in your environment.
+<P>
+You are returned to the Admin/Editor/que screen if the change
+was successful. Opening URL <TT><B>http://your-host.your-domain:9999/que/Hello</B></TT>
+will execute the new class returning the text &quot;Hello Jigsaw
+World!&quot;
+<H2><A NAME="WritingResourceFiltersinJava"><FONT SIZE=5 COLOR=#FF0000>
+Writing Resource Filters in Java</FONT></A></H2>
+<P>
+As most resource classes provided by Jigsaw descend from <TT>FilteredResource</TT>,
+they inherit a set of filters that are sub-classes of <TT>ResourceFilter</TT>,
+providing a callback twice during resource processing. Now create
+a class to use this function (see Listing 25.2). 
+<BLOCKQUOTE>
+<PRE>
+package que.examples.filter;
+
+import w3c.jigsaw.http.*;
+import w3c.jigsaw.resources.*;
+
+public class CountingFilter extends ResourceFilter {
+   // counter attribute index.
+  protected static int ATTR_COUNTER = -1 ;
+
+  static {
+    Attribute counterattrib  = null ;
+    Class   CountingClass = null ;
+
+    try {
+      CountingClass = Class.forName(&quot;que.examples.filter.CountingFilter&quot;) ;
+    } catch (Exception ex) {
+      ex.printStackTrace() ;
+      System.exit(1) ;
+    }
+</PRE>
+</BLOCKQUOTE>
+<P>
+Now create an attribute for your class, an integer. This attribute
+is persistent so this is all you need to do to keep a filtered
+count for the lifetime of your server.
+<BLOCKQUOTE>
+<PRE>
+  counterattrib = new IntegerAttribute(&quot;counter&quot;
+              , new Integer(0)
+              , Attribute.EDITABLE) ;
+  ATTR_COUNTER = AttributeRegistery.registerAttribute(CountingClass, counterattrib);
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+This method is called during resource lookup with the HTTP request
+as the parameter.
+<BLOCKQUOTE>
+<PRE>
+public synchronized int ingoingFilter(Request request) {
+   // get our counter attribute
+  int i = getInt (ATTR_COUNTER, 0) ;
+  // put it back plus one
+  setInt(ATTR_COUNTER, i+1) ;
+</PRE>
+</BLOCKQUOTE>
+<P>
+Returning DontCallOutgoing informs the target filtered resource
+that you have done your work and your outgoingFilter method does
+not need to be called after resource processing. Also, you do
+not need to declare an outgoingFilter method because your superclass
+provides an empty method.
+<BLOCKQUOTE>
+<PRE>
+    return DontCallOutgoing ;
+  }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Listing 25.2 shows the <TT>CountingFilter</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 25.2&nbsp;&nbsp;CountingFilter.java-Count Number of
+&quot;Hits&quot; on Filtered Resource<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package que.examples.filter;
+
+import w3c.jigsaw.http.*;
+import w3c.jigsaw.resources.*;
+
+public class CountingFilter extends ResourceFilter {
+ // counter attribute index.
+ protected static int ATTR_COUNTER = -1 ;
+
+ static {
+  Attribute counterattrib  = null ;
+  Class   CountingClass = null ;
+
+  try {
+   CountingClass = Class.forName(&quot;que.examples.filter.CountingFilter&quot;) ;
+  } catch (Exception ex) {
+   ex.printStackTrace() ;
+   System.exit(1) ;
+  }
+
+  counterattrib = new IntegerAttribute(&quot;counter&quot;
+      , new Integer(0)
+      , Attribute.EDITABLE) ;
+  ATTR_COUNTER = AttributeRegistery.registerAttribute(CountingClass, counterattrib) ;
+ }
+
+ public synchronized int ingoingFilter(Request request) {
+  // get our counter attribute
+  int i = getInt (ATTR_COUNTER, 0) ;
+  // put it back plus one
+  setInt(ATTR_COUNTER, i+1) ;
+  return DontCallOutgoing ;
+ }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now plug your filter into the server. If you followed along with
+the previous section, your server does not need any changes. If
+not, go back and update your <TT>CLASSPATH</TT>
+environment variable and restart the server as detailed in the
+previous section.
+<P>
+Open URL <TT><B>http://your-host.your-domain:9999/Admin/Editor/que</B></TT>
+to edit the properties of the que directory resource. Follow the
+<TT>AddFilter</TT> link at the bottom
+of the page.
+<P>
+Enter <TT><B>que.examples.filter.CountingFilter</B></TT>
+in the Filter's <TT>class</TT>: field
+and click OK, as shown in Figure 25.7. This creates two additional
+links at the bottom of the <TT>que.examples.filter.CountingFilter</TT>
+page.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-7.gif"><B>Figure 25.7 : </B><I>Form to add your Java filter to the server's
+namespace</I>.</A>
+<P>
+These new links access the properties of the filter. Here you
+see a single attribute counter that is initially set to 0. You
+do not need to enter anything in the <TT>identifier</TT>:
+field on this page.
+<P>
+A link to <TT>ShadowByque.examples.filter.CountingFilter</TT>
+is also added to the page. This takes you to attributes shadowed
+by <TT>que.examples.filter.CountingFilter</TT>.
+Nothing needs to be changed there.
+<P>
+Now when the resource <TT>que</TT>
+is requested from your server, the <TT>ingoingFilter</TT>
+method of <TT>CountingFilter</TT>
+will be called incrementing the integer attribute counter. You
+can reload the filters attribute page to view the counter as shown
+in Figure 25.8.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-8.gif"><B>Figure 25.8 : </B><I>Viewing the value of your counter filter
+attribute</I>.</A><BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Due to a bug in version 1.0 of Jigsaw, this field display is not updated. You need to restart the server via /Admin/PropertiesEditor for the updates to be viewable.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="HandlingFormsandthePOSTMethodinJava"><FONT SIZE=5 COLOR=#FF0000>
+Handling Forms and the POST Method in Java</FONT></A></H2>
+<P>
+Complete your look inside the Jigsaw server by using a class to
+handle the HTTP <TT>POST</TT> method
+(refer to Listing 25.3).
+<BLOCKQUOTE>
+<PRE>
+package que.examples.postable;
+
+import w3c.jigsaw.forms.*;
+import w3c.jigsaw.html.*;
+import w3c.jigsaw.http.*;
+import w3c.jigsaw.resources.*;
+
+import java.util.*;
+
+
+public class JigsawPost extends PostableResource
+{
+
+ protected static int ATTR_NAME   = -1 ;
+
+ protected final static String NAME   = &quot;Name:&quot;;
+</PRE>
+</BLOCKQUOTE>
+<P>
+Here you could place any number of form elements as attributes.
+This code is like the other extension examples you covered in
+the previous two sections.
+<BLOCKQUOTE>
+<PRE>
+static {
+ Attribute attrib   = null ;
+ Class   JPostClass = null ;
+
+try
+ {
+    JPostClass = Class.forName(&quot;que.examples.postable.JigsawPost&quot;) ;
+  } catch (Exception ex) {
+    ex.printStackTrace() ;
+    System.exit(1) ;
+  }
+  // register our attribute(s)
+  attrib  = new StringAttribute(NAME , &quot;&quot;, Attribute.EDITABLE) ;
+  ATTR_NAME = AttributeRegistery.registerAttribute(JPostClass, attrib) ;
+}
+
+
+// method to handle data from POST request
+public Reply handle (Request request, URLDecoder data)
+ throws HTTPException 
+{
+</PRE>
+</BLOCKQUOTE>
+<P>
+Here you do the work of handling the data resulting from the <TT>POST</TT>
+method. Now you could pick up form data, validate it, and perhaps
+place it in a database or send the data using a Java interface
+to sendmail. For this example, print out the posted data. This
+gives you a nice debugging resource.
+<BLOCKQUOTE>
+<PRE>
+  // print out the variables we received
+  // a handy object to have around when testing postable forms
+  Enumeration  en = data.keys() ;
+  HtmlGenerator gen = new HtmlGenerator (&quot;POST method decoded values&quot;) ;
+  gen.append (&quot;&lt;p&gt;List of variables and corresponding values:&lt;/p&gt;&lt;ul&gt;&quot;) ;
+  while ( en.hasMoreElements () ) {
+   String name = (String) en.nextElement() ;
+   gen.append (&quot;&lt;li&gt;&lt;em&gt;&quot;
+        + name+&quot;&lt;/em&gt; = &lt;b&gt;&quot;
+        + data.getValue(name)
+        + &quot;&lt;/b&gt;&lt;/li&gt;&quot;);
+  }
+
+  gen.append (&quot;&lt;/ul&gt;&quot;) ;
+  Reply reply = request.makeReply(HTTP.OK) ;
+  reply.setStream (gen) ;
+  return reply ;
+ }
+
+
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Adding this postable object to the server is like the examples
+in the previous sections. Open URL <TT><B>http://your-host.your-domain/Admin/Editor/que</B></TT>.
+Select the Adding-Resources link. Enter <TT><B>PostTest</B></TT>
+for the <TT>name</TT>: field and <TT><B>que.examples.postable.JigsawPost</B></TT>
+for the <TT>class</TT>: field. Press
+OK to add the resource as shown in Figure 25.9.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-9.gif"><B>Figure 25.9 : </B><I>Form adding your PostTest Java resource
+to the server's namespace</I>.</A>
+<P>
+If you open the URL <TT><B>http://your-host.your-domain:9999/que/PostTest</B></TT>,
+Jigsaw returns the error message &quot;Document not found. The
+document /que/PostTest is indexed but not available.&quot; To
+test the object, use the following URL:
+<BLOCKQUOTE>
+<TT><B>http://your-host.your-domain:9999/que/PostTest?name=dave</B></TT>;
+</BLOCKQUOTE>
+<P>
+which returns the output shown in Figure 25.10.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-10.gif"><B>Figure 25.10: </B><I>Result of accessing the </I><TT>PostTest</TT><I>
+resource</I>.</A>
+<P>
+Normally, to use a resource like this you would use HTML code
+such as:
+<BLOCKQUOTE>
+<PRE>
+&lt;FORM METHOD=&quot;POST&quot; ACTION=&quot;/que/PostTest&quot;&gt;Name:
+&lt;INPUT TYPE=&quot;text&quot; NAME=&quot;name&quot; MAXLENGTH=32&gt;&lt;br&gt;
+&lt;INPUT TYPE=&quot;reset&quot; VALUE=&quot;Reset&quot;&gt;
+&lt;INPUT TYPE=&quot;submit&quot; VALUE=&quot;Ok&quot;&gt;
+</PRE>
+</BLOCKQUOTE>
+<P>
+An sample form can be viewed with the URL <TT><B>http://your-host.your-domain:9999/que/testform.html</B></TT>
+seen in Figure 25.11.
+<P>
+<A HREF="http://docs.rinet.ru/JSol/f25-11.gif"><B>Figure 25.11: </B><I>Example of the Post Test HTML form</I>.</A>
+<P>
+Listing 25.3 shows the <TT>JigsawPost</TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 25.3&nbsp;&nbsp;JigsawPost.java-Class to Implement
+HTTP POST Method<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package que.examples.postable;
+
+import w3c.jigsaw.forms.*;
+import w3c.jigsaw.html.*;
+import w3c.jigsaw.http.*;
+import w3c.jigsaw.resources.*;
+
+import java.util.*;
+
+
+public class JigsawPost extends PostableResource
+{
+
+ protected static int ATTR_NAME   = -1 ;
+
+ protected final static String NAME   = &quot;Name:&quot;;
+
+ static {
+  Attribute attrib   = null ;
+  Class   JPostClass = null ;
+
+  try
+   {
+     JPostClass = Class.forName(&quot;que.examples.postable.JigsawPost&quot;) ;
+   } catch (Exception ex) {
+     ex.printStackTrace() ;
+     System.exit(1) ;
+   }
+   // register our attribute(s)
+   attrib  = new StringAttribute(NAME , &quot;&quot;, Attribute.EDITABLE) ;
+   ATTR_NAME = AttributeRegistery.registerAttribute(JPostClass, attrib) ;
+ }
+
+
+ // method to handle data from POST request
+ public Reply handle (Request request, URLDecoder data)
+  throws HTTPException 
+ {
+
+  // print out the variables we received
+  // a handy object to have around when testing postable forms
+  Enumeration  en = data.keys() ;
+  HtmlGenerator gen = new HtmlGenerator (&quot;POST method decoded values&quot;) ;
+  gen.append (&quot;&lt;p&gt;List of variables and corresponding values:&lt;/p&gt;&lt;ul&gt;&quot;) ;
+  while ( en.hasMoreElements () ) {
+   String name = (String) en.nextElement() ;
+   gen.append (&quot;&lt;li&gt;&lt;em&gt;&quot;
+        + name+&quot;&lt;/em&gt; = &lt;b&gt;&quot;
+        + data.getValue(name)
+        + &quot;&lt;/b&gt;&lt;/li&gt;&quot;);
+  }
+
+  gen.append (&quot;&lt;/ul&gt;&quot;) ;
+  Reply reply = request.makeReply(HTTP.OK) ;
+  reply.setStream (gen) ;
+  return reply ;
+ }
+
+
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+You should now know enough about Jigsaw to add exciting new content
+to the World Wide Web. Drop me a note and tell me about your projects.
+My e-mail address is <TT><B><A HREF="mailto:dave@daves.net">dave@daves.net</A></B></TT>.
+<HR>
+
+<CENTER><P><A HREF="ch24.htm"><IMG SRC="http://docs.rinet.ru/JSol/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JSol/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JSol/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch26.htm"><IMG SRC="http://docs.rinet.ru/JSol/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

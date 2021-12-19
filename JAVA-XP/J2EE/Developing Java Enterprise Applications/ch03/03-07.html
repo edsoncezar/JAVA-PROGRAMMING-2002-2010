@@ -1,0 +1,163 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Basic JDBC Programming</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<PRE>
+import java.sql.*;
+
+public class MetaDataExample
+{
+    public static void main (String args[])
+    {
+        try
+        {
+            Class.forName(&#147;sun.jdbc.odbc.JdbcOdbcDriver&#148;);
+        } catch (Exception e)
+        {
+            System.out.println(&#147;JDBC&#150;ODBC driver failed to load.&#148;);
+            return;
+        }
+  
+        try
+        {  
+            Connection con = DriverManager.getConnection
+                                 (&#147;jdbc:odbc:Inventory&#148;,&#147;&#148;,&#147;&#148;);
+          
+<B>            /*
+               Once you have a Connection object, use it to get the
+               DatabaseMetaData of the Connection (the datasource).
+               Use the getTables method to get a list of all tables
+               accessible from the datasource.
+            */
+            DatabaseMetaData dmd = con.getMetaData();
+
+            ResultSet rs = dmd.getTables(null,null,null,null);</B>
+  
+            System.out.println(&#147;Table Name\tTable Type&#148;);
+  
+            while (rs.next())
+            {
+        <B>        /*
+                   Print the results by iterating through
+                   the result set and printing out the default string
+                */
+                System.out.println(rs.getString(3) &#43;
+                                   &#147;\t&#148; &#43; rs.getString(4));</B>
+            }
+            con.close();
+        } catch (Exception e)
+        {
+            System.out.println(e);
+        }
+    }
+}
+</PRE>
+<P>Using this technique, you can read all the attributes of the data source. Use this information to determine the capabilities of the data source before you access it. Now that you have this information, you are ready to access the database.
+</P>
+<H3><A NAME="Heading10"></A><FONT COLOR="#000077">Accessing the Database</FONT></H3>
+<P>The connection with the database is used to send commands and SQL statements to the database. The connection acts as direct link to the database driver. You request a SQL statement object from the connection and put your SQL in this object. Think of the Statement object as an envelope into which you put your message. The Connection object is the transport that sends your message. When you pass SQL to the connection, it forwards this information to the driver. The driver forwards the SQL to the database and then returns results. The results come back to you in the form of a result set.
+</P>
+<P><A NAME="Fig10"></A><A HREF="images\03-10.jpg"><IMG SRC="images\03-10t.jpg"></A>
+<BR><A HREF="images\03-10.jpg"><FONT COLOR="#000077"><B>Figure 3.10</B></FONT></A>&nbsp;&nbsp;Displaying metadata.</P>
+<P>The Connection object has three methods that return objects representing a database call. These methods are as follows:
+</P>
+<DL>
+<DD><B>createStatement().</B> Returns an object that implements the Statement interface. Use this for executing single SQL calls on the database.
+<DD><B>prepareStatement().</B> Returns a PreparedStatement object that extends the Statement interface. Use this for sending SQL that contains parameterized values (referred to as IN parameters). This type of statement may be more efficient if you plan to call a specific SQL statement multiple times, because it may be precompiled.
+<DD><B>prepareCall().</B> Returns a CallableStatement object that extends the PreparedStatement to handle OUT parameters. Use this to execute stored procedures that have both IN parameters and OUT result values.
+</DL>
+<P>A Statement object has three methods for sending SQL to the database and executing database calls:
+</P>
+<DL>
+<DD><B>executeQuery().</B> Queries the database for a single table of result values. Usually used for simple SELECT statements.
+<DD><B>executeUpdate().</B> Updates values in the database. Usually used for INSERT, UPDATE, DELETE, or data definition commands such as CREATE. This method returns a count of rows affected by the command.
+<DD><B>execute().</B> Queries the database for potentially multiple tables of result values. Use this for calling a stored procedure that returns multiple results. Under some (uncommon) situations, a single SQL statement may return multiple result sets and/or update counts. Normally, you can ignore this method, unless you&#146;re executing a stored procedure that may return multiple results or you&#146;re dynamically executing an unknown SQL string. If you use this method, call the Statement method getMoreResults() to access subsequent result sets.
+</DL>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>JDBC 2.0 adds a fourth method: executeBatch(). This method allows you to submit a batch of commands to the database for execution. executeBatch() returns an array of update counts for each command in the batch. The counts are ordered based on the order in which the commands were inserted into the batch.
+</FONT><HR>
+</BLOCKQUOTE>
+<P>In the following example, a new table is created in the database. This example can be run only once because it does not check for the existence of the table before executing the CREATE statement. This means that on subsequent calls, a JDBC exception is thrown that tells us the table exists. The database build script in Chapter 25, &#147;A Four&#150;Tier Online Store,&#148; shows how you can handle this exception, allowing the database to be recreated if necessary.
+</P>
+<P>This example creates a new table in our database called SalesHistory. To create the table, first create a statement, then use it to create a new table. The data types NUMBER, CURRENCY, and DATE in the CREATE statement are database dependent. If the table already exists, an exception is thrown so that the success message prints only when we actually add the table. Close the statement when done. Although closing the statement in this case is unnecessary because the program is about to end anyway, in some cases you want to immediately release a statement&#146;s resources instead of waiting for this to happen when it is collected as garbage.</P>
+<PRE>
+import java.sql.*;
+
+public class ExecuteExample
+{
+    public static void main (String args[])
+    {
+        try
+        {
+            Class.forName(&#147;sun.jdbc.odbc.JdbcOdbcDriver&#148;);
+        } catch (Exception e)
+        {
+            System.out.println(&#147;JDBC&#150;ODBC driver failed to load.&#148;);
+            return;
+        }
+  
+        try
+        {  
+            Connection con =
+             DriverManager.getConnection(&#147;jdbc:odbc:Inventory&#148;,&#147;&#148;,&#147;&#148;);
+          
+           <B> // Use a connection to create a new statement.
+            Statement stmt = con.createStatement();
+
+            // Use this statement to execute a specific SQL statement.
+            stmt.execute(&#147;CREATE TABLE SalesHistory&#148; &#43;
+                         &#147;(ProductID NUMBER,&#148; &#43;
+                         &#147;Price CURRENCY, &#148; &#43;
+                         &#147;TrnsDate DATE)&#148;);</B>
+  
+           System.out.println(&#147;Created Sales History table&#148;);
+  
+<B>            /*
+               As you do for connections, you should close the
+               statement when you are done.
+            */
+            stmt.close();</B>
+  
+            con.close();
+        } catch (Exception e)
+        {
+            System.out.println(e);
+        }
+    }
+}
+</PRE>
+<P>The Statement object allows you to fetch and modify data. The next section looks at how you can process the results returned from executing a SQL statement.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-06.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-08.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

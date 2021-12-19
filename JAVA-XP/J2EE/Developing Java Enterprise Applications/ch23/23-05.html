@@ -1,0 +1,202 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using Transactions with Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch24\24-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>After testing the bean, the client uses the result method to see what happened. This method checks each database for the message that was supposed to be inserted. The return value from result indicates if the message is in database one, two, neither, or both.
+</P>
+<PRE>
+    public String result(String msg)
+         throws Exception
+    {
+        String retVal = &#147;&#148;;
+        java.sql.Connection conn=null;
+        java.sql.Statement statement=null;
+        java.sql.ResultSet rs=null;
+        boolean inOne=false;
+        boolean inTwo=false;
+        UserTransaction trans = context.getUserTransaction();
+
+        trans.begin();
+        try
+        {
+            Class.forName(driver);
+
+            conn = DriverManager.getConnection(url1
+                                            ,user,password);
+
+            statement = conn.createStatement();
+            rs = statement.executeQuery(&#147;select * from messages&#148;
+                                     &#43;&#147; where message=&#148;
+                                     &#43;&#147;\'&#148;&#43;msg&#43;&#147;\'&#148;);
+
+            if(rs.next()) inOne = true;
+        }
+        catch(Exception exp)
+        {
+            retVal = exp.toString();
+        }
+        finally
+        {
+            try
+            {
+                if(rs!=null) rs.close();
+                if(statement != null) statement.close();
+                if(conn!=null) conn.close();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+        trans.commit();
+
+        trans.begin();
+        try
+        {
+            conn = DriverManager.getConnection(url2
+                                            ,user,password);
+
+            statement = conn.createStatement();
+            rs = statement.executeQuery(&#147;select * from messages&#148;
+                                     &#43;&#147; where message=&#148;
+                                     &#43;&#147;\'&#148;&#43;msg&#43;&#147;\'&#148;);
+
+            if(rs.next()) inTwo = true;
+        }
+        catch(Exception exp)
+        {
+            retVal = exp.toString();
+        }
+        finally
+        {
+            try
+            {
+                if(rs!=null) rs.close();
+                if(statement != null) statement.close();
+                if(conn!=null) conn.close();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+        trans.commit();
+
+        retVal &#43;= &#147;In one: &#147;&#43;inOne&#43;&#148; in two: &#148;&#43;inTwo;
+
+        return retVal;
+    }
+</PRE>
+<P>Before running the test, the client calls prepare, listed here, on the test bean to empty the two databases:
+</P>
+<PRE>
+    public void prepare()
+         throws Exception
+    {
+        java.sql.Connection conn=null;
+        java.sql.Statement statement=null;
+        UserTransaction trans = context.getUserTransaction();
+
+        trans.begin();
+        try
+        {
+            Class.forName(driver);
+
+            conn = DriverManager.getConnection(url1
+                                            ,user,password);
+
+            statement = conn.createStatement();
+            statement.executeUpdate(&#147;delete * from messages&#148;);
+        }
+        catch(Exception exp)
+        {
+        }
+        finally
+        {
+            try
+            {
+                if(statement != null) statement.close();
+                if(conn!=null) conn.close();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+        trans.commit();
+
+        trans.begin();
+        try
+        {
+            Class.forName(driver);
+
+            conn = DriverManager.getConnection(url2
+                                            ,user,password);
+
+            statement = conn.createStatement();
+            statement.executeUpdate(&#147;delete * from messages&#148;);
+        }
+        catch(Exception exp)
+        {
+        }
+        finally
+        {
+            try
+            {
+                if(statement != null) statement.close();
+                if(conn!=null) conn.close();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+        trans.commit();
+    }
+}
+</PRE>
+<P>This example shows how EJBs can communicate with each other and how transaction scopes can be transferred to other resources, including beans and JDBC connections.
+</P>
+<H3><A NAME="Heading7"></A><FONT COLOR="#000077">Reentrant Beans</FONT></H3>
+<P>In general, beans are protected from multiple clients accessing them simultaneously by their container. The container will either create a bean for each client or lock a bean for use by a single client to protect it from concurrent access. This makes life easier for the bean writer, because you don&#146;t have to worry about two clients sending messages to the bean at the same time.
+</P>
+<P>However, when beans send messages to each other, one bean could send a message to a second bean that sends a message back to the first bean. This situation is called <I>reentrance</I>, because the first bean&#146;s code is being reentered. The EJB specification says that beans can be either reentrant or not as configured in their deployment descriptor. All of the examples in this book have been non&#150;reentrant by including the following line:</P>
+<PRE>
+isReentrant        false
+</PRE>
+<P>in their descriptor file. When a bean is non&#150;reentrant, any attempt to access the bean using the same transaction context that it is already using will result in a RemoteException. If the bean is reentrant, it would be possible for it to receive concurrent requests with the same transaction scope.
+</P>
+<P>The specification and documentation strongly suggest that you avoid reentrant beans whenever possible. If you do use them because your design requires callbacks from the bean&#146;s resources to the bean, keep the following issues in mind. The container may not be able to tell a new client request from a reentrant request. This means that the container cannot protect a bean from concurrent client access, and two clients could potentially cause the bean to perform an invalid operation by accessing it simultaneously. It also means that you have to program the bean so that the same transaction scope can call a method more than once without causing a problem.</P>
+<H3><A NAME="Heading8"></A><FONT COLOR="#000077">Summary</FONT></H3>
+<P>The Enterprise JavaBean specification was designed to hide the specifics of distributed transactions from the bean programmer. At the same time, the programmer can use bean&#150;managed transactions and the UserTransaction object to control the transaction scope manually. This combination makes EJB transactions easy to use. First, the EJB container manages all of the transaction scoping and processing among a bean, its client, and the resources it uses. For example, even if the bean manages its transaction, the container will tie this transaction to any JDBC connections used, and the bean will not need to directly manage those.
+</P>
+<P>The next chapter reviews the technologies discussed so far and introduces two large examples that demonstrate multiple technologies from this book in a single enterprise application.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch24\24-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,204 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Distributed Computing with Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0465-0469.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0473-0475.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-470"><P>Page 470</P></A>
+
+
+
+<P>RMI provides the registries for this purpose. Objects in a server process each have names
+that are simply strings chosen by their developers to identify them. Using a registry on the
+server, clients can identify by name the objects they wish to call and obtain references to them.
+</P>
+
+<P>A registry is a remote object that implements the java.rmi.registry.Registry
+interface. Registries act as name servers, maintaining a mapping between objects on a host and
+the names with which they were registered. A single registry can hold all name bindings for
+a host, or multiple registries may be created&#151;one per server process.
+</P>
+
+<P>Typically, the server process will instantiate an object of the java.rmi.registry.
+LocateRegistry class and call its createRegistry() method to create a registry on a
+specified port. The remote objects then call the bind() or rebind() methods of the registry to
+associate themselves with a name.
+</P>
+
+<P>As its name suggests, the LocateRegistry class is also used to locate registries. A
+client wishing to use a remote object first calls a getRegistry() method of the
+LocateRegistry class to obtain a reference to a registry. It then calls the lookup() method on the
+registry, passing the name of the remote object it wishes to use. If the registry contains the name,
+it returns a reference to the object it identifies. The reference is returned as
+the RemoteObject superclass and is cast to the actual class of the remote object before use.
+</P>
+
+<P>The java.rmi.Namimg class implements the java.rmi.registry.Registry interface and
+provides a Uniform Resource Locator syntax for naming the objects.
+An URL such as the following would identify an object on the host &quot;mycelium.com&quot; on port 7867 called &quot;Address1.&quot;
+</P>
+
+<PRE>
+rmi://mycelium.com:7867/Address1
+</PRE>
+
+<H4><A NAME="ch12_ 18">
+Remote Objects
+</A></H4>
+
+<P>Remote objects on the server extend the interface they expose to clients by
+including methods for creation and exporting. All objects to be accessed remotely using RMI
+must implement the java.rmi.Remote interface. This is usually achieved by inheriting from
+the java.rmi.server.RemoteObject class or one of its descendents, as follows.
+</P>
+
+<PRE>
+ java.lang.Object
+   |
+   +&#151;&#151;java.rmi.server.RemoteObject
+          |
+          +&#151;&#151;java.rmi.server.RemoteServer
+                  |
+                  +&#151;&#151;java.rmi.server.UnicastRemoteObject
+</PRE>
+
+<A NAME="PAGENUM-471"><P>Page 471</P></A>
+
+
+
+<P>The RemoteObject class implements the java.lang.Object behavior for remote
+and provides the remote semantics of Object by implementing methods for hashCode,
+equals, and toString.
+</P>
+
+<P>The java.rmi.server.RemoteServer class extends RemoteObject and adds methods to
+create and export remote objects. It is not used directly, but acts as an abstract
+superclass. Concrete subclasses then determine the semantics of the remote reference, as was
+discussed in the previous section about the remote reference layer.
+</P>
+
+<P>The only concrete subclass provided in the current RMI implementation is the one used
+in the address book example, namely the UnicastRemoteObject class, which defines a
+single (nonreplicated) remote object whose references are valid only while the server process
+is running. It uses TCP streams to provide support for point-to-point active object
+references (invocations, parameters, and results).
+</P>
+
+<H4><A NAME="ch12_ 19">
+Mechanisms and Techniques
+</A></H4>
+
+<P>RMI employs a number of interesting mechanisms to implement distributed objects, a
+few of which are mentioned in this section.
+</P>
+
+<B>
+Dynamic Loading of Classes
+</B>
+
+<P>Conventional Remote Procedure Calls require stub code to be linked in with the
+client code when the application is built. In contrast, RMI can take advantage of Java's
+bytecode mechanisms to download such code from the server as it is needed if it is not
+available locally. It can download not only the remote interfaces and stub code, but also the
+classes needed for parameters and return calls, or even the entire client code base. This is
+known as dynamic class loading.
+</P>
+
+<P>The mechanism to achieve this magic uses a class loader, such as RMIClassLoader, and
+a security manager, such as RMISecurityManager, to ensure that classes are
+downloaded only if they are not available locally, and that they are only obtained from a trusted
+source. The rules governing which class loader is used depend on whether the client is an
+applet or an application, and are covered in depth in the published documentation.
+</P>
+
+<B>
+Argument Passing
+</B>
+
+<P>Variable types passed to or from a remote object can be any Java type&#151;user defined
+classes or primitives. If the class is not available locally, it must be loaded from the remote site.
+</P>
+
+<A NAME="PAGENUM-472"><P>Page 472</P></A>
+
+
+
+<P>When a local object is passed as a parameter to a remote object, the object is
+copied. Similarly, objects &quot;returned&quot; from the remote call are created in the local VM.
+</P>
+
+<P>When a remote object is passed as an argument, the stub is copied, so only
+remote interfaces are available for that object (even if it actually implements non-remote
+methods and exists on the same remote VM).
+</P>
+
+<B>
+Distributed Garbage Collection
+</B>
+
+<P>RMI supports distributed garbage collection of remote objects. A count is kept on
+the server end of both local and remote references to remote objects. The garbage
+collector reaps the object only when there are no references left.
+</P>
+
+<H4><A NAME="ch12_ 20">
+Object Serialization Services
+</A></H4>
+
+<P>When methods are invoked on remote objects, data flows across the connecting link
+in both directions. Argument data passed to the method must be transferred across to
+the remote object, and the result data must be transferred back to the local caller.
+</P>
+
+<P>As part of the JDK 1.1 release of Java, JavaSoft has extended the java.io package
+to support writing arbitrary objects to a stream, along with enough structural information
+so that they may be reconstructed perfectly when read back. These extensions are known
+as the Object Serialization Services. In addition to handling the data transfer needs of
+RMI, they form a basis for adding persistence to Java objects.
+</P>
+
+<P>The following sections describe the design issues addressed by the services and the
+new classes and interfaces they introduce. It also shows how the services are useful in
+their own right, by using them to add persistence to the address book sample.
+</P>
+
+<B>
+Serializing Objects
+</B>
+
+<P>The serialization services take a data structure as input (such as an object or group
+of objects) and produce an encoded stream of bytes as output. This serial stream can then
+be written across a network or modem connection, or to storage media, such as a hard
+drive. The services also perform the converse operation of taking an encoded stream of bytes
+and producing the original set of data items that produced them.
+</P>
+
+<P>This process is a fairly straightforward operation for primitive types, such as integers
+that have a single value of fixed size. To be generally useful, however, the mechanism
+must handle arbitrarily complex types, including classes defined by the user, and must
+ensure that references to other objects also remain valid. All of this must be achieved
+without special attention from the programmer. Remember that achieving transparency
+means making remote calls almost indistinguishable from local ones.
+</P>
+<P><CENTER>
+<a href="0465-0469.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0473-0475.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

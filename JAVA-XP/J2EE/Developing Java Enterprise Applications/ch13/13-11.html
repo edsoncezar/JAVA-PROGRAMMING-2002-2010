@@ -1,0 +1,131 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Introduction to Java RMI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-10.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch14\14-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>No changes need to be made to the remote message sent, as the code that follows shows. This means that making an object activatable does not affect your core business logic.
+</P>
+<PRE>
+    public void send(String name, String s)
+     throws RemoteException
+    {
+     System.out.println(name &#43; &#147;: &#148; &#43; s);
+    }
+</PRE>
+<P>Because the server object will now be created and run by the activation system, there is no need to bootstrap the process, so the main method from previous examples has been deleted.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading23"></A><FONT COLOR="#000077">Creating ConfigureServer</FONT></H4>
+<P>The next step in the process is to create a setup program that actually installs your remote object class in the activation system. Define a class called ConfigureServer in the server package. This class has one method that installs the server in the activation system.
+</P>
+<P>Unlike the RMI server class that must stay alive as long as the implementation needs to be made available, the activatable class needs to be instantiated only when called. The ConfigureServer class passes information about the activatable class to the rmid process by registering an instance of the activatable class&#146;s stub class and a name with the rmiregistry. The information about the object is stored in an ActivationDesc (activation descriptor) object.</P>
+<P>An ActivationDesc object contains the information necessary to activate an object, including the object&#146;s group identifier, class name, code location of the class, and optional object-specific initialization data in the form of a MarshalledObject. A descriptor registered with the activation system can be used to recreate/activate the object specified by the descriptor. The MarshalledObject in the object&#146;s descriptor is passed as the second argument to the remote object&#146;s constructor for object to use during reinitialization/activation. In this example, this is not included, because it is assumed that no default initialization data is needed.</P>
+<P>For completeness, this example shows how the server can create an activation group to identify it. This group is associated with a Java virtual machine (VM). When objects in a group are activated, they run in this VM. Objects in other groups are assigned their own VM.</P>
+<PRE>
+package server;
+
+import java.util.*;
+
+import java.rmi.*;
+import java.rmi.activation.*;
+
+import message.*;
+
+public class ConfigureServer
+{
+    public static void main(String[] args) throws Exception
+    {
+
+     System.setSecurityManager(new RMISecurityManager());
+
+     MessageServer srv;
+     String servname = &#147;server.Server&#148;;
+
+     String location = &#147;file:///temp/&#148;;
+
+     MarshalledObject data = null;
+     
+     Properties props = new Properties();
+
+     props.put(&#147;java.security.policy&#148;,
+          &#147;/temp/server.policy&#148;);
+<B>     ActivationGroupDesc.CommandEnvironment ace = null;</B>
+     
+     <B>ActivationGroupID id =
+         ActivationGroup.getSystem().registerGroup(
+             new ActivationGroupDesc(props, ace));
+
+     ActivationDesc desc = new ActivationDesc(id
+                    ,servname, location, data);
+
+     srv = (MessageServer)Activatable.register(desc);</B>
+       System.out.println(&#147;Registered and got Server_Stub&#148;);
+
+<B>        Naming.rebind(MessageServer.SERVER_NAME, srv);</B>
+       System.out.println(&#147;Exported MessageServer&#148;);
+
+     System.exit(0);
+    }
+}
+</PRE>
+<P>Notice that the configuration program essentially puts the activatable object in rmid using the Activatable class&#146;s register method. This returns a stub that is registered with the rmiregistry. Clients access the stub, triggering the activation of the real object. Once the ConfigureServer code is complete, you can compile and run by changing the directory to the project root and issuing the following commands in Windows:
+</P>
+<PRE>
+javac server\*.java
+rmic -d . server.Server
+copy server c:\temp\server
+copy server.policy \temp
+
+start rmiregistry -J-Djava.security.policy=/temp/server.policy
+
+start rmid
+
+java -Djava.security.policy=server.policy -
+Djava.rmi.server.codebase=file:///temp/ server.ConfigureServer
+</PRE>
+<P>Notice that when starting the configuration application, you must specify a CODEBASE that can take the form of a valid file or HTTP URL. The slash at the end of the URL is mandatory. Without the slash you will get a java.lang.ClassNotFoundException, as you would if your class could not be found for some other reason. In this example, the server files are copied to temp for convenience.
+</P>
+<P>To run the client, execute the following:</P>
+<PRE>
+start java -Djava.security.manager
+    -Djava.security.policy=server.policy client.Client Client1
+</PRE>
+<P>The results should be similar to the first example. The difference is that the server is not actually running (activated) until the client makes a request by sending it a message.
+</P>
+<H3><A NAME="Heading24"></A><FONT COLOR="#000077">Summary</FONT></H3>
+<P>The goals for RMI are to support seamless remote invocation on objects in different virtual machines as well as callbacks from servers and applets. The semantics of RMI are well integrated with the Java programming language, so you need very little knowledge of network communication to invoke remote objects. Because RMI is divided into several layers, you could replace the default transport of TCP with some other protocol.
+</P>
+<P>RMI is both flexible and easy for the Java programmer to use. With the addition of activation in Java 2, RMI is also able to be responsive to client requests without taking up system resources. Clearly, for Java object communication, RMI is a good choice for creating enterprise solutions. However, if you intend to invoke methods of non-Java objects through CORBA, you may want to consider Java IDL or using an IIOP transport. Information on these topics can be found at the Sun Web site.</P>
+<P>One last tidbit: When creating your RMI programs, you can use the built-in logging feature to help with debugging. Use the flag -Djava.rmi.server.logCalls=true when running a program to see a list of the calls that arrive to the RMI object.</P>
+<P>The next chapter looks at a practical use of Java RMI: a file-locking server that provides multiuser access to networked files through Java.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-10.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="..\ch14\14-01.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

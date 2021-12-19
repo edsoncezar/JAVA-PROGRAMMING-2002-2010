@@ -1,0 +1,284 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Custom Implementations</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="..\algorithms\index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="..\interoperability\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=bottom border=0 alt="Collections | "></a>
+</td>
+<td align=right>
+<a href="..\toc.html#custom-implementations"><strong><em>Contents</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p>
+<h1>
+     Custom Implementations
+</h1>
+<p>
+<blockquote>
+
+    Many programmers will never need to implement their own collections
+classes.  You can go pretty far using the implementations described in the
+previous sections of this lesson.  Someday, however, you might find yourself
+wanting to write your own implementation of a core collection
+interface.  It turns out that it's easy to do with the <i>abstract
+implementations</i> provided by the Java platform.  But before we discuss how
+to write an implementation, let's discuss why you might want to do such a
+thing.
+
+<h4>Reasons to Write Your Own Implementation</h4>
+<blockquote>
+
+    This list enumerates several kinds of collections you
+might want to implement.  It is not intended to be exhaustive.
+<ul>
+<li><b>Persistent</b>: 
+All of the built-in collection implementations reside in main memory, and
+vanish when the VM exits.  Suppose you want a collection that will still be
+present the next time the VM starts.  One fine way to implement such a
+collection is to build a veneer over an external database.  Such a collection
+might conceivably be concurrently accessible by multiple VMs, since it resides
+outside the VM.
+
+<li><b>Application-specific</b>: This is a very broad category.  One example
+is an unmodifiable <code>Map</code> containing real-time telemetry data.
+The keys might represent locations, and the values could be read from sensors
+at these locations in response to the <code>get</code> operation.
+
+<li><b>Highly Concurrent</b>: 
+The built-in collections are not designed to support high concurrency.
+The synchronization wrappers (and the legacy implementations) lock the
+<i>entire</i> collection every time it's accessed.  Suppose you're building a
+server and you need a <code>Map</code> implementation that can be accessed by
+many threads concurrently.  It is reasonably straightforward to build a hash
+table that locks each bucket separately, allowing multiple threads to 
+access the table concurrently (assuming they're accessing keys that hash to
+different buckets).
+
+<li><b>High-performance, Special-purpose</b>: 
+There are many data structures that take advantage of restricted usage to
+offer better performance than is possible with general-purpose
+implementations.  For example, consider a <code>Set</code> whose elements are
+restricted to a small, fixed universe.  Such a <code>Set</code> can be
+represented as a <i>bit-vector</i>, which offers blindingly fast performance
+as well low memory usage.  Another example concerns a <code>List</code>
+containing long runs of identical element values.  Such lists, which occur
+frequently in text processing, can be <i>run-length encoded</i>: runs can be  
+represented as a single object containing the repeated element and the number
+of consecutive repetitions.  This example is interesting because it trades off
+two aspects of performance: It requires far less space than an
+<code>ArrayList</code>, but more time.
+
+<li>
+<b>High-performance, General-purpose</b>: 
+The engineers who designed the collections framework tried to provide the
+best general-purpose implementations for each interface, but there are many,
+many data structures that could have been used, and new ones are invented
+every day.  Maybe you can come up with something faster!
+
+<li><b>Enhanced functionality</b>: 
+Suppose you need a <code>Map</code> (or <code>Set</code>) implementation that
+offers constant time access, as well as insertion-order iteration.
+This combination can be achieved with a hash table, all of whose elements are
+further joined, in insertion order, into a doubly-linked list.
+Alternatively, suppose you need an efficient <i>bag</i> implementation
+(also known as a <i>multiset</i>): a <code>Collection</code> that 
+offers constant time access while allowing duplicate elements.  It's
+reasonably straightforward to implement such a collection atop a
+<code>HashMap</code>.
+
+<li><b>Convenience</b>: 
+You may want additional convenience implementations beyond those offered by
+the Java platform.  For instance, you may have a frequent need for
+immutable <code>Map</code> objects representing a single key-value mapping, or
+<code>List</code> objects representing a contiguous range of
+<code>Integer</code>s, or whatever.
+
+<li><b>Adapter</b>: 
+Suppose you are using some legacy API that has its own ad hoc
+collections API.  You can write an <i>adapter</i> implementation that permits
+these collections to operate in the Java Collections Framework.  An adapter
+implementation is a thin veneer that wraps objects of one type and makes them
+behave like objects of another type by translating operations on the latter
+type into operations on the former.
+</ul>
+</blockquote>
+
+<h4>How to Write a Custom Implementation</h4>
+<blockquote>
+Writing a custom implementation is surprisingly easy with the aid of the
+<i>abstract implementations</i> furnished by the Java platform.  Abstract
+implementations are skeletal implementations of the core collection interfaces
+designed expressly to facilitate custom implementations.  We'll start with
+an example.  Here's an implementation of
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.Arrays.html"><code>Arrays.asList</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.Arrays.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>.<blockquote>
+<pre>    public static List asList(Object[] a) {
+	return new ArrayList(a);
+    }
+
+    private static class ArrayList extends AbstractList
+    				   implements java.io.Serializable
+    {
+	private Object[] a;
+
+	ArrayList(Object[] array) {
+	    a = array;
+	}
+
+	public Object get(int index) {
+	    return a[index];
+	}
+
+	public Object set(int index, Object element) {
+	    Object oldValue = a[index];
+	    a[index] = element;
+	    return oldValue;
+	}
+
+	public int size() {
+	    return a.length;
+	}
+    }</pre>
+</blockquote>
+Believe it or not, this is almost exactly the implementation contained in the
+JDK.  It's that simple!  You provide a constructor, the <code>get</code>,
+<code>set</code>, and <code>size</code> methods, and <code>AbstractList</code>
+does all the rest.  You get the <code>ListIterator</code>, bulk
+operations, search operations, hash code computation, comparison and string
+representation for free.
+<p>
+Suppose you want to make the implementation a bit faster.  The API
+documentation for the abstract implementations describes precisely how each
+method is implemented so you'll know which methods to override in order to get
+the performance that you want.  The performance of the implementation above is
+fine, but it can be improved a bit.   In particular, the <code>toArray</code>
+method iterates over the <code>List</code> copying one element at a time.
+Given the internal representation, it's a lot faster and more sensible just to
+clone the array:
+<blockquote>
+<pre>	public Object[] toArray() {
+	    return (Object[]) a.clone();
+	}</pre>
+</blockquote>
+With the addition of this override, and a similar one for
+<code>toArray(Object[])</code>, this implementation is <i>exactly</i> the one
+found in the JDK.  In the interests of full disclosure, it's a bit tougher to
+use the other  abstract implementations because they require you to write your
+own iterator, but it's still not that hard.
+<p>
+The abstract implementations are summarized below:
+<ul>
+<li>
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractCollection.html"><code>AbstractCollection</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractCollection.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>: A <code>Collection</code> that is neither a <code>Set</code> nor a
+<code>List</code>, such as a <i>bag</i>.  At a minimum, you must provide the
+<code>iterator</code> and the <code>size</code> method.
+
+<li>
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractSet.html"><code>AbstractSet</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractSet.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>: A <code>Set</code>.  Use is identical to <code>AbstractCollection</code>.
+
+<li>
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractList.html"><code>AbstractList</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractList.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>: A <code>List</code> backed by a random-access data store (such as an array).
+At a minimum, you must provide the positional access methods
+(<code>get(int)</code> and, optionally, <code>set(int)</code>,
+<code>remove(int)</code>, and <code>add(int)</code>) and the <code>size</code>
+method.  The abstract class takes care of <code>listIterator</code> (and
+<code>iterator</code>).
+
+<li>
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractSequentialList.html"><code>AbstractSequentialList</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractSequentialList.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>: A <code>List</code> backed by a sequential-access data store (such as a
+linked list).  At a minimum, you must provide the <code>listIterator</code> and
+<code>size</code> methods.  The abstract class takes care of the positional
+access methods.  (This is the opposite of <code>AbstractList</code>.)
+
+<li>
+<a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractMap.html"><code>AbstractMap</code></a><a target="_top" href="http://java.sun.com/products/jdk/1.2/docs/api/java.util.AbstractMap.html"><img src="http://docs.rinet.ru/Jtuta/images/apiIcon.gif" width=20 height=20 border=0 alt="(in the API reference documentation)"></a>: A <code>Map</code>.  At a minimum you must provide the <code>entrySet</code>
+view.  This is typically implemented with the <code>AbstractSet</code> class.
+If the <code>Map</code> is modifiable, you must also provide the
+<code>put</code> method.
+</ul>
+The process of writing a custom implementation is summarized below:
+<ol>
+<li>
+<b>Choose</b> the appropriate abstract implementation class from the list
+above.
+<p><li>
+<b>Provide implementations</b> for all of the class's abstract methods.  If
+your custom collection is to be modifiable, you'll have to override one or
+more concrete methods as well.  The API documentation for the abstract
+implementation class will tell you which methods to override.
+<p><li>
+<b>Test</b> and, if necessary, debug the implementation.  You now have a
+working custom collection implementation!
+<p><li>
+<b>If you're concerned about performance</b>, read the abstract implementation
+class's API documentation for all of the methods whose implementations you're
+inheriting.  If any of them seem too slow, override them.  If you override any
+methods, be sure to measure the performance of the method before and after the
+override!  How much effort you put into tweaking the performance should be a
+function of how much use the implementation will get, and how
+performance-critical the use.  (Often, this step is best omitted.)
+</ul>
+</blockquote>
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="..\algorithms\index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="..\interoperability\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/security1_2Header.gif" width=26 height=26 align=top border=0 alt="Collections | "></a>
+</td>
+<td align=right>
+<a href="..\toc.html#custom-implementations"><strong><em>Contents</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

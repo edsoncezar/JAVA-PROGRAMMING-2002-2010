@@ -1,0 +1,238 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Clients tell the bean to execute a purchase with the method purchaseCart. This method performs a number of database checks to make sure that the specified user has the necessary credit to make the purchase, that the items are available, and finally, that the user&#146;s credit information is updated to reflect the purchase. This method is provided here, with discussions inserted at major operations.
+</P>
+<PRE>
+    public boolean purchaseCart(String user) 
+     throws Exception, BadCreditException
+    {
+        boolean retVal = false;
+        ShoppingCartItem curItem;
+        Enumeration cursor;
+        ResultSet rs=null;
+        Statement statement=null;
+        Connection conn=null;
+        double curPrice;
+        int curQuantity, curSales;
+        double total=0;
+        double max, used;
+    
+        if(items == null) return false;
+        
+        logToServer(&#147;Purchasing items for: &#148;+user);
+        
+        try
+        {
+</PRE>
+<P>Next, the purchaseCart method connects to the database. This connection will be closed at the end of the method. The connectToDB method is an internal method discussed later in the chapter.
+</P>
+<PRE>
+            conn = connectToDB();
+             
+            statement = conn.createStatement();
+</PRE>
+<P>The first check required to make a purchase is to get the customer&#146;s maximum and used credit. These values will be used to determine whether the purchase can be made. An exception is thrown if the database access fails. The available credit is calculated by looking at the limit and subtracting the amount used. This available credit is stored in the local variable max.
+</P>
+<PRE>
+            rs = statement.executeQuery(&#147;select * from customers&#148;
+                                          +&#147; where CUST_NAME=&#148;
+                                         +&#147;\&#145;&#148;+user+&#147;\&#145;&#148;);
+            
+            if(rs.next())
+            {
+                used = rs.getDouble(&#147;CREDIT_USED&#148;);
+                max = rs.getDouble(&#147;CREDIT_LIMIT&#148;)
+                            - used;
+            }
+            else
+            {
+                throw new Exception(&#147;Trigger failure, no credit.&#148;);
+            }
+</PRE>
+<P>Next, the purchaseCart method updates the list of items being purchased, making sure that they are still available and the price is correct. An exception is thrown to notify the caller whether the items have changed in the database. While the items are processing, the bean calculates the total price of the purchase and stores it in the variable total.
+</P>
+<PRE>
+            cursor = items.elements();
+             
+            while(cursor.hasMoreElements())
+            {
+            
+                curItem = (ShoppingCartItem) cursor.nextElement();
+                statement = conn.createStatement();
+                rs =
+                  statement.executeQuery(&#147;select * from inventory&#148;
+                                  +&#147; where item_desc=&#148;
+                                  +&#147;\&#145;&#148;+curItem.desc+&#147;\&#145;&#148;);
+            
+                //Only take the first one
+                if(rs.next())
+                {
+                    curPrice = curItem.price;
+                
+                    //reset price from DB
+                    curItem.price = rs.getDouble(&#147;PRICE&#148;);
+                
+                    curQuantity = rs.getInt(&#147;QUANTITY&#148;);
+                
+                    if((curQuantity &lt curItem.quantity)
+                            ||(curPrice != curItem.price))
+                    {
+                        throw new Exception(&#147;Trigger failure,&#148;
+                                           + &#147; bad q/p.&#148;);
+                    }
+                    
+                    total += curItem.getTotal();
+                }
+                else
+                {
+                    throw 
+                     new Exception(&#147;Trigger failure item&#148;
+                                      + &#147; not in DB.&#148;);
+                }
+            }
+</PRE>
+<P>Now check the customer&#146;s credit. If the customer&#146;s credit doesn&#146;t cover the purchase, throw a BadCreditException. This is a custom exception that is propagated to the caller.
+</P>
+<PRE>
+            //make sure there is enough credit
+             if(total &gt max)
+            {
+                throw new BadCreditException(max);
+            }
+</PRE>
+<P>If the user&#146;s credit is okay, update the CUSTOMERS table to reflect the purchase by increasing the CREDIT_USED column.
+</P>
+<PRE>
+            //update the user&#146;s credit
+             statement.executeUpdate(&#147;update customers set &#148;
+                                         +&#147;credit_used=&#148;
+                                         + (total+used)
+                                         +&#147; where cust_name=&#148;
+                                         +&#147;\&#145;&#148;+user+&#147;\&#145;&#148;);
+</PRE>
+<P>Next, update the inventory to reflect the purchase. Subtract the purchased items from the QUANTITY column and add them to the SALES column.
+</P>
+<PRE>
+            //update the inventory
+             cursor = items.elements();
+            
+            while(cursor.hasMoreElements())
+            {
+            
+                curItem = (ShoppingCartItem) cursor.nextElement();
+                
+                rs = statement.executeQuery(&#147;select * from &#148;
+                                       +&#147;inventory&#148;
+                                       +&#147; where item_desc=&#148;
+                                       +&#147;\&#145;&#148;+curItem.desc+&#147;\&#145;&#148;);
+            
+                //Only take the first one
+                if(rs.next())
+                {
+                    curQuantity = rs.getInt(&#147;QUANTITY&#148;);
+                    curSales = rs.getInt(&#147;SALES&#148;);
+                    
+                    statement.executeUpdate(&#147;update inventory &#148;
+                                   +&#147;set quantity=&#148;
+                                   + (curQuantity-curItem.quantity)
+                                   +&#147; , sales=&#148;
+                                   + (curSales+curItem.quantity)
+                                   +&#147; where item_desc=&#148;
+                                   +&#147;\&#145;&#148;+curItem.desc+&#147;\&#145;&#148;);
+                }
+                else
+                {
+                    throw new Exception(&#147;Trigger failure item&#148;
+                                        +&#147; not in DB.&#148;);
+                }
+            }
+            
+            retVal = true;
+        }
+        catch(BadCreditException exp)
+        {
+            logToServer(exp.toString());
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            logToServer(exp.toString());
+            retVal = false;
+        }
+</PRE>
+<P>Close the database connection in a finally block to ensure that regardless of the exceptions thrown by the purchase process, the database connection is returned to the pool.
+</P>
+<PRE>
+        finally
+         {
+            try
+            {
+                if(rs!=null) rs.close();
+                if(statement != null) statement.close();
+                if(conn!=null) conn.close();
+            }
+            catch(Exception exp)
+            {
+                logToServer(exp.toString());
+            }
+        }
+        
+        return retVal;
+    }
+</PRE>
+<P>That concludes the purchaseCart method. The next method in ShoppingCartBean is a convenience method that connects the DebugLogger to the server, if necessary, and logs a message to it.
+</P>
+<PRE>
+    protected void logToServer(String str)
+     {
+        if(logger == null)
+        {
+            try
+            {
+                logger = new DebugLog();
+                logger.logTo(logServer);
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+        
+        logger.log(str);
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

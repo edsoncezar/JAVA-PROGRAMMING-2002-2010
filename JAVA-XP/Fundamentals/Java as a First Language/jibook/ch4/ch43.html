@@ -1,0 +1,587 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+
+<head>
+<meta http-equiv="Content-Type"
+content="text/html; charset=iso-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPad 2.0">
+<title> 4.3 The construction of the Tuttle class </title>
+</head>
+
+<body bgcolor="#FFFFFF">
+
+<h1 align="center"><font size="6">4.3 The construction of the</font><font
+size="7"> </font><font size="6" face="Arial"><i>Tuttle</i></font><font
+size="6"> class</font></h1>
+
+<p>The instance diagram for the <font size="2" face="Arial"><i>Tuttle</i></font>
+class is presented in Figure 4.5. It shows that every <font
+size="2" face="Arial"><i>tuttle</i></font> is an instance is of
+the <font size="2" face="Arial"><i>Tuttle</i></font> class which
+extends the <font size="2" face="Arial">Canvas</font> class. Each
+<font size="2" face="Arial"><i>tuttle</i></font> also has a <font
+size="2" face="Arial"><i>rotatingCursor</i></font> which is an
+instance of the <font size="2" face="Arial"><i>TuttleCursor</i></font>
+class.</p>
+
+<p align="center"><font size="2"><b><img src="fig45.gif"
+width="301" height="222"></b></font></p>
+
+<p align="center"><font size="3"><b>Figure 4.5</b> </font><font
+size="3" face="Arial"><i>Tuttle</i></font><font size="3">
+instance diagram.</font></p>
+
+<p>The <font size="2" face="Arial"><i>Doodle</i></font> applet
+from Chapter 2 suffered from one major failure. When the applet's
+window was covered by another window and subsequently uncovered
+any drawings on the window were lost and a blank window was
+redisplayed. This behavior would be unacceptable for the <font
+size="2" face="Arial"><i>Tuttle</i></font> class and a technique
+known as <i>double buffering</i> is used to provide the required <i>save
+under</i> capability. It is accomplished by not drawing directly
+onto the component's window but upon a hidden <font size="2"
+face="Arial">Image</font> and copying it to the window whenever
+required. This technique is illustrated in Figure 4.6.</p>
+
+<p align="center"><b><img src="fig46.gif" width="423"
+height="317"></b></p>
+
+<p align="center"><b>Figure 4.6</b> Double buffering of the <font
+face="Arial"><i>Tuttle</i></font> image.</p>
+
+<p><font size="2" face="Arial">Image</font> is a Java AWT class
+which effectively provides a 'window' in the computer's memory
+where an image can be stored or manipulated. The contents of an <font
+size="2" face="Arial">Image</font> can be obtained by loading a
+graphics image file, for example a <i>*.gif</i> (<b><i>G</i></b>raphics
+<b><i>I</i></b>mage <b><i>F</i></b>ormat) file from disk or from
+the Internet. Alternatively the contents of an <font size="2"
+face="Arial">Image</font> can be obtained by drawing onto it
+using a <font size="2" face="Arial">Graphics</font> context
+constructed for the purpose. Both of these techniques will be
+described below.</p>
+
+<p>The context clause of the <font size="2" face="Arial"><i>Tuttle.java</i></font>
+source code file and the declaration of its data attributes are
+as follows.</p>
+
+<pre><font size="3">0001  // Filename <i>Tuttle.java</i>.
+0002  // Providing <i>tuttle</i> (turtle) graphics capabilities by
+0003  // extending the Canvas class.
+0004  //
+0005  // Written for the Java Interface Book Chapter 4.
+0006  // Fintan Culwin, v 0.2, August 1997.
+0007  
+0008  
+0009  <b>package</b> <i>Tuttles</i>;
+0010  
+0011  <b>import</b> java.awt.*;
+0012  <b>import</b> java.applet.*;
+0013  <b>import</b> java.awt.image.*;
+0014  <b>import</b> java.lang.Math;
+0015  
+0016  <b>import</b> <i>Tuttles.TuttleCursor</i>;
+0017  
+0018  
+0019  <b>public class</b> <i>Tuttle</i> <b>extends</b> Canvas {
+0020  
+0021  <b>private static final</b> <b>int</b> <i>SCREEN_STEPS</i> = 500;
+0022  
+0023  <b>private</b> Image        <i>tuttleImage</i>;
+0024  <b>private</b> Image        <i>theCursor</i>;
+0025  <b>private</b> Graphics     <i>tuttleGraphics</i>;
+0026  <b>private</b> <i>TuttleCursor rotatingCursor</i>;
+0027  <b>private</b> Applet       <i>itsApplet</i>;
+0028  
+0029  <b>private int</b>     <i>xLocation</i> = 0;
+0030  <b>private int</b>     <i>yLocation</i> = 0;
+0031  <b>private int</b>     <i>direction</i> = 0;    // The tuttle's virtual location.
+0032  
+0033  <b>private int</b>     <i>screenX</i>   = 0;
+0034  <b>private int</b>     <i>screenY</i>   = 0;    // The tuttle's screen location.
+0035  
+0036  <b>private int</b>     <i>screenWidth</i>;
+0037  <b>private int</b>     <i>screenHeight</i>;     // The physical dimensions of the screen area.
+0038  
+0039  <b>private double</b>  <i>horizontalScale</i>;
+0040  <b>private double</b>  <i>verticalScale</i>;    // Virtual to physical conversion factors.
+0041  
+0042  <b>private boolean</b> <i>penDown</i>           = <b>true</b>;
+0043  <b>private</b> Color   <i>currentForeground</i> = Color.blue;
+0044  <b>private</b> Color   <i>currentBackground</i> = Color.yellow;</font></pre>
+
+<p>The context establishes that this class is contained within
+the <font size="2" face="Arial"><i>Tuttles</i> <b>package</b></font>
+and that it makes use of the <font size="2" face="Arial"><i>TuttleCursor</i></font>
+class from the same package. The constant <font size="2"
+face="Arial"><i>SCREEN_STEPS</i></font> is used to define the
+virtual distance between the center of the screen and the edge.
+The <font size="2" face="Arial"><i>tuttleImage</i></font>
+attribute is the Image upon which all drawing will take place in
+order to implement double buffering and the <font size="2"
+face="Arial"><i>tuttleGraphics</i></font> attribute will be used
+to draw upon it. The <font size="2" face="Arial"><i>theCursor</i></font>
+and <font size="2" face="Arial"><i>rotatingCursor</i></font>
+attributes are used to support the cursor and will be described
+below, as will the use made of the <font size="2" face="Arial"><i>itsApplet</i>
+Applet</font> attribute. </p>
+
+<hr>
+
+<blockquote>
+    <p><b><i>Design Advice</i></b> </p>
+    <p>Drawing methods should always use a virtual frame of
+    reference and translate to a physical frame of reference only
+    when absolutely required. </p>
+</blockquote>
+
+<hr>
+
+<p>The <font size="2" face="Arial"><i>xLocation</i></font>, <font
+size="2" face="Arial"><i>yLocation</i></font> and <font size="2"
+face="Arial"><i>direction</i></font> attributes define the
+location of the tuttle within the virtual space. The <font
+size="2" face="Arial"><i>screenX</i></font> and <font size="2"
+face="Arial"><i>screenY</i></font> attributes record the position
+of the tuttle on the physical screen, whose dimensions are stored
+in <font size="2" face="Arial"><i>screenWidth</i></font> and <font
+size="2" face="Arial"><i>screenHeight</i></font>. The <font
+size="2" face="Arial"><i>horizontalScale</i></font> and <font
+size="2" face="Arial"><i>verticalScale</i></font> store the
+conversion factors between the virtual and physical screen. The <font
+size="2" face="Arial"><i>currentForeground</i></font> and <font
+size="2" face="Arial"><i>currentBackground</i></font> attributes
+store the colors to be used and <i>penDown</i> the state of the
+tuttle's pen. It is the responsibility of the constructor and <font
+size="2" face="Arial"><i>addNotify()</i></font> methods to ensure
+that all of these attributes are initialized into a well defined
+state, as follows. <br>
+</p>
+
+<pre><font size="3">0046     <b>public</b> <i>Tuttle</i>( Applet <i>applet</i>, <b>int</b> <i>width</i>, <b>int</b> <i>height</i>) { 
+0047        <b>this</b>.setSize( <i>width</i>, <i>height</i>);      
+0048        <i>itsApplet</i> = <i>applet</i>;     
+0049     } // End <i>Tuttle</i> constructor.
+0050  
+0051  
+0052     <b>public void</b> <i>addNotify</i>() { 
+0053        <b>super</b>.addNotify();
+0054        <b>this</b>.<i>initialiseTuttle</i>();
+0055        <b>this</b>.<i>initialiseCursor</i>();
+0056     } // End <i>addNotify</i>.
+0057  
+0058  
+0059     <b>private void</b> <i>initialiseTuttle</i>() { 
+0060          <i>screenWidth</i>    = <b>this</b>.getSize().width;
+0061          <i>screenHeight</i>   = <b>this</b>.getSize().height;
+0062          <i>tuttleImage</i>    = <b>this</b>.createImage( <i>screenWidth</i>, <i>screenHeight</i>);
+0063          <i>tuttleGraphics</i> = <i>tuttleImage</i>.getGraphics();
+0064          <i>tuttleGraphics</i>.setColor( <i>currentBackground</i>);
+0065          <i>tuttleGraphics</i>.fillRect( 0, 0, <i>screenWidth</i>, <i>screenHeight</i>);
+0066          <i>tuttleGraphics</i>.setColor( <i>currentForeground</i>);
+0067          <i>tuttleGraphics</i>.translate( <i>screenWidth</i> /2, <i>screenHeight</i> /2);
+0068          <i>horizontalScale</i> = ((<b>double</b>) <i>screenWidth</i>  / (<b>double</b>) (<i>SCREEN_STEPS</i> * 2));
+0069          <i>verticalScale</i>   = ((<b>double</b>) <i>screenHeight</i> / (<b>double</b>) (<i>SCREEN_STEPS</i> * 2));
+0070     } // End <i>initialiseTuttle</i>.</font></pre>
+
+<p>The constructor merely sets the size of the component to the
+dimensions supplied and stores the identity of its applet. The
+remaining initialization of the <font size="2" face="Arial"><i>Tuttle</i></font>
+is deferred until the <font size="2" face="Arial"><i>addNotify()</i></font>
+method is called, after its component peer has been created. The <font
+size="2" face="Arial"><i>addNotify()</i></font> method first
+calls its parent <font size="2" face="Arial">addNotify()</font>
+method and then calls the <font size="2" face="Arial"><b>private</b></font>
+<font size="2" face="Arial"><i>initialiseTuttle()</i></font> and <font
+size="2" face="Arial"><i>initialiseCursor()</i></font> methods. </p>
+
+<p>As the component's window has been created the <font size="2"
+face="Arial"><i>initialiseTuttle()</i></font> method can
+commence, on lines 0060 and 0061, by determining the size of the
+physical drawing area. It would not be safe for the <font
+size="2" face="Arial"><i>Tuttle</i></font> simply to assume that
+the <font size="2" face="Arial">setSize()</font> method, called
+in its constructor, had obtained the dimensions requested as
+layout negotiations may have given it a different size. Once the
+size of the screen window is known, on line 0062, the <font
+size="2" face="Arial"><i>tuttleImage</i></font> is created with
+exactly the same sizes using the <font size="2" face="Arial">Component</font>
+<font size="2" face="Arial">createImage()</font> method. </p>
+
+<p>Having created an <font size="2" face="Arial">Image</font> its
+<font size="2" face="Arial">getGraphics()</font> method is used,
+on line 0063, to obtain a context for drawing onto it. Lines 0064
+to 0066 then ensure that the image is cleared to the background
+color, by drawing a filled rectangle of the background color onto
+it, and the context is prepared for drawing in the foreground
+color. Line 0067 translates the origin (0,&nbsp;0) from the top
+left hand corner of the <font size="2" face="Arial">Image</font>
+to the center of the <font size="2" face="Arial">Image</font>,
+for the convenience of the drawing methods. Finally the scaling
+factors, <font size="2" face="Arial"><i>horizontalScale</i></font>
+and <font size="2" face="Arial"><i>verticalScale</i></font>, are
+initialized to allow conversion between the virtual and physical
+locations on the screen. The implementation of the <font size="2"
+face="Arial"><i>initialiseCursor()</i></font> method will be
+considered below. </p>
+
+<p>The contents of the <font size="2" face="Arial"><i>tuttleImage</i></font>
+need to be copied to the <font size="2" face="Arial"><i>Tuttle</i></font>'s
+window whenever its <font size="2" face="Arial"><i>paint()</i></font>
+method is called in order to provide double buffering. A
+component's<font size="2" face="Arial"> paint()</font> method is
+always called by Java from the <font size="2" face="Arial">update()</font>
+method, whose default implementation, in the <font size="2"
+face="Arial">Component</font> class, will first clear the visible
+window before indirecting to the <font size="2" face="Arial">paint()</font>
+method. If the <font size="2" face="Arial">update()</font> method
+were not overridden in the <font size="2" face="Arial"><i>Tuttle</i></font>
+class this would cause the window to flicker as it is first
+cleared and immediately afterwards has the <font size="2"
+face="Arial"><i>TuttleImage</i></font> copied on to it. To avoid
+this behavior an overriding <font size="2" face="Arial"><i>update()</i></font>
+method is declared in the <font size="2" face="Arial"><i>Tuttle</i></font>
+class as an method which only calls the <font size="2"
+face="Arial"><i>Tuttle</i></font>'s <font size="2" face="Arial"><i>paint()</i></font>
+method, without first clearing the visisble window.</p>
+
+<pre><font size="3">0110     <b>public void</b> <i>update</i>( Graphics <i>systemContext</i>) { 
+0111        <b>this</b>.<i>paint</i>( <i>systemContext</i>);
+0112     } // End <i>update</i>.
+0113  
+0114     <b>public void</b> <i>paint</i>( Graphics <i>systemContext</i>) { 
+0115     
+0116     <b>int</b> <i>cursorCenterX</i>;
+0117     <b>int</b> <i>cursorCenterY</i>;
+0118  
+0119        <i>systemContext</i>.drawImage( <i>tuttleImage</i>, 0, 0, <b>this</b>);
+0120        <i>cursorCenterX</i> = ((<i>screenWidth </i>/2) + <i>screenX</i>) - 
+0121                        (<i>theCursor</i>.getWidth( <b>this</b>) /2);
+0122        <i>cursorCenterY</i> = ((<i>screenHeight</i> /2) + <i>screenY</i>) - 
+0123                        (<i>theCursor</i>.getHeight( <b>this</b>) /2);
+0124        <i>systemContext</i>.drawImage( <i>theCursor</i>,
+0125                                 <i>cursorCenterX</i>, 
+0126                                 <i>cursorCenterY</i>,
+0127                                 <b>this</b>);
+0128     } // End <i>paint</i>.</font></pre>
+
+<p>The <font size="2" face="Arial"><i>paint()</i></font> method
+commences, on line 0119, by copying the <font size="2"
+face="Arial"><i>tuttleImage</i></font> from memory into the <font
+size="2" face="Arial"><i>Tuttle</i></font>'s visible window using
+the <font size="2" face="Arial"><i>systemContext</i></font> <font
+size="2" face="Arial"><i>drawImage()</i></font> method. The four
+arguments to his call indicate the <font size="2" face="Arial">Image</font>
+to be copied, the location on the destination to place its top
+left corner; the last formal argument requires an <font size="2"
+face="Arial">ImageObserver</font> to be supplied. </p>
+
+<p>Java was intended from the outset for use on the Internet and
+the latency inherent in this environment was taken into account
+during its implementation. In particular it was designed so that
+the presentation of information would not be unnecessarily
+impeded by delays waiting for image, or other multimedia
+resources, to be downloaded or otherwise manipulated. Accordingly
+many operations on <font size="2" face="Arial">Image</font>s, and
+other comparable multimedia resources, takes place on a different
+thread from the main thread of control in Java programs. In order
+to allow synchronization of the separate threads to be achieved
+the <font size="2" face="Arial">ImageObserver</font> <font
+size="2" face="Arial">Interface</font> is supplied. This <font
+size="2" face="Arial">Interface</font> mandates methods which
+allow the main thread to determine from the subordinate thread
+the status of various operations, for example the loading or
+other time consuming manipulation, of an <font size="2"
+face="Arial">Image</font>. </p>
+
+<p>As the <font size="2" face="Arial">Component</font> class
+implements the <font size="2" face="Arial">ImageObserver</font>
+interface any AWT component can be supplied where the API
+requires an <font size="2" face="Arial">ImageObserver</font> as a
+formal argument. In the call of the <font size="2" face="Arial">drawImage()</font>
+method, on line 0119, currently being considered; the actual
+argument supplied for the fourth argument is the identity of the
+current <font size="2" face="Arial"><i>Tuttle</i></font> instance
+(<font size="2" face="Arial"><b>this</b></font>). The use of <font
+size="2" face="Arial">ImageObserver</font>s, including techniques
+for synchronization, will be continued throughout this chapter.</p>
+
+<p>The <font size="2" face="Arial"><i>Tuttle</i></font><i> </i><font
+size="2" face="Arial"><i>paint()</i></font> method continues, on
+lines 0120 to 0127, by the drawing of <font size="2" face="Arial"><i>theCursor</i></font>
+onto the window, centered at the <font size="2" face="Arial"><i>Tuttle</i></font>'s
+current (&nbsp;<font size="2" face="Arial"><i>screenX</i></font>,
+<font size="2" face="Arial"><i>screenY</i></font>) location. The
+overall effect of the <font size="2" face="Arial"><i>paint()</i></font>
+method is to show on the <font size="2" face="Arial"><i>Tuttle</i></font>'s
+window the contents of the <font size="2" face="Arial"><i>tuttleImage</i></font>
+and then superimpose upon it the cursor, which is maintained in
+the <font size="2" face="Arial"><i>theCursor</i> Image</font>.
+The only method which actually draws onto the <font size="2"
+face="Arial"><i>tuttleImage</i></font> is the <font size="2"
+face="Arial"><i>forward()</i></font> method whose implementation
+is as follows. </p>
+
+<pre><font size="3">0132     <b>public void</b> <i>forward</i>( <b>int</b> <i>steps</i>) {
+0133  
+0134     <b>int</b>    <i>possibleNewX</i>;
+0135     <b>int</b>    <i>possibleNewY</i>;
+0136     <b>int</b>    <i>localDegrees</i> = (<i>direction</i> + 270 ) % 360;
+0137     <b>double</b> <i>radians</i>      = (((<b>double</b>) <i>localDegrees</i>) / 180.0) * Math.PI;
+0138        
+0139        <i>possibleNewX</i> = <i>xLocation</i> +
+0140                 (<b>int</b>) (Math.cos( <i>radians</i>) * (<b>double</b>) <i>steps</i>);
+0141        <i>possibleNewY</i> = <i>yLocation</i> +
+0142                 (<b>int</b>) (Math.sin( <i>radians</i>) * (<b>double</b>) <i>steps</i>);
+0143  
+0144        <b>if</b> ( (<i>possibleNewX</i> &gt;= -<i>SCREEN_STEPS</i>) &amp;&amp; (<i>possibleNewX</i> &lt;= <i>SCREEN_STEPS</i>) &amp;&amp;
+0145             (<i>possibleNewY</i> &gt;= -<i>SCREEN_STEPS</i>) &amp;&amp; (<i>possibleNewY</i> &lt;= <i>SCREEN_STEPS</i>) ){
+0146             
+0147             <b>int</b> <i>NewX</i> = (<b>int</b>) ( ((<b>double</b>) <i>possibleNewX</i>) * <i>horizontalScale</i>);
+0148             <b>int</b> <i>NewY</i> = (<b>int</b>) ( ((<b>double</b>) <i>possibleNewY</i>) * <i>verticalScale</i>);
+0149             
+0150             <b>if</b> ( <i>penDown</i>) { 
+0151                <i>tuttleGraphics</i>.drawLine( <i>screenX</i>, <i>screenY</i>, <i>NewX</i>, <i>NewY</i>);
+0152             } // End if.
+0153             
+0154             <i>xLocation</i> = <i>possibleNewX</i>;
+0155             <i>yLocation</i> = <i>possibleNewY</i>;
+0156             <i>screenX</i>   = <i>NewX</i>;
+0157             <i>screenY</i>   = <i>NewY</i>;
+0158             <i>repaint</i>();
+0159        } // End if.
+0160     } // End <i>forward</i>.
+0161  
+0162     <b>public void</b> <i>backward</i>( <b>int</b> <i>steps</i>) {
+0163        <b>this</b>.<i>forward</i>( -<i>steps</i>);
+0164     } // End <i>backward</i>.</font></pre>
+
+<p>The purpose of this method is to move the <font size="2"
+face="Arial"><i>Tuttle</i></font> from its current location by
+the number of steps specified in its current direction, providing
+this will not take it outside the bounds of the screen, and
+leaving a trail if the <font size="2" face="Arial"><i>penDown</i></font>
+flag is set. The <font size="2" face="Arial"><i>Tuttle</i></font>
+is constructed so that its zero degree direction is in the
+12-o'clock position pointing to the top of the window. However,
+the <font size="2" face="Arial">Graphics</font> zero degree
+direction is in the 3-o'clock position pointing to the right of
+the window. The declaration of the local variable <font size="2"
+face="Arial"><i>localDegrees</i></font>, on line 0136, converts
+the <font size="2" face="Arial"><i>Tuttle'</i></font>s direction
+into an equivalent <font size="2" face="Arial">Graphics</font>
+direction and then line 0137 then expresses this value in radians
+rather than degrees. </p>
+
+<p>The method itself commences, on lines 0139 to 0142, with the
+calculation of the possible new virtual location; using the
+appropriate trigonometric functions from the <font size="2"
+face="Arial">Math</font> class. The <font size="2" face="Arial"><b>if
+</b></font>structure which follows is then ensures that the new
+location is within the allowed area. If so the <font size="2"
+face="Arial"><i>newX</i></font> and <font size="2" face="Arial"><i>newY</i></font>
+variables, declared local to the <font size="2" face="Arial"><b>if</b></font>
+structure, are initialized to the new screen location and, if the
+pen is down, a line is drawn from the currently recorded screen
+location to the new location. As the <font size="2" face="Arial"><i>Tuttle</i></font>
+is now known to have moved, on lines 0154 to 0157 the attributes
+which record its virtual and physical location are updated. The
+final step is to call the <font size="2" face="Arial">repaint()</font>
+method which will, in due course, cause the <font size="2"
+face="Arial">Tuttle</font>'s <font size="2" face="Arial"><i>update()</i></font>
+and hence it's <font size="2" face="Arial"><i>paint()</i></font>
+methods to be called making any new line drawn visible to the
+user and moving <font size="2" face="Arial"><i>theCursor</i></font><tt>.</tt></p>
+
+<p><font size="4" face="Times New Roman"><tt>The </tt></font><font
+size="3" face="Arial"><i><tt>backward()</tt></i></font><font
+size="4" face="Arial"><tt> </tt></font><font size="4"
+face="Times New Roman"><tt>method, on lines 0162 to 0164, is
+implemented as a call of the</tt></font><font size="4"
+face="Arial"><tt> </tt></font><font size="3" face="Arial"><i><tt>forward()</tt></i></font><font
+size="4" face="Times New Roman"><tt> method with its argument
+negated. For example moving backwards 100 steps is the same as
+moving forwards -100 steps. The implementation of the </tt></font><font
+size="3" face="Arial"><i><tt>penUp()</tt></i></font><font
+size="4" face="Times New Roman"><tt> and </tt></font><font
+size="3" face="Arial"><i><tt>penDown()</tt></i></font><font
+size="4" face="Times New Roman"><tt> methods is straightforward,
+manipulating the encapsulated</tt></font><font size="4"
+face="Arial"><tt> </tt></font><font size="3" face="Arial"><i><tt>penDown</tt></i></font><font
+size="4" face="Arial"><tt> </tt></font><font size="4"
+face="Times New Roman"><tt>attribute, as follows. </tt></font></p>
+
+<pre><font size="3">0167     <b>public void</b> <i>setPenUp</i>() {    
+0168         <i>penDown</i> = <b>false</b>;
+0169     } // End <i>setPenUp</i>. 
+0170  
+0171     <b>public void</b> <i>setPenDown</i>() {    
+0172         <i>penDown</i> = <b>true</b>;
+0173     } // End <i>setPenDown</i>. 
+</font></pre>
+
+<p>The implementation of the <font size="2" face="Arial"><i>turnRight()</i></font>
+and <font size="2" face="Arial"><i>turnLeft()</i></font> methods
+are as follows.</p>
+
+<pre><font size="3">0177     <b>public void</b> <i>turnRight</i>( <b>int</b> <i>degrees</i>) {
+0178        <i>direction</i> += <i>degrees</i>;
+0179        <b>while</b> ( <i>direction</i> &lt; 0) { 
+0180           <i>direction</i> += 360;
+0181        } // End while.
+0182        <i>direction</i> %= 360;
+0183        <i>theCursor</i> = <i>rotatingCursor</i>.<i>rotate</i>( <i>direction</i>);
+0184        <i>repaint</i>();
+0185     } // End <i>turnRight</i>.
+0186  
+0187     <b>public void</b> <i>turnLeft</i>( <b>int</b> <i>degrees</i>) {
+0188        <i>turnRight</i>( -<i>degrees</i>);
+0189     } // End <i>turnLeft</i>.</font></pre>
+
+<p>The <font size="2" face="Arial"><i>turnLeft()</i></font>
+method is implemented as a call of the <font size="2"
+face="Arial"><i>turnRight()</i></font> method passing the negated
+value of its argument. For example turning left 30<sup>o</sup> is
+the same as turning right -30<sup>o</sup>. The first part of the <font
+size="2" face="Arial"><i>turnRight()</i></font> method is to add
+the number of <font size="2" face="Arial"><i>degrees</i></font>
+to turn to the current <font size="2" face="Arial"><i>direction</i></font>.
+As a left turn is implemented as a negative right turn, the value
+of <font size="2" face="Arial"><i>direction</i></font> may become
+negative so the loop on lines 0179 to 0181 ensures that an
+equivalent positive value in the range 0 to 359 is obtained.
+Likewise a right turn may take the value of direction above 359
+so the modular division on line 0182 constrains it to the
+equivalent 0 to 359 value. On line 0183 <font size="2"
+face="Arial"><i>theCursor</i></font> is recreated to reflect the
+new <font size="2" face="Arial"><i>direction</i></font> and
+finally the <font size="2" face="Arial">repaint()</font> method
+is called to ensure that the new cursor is visible to the user. </p>
+
+<p>The implementation of the <font size="2" face="Arial"><i>clearTuttleArea()</i></font>,
+<font size="2" face="Arial"><i>resetTuttle()</i></font> and <font
+size="2" face="Arial"><i>clearAndReset()</i></font> methods are
+as follows. </p>
+
+<pre><font size="3">0193     <b>public void</b> <i>clearTuttleArea</i>() { 
+0194          <i>tuttleGraphics</i>.setColor( <i>currentBackground</i>);
+0195          <i>tuttleGraphics</i>.fillRect( -( <i>screenWidth</i>/2),
+0196                                   -( <i>screenHeight</i>/2), 
+0197                                   <i>screenWidth</i>, <i>screenHeight</i>);
+0198          <i>tuttleGraphics</i>.setColor( <i>currentForeground</i>); 
+0199          <b>this</b>.repaint();     
+0200     } // End <i>clearTuttleArea</i>.
+0201  
+0202     <b>public void</b> <i>resetTuttle</i>() { 
+0203        <i>xLocation</i> = 0;
+0204        <i>yLocation</i> = 0;   
+0205        <i>screenX</i>   = 0;
+0206        <i>screenY</i>   = 0;
+0207        <i>direction</i> = 0;
+0208        <i>theCursor</i> = <i>rotatingCursor</i>.<i>rotate</i>( <i>direction</i>);
+0209        <b>this</b>.repaint();
+0210     } // End <i>resetTuttle</i>.
+0211  
+0212     <b>public void</b> <i>clearAndReset</i>() { 
+0213        <b>this</b>.<i>resetTuttle</i>();
+0214        <b>this</b>.<i>clearTuttleArea</i>();
+0215     } // End <i>clearAndReset</i>;   </font></pre>
+
+<p>On lines 0194 to 0198, the <font size="2" face="Arial"><i>Tuttle</i></font>
+area is cleared by filling it with a solid rectangle of the <font
+size="2" face="Arial"><i>currentBackground</i></font> color. As
+the <font size="2" face="Arial"><i>tuttleGraphics</i></font>
+context is used for this and as its origin has been transposed to
+the center of the <font size="2" face="Arial">Image</font>, the
+upper left hand corner of the rectangle has be re-transposed to
+the upper left corner of the image. When the context has had its
+drawing color restored to the <font size="2" face="Arial"><i>currentForeground</i></font>
+color, the <font size="2" face="Arial"><i>Tuttle</i></font>'s <font
+size="2" face="Arial">repaint()</font> method is called to make
+the cleared image visible. </p>
+
+<p>The <font size="2" face="Arial"><i>resetTuttle()</i></font>
+method resets the appropriate <font size="2" face="Arial"><i>Tuttle</i></font>
+attributes and then creates a new cursor, as the direction to be
+indicated by it may have changed, and <font size="2" face="Arial"><i>repaint</i></font>s
+the image onto the screen. The <font size="2" face="Arial"><i>clearAndReset()</i></font>
+method is implemented as calls of the <font size="2" face="Arial"><i>resetTuttle()</i></font>
+and <font size="2" face="Arial"><i>clearTuttleArea()</i></font>
+methods. </p>
+
+<p>The <font size="2" face="Arial"><i>setForeground()</i></font>
+method stores the current color, changes the current color of the
+<font size="2" face="Arial"><i>tuttleGraphics</i></font> context,
+changes the color of the of the <font size="2" face="Arial"><i>rotatingCursor</i></font>
+instance and obtains a new cursor, before finally calling the <font
+size="2" face="Arial">repaint()</font> method to show the new
+cursor.</p>
+
+<pre><font size="3">0219     <b>public void</b> <i>setForeground</i>( Color <i>newColor</i>) { 
+0220        <i>currentForeground</i> = <i>newColor</i>;
+0221        <i>tuttleGraphics</i>.setColor( <i>currentForeground</i>);
+0222        <i>rotatingCursor</i>.<i>setCursorColor</i>( <i>newColor</i>);
+0223        <i>theCursor</i> = <i>rotatingCursor</i>.<i>rotate</i>( <i>direction</i>);
+0224        <b>this</b>.repaint();  
+0225     } // End <i>setForeground</i>.</font></pre>
+
+<p>The implementation of the <font size="2" face="Arial"><i>setBackground()</i></font>
+method is more complex and will be considered when the <font
+size="2" face="Arial"><i>TuttleCursor</i></font> class is
+considered below. The final method of the <font size="2"
+face="Arial"><i>Tuttle</i></font> class is the <font size="2"
+face="Arial"><i>getDetails()</i></font> method whose
+implementation is as follows. </p>
+
+<pre><font size="3">0288     <b>public</b> String <i>getDetails</i>() { 
+0289  
+0290     StringBuffer <i>buffer</i> = <b>new</b> StringBuffer();
+0291
+0292         <i>buffer</i>.append(  &quot;x : &quot;  + <i>xLocation</i> + 
+0293                        &quot; y : &quot; + (<i>yLocation</i> * -1) + 
+0294                        &quot; d : &quot; + <i>direction</i>);
+0295         <b>if</b> ( <i>penDown</i>) { 
+0296            <i>buffer</i>.append( &quot; pen down&quot;);
+0297         } <b>else</b> { 
+0298            <i>buffer</i>.append( &quot; pen up&quot;);
+0299         } // End if.                      
+0300         <b>return</b> <i>buffer</i>.toString();
+0301     } // End <i>getDetails</i>.</font></pre>
+
+<p>On line 0293 the <font size="2" face="Arial"><i>yLocation</i></font>
+value has to be multiplied by -1 as, in the <font size="2"
+face="Arial">Graphics</font> frame of reference, y values
+increase down the area whilst they increase up the area in the <font
+size="2" face="Arial"><i>Tuttle</i></font>'s frame of reference,
+as shown in Figure 4.3. Thus, when the <font size="2"
+face="Arial"><i>Tuttle</i></font> is above the midpoint of the
+screen it will have a negative <font size="2" face="Arial">Graphics</font>
+value which has to be reported as the equivalent positive value
+by the <font size="2" face="Arial"><i>Tuttle</i></font>.</p>
+
+<hr>
+
+<blockquote>
+    <p><a href="tuttles\tuttle.java"><font size="5"><img
+    src="list.gif" align="middle" border="0" width="40"
+    height="35"> Tuttle.java</font></a></p>
+</blockquote>
+
+<hr>
+
+<blockquote>
+    <p><a href="ch44.html"><img src="next.gif" align="middle"
+    border="0" width="50" height="40"><font size="5">4.4 The </font><font
+    size="5" face="Arial"><i>TuttleCursor</i></font><font
+    size="5"> class</font></a></p>
+    <p><a href="ch42.html"><font size="4"><img src="last.gif"
+    align="middle" border="0" width="50" height="40"></font><font
+    size="5">4.2 The</font> <font size="5" face="Arial">Graphics</font><font
+    size="6"> </font><font size="5">and</font><font size="6"> </font><font
+    size="5" face="Arial">Color</font><font size="6"> </font><font
+    size="5">classes</font></a></p>
+</blockquote>
+
+<hr>
+</body>
+</html>

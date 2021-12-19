@@ -1,0 +1,369 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Calling Java Methods</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="array.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="field.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=bottom border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Interacting with Java from the Native Side</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Calling Java Methods
+</h2>
+<p>
+<blockquote>
+
+<p> This section illustrates how to call Java methods from native language 
+methods. Our example program, <a href=http://docs.rinet.ru/Jtuta/native1.1/implementing/example-1dot1/Callbacks.java><code>Callbacks.java</code></a>, invokes a native
+method. The native method then makes a call back to a Java method. To
+make things a little more interesting, the Java method again
+(recursively) calls the native method. This process continues until
+the recursion is five levels deep, at which time the Java method returns
+without making any more calls to the native method. To help you see this, the Java method
+and the native method print a sequence of tracing information.
+
+<h4>Calling a Java Method from Native Code</h4>
+
+To see how native code calls a Java method, let us focus on the implementation of
+<code>Callbacks_nativeMethod</code>, which is implemented in <a href=http://docs.rinet.ru/Jtuta/native1.1/implementing/example-1dot1/Callbacks.c><code>Callbacks.c</code></a>.  This native method contains a call back to the
+Java method <code>Callbacks.callback</code>.
+
+<blockquote>
+<pre>
+JNIEXPORT void JNICALL
+Java_Callbacks_nativeMethod(JNIEnv *env, jobject obj, jint depth)
+{
+    jclass cls = (*env)->GetObjectClass(env, obj);
+    jmethodID mid = (*env)->GetMethodID(env, cls, "callback", "(I)V");
+    if (mid == 0) {
+        return;
+    }
+    printf("In C, depth = %d, about to enter Java\n", depth);
+    (*env)->CallVoidMethod(env, obj, mid, depth);
+    printf("In C, depth = %d, back from Java\n", depth);
+}
+</pre>
+</blockquote>
+
+
+You can call an instance method by following these three steps:
+
+<ol>
+
+<li>Your native method calls the JNI function <code>GetObjectClass</code>, which returns the Java class object that is the type of 
+the Java object.
+
+<li>Your native method then calls the JNI function <code>GetMethodID</code>, which performs a lookup for the Java method in
+a given class. The lookup is based on the name of the method as well
+as the method signature. If the method does not exist,
+<code>GetMethodID</code> returns zero (0).  An immediate return from the
+native method at that point causes a
+<code>NoSuchMethodError</code> to be thrown in the Java application code.
+
+<li> Lastly, your native method calls the JNI function <code>CallVoidMethod</code>.  The <code>CallVoidMethod</code> function invokes an instance method that has
+<code>void</code> return type. You pass the object, method ID, and the actual
+arguments to <code>CallVoidMethod</code>.
+
+</ol>
+
+<h4>Forming the Method Name and Method Signature</h4>
+
+<p>The JNI performs a symbolic lookup based on the method's name and
+type signature. This ensures that the same native method will work
+even after new methods have been added to the corresponding Java 
+class.
+
+<p> The method name is the Java method name in UTF-8 form. Specify the
+ constructor of a class by enclosing the word
+<code>init</code> within angle brackets (this appears as "&lt;init&gt;").
+
+<p>
+Note that the JNI uses the method signature to denote the return type of a Java 
+method. The signature <code>(I)V</code>, for example, denotes a Java 
+method that takes one argument of type <code>int</code> and has a return
+type <code>void</code>.  The general form of a method signature argument is:
+
+<blockquote>
+<pre>
+"(argument-types)return-type"
+</blockquote>
+</pre>
+
+<p>
+The following table summarizes the encoding
+for the Java type signatures:
+
+<blockquote>
+<h5>Java VM Type Signatures</h5>
+<table border=1>
+  <tr>
+     <td>Signature<td> Java Programming Language Type</td> 
+  </tr>
+     <td><code>Z</code><td> <code>boolean</code> </td> 
+  </tr>
+     <td><code>B</code><td> <code>byte</code></td> 
+  </tr>
+     <td><code>C</code><td> <code>char</code></td> 
+  </tr>
+     <td><code>S</code><td> <code>short</code></td> 
+  </tr>
+     <td><code>I</code><td> <code>int</code></td> 
+  </tr>
+     <td><code>J</code><td> <code>long</code></td> 
+  </tr>
+     <td><code>F</code><td> <code>float</code></td> 
+  </tr>
+     <td><code>D</code><td> <code>double</code></td> 
+  </tr>
+               <td> <code>L</code> fully-qualified-class;   <td>  fully-qualified-class </td>
+  </tr>
+     <td><code>[</code> <i>type</i><td> <i>type</i><code>[]</code></td> 
+  </tr>
+     <td><code>(</code> arg-types <code>)</code> ret-type<td>  method type</td> 
+  </tr>
+</table>
+</blockquote>
+</font>
+
+<p>
+For example, the <code>Prompt.getLine</code> method has the signature:
+
+<blockquote>
+<pre>
+(Ljava/lang/String;)Ljava/lang/String;
+</pre>
+</blockquote>
+
+<code>Prompt.getLine</code> takes one parameter, a Java <code>String</code> object, and the method type is also <code>String</code>. 
+<p>
+The <code>Callbacks.main</code> method has the signature:
+
+<blockquote>
+<pre>
+([Ljava/lang/String;)V
+</pre>
+</blockquote>
+
+The signature indicates that the <code>Callbacks.main</code> method takes one parameter, a Java <code>String</code> object, and the method type is void. 
+
+<p>Array types are indicated by a leading square bracket ([) followed
+by the type of the array elements.
+
+<h4>
+Using <code>javap</code> to Generate Method Signatures</h4>
+
+<p>
+The Java class file disassembler tool, <code>javap</code>, helps you to eliminate the mistakes that can occur when deriving method signatures by hand.  You can use the <code>javap</code> tool to print out member variables and method signatures for specified classes. Run the <code>javap</code> tool with the options <code>-s</code> and <code>-p</code> and give it the name of a Java class, as follows:
+
+<blockquote>
+<pre>
+javap -s -p Prompt
+</pre>
+</blockquote>
+<p>
+This gives you the following output:
+
+<blockquote>
+<pre>
+Compiled from Prompt.java
+class Prompt extends java.lang.Object 
+    /* ACC_SUPER bit set */
+{
+    private native getLine (Ljava/lang/String;)Ljava/lang/String;
+    public static main ([Ljava/lang/String;)V
+    &lt;init&gt; ()V
+    static &lt;clinit&gt; ()V
+}
+</pre>
+</blockquote>
+
+<p> The "-s" flag informs <code>javap</code> to output signatures rather than
+normal Java types.  The "-p" flag instructs <code>javap</code> to include private members.  
+
+<h4>Calling Java Methods Using Method IDs</h4>
+
+<p> When you invoke a method in the JNI, you pass the method ID to the actual method invocation
+function. Obtaining a method ID is a relatively expensive operation.  Because you obtain the method ID separately from the method invocation, you need only perform this operation once. Thus, it is possible to first obtain the method ID one time and then use the method ID many times at later points to invoke
+the same method.
+
+<p>It is important to keep in mind that <em> a method ID is valid only
+for as long as the class from which it is derived is not unloaded.</em> Once
+the class is unloaded, the method ID becomes invalid. As a result, if you want
+to cache the method ID, be sure to keep a live reference to the Java  
+class from which the method ID is derived. As long as the reference to
+the Java class (the <code>jclass</code> value) exists, the native code keeps a live
+reference to the class. The section <a href=refs.html>Local and Global References</a> explains how to keep a live reference even after
+the native method returns and the <code>jclass</code> value goes out of
+scope.
+
+<h4>Passing Arguments to Java Methods</h4>
+
+<p> The JNI provides several ways to pass arguments to a Java method.
+Most often, you pass the arguments following the method ID. There are
+also two variations of method invocation functions that take arguments
+in an alternative format. For example, the <code>CallVoidMethodV</code> function
+receives all its arguments in one <code>va_list</code> type argument. A <code>va_list</code> type is a special C type that allows a C function to accept a variable number of arguments.  The
+<code>CallVoidMethodA</code> function expects the arguments in an array of
+<code>jvalue</code> union types.  The array of <code>jvalue</code> union types are as follows:
+
+<blockquote>
+<pre>
+typedef union jvalue {
+    jboolean z;
+    jbyte    b;
+    jchar    c;
+    jshort   s;
+    jint     i;
+    jlong    j;
+    jfloat   f;
+    jdouble  d;
+    jobject  l;
+} jvalue;
+</pre>
+</blockquote>
+
+<p> In addition to the <code>CallVoidMethod</code> function, the JNI also supports instance
+method invocation functions with other return types, such as
+<code>CallBooleanMethod</code>, <code>CallIntMethod</code>, and so on. The return type of the method
+invocation function must match with the type of the Java method you wish to
+invoke.
+
+<h4>Calling Class Methods</h4>
+
+You can call a Java class method from your native code in a similar manner to calling an instance method.  Call a class method by following these steps:
+
+<ul> <li>Obtain the method ID using the JNI function <code>GetStaticMethodID</code> rather than the function <code>GetMethodID</code>.
+
+<li>Pass the class, method ID, and arguments to the family of class
+method invocation functions: <code>CallStaticVoidMethod</code>,
+<code>CallStaticBooleanMethod</code>, and so on.
+
+</ul>
+
+If you compare instance method invocation functions to class method invocation functions, you will notice that instance method invocation functions receive
+the <em>object</em>, rather than the class, as the second argument
+following the <code>JNIEnv</code> argument. For example, suppose we add a <code>incDepth</code> class method into <code>Callback.java</code>. 
+
+<blockquote>
+<pre>
+    static int incDepth(int depth) {return depth + 1};
+</pre>
+</blockquote>
+
+ We can call this class method <code>incDepth</code> from <code>Java_Callback_nativeMethod</code>
+using the following JNI functions:
+
+<blockquote>
+<pre>
+JNIEXPORT void JNICALL
+Java_Callbacks_nativeMethod(JNIEnv *env, jobject obj, jint depth)
+{
+    jclass cls = (*env)->GetObjectClass(env, obj);
+    jmethodID mid = (*env)->GetStaticMethodID(env, cls, "incDepth", "(I)I");
+    if (mid == 0) {
+        return;
+    }
+    depth = (*env)->CallStaticIntMethod(env, cls, mid, depth);
+    ...
+</pre>
+</blockquote>
+
+
+<h4>Calling Instance Methods of a Superclass</h4>
+
+You can call instance methods defined in a superclass that have
+been overridden in the class to which the object belongs. The JNI provides a set
+of <code>CallNonvirtual&lt;type&gt;Method</code> functions for this purpose.  To call instance methods from the superclass that defined them, you do the following:
+
+<ul>
+
+<li>Obtain the method ID from the superclass using <code>GetMethodID</code> rather than <code>
+GetStaticMethodID</code>.
+
+<li>Pass the object, superclass, method Id, and arguments to the
+family of nonvirtual invocation functions: <code>CallNonvirtualVoidMethod</code>,
+<code>CallNonvirtualBooleanMethod</code>, and so on.
+
+</ul>
+
+It is rare that you will need to invoke the instance methods of a
+superclass. This facility is similar to calling a superclass method,
+such as <code>f</code>, in Java using the following construct:
+
+<blockquote>
+<pre>
+super.f();
+</pre>
+</blockquote>
+
+
+</blockquote>
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="array.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="field.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=top border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Interacting with Java from the Native Side</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>
+

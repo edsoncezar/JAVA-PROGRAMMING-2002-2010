@@ -1,0 +1,241 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>The JarClassLoader Class</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="jarrunner.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="JAR Files | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Using JAR-related APIs Introduced in 1.2</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    The JarClassLoader Class
+</h2>
+<p>
+<blockquote>
+
+The <tt>JarClassLoader</tt> class extends <tt>jar.net.URLClassLoader</tt>, 
+a new class in version 1.2 of the Java<font size="-2"><sup>TM</sup></font> 
+platform. As its name implies, <tt>URLClassLoader</tt> is designed to be 
+used for loading classes and resources that are accessed by searching a 
+set of URLs.  The URLs can refer either to directories or to JAR files. 
+<p>
+In addition to subclassing <tt>URLClassLoader</tt>, <tt>JarClassLoader</tt> 
+also makes use of features in two other new JAR-related APIs, the 
+<tt>java.util.jar</tt> package and the <tt>java.net.JarURLConnection</tt> 
+class. In this section, we'll look in detail at the constructor and two 
+methods of <tt>JarClassLoader</tt>.
+<p>
+<h3>The JarClassLoader Constructor</h3>
+<blockquote>
+The contructor takes an instance of <tt>java.net.URL</tt> as an 
+argument. The URL passed to this constructor will be used elsewhere in 
+<tt>JarClassLoader</tt> to find the JAR file from which classes are to 
+be loaded.
+<blockquote><pre>
+public JarClassLoader(URL url) {
+    super(new URL[] { url });
+    this.url = url;
+}
+</pre></blockquote>
+The <tt>URL</tt> object is passed to the constructor of the 
+superclass, <tt>URLClassLoader</tt>, which takes a <tt>URL[]</tt> array, 
+rather than a single <tt>URL</tt> instance, as an argument. 
+</blockquote>
+
+<h3>The getMainClassName Method</h3>
+<blockquote>
+Once a <tt>JarClassLoader</tt> object is constructed with the URL of 
+a JAR-bundled application, it's going to need a way to determine which 
+class in the JAR file is the application's entry point.  That's the 
+job of the <tt>getMainClassName</tt> method:
+<blockquote><pre>
+public String getMainClassName() throws IOException {
+    URL u = new URL("jar", "", url + "!/");
+    JarURLConnection uc = (JarURLConnection)u.openConnection();
+    Attributes attr = uc.getMainAttributes();
+    return attr != null ? attr.getValue(Attributes.Name.MAIN_CLASS) : null;
+}
+</pre></blockquote>
+You may recall from a <a href="..\basics\run.html#1.2">previous lesson</a> 
+that a JAR-bundled application's entry point is specified by the 
+<tt>Main-Class</tt> header of the JAR file's manifest. To understand how 
+<tt>getMainClassName</tt> accesses the <tt>Main-Class</tt> header value, 
+let's look at the method in detail, paying special attention to the 
+new JAR-handling features that it uses:
+
+<h4>The JarURLConnection class and JAR URLs</h4>
+The <tt>getMainClassName</tt> method uses the JAR URL format specified 
+by the <tt>java.net.JarURLConnection</tt> class. The syntax for the URL 
+of a JAR file is as in this example:
+<blockquote><pre>
+jar:http://www.xxx.yyy/jarfile.jar!/
+</pre></blockquote>
+The terminating <tt>!/</tt> separator indicates that the URL refers to 
+an entire JAR file.  Anything following the separator refers to 
+specific JAR-file contents, as in this example: 
+<blockquote><pre>
+jar:http://www.xxx.yyy/jarfile.jar!/mypackage/myclass.class</tt>
+</pre></blockquote>
+<p>
+The first line in the <tt>getMainClassName</tt> method is:
+<blockquote><pre>
+URL u = new URL("jar", "", url + "!/");
+</pre></blockquote>
+This statement contructs a new <tt>URL</tt> object representing a JAR URL, 
+appending the <tt>!/</tt> separator to the URL that was used in creating the 
+<tt>JarClassLoader</tt> instance.
+
+<h4>The java.net.JarURLConnection class</h4>
+This is a new class in the 1.2 platform that represents a communications 
+link between an application and a JAR file. It has methods for accessing 
+the JAR file's manifest. The second line 
+of <tt>getMainClassName</tt> is:
+<blockquote><pre>
+JarURLConnection uc = (JarURLConnection)u.openConnection();
+</pre></blockquote>
+In this statement, <tt>URL</tt> instance created in the first line opens a 
+<tt>URLConnection</tt>. The <tt>URLConnection</tt> instance is then cast 
+to <tt>JarURLConnection</tt> so it can take advantage of 
+<tt>JarURLConnection</tt>'s JAR-handling features.
+
+
+<h4>Fetching Manifest Attributes: java.util.jar.Attributes</h4>
+With a <tt>JarURLConnection</tt> open to a JAR file, you can access 
+the header information in the JAR file's manifest by using 
+the <tt>getMainAttributes</tt> method of <tt>JarURLConnection</tt>. This 
+method returns an instance of <tt>java.util.jar.Attributes</tt>, a new 
+class in the 1.2 platform that maps header names in JAR-file manifests 
+with their associated string values. The third line in 
+<tt>getMainClassName</tt> creates an <tt>Attributes</tt> object:
+<blockquote><pre>
+Attributes attr = uc.getMainAttributes();
+</pre></blockquote>
+<p>
+To get the value of the manifest's <tt>Main-Class</tt> header, 
+the fourth line of <tt>getMainClassName</tt> invokes the 
+<tt>Attributes.getValue</tt> method:
+<blockquote><pre>
+return attr != null ? attr.getValue(Attributes.Name.MAIN_CLASS) : null;
+</pre></blockquote>
+The method's argument, <tt>Attributes.Name.MAIN_CLASS</tt>, specifies 
+that it's the value of the <tt>Main-Class</tt> header that you want.  
+(The <tt>Attributes.Name</tt> class also provides static fields such 
+as <tt>MANIFEST_VERSION</tt>, <tt>CLASS_PATH</tt>, and <tt>SEALED</tt> 
+for specifying other standard manifest headers.)
+</blockquote>
+
+<h3>The invokeClass Method</h3>
+<blockquote>
+We've seen how <tt>JarURLClassLoader</tt> can identify the main class 
+in a JAR-bundled application.  The last method to consider,  
+<tt>JarURLClassLoader.invokeClass</tt>, enables that main 
+class to be invoked to launch the JAR-bundled application:
+<blockquote><pre>
+public void invokeClass(String name, String[] args)
+    throws ClassNotFoundException,
+           NoSuchMethodException,
+           InvocationTargetException
+{
+    Class c = loadClass(name);
+    Method m = c.getMethod("main", new Class[] { args.getClass() });
+    m.setAccessible(true);
+    int mods = m.getModifiers();
+    if (m.getReturnType() != void.class || !Modifier.isStatic(mods) ||
+        !Modifier.isPublic(mods)) {
+        throw new NoSuchMethodException("main");
+    }
+    try {
+        m.invoke(null, new Object[] { args });
+    } catch (IllegalAccessException e) {
+        // This should not happen, as we have disabled access checks
+    }
+}
+</pre></blockquote>
+<p>
+The <tt>invokeClass</tt> method takes two arguments: the name of the 
+application's entry-point class and an array of string arguments to 
+pass to the entry-point class's <tt>main</tt> method.  First, the 
+main class is loaded: 
+<blockquote><pre>
+Class c = loadClass(name);
+</pre></blockquote>
+The <tt>loadClass</tt> method is inherited from 
+<tt>java.lang.ClassLoader</tt>.
+<p>
+Once the main class is loaded, the reflection API of the 
+<tt>java.lang.reflect</tt> package is used to pass the arguments to 
+the class and launch it. You can refer to the tutorial on 
+<a href="..\..\reflect\index.html">The Reflection API</a> for a 
+review of reflection. 
+</blockquote>
+
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="index.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="jarrunner.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="JAR Files | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Using JAR-related APIs Introduced in 1.2</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>
+

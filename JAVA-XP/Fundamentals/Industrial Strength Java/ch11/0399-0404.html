@@ -1,0 +1,385 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0394-0398.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0405-0409.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-399"><P>Page 399</P></A>
+
+
+
+<P><a href="images\ch11fg05.jpg"><img src="images\tn_ch11fg05.jpg"></a><BR>
+Figure 11.5
+Use of TCP/UDP ports on clients and servers.
+</P>
+
+<H4><A NAME="ch11_ 18">
+ClientHandler Class
+</A></H4>
+
+<P>The ClientHandler abstract class works as the base for all classes that implement
+server functions. ClientHandler implements Runnable to allow your handlers to run as
+separate threads. Among other functions, the abstract class maintains a reference to the
+connection. The definition of ClientHandler follows:
+</P>
+
+<PRE>
+  abstract public class ClientHandler implements Runnable {
+    Socket connection;
+
+    public ClientHandler(Socket connection) {
+    this.connection = connection;
+    }
+
+    abstract public void run();
+  }
+</PRE>
+
+<A NAME="PAGENUM-400"><P>Page 400</P></A>
+
+
+
+<H3><A NAME="ch11_ 19">
+SimpleServer and ThreadedServer
+</A></H3>
+
+<P>You construct two subclasses of Server: a simple version that
+serves only one client at a time, and a multithread, multiclient version.
+</P>
+
+<H4><A NAME="ch11_ 20">
+SimpleServer
+</A></H4>
+
+<P>The first subclass of Server is a SimpleServer loop that handles
+one client at a time. This limited function is appropriate for
+infrequently used services, quickly responding services, or services that
+are inherently single-tasking because of limitations in the
+underlying system. For example, a server that accesses a single-user
+database package or single-user physical devices must prevent
+multiple threads from making concurrent requests. The easiest way to
+prevent concurrent access is to handle one client at a time. As with
+all Servers, the SimpleServer instance contains a reference to a
+specific type of factory:
+</P>
+<PRE>
+  class SimpleServer extends Server {
+    public SimpleServer(ClientHandlerFactory factory)
+ {
+    super(factory);
+    }
+</PRE>
+<P>
+<B>
+Using the ServerSocket
+</B>
+</P>
+<P>Your run() method contains the code to both create the ServerSocket and to wait for
+a connection from the client. After the connection occurs, call the clientFactory to create
+the handler object. ClientHandlers implement Runnable() so that you can call their
+run() method to service the client. After the handling is complete, loop back and wait
+for another connection:
+</P>
+
+<PRE>
+    public void run() {
+    ClientHandler handler;
+    running = true;
+    try {
+      listener = new ServerSocket(clientFactory.serverPort());
+      while (running) {
+        Socket connection = listener.accept();
+        if (!running)
+</PRE>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The Jeeves Server base class from JavaSoft is a
+combination of several classes you are developing. Instead
+of using a separate factory object, you subclass the Server
+in Jeeves to provide the factory function. The Jeeves Server
+class implements the ThreadedServer model of
+multiple handler threads and automatically
+creates, if necessary, a separate thread to run the handler.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+<A NAME="PAGENUM-401"><P>Page 401</P></A>
+
+
+
+
+<PRE>
+          return;
+        if (connection == null)
+          continue;
+        handler = clientFactory.createClientHandler(connection);
+        if (handler == null) {
+          connection.close();
+          continue;
+          }
+        handler.run();
+      }
+    }
+</PRE>
+<P>
+<B>
+Catching and Logging Exceptions
+</B>
+</P>
+<P>Of course, you should catch and log all exceptions. The &quot;finally&quot; clause guarantees
+that the ServerSocket closes if the server exits for any reason:
+</P>
+
+<PRE>
+    catch (Exception e) {
+      System.out.println(e);
+    }
+    finally {
+      try {
+        listener.close();
+      }
+      catch (IOException e) {
+      }
+    }
+    }
+
+  }
+</PRE>
+
+<P>A SimpleServer can handle only one client at a time. If other clients attempt to connect
+to the service when it is in use, the system queues or refuses the connection requests.
+</P>
+
+<H4><A NAME="ch11_ 21">
+Serving Multiple Concurrent Clients
+</A></H4>
+
+<P>The other subclass of Server is a multithreaded version that can handle multiple
+concurrent requests. This subclass creates a thread to run the handler for each new
+connection. Multithreading works well in building applications and applets, but it is essential
+in building servers. The SimpleServer approach suffices for some simple, quick services,
+but general servers must be prepared to provide service concurrently to clients throughout
+the Internet.
+</P>
+
+<A NAME="PAGENUM-402"><P>Page 402</P></A>
+
+
+
+<P>To limit the load placed on the system, and to ensure satisfactory service for all
+clients, servers generally impose a limit on the number of simultaneous connections
+allowed. Create a ThreadedServer with a factory and the maximum number of allowed threads,
+as follows:
+</P>
+
+<PRE>
+  public class ThreadedServer extends Server {
+    ThreadGroup group;
+    int maxThreads;
+    int activeEstimate;
+
+    public ThreadedServer(ClientHandlerFactory factory) {
+    this(factory, 10);
+    }
+
+    public ThreadedServer(ClientHandlerFactory factory, int maxThreads)
+{
+    super(factory);
+    this.maxThreads = maxThreads;
+    }
+</PRE>
+<P>
+<B>
+Monitoring Thread Activity
+</B>
+</P>
+
+<P>Use a ThreadGroup to keep track of the threads created to handle clients.
+Call activeCount() to determine how many threads are currently active as defined by
+the system:
+</P>
+
+<PRE>
+    int activeCount() {
+    if (group != null) {
+      activeEstimate = group.activeCount();
+      return activeEstimate;
+    }
+    else
+      return 0;
+    }
+</PRE>
+<P>
+<B>
+Handling New Connections
+</B>
+</P>
+<P>As with all servers, a ServerSocket waits for clients to connect. When a client
+connects, check to see whether you are already handling the maximum number of allowed
+connections. Instead of tracking the actual number of active threads at any given time,
+the estimate counts thread creation, not death. You should correct your estimate when
+you reach the maximum threshold. If you have not reached the maximum thread limit, you
+can create a new handler and a new thread to run the handler code:
+</P>
+
+<A NAME="PAGENUM-403"><P>Page 403</P></A>
+
+
+<PRE>
+    public void run() {
+    group = new ThreadGroup(Thread.currentThread().getName());
+    activeEstimate = 0;
+    running = true;
+    try {
+      listener = new ServerSocket(clientFactory.serverPort());
+      while (running) {
+        Socket connection = listener.accept();
+        if (!running)
+          return;
+        if (connection == null)
+          continue;
+        if (activeEstimate &gt;= maxThreads) {
+          activeEstimate = group.activeCount();
+          if (activeEstimate &gt;= maxThreads) {
+            connection.close();
+            continue;
+          }
+        }
+        ClientHandler clientHandler =
+                &Acirc;clientFactory.createClientHandler(connection);
+        if (clientHandler == null) {
+          connection.close();
+          continue;
+        }
+</PRE>
+<P>
+<B>
+Creating Client-Handling Threads
+</B>
+</P>
+<P>To determine the thread that handles each client, use the string representation of
+the connection as the name of the thread. Because you assign all handler threads into a
+group and define a meaningful name for each thread, use the most general Thread constructor:
+</P>
+
+<PRE>
+        Thread t = new Thread(group, clientHandler,
+                &Acirc;connection.toString());
+        activeEstimate++;
+        t.start();
+        connection = null;
+        clientHandler = null;
+        t = null;
+      }
+      }
+    catch (Exception e) {
+      System.out.println(e);
+    }
+</PRE>
+
+<A NAME="PAGENUM-404"><P>Page 404</P></A>
+
+
+
+<B>
+Closing ServerSockets
+</B>
+
+<P>As before, make sure to close the ServerSocket before exiting:
+</P>
+
+<PRE>
+    finally {
+      try {
+        listener.close();
+      }
+      catch (IOException e) {
+      }
+    }
+    }
+
+  }
+</PRE>
+
+<P>Note that your application still services only one client between
+the time the ServerSocket.accept() returns (indicating that a
+connection has been established) and the time it calls accept() again.
+Although most TCP implementations temporarily queue connection
+requests in order to give the server code time to call accept() again,
+you should do as little processing as possible in this loop to
+prevent unnecessarily rejected connections. The code creating the input
+and output streams, for example, belongs in the first few lines of
+the ClientHandler's run() method and executes on the new thread.
+</P>
+
+<H3><A NAME="ch11_ 22">
+HTTPHandler Class
+</A></H3>
+
+<P>Because of its general nature and wide-spread browser support, HTTP is a good
+base client/server protocol for many customized applications. These custom servers are
+based on the generic HTTPHandler class, which provides basic HTTP operation. Later in
+this chapter, you will build two custom HTTP servers as part of the overall e-mail server.
+</P>
+
+<P>Basic HTTP processing is very simple: You read a multiline request header terminated
+by a blank line. The first line of the request starts with a command keyword (GET,
+HEAD, POST, etc.), followed by a URL and HTTP version information. Subsequent lines
+provide additional information related to the request.
+</P>
+
+<P>After processing the command, send a response header and response data back to
+the client. The response header begins with a line consisting of a protocol identifier
+(&quot;HTTP/1.0&quot;), a numeric response code, and explanatory text. Additional response
+information lines follow this response status line, and as with the request, the response header
+terminates in a blank line. A response code of 200 (following the &quot;HTTP/1.0&quot;) indicates that
+the request was successful. The server closes the TCP connection after returning the
+response.
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Jeeves manages a pool of worker threads that eliminate
+the potentially time-consuming need to create a new thread
+to service each request.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<P><CENTER>
+<a href="0394-0398.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0405-0409.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

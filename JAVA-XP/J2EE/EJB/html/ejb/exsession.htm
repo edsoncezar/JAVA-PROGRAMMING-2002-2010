@@ -1,0 +1,793 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 4.0">
+<link REL="stylesheet" TYPE="text/css" HREF="../cursos.css" />
+<title>EJB: Um Exemplo de um Session Bean</title>
+</head>
+
+<body>
+
+<h1 align="center">EJB: Exemplos de Session Beans</h1>
+
+<h2>Exemplo de um Session Bean sem Estado</h2>
+
+<h3>O Problema</h3>
+
+<ul>
+  <li>Vamos fazer uma aplicação de conversão de moedas</li>
+  <li>A conversão será feita por um Session Bean sem estado, já que precisamos apenas fazer
+    um processamento simples de transformação de números</li>
+</ul>
+
+<h3>A Solução: Criação do Bean</h3>
+
+<ul>
+  <li>A interface remota em <a href="../src/converter/Converter.java">Converter.java</a>
+    especifica os &quot;business methods&quot; do Bean</li>
+</ul>
+
+<pre class="clsCode">import javax.ejb.EJBObject;
+import java.rmi.RemoteException;
+import java.math.*;
+
+public interface Converter extends EJBObject {
+ 
+  public BigDecimal dollarToYen(BigDecimal dollars) throws RemoteException;
+  public BigDecimal yenToEuro(BigDecimal yen) throws RemoteException;
+}</pre>
+
+<ul>
+  <li>A home interface define métodos usados por um cliente para criar, localizar ou remover
+    um EJB</li>
+  <li>A home interface em <a href="../src/converter/ConverterHome.java">ConverterHome.java</a>
+    contém um único método de criação que retorna um objeto do tipo da interface remota</li>
+</ul>
+
+<pre class="clsCode">import java.io.Serializable;
+import java.rmi.RemoteException;
+import javax.ejb.CreateException;
+import javax.ejb.EJBHome;
+
+public interface ConverterHome extends EJBHome {
+
+  Converter create() throws RemoteException, CreateException;
+}</pre>
+
+<ul>
+  <li>A classe de implementação está em <a href="../src/converter/ConverterBean.java">ConverterBean.java</a>
+    e deve implementar os métodos prometidos pela interface remota:</li>
+</ul>
+
+<pre class="clsCode">import java.rmi.RemoteException; 
+import javax.ejb.SessionBean;
+import javax.ejb.SessionContext;
+import java.math.*;
+
+public class ConverterBean implements SessionBean {
+  BigDecimal yenRate = new BigDecimal(&quot;121.6000&quot;);
+  BigDecimal euroRate = new BigDecimal(&quot;0.0077&quot;); 
+
+  public BigDecimal dollarToYen(BigDecimal dollars) {
+    BigDecimal result = dollars.multiply(yenRate);
+    return result.setScale(2,BigDecimal.ROUND_UP);
+  }
+
+  public BigDecimal yenToEuro(BigDecimal yen) {
+    BigDecimal result = yen.multiply(euroRate);
+    return result.setScale(2,BigDecimal.ROUND_UP);
+  }
+
+  public ConverterBean() {}
+  public void ejbCreate() {}
+  public void ejbRemove() {}
+  public void ejbActivate() {}
+  public void ejbPassivate() {}
+  public void setSessionContext(SessionContext sc) {}
+} // ConverterBean</pre>
+
+<ul>
+  <li>Observe que o ConverterBean não implementa a interface remota<ul>
+      <li>Quem realmente vai implementá-la é o container</li>
+      <li>Os clientes não acessam EJBs diretamente</li>
+    </ul>
+  </li>
+  <li>Observe que muitos métodos &quot;callback&quot; estão vazios<ul>
+      <li>São chamados pelo container para você ter ganchos</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="Ciclo-Session-Beans-Stateless.gif" width="517" height="611"
+alt="Ciclo-Session-Beans-Stateless.gif (11015 bytes)"></p>
+
+<h3>A Solução: Compilação do Bean</h3>
+
+<ul>
+  <li>Agora, devemos compilar os fontes:</li>
+</ul>
+
+<pre class="clsCode">C:\...\src&gt;ant converter
+Buildfile: build.xml
+
+init:
+
+converter:
+    [mkdir] Created dir: C:\Documents and Settings\JACQUES\Meus documentos\Cursos\Hp\j2ee\html\build\converter
+    [javac] Compiling 4 source files to C:\Documents and Settings\JACQUES\Meus documentos\Cursos\Hp\j2ee\html\build\conv
+erter
+     [copy] Copying 1 file to C:\Documents and Settings\JACQUES\Meus documentos\Cursos\Hp\j2ee\html\build\converter
+
+BUILD SUCCESSFUL
+
+Total time: 5 seconds</pre>
+
+<h3>A Solução: Packaging do Bean</h3>
+
+<ul>
+  <li>Agora, usaremos o deploytool para:<ul>
+      <li>Criar o Deployment Descriptor do Bean</li>
+      <li>Empacotar o Deployment Descriptor&nbsp; e as classes do Bean num arquivo JAR para EJB</li>
+      <li>Inserir o EJB JAR no arquivo da aplicação ConverterApp.ear</li>
+    </ul>
+  </li>
+  <li>Etapas<ul>
+      <li>Selecione File -&gt; New-&gt; Application</li>
+      <li>Clique em Browse</li>
+      <li>No file chooser, navegue até src/converter</li>
+      <li>No campo &quot;File Name&quot;, digite ConverterApp.ear</li>
+      <li>Clique em &quot;New Application&quot;</li>
+      <li>Clique em OK</li>
+      <li>Selecione File-&gt;New-&gt; Enterprise Bean</li>
+      <li>Introduction Dialog Box: clique em Next</li>
+      <li>No EJB JAR Dialog Box:<ul>
+          <li>Selecione o botão &quot;Create new JAR File in Application&quot;</li>
+          <li>No combo box, selecione &quot;ConverterApp&quot;</li>
+          <li>No campo &quot;JAR Display Name&quot;, digite ConverterJAR</li>
+          <li>Clique em Edit</li>
+          <li>Na árvore &quot;Available Files&quot;, localize o diretório build/converter</li>
+          <li>Selecione e adicione Converter.class, ConverterBean.class, ConverterHome.class</li>
+          <li>Clique em OK</li>
+          <li>Clique em Next</li>
+        </ul>
+      </li>
+      <li>No General Dialog Box:<ul>
+          <li>Em Bean Type, selecione Session</li>
+          <li>Selecione Stateless</li>
+          <li>No combo box &quot;Enterprise Bean Class&quot;, selecione ConverterBean</li>
+          <li>No campo &quot;Enterprise Bean Name&quot;, digite ConverterEJB</li>
+          <li>No combo box &quot;Remote Home Interface&quot;, selecione ConverterHome</li>
+          <li>No combo box &quot;Remote Interface&quot;, selecione Converter</li>
+          <li>Clique em Next</li>
+        </ul>
+      </li>
+      <li>No Transaction Management Dialog Box:<ul>
+          <li>Clique em Finish</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h3>A Solução: Criação do Cliente</h3>
+
+<ul>
+  <li>Podemos criar vários tipos de clientes<ul>
+      <li>Application Client</li>
+      <li>Web Client</li>
+    </ul>
+  </li>
+  <li>Faremos um Web Client</li>
+  <li>O código está em <a href="../src/converter/index.jsp">index.jsp</a></li>
+</ul>
+
+<pre class="clsCode">&lt;%@ page import=&quot;Converter,ConverterHome,javax.ejb.*, javax.naming.*,
+                 javax.rmi.PortableRemoteObject, java.rmi.RemoteException,
+                 java.math.*&quot; %&gt;
+&lt;%!
+  private Converter converter = null;
+   public void jspInit() { 
+      try {
+<font
+color="#0080FF">         InitialContext ic = new InitialContext();
+         Object objRef = ic.lookup(&quot;java:comp/env/ejb/TheConverter&quot;);
+         ConverterHome home = (ConverterHome)PortableRemoteObject.narrow(objRef,
+                                                           ConverterHome.class);
+         converter = home.create();
+</font>      } catch (RemoteException ex) {
+            System.out.println(&quot;Couldn't create converter bean.&quot;+ ex.getMessage());
+      } catch (CreateException ex) {
+            System.out.println(&quot;Couldn't create converter bean.&quot;+ ex.getMessage());
+      } catch (NamingException ex) {
+            System.out.println(&quot;Unable to lookup home: &quot;+ &quot;TheConverter &quot;+ ex.getMessage());
+      } 
+   }
+
+   public void jspDestroy() {    
+         converter = null;
+   }
+%&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;Converter&lt;/title&gt;
+&lt;/head&gt;
+&lt;body bgcolor=&quot;white&quot;&gt;
+&lt;h1&gt;&lt;b&gt;&lt;center&gt;Converter&lt;/center&gt;&lt;/b&gt;&lt;/h1&gt;
+&lt;hr&gt;
+&lt;p&gt;Enter an amount to convert:&lt;/p&gt;
+&lt;form method=&quot;get&quot;&gt;
+&lt;input type=&quot;text&quot; name=&quot;amount&quot; size=&quot;25&quot;&gt;
+&lt;br&gt;
+&lt;p&gt;
+&lt;input type=&quot;submit&quot; value=&quot;Submit&quot;&gt;
+&lt;input type=&quot;reset&quot; value=&quot;Reset&quot;&gt;
+&lt;/form&gt;
+&lt;%
+    String amount = request.getParameter(&quot;amount&quot;);
+    if ( amount != null &amp;&amp; amount.length() &gt; 0 ) {
+      BigDecimal d = new BigDecimal (amount);
+%&gt;
+&lt;p&gt;&lt;%= amount %&gt; dollars are &lt;%= <font
+color="#0080FF">converter.dollarToYen(d)</font> %&gt; Yen.
+&lt;p&gt;&lt;%= amount %&gt; Yen are &lt;%= <font
+color="#0080FF">converter.yenToEuro(d)</font> %&gt; Euro.
+&lt;%
+    }
+%&gt;
+&lt;/body&gt;
+&lt;/html&gt; </pre>
+
+<ul>
+  <li>Precisamos fazer 3 coisas:<ul>
+      <li>Localizar a home interface</li>
+      <li>Criar uma instância de um EJB</li>
+      <li>Chamar um Business Method deste EJB</li>
+    </ul>
+  </li>
+  <li>Localizar a home interface<ul>
+      <li>Primeiro criamos um contexto JNDI</li>
+      <li>Depois obtemos um objeto amarrado ao nome &quot;ejb/TheConverter&quot;</li>
+      <li>Finalmente, convertemos o objeto ao tipo correto ConverterHome<ul>
+          <li>É como fazer um cast mas envolvendo objetos remotos</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Criar uma instância de um EJB<ul>
+      <li>Feito com:<br>
+        Converter currencyConverter = home.create();</li>
+      <li>O método ConverterBean.ejbCreate() é chamado</li>
+    </ul>
+  </li>
+  <li>Chamar um Business Method deste EJB<ul>
+      <li>Feito com:<br>
+        converter.dollarToYen(new BigDecimal(amount))</li>
+      <li>Na realidade, vamos chamar o método do container e este chama o método do objeto
+        remoto (a instância do EJB)</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>A Solução: Compilação do Cliente</h3>
+
+<ul>
+  <li>Páginas JSP são automaticamente convertidas para servlets e compiladas pelo servidor
+    J2EE</li>
+</ul>
+
+<h3>A Solução: Packaging do Cliente</h3>
+
+<ul>
+  <li>No deploytool:<ul>
+      <li>Selecione File-&gt;New-&gt;Web Component</li>
+      <li>No dialog box &quot;Introduction&quot;<ul>
+          <li>Clique em &quot;Next&quot;</li>
+        </ul>
+      </li>
+      <li>No dialog box &quot;WAR File&quot;<ul>
+          <li>Selecione &quot;Create New WAR File in Application&quot;</li>
+          <li>Na combo box, selecione &quot;ConverterApp&quot;</li>
+          <li>No campo &quot;WAR Display Name&quot;, digite &quot;ConverterWAR&quot;</li>
+          <li>Clique em &quot;Edit&quot;</li>
+          <li>Sob a árvore &quot;Available Files&quot;, localize o diretório build/converter</li>
+          <li>Selecione e adicione index.jsp</li>
+          <li>Clique em &quot;OK&quot;</li>
+          <li>Clique em &quot;Next&quot;</li>
+        </ul>
+      </li>
+      <li>Selecione &quot;JSP&quot;</li>
+      <li>Clique em &quot;Next&quot;</li>
+      <li>No dialog box &quot;Component General Properties&quot;<ul>
+          <li>No combo box &quot;JSP Filename&quot;, selecione index.jsp</li>
+          <li>Clique em &quot;Finish&quot;</li>
+        </ul>
+      </li>
+      <li>Especifique a referência EJB:<ul>
+          <li>Selecione ConverterWAR</li>
+          <li>Selecione a orelha &quot;EJB Refs&quot;</li>
+          <li>Clique em Add</li>
+          <li>Na coluna &quot;Coded Name&quot;, digite &quot;ejb/TheConverter&quot;</li>
+          <li>Na coluna &quot;Type&quot;, selecione Session</li>
+          <li>Na coluna &quot;Interfaces&quot;, selecione Remote</li>
+          <li>Na coluna &quot;Home Interface&quot;, digite &quot;ConverterHome&quot;</li>
+          <li>Na coluna &quot;Local/Remote Interface&quot;, digite &quot;Converter&quot;</li>
+        </ul>
+      </li>
+      <li>Especifique o nome JNDI<ul>
+          <li>Selecione ConverterApp</li>
+          <li>Selecione a orelha &quot;JNDI Names&quot;</li>
+          <li>Para especificar um nome JNDI para o Bean, examine a tabela &quot;Application&quot; e
+            localize o componente &quot;ConverterEJB&quot; e digite MyConverter na coluna &quot;JNDI
+            Name&quot;</li>
+          <li>Para mapear as referências, examine a tabela &quot;References&quot; e digite
+            MyConverter em &quot;JNDI Name&quot; para cada linha</li>
+        </ul>
+      </li>
+      <li>Salva</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>A solução: O Deployment Descriptor</h3>
+
+<h4>O DD da aplicação</h4>
+
+<ul>
+  <li>O deployment descriptor para a aplicação como um todo está divido em
+    duas partes
+    <ul>
+      <li>Parte independente do servidor (application.xml)</li>
+      <li>Parte dependente do servidor (sun-j2ee-ri.xml)</li>
+    </ul>
+  </li>
+  <li>Aqui está <a href="../src/converter/xml/META-INF/application.xml">application.xml</a>
+    <ul>
+      <li>Observe os dois módulos</li>
+      <li>Observe o context root para o módulo web</li>
+    </ul>
+  </li>
+</ul>
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE application PUBLIC '-//Sun Microsystems, Inc.//DTD J2EE Application 1.3//EN' 'http://java.sun.com/dtd/application_1_3.dtd'&gt;
+
+&lt;application&gt;
+  &lt;display-name&gt;ConverterApp&lt;/display-name&gt;
+  &lt;description&gt;Application description&lt;/description&gt;
+  &lt;module&gt;
+    &lt;web&gt;
+      &lt;web-uri&gt;war-ic.war&lt;/web-uri&gt;
+      &lt;context-root&gt;converter&lt;/context-root&gt;
+    &lt;/web&gt;
+  &lt;/module&gt;
+  &lt;module&gt;
+    &lt;ejb&gt;ejb-jar-ic.jar&lt;/ejb&gt;
+  &lt;/module&gt;
+&lt;/application&gt;</pre>
+
+<ul>
+  <li>Aqui está <a href="../src/converter/xml/META-INF/sun-j2ee-ri.xml">sun-j2ee-ri.xml</a>
+    (parcial)</li>
+</ul>
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE j2ee-ri-specific-information PUBLIC '-//Sun Microsystems Inc.//DTD J2EE Reference Implementation 1.3//EN' 'http://localhost:8000/sun-j2ee-ri_1_3.dtd'&gt;
+
+<font color="#0080FF">&lt;j2ee-ri-specific-information&gt;</font>
+  &lt;server-name&gt;&lt;/server-name&gt;
+  &lt;rolemapping /&gt;
+  &lt;web&gt;
+    &lt;module-name&gt;war-ic.war&lt;/module-name&gt;
+    &lt;context-root&gt;converter&lt;/context-root&gt;
+<font color="#0080FF">    &lt;ejb-ref&gt;
+      &lt;ejb-ref-name&gt;ejb/TheConverter&lt;/ejb-ref-name&gt;
+      &lt;jndi-name&gt;MyConverter&lt;/jndi-name&gt;
+    &lt;/ejb-ref&gt;
+</font>  &lt;/web&gt;
+<font color="#0080FF">  &lt;enterprise-beans&gt;</font>
+    &lt;module-name&gt;ejb-jar-ic.jar&lt;/module-name&gt;
+    &lt;unique-id&gt;0&lt;/unique-id&gt;
+<font color="#0080FF">    &lt;ejb&gt;</font>
+<font color="#0080FF">      &lt;ejb-name&gt;ConverterEJB&lt;/ejb-name&gt;
+      &lt;jndi-name&gt;MyConverter&lt;/jndi-name&gt;
+...
+</font>    &lt;/ejb&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/j2ee-ri-specific-information&gt;
+</pre>
+<h4>O DD do bean EJB</h4>
+
+<ul>
+  <li>Eis o arquivo ejb-jar.xml, o deployment descriptor do EJB, contido no
+    arquivo JAR do bean (ejb-jar-ic.jar)que, por sua vez está no arquivo
+    ConverterApp.ear</li>
+</ul>
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE ejb-jar PUBLIC '-//Sun Microsystems, Inc.//DTD Enterprise JavaBeans 2.0//EN' 'http://java.sun.com/dtd/ejb-jar_2_0.dtd'&gt;
+
+<font color="#0080FF">&lt;ejb-jar&gt;</font>
+  &lt;display-name&gt;ConverterJAR&lt;/display-name&gt;
+  <font color="#0080FF">&lt;enterprise-beans&gt;</font>
+    <font color="#0080FF">&lt;session&gt;</font>
+      &lt;display-name&gt;ConverterEJB&lt;/display-name&gt;
+      &lt;ejb-name&gt;ConverterEJB&lt;/ejb-name&gt;
+      &lt;home&gt;ConverterHome&lt;/home&gt;
+      &lt;remote&gt;Converter&lt;/remote&gt;
+      &lt;ejb-class&gt;ConverterBean&lt;/ejb-class&gt;
+      &lt;session-type&gt;<font color="#0080FF">Stateless</font>&lt;/session-type&gt;
+      &lt;transaction-type&gt;Bean&lt;/transaction-type&gt;
+      &lt;security-identity&gt;
+        &lt;description&gt;&lt;/description&gt;
+        &lt;use-caller-identity&gt;&lt;/use-caller-identity&gt;
+      &lt;/security-identity&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/ejb-jar&gt;</pre>
+
+<h3>A Solução: Deployment da Aplicação</h3>
+
+<ul>
+  <li>Etapas:<ul>
+      <li>O servidor j2ee deve estar funcionando</li>
+      <li>Selecione a aplicação &quot;ConverterApp&quot;</li>
+      <li>Selecione Tools-&gt;Deploy</li>
+      <li>No dialogo box &quot;Introduction&quot;, confirme ConverterApp e o servidor apropriado</li>
+      <li>No campo de texto, entre o nome completo src/converter/ConverterAppClient.jar<ul>
+          <li>Este arquivo vai conter os stubs para acessar o ConverterEJB bean remotamente</li>
+        </ul>
+      </li>
+      <li>Clique em Next</li>
+      <li>No dialog box &quot;JNDI Names&quot;, verifique os nomes usados da seção anterior</li>
+      <li>Clique em Next</li>
+      <li>No dialog box &quot;WAR Context Root&quot;, digite &quot;converter&quot; no campo
+        &quot;Context Root&quot;</li>
+      <li>Clique em &quot;Next&quot;</li>
+      <li>No dialogo box &quot;Review&quot;, clique em Finish</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="objeto-distribuido.gif" width="545" height="460"
+alt="Objeto-Distribuído.gif (8565 bytes)"></p>
+
+<h3>A Solução: Execução da Aplicação</h3>
+
+<ul>
+  <li>URL <a href="http://anjinho.dsc.ufpb.br:8080/converter">http://anjinho.dsc.ufpb.br:8080/converter</a></li>
+</ul>
+
+<p align="center"><img src="exsess1.jpg" width="526" height="423"
+alt="wpe1.jpg (31840 bytes)"></p>
+
+<p align="center"><img src="exsess2.jpg" width="526" height="439"
+alt="wpe3.jpg (34650 bytes)"></p>
+
+<h2>Exemplo de um Session Bean com Estado</h2>
+
+<ul>
+  <li>Criaremos um Bean de cesta de compras, CartEJB</li>
+  <li>Você concorda que uma cesta de compras mantida no servidor não poderia ser stateless?</li>
+  <li>O bean tem a seguinte funcionalidade:<ul>
+      <li>Adicionar um livro</li>
+      <li>Remover um livro</li>
+      <li>Examinar conteúdo</li>
+    </ul>
+  </li>
+  <li>Deixo como exercício fazer um Cart para qualquer tipo de objeto vendável</li>
+  <li>Precisamos fazer o seguinte:<ul>
+      <li>Uma interface Home (CartHome)</li>
+      <li>Uma interface Remote (Cart)</li>
+      <li>Uma classe de implementação (CartBean)</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>A Remote Interface</h3>
+
+<ul>
+  <li>Define os Business Methods</li>
+</ul>
+
+<pre class="clsCode">import java.util.*;
+import javax.ejb.EJBObject;
+import java.rmi.RemoteException;
+
+public interface Cart extends EJBObject {
+ 
+  public void addBook(String title) throws RemoteException;
+  public void removeBook(String title) throws BookException,
+                                              RemoteException;
+  public Vector getContents() throws RemoteException;
+}</pre>
+
+<h3>A Home Interface</h3>
+
+<ul>
+  <li>Define os métodos de criação que podem ser chamados pelo cliente remoto</li>
+</ul>
+
+<pre class="clsCode">import java.io.Serializable;
+import java.rmi.RemoteException;
+import javax.ejb.CreateException;
+import javax.ejb.EJBHome;
+
+public interface CartHome extends EJBHome {
+ 
+  Cart create(String person) throws RemoteException, CreateException;
+  Cart create(String person, String id) throws RemoteException, 
+                                               CreateException; 
+}</pre>
+
+<h3>Classe de Implementação</h3>
+
+<ul>
+  <li>Algumas regras a obedecer:<ul>
+      <li>Implementa a interface SessionBean</li>
+      <li>A classe deve ser &quot;public&quot; (devido à instrospecção do Java)</li>
+      <li>A classe não pode ser abstract ou final</li>
+      <li>Para cada método create na interface Home, a classe de implementação deve implementar
+        um método ejbCreate<ul>
+          <li>Lembre que essa classe não implementa a Remote interface</li>
+          <li>Não é chamada pelo cliente</li>
+          <li>Só é chamada pelo container</li>
+        </ul>
+      </li>
+      <li>Implementa os Business Methods da Remote Interface</li>
+      <li>Contém um construtor público sem parâmetro</li>
+      <li>Não deve definir o método finalize</li>
+    </ul>
+  </li>
+  <li>O código segue:</li>
+</ul>
+
+<pre class="clsCode">import java.util.*;
+import javax.ejb.*;
+
+public class CartBean implements SessionBean {
+
+  String customerName;
+  String customerId;
+  Vector contents;
+
+  public void ejbCreate(String person) throws CreateException {
+    if (person == null) {
+      throw new CreateException(&quot;Null person not allowed.&quot;);
+    } else {
+      customerName = person;
+    }
+    customerId = &quot;0&quot;;
+    contents = new Vector();
+  }
+
+  public void ejbCreate(String person, String id) throws CreateException {
+    ejbCreate(person);
+    IdVerifier idChecker = new IdVerifier();
+    if (idChecker.validate(id)) {
+      customerId = id;
+    } else {
+      throw new CreateException(&quot;Invalid id: &quot; + id);
+    }
+  }
+
+  public void addBook(String title) {
+    contents.add(title);
+  }
+
+  public void removeBook(String title) throws BookException {
+    boolean result = contents.remove(title);
+    if (result == false) {
+      throw new BookException(title + &quot; not in cart.&quot;);
+    }
+  }
+
+  public Vector getContents() {
+    return contents;
+  }
+
+  public CartBean() {}
+  public void ejbRemove() {}
+  public void ejbActivate() {}
+  public void ejbPassivate() {}
+  public void setSessionContext(SessionContext sc) {}
+}</pre>
+
+<ul>
+  <li>As classes de apoio seguem:</li>
+</ul>
+
+<pre class="clsCode">public class BookException extends Exception {
+
+  public BookException() {
+  }
+
+  public BookException(String msg) {
+    super(msg);
+  }
+}
+
+public class IdVerifier {
+
+  public IdVerifier() {
+  }
+
+  public boolean validate(String id) {
+
+    boolean result = true;
+    for (int i = 0; i &lt; id.length(); i++) {
+      if (Character.isDigit(id.charAt(i)) == false)
+        result = false;
+    }
+    return result;
+  }
+}</pre>
+
+<h4>A interface SessionBean</h4>
+
+<ul>
+  <li>Há vários métodos de callback<ul>
+      <li>Chamados pelo container em momentos apropriados</li>
+    </ul>
+  </li>
+  <li>Foram deixados vazios porque não são necessários aqui</li>
+  <li>Para entender quando os callbacks são chamados, examine a figura abaixo que representa
+    o ciclo de vida de uma Stateful Session Bean</li>
+</ul>
+
+<p align="center"><img src="Ciclo-Session-Beans-Stateful.gif" width="553" height="645"
+alt="Ciclo-Session-Beans-Stateful.gif (15427 bytes)"></p>
+
+<h4>Os Business Methods</h4>
+
+<ul>
+  <li>Examine a implementação dos Business methods acima</li>
+  <li>Eles seriam chamados assim pelo cliente:</li>
+</ul>
+
+<pre class="clsCode">  Cart shoppingCart = home.create(“Duke DeEarl”, “123”);
+  . . .
+  shoppingCart.addBook(“The Martian Chronicles”);
+  shoppingCart.removeBook(“Alice In Wonderland”);
+  bookList = shoppingCart.getContents();
+  . . .</pre>
+
+<ul>
+  <li>Você pode lançar <em>suas </em>exceções nos métodos: eles serão repassados para o
+    cliente<ul>
+      <li>Exemplo: BookException</li>
+      <li>Exceções EJBException indicam erros de sistema<ul>
+          <li>São colocadas dentro de uma RemoteException que o cliente captura</li>
+        </ul>
+      </li>
+      <li>Outras exceções (como BookException) não são colocadas numa RemoteException</li>
+    </ul>
+  </li>
+  <li>O deployment descriptor será o seguinte quando terminarmos de criar o
+    componente</li>
+</ul>
+
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE ejb-jar PUBLIC '-//Sun Microsystems, Inc.//DTD Enterprise JavaBeans 2.0//EN' 'http://java.sun.com/dtd/ejb-jar_2_0.dtd'&gt;
+
+<font color="#0080FF">&lt;ejb-jar&gt;</font>
+  &lt;display-name&gt;CartJAR&lt;/display-name&gt;
+  &lt;enterprise-beans&gt;
+    <font color="#0080FF">&lt;session&gt;</font>
+      &lt;display-name&gt;CartEJB&lt;/display-name&gt;
+      &lt;ejb-name&gt;CartEJB&lt;/ejb-name&gt;
+      &lt;home&gt;CartHome&lt;/home&gt;
+      &lt;remote&gt;Cart&lt;/remote&gt;
+      &lt;ejb-class&gt;CartBean&lt;/ejb-class&gt;
+      &lt;session-type&gt;<font color="#0080FF">Stateful</font>&lt;/session-type&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      &lt;security-identity&gt;
+        &lt;description&gt;&lt;/description&gt;
+        &lt;use-caller-identity&gt;&lt;/use-caller-identity&gt;
+      &lt;/security-identity&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+...
+&lt;/ejb-jar&gt;</pre>
+
+<h3>Criação de um cliente</h3>
+
+<ul>
+  <li>Vamos fazer um cliente simples (Application Client)</li>
+</ul>
+
+<pre class="clsCode">import java.util.*;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.rmi.PortableRemoteObject;
+
+public class CartClient {
+
+  public static void main(String[] args) {
+    try {
+      Context initial = new InitialContext();
+      Object objref = initial.lookup(&quot;java:comp/env/ejb/SimpleCart&quot;);
+
+      CartHome home = 
+          (CartHome)PortableRemoteObject.narrow(objref, 
+                                       CartHome.class);
+
+      Cart shoppingCart = home.create(&quot;Duke DeEarl&quot;,&quot;123&quot;);
+
+      shoppingCart.addBook(&quot;The Martian Chronicles&quot;);
+      shoppingCart.addBook(&quot;2001 A Space Odyssey&quot;);
+      shoppingCart.addBook(&quot;The Left Hand of Darkness&quot;);
+      
+      Vector bookList = shoppingCart.getContents();
+      Iterator enumer = bookList.iterator();
+      while (enumer.hasNext()) {
+        String title = (String) enumer.next();
+        System.out.println(title);
+      }
+
+      shoppingCart.removeBook(&quot;Alice in Wonderland&quot;);
+      shoppingCart.remove();
+
+      System.exit(0);
+
+    } catch (BookException ex) {
+      System.err.println(&quot;Caught a BookException: &quot; + ex.getMessage());
+      System.exit(0);
+    } catch (Exception ex) {
+      System.err.println(&quot;Caught an unexpected exception!&quot;);
+      ex.printStackTrace();
+      System.exit(1);
+    }
+  } 
+} </pre>
+
+<ul>
+  <li>Compile com &quot;ant cart&quot;</li>
+  <li>Usando o deploytool, crie uma aplicação com as seguintes características:<ul>
+      <li>Nome no arquivo da aplicação: CartApp.ear</li>
+      <li>Dois modules:<ul>
+          <li>Um JAR contendo o EJB CartEJB com nome de referência ejb/SimpleCart e nome JNDI: MyCart</li>
+          <li>Um JAR contendo a aplicação cliente</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Caso tenha dúvidas, aqui está o arquivo <a href="../src/cart/earpronto/CartApp.ear">CartApp.ear</a>
+    final</li>
+</ul>
+
+<h3>Execução do exemplo CartEJB</h3>
+
+<ul>
+  <li>Agora faça o deployment, pedindo para retornar o &quot;JAR Cliente&quot; e execute a
+    aplicação:<ul>
+      <li>set APPCPATH=CartAppClient.jar (MSDOS)</li>
+      <li>APPCPATH=CartAppClient.jar export APPCPATH (UNIX)</li>
+      <li>runclient -client CartApp.ear -name CartClient -textauth<ul>
+          <li>login: guest</li>
+          <li>senha: guest123</li>
+        </ul>
+      </li>
+      <li>A saída deve ser como segue (observe o tratamento de exceções)</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">C:\...\src\cart\earpronto&gt;runclient -client CartApp.ear -
+name CartClient -textauth
+Initiating login ...
+Username = null
+Enter Username:guest
+Enter Password:guest123
+Binding name:`java:comp/env/ejb/SimpleCart`
+<font
+color="#0080FF">The Martian Chronicles
+2001 A Space Odyssey
+The Left Hand of Darkness
+Caught a BookException: Alice in Wonderland not in cart.
+</font>Unbinding name:`java:comp/env/ejb/SimpleCart`</pre>
+
+<p class="botref">exsession <a href="../j2ee-2.htm">programa</a> </p>
+</body>
+</html>

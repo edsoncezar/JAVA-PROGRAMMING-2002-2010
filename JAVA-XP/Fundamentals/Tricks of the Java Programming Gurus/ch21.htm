@@ -1,0 +1,1049 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 21 -- Creating a Security Policy</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 21</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Creating a Security Policy</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+<UL>
+<LI><A HREF="#TheJavaSecurityModel" >The Java Security Model</A>
+<LI><A HREF="#TheJavaSecurityManager" >The Java Security Manager</A>
+<LI><A HREF="#SecurityManagerDecisions" >Security Manager Decisions</A>
+<LI><A HREF="#WhichResourcesAreProtected" >Which Resources Are Protected?</A>
+<LI><A HREF="#UnderstandingSecurityRisks" >Understanding Security Risks</A>
+<LI><A HREF="#KeepingtheSecurityPolicyManageable" >Keeping the Security Policy Manageable</A>
+<LI><A HREF="#ImplementingClassLoaders" >Implementing Class Loaders</A>
+<LI><A HREF="#ImplementingSecurityManagers" >Implementing Security Managers</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+If you are building an application that loads and runs Java programs
+from the network (or from any source that is not trustworthy),
+it's important that you think about the security policy you need
+and build your application to enforce it. It's a difficult job;
+security policy decisions are subtle and complicated. You also
+need to take special care in the implementation, because bugs
+in this part of your program can have serious consequences. Fortunately,
+a lot of the tricky parts of a security policy implementation
+are in the standard Java libraries. This chapter explains the
+Java security model and shows how to write the code that makes
+security decisions for your application. It also presents some
+tips on formulating security policies.
+<H2><A NAME="TheJavaSecurityModel"><B><FONT SIZE=5 COLOR=#FF0000>The
+Java Security Model</FONT></B></A></H2>
+<P>
+Before getting into the details of how specific security checks
+and policies are implemented in Java applications, it's important
+to have a clear idea of the basic structure of the language security
+model, which provides the fundamental assumptions upon which a
+policy implementation rests.
+<H3><B>Layer One: Language Safety</B></H3>
+<P>
+The first line of defense against untrusted programs in a Java
+application is a part of the basic design of the language: Java
+is a <I>safe</I> language. When programming language theorists
+use the word &quot;safety,&quot; they aren't talking about protection
+against malicious programs. Rather, they mean protection against
+<I>incorrect</I> programs. Java achieves this in several ways.
+The language does not allow programmers to manipulate pointers
+directly (although they are used extensively behind the scenes).
+Array references are checked at runtime to ensure that they are
+within the bounds of the array. Casts are carefully controlled
+so that they can't be used to violate the language's rules, and
+implicit type conversions are kept to a minimum. Memory management
+is automatic. All these qualities make Java a &quot;safe&quot;
+language. Put another way, they ensure that code written in Java
+actually does what it appears to do, or fails. The surprising
+things that can happen in C, such as continuing to read data past
+the end of an array as though it were valid, cannot happen. In
+a safe language, the behavior of a particular program with a particular
+input should be entirely predictable-with no surprises.
+<H3><B>Layer Two: Bytecode Verification</B></H3>
+<P>
+Inserting rules about proper language behavior into the language
+specification is a good thing, but it's also important to make
+sure that those rules aren't broken. Checking everything in the
+compiler isn't good enough, because it's possible for someone
+to write a completely new compiler that omits those checks. For
+that reason, the Java library carefully checks and verifies the
+bytecodes of every class that is loaded into the virtual machine,
+to make sure that those bytecodes obey the rules. Some of the
+rules, such as bounds checking on references to array elements,
+are actually implemented in the virtual machine, so no real checks
+are necessary. Other rules, however, must be checked carefully.
+One particularly important rule that is verified rigorously is
+that objects must be true to their type-an object that is created
+as a particular type must never be able to masquerade as an object
+of some incompatible type. Otherwise, there would be a serious
+loophole through which explicit security checks could be bypassed.
+<H3><B>Layer Three: Library Implementation</B></H3>
+<P>
+The final part of the Java security model is the implementation
+of the Java class library. Classes in the library provide Java
+applications with their only means of access to sensitive system
+resources, such as files and network connections. Those classes
+are written so that they always perform security checks before
+granting access.
+<P>
+Application authors can write their own native methods, which
+extend the Java library and provide access to new resources. It's
+important to remember security issues when doing so, and <A HREF="ch33.htm" >Chapter 33</A>,
+&quot;Securing Your Native Method Libraries,&quot; explains how
+to make your library extensions as secure as the core Java library.
+<H2><A NAME="TheJavaSecurityManager"><B><FONT SIZE=5 COLOR=#FF0000>The
+Java Security Manager</FONT></B></A></H2>
+<P>
+It's impossible for the Java application programmer to alter the
+basics of the Java security model without delving into native
+methods, but you can modify the security <I>policy</I>: the way
+access decisions are made.
+<P>
+Ultimately, decisions about access to sensitive resources are
+made by the security manager, which is an instance of the <TT>SecurityManager</TT>
+class. Not just any instance will do: the security manager for
+the application is set by using <TT>System.setSecurityManager</TT>
+and accessed by using <TT>System.getSecurityManager</TT>.
+Here's how to install a security manager in your application:
+<BLOCKQUOTE>
+<TT>System.setSecurityManager(new mySecurityManager());</TT>
+</BLOCKQUOTE>
+<P>
+Any Java method can query the security manager, but it's crucial
+that the methods that provide access to sensitive system resources
+query the security manager before they permit the access. As an
+example of how it works, here's the <TT>File.delete</TT>
+method:
+<BLOCKQUOTE>
+<TT>/**<BR>
+&nbsp;* Deletes the specified file. Returns true<BR>
+</TT>&nbsp;<TT>* if the file could
+be deleted.<BR>
+&nbsp;*/<BR>
+public boolean delete() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;SecurityManager security = System.getSecurityManager();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security.checkDelete(path);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return delete0();<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+<TT>delete0</TT> is the method that
+really does the work of deleting the file. Before calling it,
+the <TT>delete</TT> method checks
+with the security manager to see whether the operation will be
+permitted. If everything is fine, the security manager's <TT>checkDelete</TT>
+method simply returns, and the <TT>delete0</TT>
+method is called. If the operation is not allowed, <TT>checkDelete</TT>
+throws a <TT>SecurityException</TT>.
+Because <TT>delete</TT> makes no attempt
+to catch the exception, it propagates up to the caller, and <TT>delete0</TT>
+is never called.
+<P>
+When an applet is running in an application such as Netscape Navigator
+or appletviewer, it is free to call methods such as <TT>File.delete</TT>.
+ However, when the <TT>delete</TT>
+method checks with the security manager, it will see that the
+request is being made by an applet and throw a <TT>SecurityException</TT>.
+ The applet is free to catch the exception and ignore it, but
+the exception prevents the <TT>delete0</TT>
+method from being called, so the applet can't actually delete
+the file.
+<P>
+In the <TT>delete</TT> method, if
+there is no security manager defined, access is always granted.
+The same is true in all the methods that perform security checks.
+If no security manager is defined, everything is allowed-even
+creating a security manager. Thus, it's important that any application
+that is going to be loading untrusted classes create a security
+manager <I>before</I> the first untrusted class is loaded into
+the virtual machine.
+<P>
+What's to keep an untrusted class from replacing the security
+manager? Once a security manager has been set by using <TT>System.setSecurityManager</TT>,
+it is <I>always</I> a security violation to try to set a new security
+manager. There can only be <I>one</I> security manager in an application.
+Thus, if it's desirable to adjust the security policy of an application
+while it is running, those adjustments must be catered for in
+the security manager itself; they can't be accomplished by changing
+the security manager.
+<P>
+Typically, application-specific classes do not need to call the
+security manager. Those classes call the Java library classes
+to access sensitive resources, and the library classes call the
+security manager. Classes that use factory objects are an exception.
+(<A HREF="ch17.htm" >See Chapter 17</A>, &quot;Network-Extensible
+Applications with Factory Objects,&quot; for more information.)
+Classes that use factory objects usually provide a method for
+setting the factory object, such as the <TT>URLConnection.setContentHandlerFactory</TT>
+method. Such methods should make a call to <TT>SecurityManager.checkSetFactory()</TT>.
+They should also refuse to replace an existing factory; just as
+with the system security manager, it should be an error to set
+a factory object when one has already been set. Here's the relevant
+method from <TT>URLConnection</TT>:
+<BLOCKQUOTE>
+<TT>public static synchronized void<BR>
+setContentHandlerFactory(ContentHandlerFactory fac) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(factory != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new Error(&quot;factory
+already defined&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;SecurityManager security = System.getSecurityManager();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security.checkSetFactory();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;factory = fac;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>SecurityManager</TT> class,
+which is a part of the core Java library, is an abstract class,
+so it cannot be used directly. Nor would you want to-its implementation
+disallows <I>everything</I>, no matter what the source, so if
+you install it, you won't have a very useful application. To implement
+a security policy, you must subclass <TT>SecurityManager</TT>,
+overriding the methods to determine resource access according
+to policies that you define.
+<H2><A NAME="SecurityManagerDecisions"><B><FONT SIZE=5 COLOR=#FF0000>Security
+Manager Decisions</FONT></B></A></H2>
+<P>
+When the security manager has to decide whether to allow or deny
+access to a resource, what information can it use to make the
+decision?
+<P>
+The security manager can investigate the current execution environment
+to learn what classes currently have methods executing on the
+execution stack. It can also learn about the <TT>ClassLoader</TT>
+objects that loaded those classes into the runtime environment.
+If your application has class loaders that load from the network
+or other untrusted sources, you can arrange for those class loaders
+to keep track of the source of each different class for use by
+the security manager. The section Implementing Security Managers,
+later in this chapter, discusses this in more detail.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+In the default Java environment, which is presented to stand-alone applications (as opposed to applets, for example), there are no class loaders. Classes that are found in the CLASSPATH are loaded by the virtual machine implementation. This is sometimes 
+referred to as the &quot;primordial&quot; class loader, but from the security manager's viewpoint, no <TT>ClassLoader</TT> object is involved at all. Without access to a <TT>ClassLoader</TT> object, the security manager cannot learn any details about the 
+origin of the class. For this reason classes that are found in the CLASSPATH are always trusted.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The JDK appletviewer is typical of applications that load code
+from untrusted sources. It creates a separate class loader for
+each base URL from which it needs classes, and each class loader
+is responsible for only those classes that are fetched from that
+URL. The section Implementing Class Loaders, later in this chapter,
+discusses this in more detail.
+<P>
+You don't have to base your security model on the network source
+of classes. On a multiuser machine, it's possible to place restrictions
+on classes based on the ownership of the class file. (This only
+works for classes that are not found in the CLASSPATH; see previous
+Note.) It will someday also be possible to determine the <I>real</I>
+source of classes, using digital signature techniques, so that
+security can be relaxed for classes certified by someone you trust
+(<A HREF="ch22.htm" >see Chapter 22</A>, &quot;Authentication,
+Encryption, and Trusted Applets,&quot; for more information).
+<H2><A NAME="WhichResourcesAreProtected"><B><FONT SIZE=5 COLOR=#FF0000>Which
+Resources Are Protected?</FONT></B></A></H2>
+<P>
+The <TT>SecurityManager</TT> class
+provides checks for several types of resources:
+<UL>
+<LI>Local file system access
+<LI>System access
+<LI>Network access
+<LI>Thread manipulation
+<LI>Factory object creation
+<LI>Interpreter manipulation
+<LI><FONT COLOR=#000000>Window creation</FONT>
+</UL>
+<P>
+When you're trying to settle on the details of a security policy,
+it helps to know exactly which resources are protected and when
+the security checks are made. Table 21.1 lists all the access
+check methods provided by the security manager, a description
+of functions performed by each, and the Java core library methods
+that call them.
+<H2><A NAME="UnderstandingSecurityRisks"><B><FONT SIZE=5 COLOR=#FF0000>Understanding
+Security Risks</FONT></B></A></H2>
+<P>
+In order to design a good security policy, you should understand
+the different reasons for securing all the resources listed previously.
+Without that understanding, it's easy to design a policy with
+unforeseen weaknesses. The following paragraphs describe some
+of the issues involved and the possible attacks that could be
+made if the Java security features were relaxed.
+<P>
+It's fairly obvious that file system access must be restricted
+to prevent both theft and destruction of valuable information.
+However, the Java library provides the means to secure some seemingly
+innocuous types of accesses. Classes can be prohibited from learning
+whether a file exists, the length of a file, the last-modified
+date, or whether a file is a directory. For many files, which
+simply contain user data, it might sometimes be enough to protect
+the contents and not any of that other information. For some special
+system files, however, even knowledge of the file's existence
+on a particular system might be valuable information. The existence
+of a particular file might be an indicator that a software package
+has been installed on the system. For certain files, which consist
+of fixed-length records, the length of the file reveals how many
+records are in the file. These examples illustrate the difficulty
+of deciding what information should be protected and what should
+not. It's important that you protect file access that is not crucial
+to your application. Similarly, you should allow access only to
+system commands that are essential to your application and those
+that you are confident do not pose a risk. Among other serious
+problems, system commands can be used to bypass file system security.
+<P>
+Network access involves more subtle issues. For example, many
+Java developers have been confused by Netscape Navigator's policy
+of permitting classes to open network connections only to the
+same host from which they were loaded. If you work in an organization
+that uses a firewall for security between the internal network
+and the Internet, you probably understand. Behind firewalls, it's
+common for access between machines to be loosely controlled. Once
+an applet begins running on one machine behind the firewall, access
+to other machines in the organization might be possible via the
+network.
+<P>
+It's possible to find other policies that offer more flexibility
+while still maintaining reasonable security. You might permit
+a list of prohibited network addresses (or address ranges) to
+be specified via a configuration option. If your application is
+strictly for use within your organization, you might permit applets
+always to access sites outside your firewall, but permit internal
+access only if the applet originated within the firewall. You
+still have to think seriously about the security issues. For instance,
+the application with the configuration option could easily be
+compromised by a user who didn't understand the issues (<A HREF="ch20.htm" >see Chapter 20</A>,
+&quot;A User's View of Security,&quot; for a discussion of user
+perception of security issues).
+<P>
+Another potential problem with allowing network access is the
+possibility that a malicious applet could masquerade as the application's
+user. Because the communication would actually be coming from
+the user's machine, it would be difficult to determine that it
+was not actually the user who initiated it. For example, while
+browsing the Web, you could execute an applet that would send
+mail on your behalf. For this reason, it's a good idea to prohibit
+connections to certain reserved port numbers (such as TCP port
+25, the mail transport protocol port) even when other network
+access is permitted. That measure doesn't completely solve the
+problem, but it helps. The real solution to the problem will come
+when it becomes common for people to use digital signatures on
+all their communications; unsigned mail will be immediately suspect,
+rather than being accepted as it is today.
+<P>
+Thread and thread group access is somewhat less complicated. There
+is little reason for downloaded code to be given access to the
+applications's threads. Downloaded code should probably be run
+in a thread group of its own and should only be allowed to modify
+that group. You may choose to allow one applet to modify the threads
+or thread groups of other applets, depending on the degree to
+which applets need to interact. However, there is little risk
+of serious data theft or loss involved in thread access. It is
+important, however, to restrict the maximum priority of threads
+belonging to untrusted code, to ensure that they don't become
+nuisances (see the section Denial of Service Attacks, later in
+this chapter).
+<P>
+Factory objects dynamically create specialized objects of a general
+type, choosing the specific type based on information provided
+at runtime. (The <TT>new</TT> operator
+makes up its mind at compile time.) If an untrusted object were
+to be installed as a factory, it might create objects that <I>spoof</I>
+important functions, pretending to perform the function properly
+while actually doing something else.<P>
+<P>
+<CENTER><B>Table 21.1. Security Manager Methods.</B><p>
+<TABLE BORDERCOLOR=#000000 BORDER=1 width=100%>
+<TR VALIGN=TOP><TD WIDTH=25%><I>Method</FONT></I></TD><TD WIDTH=20%><I>Description</FONT></I>
+</TD><TD WIDTH=20%><I>Parameters</FONT></I></TD><TD WIDTH=30%><I>Calling Methods</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=589><I>Local File System Access</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkRead(int)</TT>
+</TD><TD WIDTH=20%>Checks read access to the specified file descriptor</FONT>
+</TD><TD WIDTH=20%>A system-dependent file descriptor</FONT>
+</TD><TD WIDTH=30%><TT>FileInputStream(FileDescriptor)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkRead(String)</TT>
+</TD><TD WIDTH=20%>Checks read access to the named file</FONT>
+</TD><TD WIDTH=20%>A system-dependent file name</FONT>
+</TD><TD WIDTH=30%><TT>File.exists()</TT>,
+<BR>
+<TT>File.canRead()</TT>,<BR>
+<TT>File.isFile()</TT>,<BR>
+<TT>File.isDirectory()</TT>,<BR>
+<TT>File.lastModified()</TT>,<BR>
+<TT>File.length()</TT>,<BR>
+<TT>File.list()</TT>,<BR>
+<TT>FileInputStream(String)</TT>,<BR>
+<TT>RandomAccessFile(String,<BR>
+String)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkRead(String, Object)</TT>
+</TD><TD WIDTH=20%>Checks read access to the named file in both the current context and the context represented by the <TT>Object</TT> parameter1</FONT>
+</TD><TD WIDTH=20%>A system-dependent file name and an object representing a security context</FONT>
+</TD><TD WIDTH=30%>(Not currently called) </FONT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkWrite(int)</TT>
+</TD><TD WIDTH=20%>Checks write access to the specified file descriptor</FONT>
+</TD><TD WIDTH=20%>A system-dependent file descriptor</FONT>
+</TD><TD WIDTH=30%><TT>FileOutputStream (FileDescriptor)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkWrite(String)</TT>
+</TD><TD WIDTH=20%>Checks write access to the named file</FONT>
+</TD><TD WIDTH=20%>A system-dependent file name</FONT>
+</TD><TD WIDTH=30%><TT>File.canWrite()</TT>, <BR><TT>File.mkdir()</TT>, <BR><TT>File.renameTo(File)</TT>, <BR> <TT>FileOutputStream(String)</TT>, <BR> <TT>RandomAccessFile(String, <BR> String)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=589><I>System Access</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkExec(String)</TT>
+</TD><TD WIDTH=20%>Checks whether to allow execution of a system command</FONT>
+</TD><TD WIDTH=20%>A system-dependent command line</FONT>
+</TD><TD WIDTH=30%><TT>Process.exec(String, <BR> String[])</TT>, <BR><TT>Process.exec(String[], <BR>String[])</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkPropertiesAccess()</TT>
+</TD><TD WIDTH=20%>Checks access to the list of system properties</FONT>
+</TD><TD WIDTH=20%>None</FONT></TD><TD WIDTH=30%><TT>System.getProperties()<BR>System.setProperties()</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=589><I>Network Access</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkAccept(String, int)</TT>
+</TD><TD WIDTH=20%>Checks whether a connection from a particular host and port may be accepted</FONT>
+</TD><TD WIDTH=20%>A host name and port number</FONT>
+</TD><TD WIDTH=30%><TT>ServerSocket.accept()</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkConnect(String, int)</TT>
+</TD><TD WIDTH=20%>Checks whether an attempt to connect to a particular host and port will be allowed</FONT>
+</TD><TD WIDTH=20%>A host name and port number</FONT>
+</TD><TD WIDTH=30%><TT>InetAddress.getByName(String) <BR>InetAddress.getAllByName (String) <BR>Socket(String, int, boolean) <BR>Socket(InetAddress, int, boolean) <BR>DatagramSocket.send (DatagramPacket) <BR>DatagramSocket.receive <BR>(DatagramPacket)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkConnect(String, int, Object)</TT>
+</TD><TD WIDTH=20%>Checks whether an attempt to connect to a particular host and port will be allowed in both the current execution context and the context represented by the <TT>Object parameter</TT><SUP>1</SUP>.
+</TD><TD WIDTH=20%>A host name, port number, and object representing a security context</FONT>
+</TD><TD WIDTH=30%>(Not currently called) context and the context</FONT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkListen(int)</TT>
+</TD><TD WIDTH=20%>Checks whether listening on a particular port is allowed</FONT>
+</TD><TD WIDTH=20%>A port number</FONT></TD><TD WIDTH=30%><TT>ServerSocket(int, int) DatagramSocket(int)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=589><I>Thread Manipulation</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkAccess(Thread)</TT>
+</TD><TD WIDTH=20%>Checks access to thread operations</FONT>
+</TD><TD WIDTH=20%>A thread</FONT></TD><TD WIDTH=30%><TT>Thread.checkAccess()</TT><sup>2</sup><BR> <TT>Thread.stop()Thread.stop(Throwable)<BR> Thread.suspend()Thread.resume()<BR>Thread.setPriority(int) <BR>Thread.setName(String) 
+<BR>Thread.setDaemon(boolean)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkAccess(ThreadGroup)</TT>
+</TD><TD WIDTH=20%>Checks access to thread group operations</FONT>
+</TD><TD WIDTH=20%>A thread group</FONT></TD><TD WIDTH=30%><TT>ThreadGroup.checkAccess()</TT><SUP>2</SUP> <BR><TT>ThreadGroup(ThreadGroup, String) <BR>ThreadGroup.setDaemon(boolean) <BR>ThreadGroup.setMaxPriority(int) 
+<BR>ThreadGroup.stop()ThreadGroup.suspend()<BR>ThreadGroup.resume()<BR>ThreadGroup.destroy()<BR>Thread.init(ThreadGroup, <BR>Runnable,String)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=589><I>Factory Object Creation</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkSetFactory()</TT>
+</TD><TD WIDTH=20%>Checks access to replace network-related factory objects</FONT>
+</TD><TD WIDTH=20%>None</FONT></TD><TD WIDTH=30%><TT>ServerSocket.setSocket <BR>Factory(SocketImplFactory) <BR>Socket.setSocketImpl <BR>Factory(SocketImplFactory) <BR>URL.setURLStreamHandler <BR>Factory(URLStreamHandler Factory) 
+<BR>URLConnection.setContent <BR>HandlerFactory(Content <BR>HandlerFactory)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=589><I>Interpreter Manipulation</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkLink(String)</TT>
+</TD><TD WIDTH=20%>Checks whether loading a dynamic library will be allowed</FONT>
+</TD><TD WIDTH=20%>A filename or library name</FONT>
+</TD><TD WIDTH=30%><TT>Runtime.load(String) <BR>Runtime.loadLibrary(String)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkExit(int)</TT>
+</TD><TD WIDTH=20%>Checks access to shutting down the Java interpreter</FONT>
+</TD><TD WIDTH=20%>An exit status</FONT></TD><TD WIDTH=30%><TT>Runtime.exit(int)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkCreateClassLoader()</TT>
+</TD><TD WIDTH=20%>Checks whether a new class loader may be created</FONT>
+</TD><TD WIDTH=20%>None</FONT></TD><TD WIDTH=30%><TT>ClassLoader()</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkPackageAccess(String)</TT>
+</TD><TD WIDTH=20%>Checks whether classes in a package may be loaded</FONT>
+</TD><TD WIDTH=20%>A package name</FONT></TD><TD WIDTH=30%>(Not currently called)</FONT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkPackageDefinition (String)</TT>
+</TD><TD WIDTH=20%>Checks whether a new class may be defined in a package</FONT>
+</TD><TD WIDTH=20%>A package name</FONT></TD><TD WIDTH=30%>(Not currently called)</FONT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=589><I>Window Creation</FONT></I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=25%><TT>checkTopLevelWindow()</TT>
+</TD><TD WIDTH=20%>Checks whether a new toplevel window may be created<sup>3</sup></FONT>
+</TD><TD WIDTH=20%>None</FONT></TD><TD WIDTH=30%><TT>Window()
+<BR>
+Window(Frame)</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=100%><SUP>1</SUP>The nature of security context objects is application-dependent, and only the security manager needs to understand them. The security context objects are acquired by calling the 
+<TT>SecurityManager.getSecurityContext()</TT> method. In a typical application that bases its trust of classes on the network host from which they were loaded, <TT>URL</TT> or <TT>InetAddress</TT> objects might be valid security context objects.</FONT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=100%><SUP>2</SUP>Threads and thread groups call their respective <TT>SecurityManager.checkAccess</TT> methods to check on many different operations. Each encapsulates that call within its own <TT>checkAccess</TT> methods, 
+which make the only direct calls to the security manager. All the other methods listed make indirect calls through the methods in the <TT>Thread</TT> and <TT>ThreadGroup</TT> classes.</FONT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=4 WIDTH=100%><SUP>3</SUP>Unlike the other security check methods, <TT>checkTopLevelWindow</TT> returns a value. If creating a top-level window is not permitted at all, the method throws a <TT>SecurityException</TT>, but if the 
+window creation is permitted, the method returns a boolean value. If the value is <TT>false</TT>, the window is adorned with a prominent warning that the code in control of the window is not trusted.</FONT>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+For example, the <TT>SocketImplFactory</TT>
+object creates <TT>SocketImpl</TT>
+objects when new sockets are created. The <TT>SocketImpl</TT>
+object, as its name suggests, provides the actual implementation
+of the socket. (This seems like a funny way to do things, but
+it permits subclassing <TT>SocketImpl</TT>
+and adding knowledge of how to traverse a corporate firewall.
+A new <TT>SocketImplFactory</TT> would
+return the appropriate kind of socket implementation, depending
+on whether the address was outside the firewall.) If an untrusted
+object were substituted for the trusted <TT>SocketImpl</TT>,
+it could redirect the socket to another host or alter the data
+being sent across the socket, without the user of the application
+being aware of the deception.
+<P>
+Because <TT>ClassLoader</TT> objects
+cooperate with the security manager to enforce security policy
+(see the section Implementing Class Loaders, later in this chapter),
+an untrusted <TT>ClassLoader</TT>
+could compromise the application's entire security architecture.
+Additionally, because packages are an important part of the Java
+protection mechanism, <TT>ClassLoader</TT>
+objects should check with the security manager before creating
+a new class within a package and before allowing an untrusted
+class to use a particular package (using the <TT>checkPackageDefinition</TT>
+and <TT>checkPackageAccess</TT> methods
+of the security manager, respectively).
+<P>
+<I>Native methods</I> are written in some language other than
+Java. They might be a source of security problems-they can bypass
+the Java security mechanisms, although they don't have to (<A HREF="ch33.htm" >see Chapter 33</A>
+for more information). Because of this, loading a native method
+library might compromise the security of your application.
+<P>
+It's fairly obvious why untrusted code shouldn't be allowed to
+cause the Java virtual machine to exit. Not only would it be extremely
+annoying, but a user could lose a significant amount of work,
+or an important server could be taken out of service.
+<P>
+Java gives the security manager a say in the creation of new top-level
+windows, with an extra twist. Not only can the security manager
+permit the request or refuse it outright, it can compromise by
+allowing the window creation so long as a warning is displayed
+in the window. The text of the warning is taken from a system
+property. Refusing window creation might be useful in controlling
+some kinds of nuisance attacks, such as an applet that filled
+your screen with thousands of useless, unresponsive windows, obscuring
+the user's work and making it difficult even to shut down the
+application. The warning helps to make the user aware of possible
+deceptions. Both of these kinds of problems are discussed in the
+next section.
+<H3><B>Deception and Denial-of-Service Attacks</B></H3>
+<P>
+Theft and destruction of information aren't the only unpleasant
+things that a malicious applet can do. An applet can deceive a
+user into voluntarily providing sensitive information. Without
+proper controls, untrusted code could mount what is called a <I>denial-of-service
+attack</I> by attempting to consume such a large amount of some
+resource (CPU cycles, memory, network bandwidth, or even screen
+space) that no more is left for the user of your application.
+<P>
+People are often easily deceived. That's why the AWT provides
+a way for the security manager to attach a warning to windows
+owned by untrusted code. Take advantage of that capability. It's
+not a perfect answer, though. For example, applets that run inside
+the main Netscape window, rather than creating their own top-level
+windows, display no such warning, but can do most of the same
+things. As more and more powerful applications become available
+in applet form, users may become accustomed to having mostly &quot;untrusted
+applet windows&quot; on their screens, and the warnings will lose
+their force. Ultimately, the solution to deception attacks will
+come with increased user awareness of the problem.
+<P>
+Denial-of-service attacks are a little easier to control. There
+are several steps that you can take to prevent such attacks, or
+at least severely limit them. The security manager is consulted
+whenever the following types of resources are allocated: threads,
+thread groups, network connections, and windows. If the application
+keeps track of applets or other downloaded programs appropriately,
+the security manager could track an applet's usage of certain
+resources and eventually begin denying the requests. This technique
+could prevent many simple abuses.
+<P>
+Unfortunately, the security manager doesn't have all the information
+that it needs to do a good job of resource tracking. When the
+<TT>checkAccess(ThreadGroup)</TT>
+method is called, for example, the security manager doesn't know
+whether a thread is being created or an entire thread group is
+being destroyed. Sockets don't keep track of the number of bytes
+that have passed through them, and threads don't keep track of
+their CPU utilization.
+<P>
+It might be possible to add some of this resource tracking yourself
+by being exceptionally tricky. It would be much better, however,
+if a future Java release provided better ways to track the resources
+used by particular threads or thread groups or by classes from
+a particular source. That would give application authors much
+more power to deal effectively with denial-of-service attacks.
+<P>
+Currently, the best available solution is to make sure that the
+user of the application has good control over what is happening.
+Downloaded code should run in thread groups with lowered maximum
+priorities to ensure that trusted application code will always
+get a chance to run. Along with that, it would be nice for users
+to be able to pop up some sort of status display, showing the
+status of all thread groups and the source of the classes running
+in each. As a last resort, knowledgeable users could use such
+displays to shut down nuisance applets. That's definitely not
+the best solution, but it's wise to provide <I>some</I> way for
+the user to retain ultimate control.
+<H2><A NAME="KeepingtheSecurityPolicyManageable"><B><FONT SIZE=5 COLOR=#FF0000>Keeping
+the Security Policy Manageable</FONT></B></A></H2>
+<P>
+You've probably realized by now that security policies can be
+very complex, with many subtleties. If you are content to support
+applets that can put on a good show, but can't do anything really
+useful, it's not too bad. On the other hand, if you want downloaded
+applications to be able to do useful things without doing harmful
+things, you have some careful thinking to do. Is there any way
+to make it simpler?
+<P>
+Fortunately, the answer is &quot;yes.&quot; Network security is
+never easy, but there are ways of organizing your thoughts about
+security policy to keep the complexity from overwhelming you.
+<P>
+Some types of Java applications will always have complex security
+issues to deal with, because they have a broad purpose. An example
+is a desktop manager for a cheap Internet terminal device. Because
+such devices don't have much local storage, they have to use the
+network as a source for all sorts of full-fledged applications.
+In that environment, it's impossible to predict in advance what
+a downloaded application will need to do.
+<P>
+If you're building a more specialized application, you can make
+some simplifying assumptions about the requirements of downloaded
+programs. In particular, you should design your security policy
+around the kinds of objects that the users of your applications
+will be thinking of-application-level resources and abstractions.
+This will not only help you think about the security policy, it
+will also help users understand the implications of security configuration
+decisions that they might have to make.
+<P>
+Once you identify some application-level abstractions upon which
+to base your security model, write special classes that provide
+access to system resources based on those abstractions. These
+classes should implement their own security checks, based on their
+understanding of the resources. Take care that those security
+restrictions can't be bypassed by subclassing. Then write your
+security manager to trust those classes.
+<H3><B>A Calendar Management System</B></H3>
+<P>
+Here's an example. Think about a calendar management program that
+permits &quot;agents&quot; from other people to enter your system,
+querying and possibly modifying your calendar. Such a system would
+work much like current distributed calendar management systems,
+which work using a client-server model. However, by requiring
+other users' agents to come to your machine to query your calendar,
+the system could be more convenient while doing a <I>better</I>
+job of protecting your privacy.
+<P>
+Suppose a friend wants to invite you to the office Christmas party.
+Her agent might enter your system and do something like this:
+<BLOCKQUOTE>
+<TT>Calendar joecal = new Calendar(&quot;joe&quot;);
+<BR>
+<BR>
+// 20 December 1996, 7:00 p.m.&nbsp;&nbsp;Month 0 is January,
+month 11 is December!<BR>
+Date begin = new Date(96, 11, 20, 19, 0);<BR>
+Date end = new Date(96, 11, 20, 24, 0);&nbsp;&nbsp;// midnight
+<BR>
+<BR>
+if (!joecal.busy(begin, end)) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// no plans, so you're invited!<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;joecal.invite(begin,
+end, &quot;Winter Garden Ballroom&quot;,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Office
+Christmas party&quot;, true);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+The final parameter means &quot;rsvp&quot;.<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In order to handle this, the <TT>Calendar</TT>
+object called <TT>joecal</TT> must
+follow these steps:
+<OL>
+<LI>Find out which file contains the calendar for user <TT>joe</TT>
+and open it (this probably involves several file system accesses).
+<LI>Read the file to find out whether anything is planned for
+the night of December 20.
+<LI>Write to some file, and possibly send electronic mail, to
+record the invitation.
+</OL>
+<P>
+In designing the security model for this application, you shouldn't
+really think in terms of files and directories; that will make
+things much more complex, and you'll also miss some important
+opportunities. You should think in terms of calendars, appointments,
+and invitations.
+<P>
+The calendar object should have its own security model, making
+sure that it reads <I>only </I>calendar files and no others. It
+should provide a limited interface to the calendars-querying whether
+a particular time period is free, searching for free time periods
+of a given duration during a particular week, and recording an
+invitation for a particular event.
+<P>
+The security manager should continue to disallow file system access
+as usual, except in the case where the request is actually being
+made from the <TT>Calendar</TT> class.
+(The security manager has access to enough information about the
+execution context to be able to verify that case; this is discussed
+later in this chapter.) Because the security manager and the <TT>Calendar</TT>
+class are both part of the same application, the <TT>Calendar</TT>
+class can be trusted.
+<P>
+The interesting part of the whole thing is the <TT>Calendar</TT>
+class's security model. Besides limiting access to real calendar
+files, it could perform other functions as well. It wouldn't have
+to obey every request blindly; just like the Java security manager,
+it could choose to accept or deny a request based on the source
+of the requestor. It could even <I>lie</I> on your behalf.
+<P>
+If you had a good relationship with your boss (and if you're the
+kind of person who carefully records every commitment in your
+calendar), it might be a lot easier for both of you if your boss
+could simply enter meetings into your calendar when necessary.
+You would be notified, but you wouldn't have to be involved when
+the meeting was scheduled. You probably wouldn't want your boss
+scheduling meetings for you on weekends or holidays, however.
+Additionally, if you turned out to already have a commitment for
+a particular time, you might not want it known that you had scheduled
+an interview for a new job. The <TT>Calendar</TT>
+class should let you specify that your boss has, for example,
+<I>probe</I>, <I>freesearch</I>, and <I>add</I> access for work
+hours on your calendar, but not for nights, weekends, or holidays.
+<I>Read</I> access, by which your boss might learn details about
+a commitment, could be withheld.
+<P>
+Other alternatives are possible. If there's a manager in another
+department who enjoys long, unfocused, boring meetings, and likes
+to invite you along for some reason, you could arrange for your
+calendar to handle invitations from that manager specially. It
+could forward the invitations to your electronic mail, rather
+than recording them directly, so that you could invent an excuse.
+It could even pretend to find a commitment no matter what time
+was queried.
+<P>
+If you were designing a security model for this application by
+thinking in terms of the low-level system resources that the <TT>SecurityManager</TT>
+class understands, things would be very complex. For one thing,
+the application requires finer granularity than the <TT>SecurityManager</TT>
+can provide-you want to restrict access not to an entire file,
+but to <I>parts</I> of the file. Thinking about security at the
+level of the application is a lot simpler, and it also permits
+you to offer additional privacy features and flexibility above
+and beyond what the built-in Java security model supports.
+<H2><A NAME="ImplementingClassLoaders"><B><FONT SIZE=5 COLOR=#FF0000>Implementing
+Class Loaders</FONT></B></A></H2>
+<P>
+Unlike most other portions of an application, class loaders must
+work both sides of the security fence. They must take care to
+consult the security manager before allowing certain operations,
+and they must cooperate with the security manager to help it learn
+about classes and make decisions about access requests. They must
+also avoid breaking any of the assumptions about classes on which
+the security manager relies.
+<P>
+When defining a class, the class loader must identify the package
+in which the class belongs and call <TT>SecurityManager.checkPackageDefinition</TT>
+before actually loading the class into that package. Membership
+in a package gives a class special access to other classes in
+the package and can provide a way to circumvent security restrictions.
+<P>
+When the class loader defines a class, it must also <I>resolve</I>
+the class. Resolving a class involves locating and loading, if
+necessary, other classes that the new class requires. This is
+done by calling <TT>ClassLoader.resolveClass(Class)</TT>.
+During the resolution process, the Java runtime calls the <TT>loadClass(String,
+boolean)</TT> method in the same <TT>ClassLoader</TT>
+that loaded the class currently being resolved. (If the boolean
+parameter is true, it means that the newly loaded class must be
+resolved also.)
+<P>
+The class loader must be careful not to load a class from an untrusted
+source that will mirror a trusted class. The <TT>CLASSPATH</TT>
+should be searched first for system classes.  This is especially
+important during the resolution process.
+<P>
+Additionally, the class loader should check with the security
+manager about whether the class being resolved is even allowed
+to use the classes in the requested package. The security manager
+might wish to prevent untrusted code from using entire packages.
+<P>
+Here's an example of steps you might take to load a class securely:
+<BLOCKQUOTE>
+<TT>protected Class loadClass(String cname,
+boolean resolve) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+Check to see if I've already loaded this one from my source.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Class class = (Class) myclasses.get(cname);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (class == null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+If not, then I have to do security checks.<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Is the requestor allowed to use classes in this package?<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SecurityManager
+security = System.getSecurityManager();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(security != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+pos = cname.lastIndexOf('.');<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(pos &gt;= 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;security.checkPackageAccess(cname.substring(0,
+pos));<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+If there's a system class by this name, use it.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+findSystemClass(cname);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (Throwable
+e) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+otherwise, go find it and load it.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class
+= fetchClass(cname);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (class == null) throw new ClassNotFoundException();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (resolve) resolveClass(class);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return class;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In the example, the real work of actually retrieving a class and
+defining it is done in the <TT>fetchClass</TT>
+method. The primary security responsibility of that method is
+to call <TT>SecurityManager.checkPackageDefinition(package)</TT>
+before actually defining the class, as described previously.
+<P>
+The way this resolution process works (with the <TT>ClassLoader</TT>
+that loaded the class being responsible for resolving class dependencies)
+is one reason why applications typically define one class loader
+for each different source of classes. When a class from one source
+has a dependency on some class named, for example, <TT>MyApplet</TT>,
+it would probably be a mistake to resolve the dependency using
+a class with the same name from another source.
+<P>
+The other side of the class loader's responsibility for security
+is to maintain information about classes and provide that information
+to the security manager. The type of information that is important
+to the security manager depends on the application. Currently,
+most Java applications base security decisions on the network
+host from which a class was loaded, but other information may
+soon be used instead.
+<H2><A NAME="ImplementingSecurityManagers"><B><FONT SIZE=5 COLOR=#FF0000>Implementing
+Security Managers</FONT></B></A></H2>
+<P>
+Implementing a security manager can involve a lot of work, but
+once you have designed a coherent security policy, it isn't particularly
+complicated. Most of the work involved stems from the fact that
+<TT>SecurityManager</TT> has a lot
+of methods that you need to implement.
+<P>
+Once the security manager has decided to allow an operation, all
+it needs to do is return. Alternatively, if the security manager
+decides to prohibit an operation, it just needs to throw a security
+exception. As mentioned earlier in this chapter, the decision
+is the hard part.
+<P>
+The security manager can examine the execution stack to find out
+which classes have initiated an operation. If an object's method
+is being executed at the time that the security manager is called,
+the class of that object is requesting the current operation (either
+directly or indirectly). The important thing about the objects
+on the stack, from the security manager's point of view, is not
+the objects themselves but their classes and those classes' origins.
+In Java, each object contains a pointer to its <TT>Class</TT>
+object, and each class can return its class loader via the <TT>getClassLoader()</TT>
+method. The implementation of <TT>SecurityManager</TT>
+uses those facts, along with native methods that can find the
+objects on the stack itself, to find out the classes and class
+loaders that have objects on the execution stack. Figure 21.1
+depicts the Java execution stack while the security manager is
+executing.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f21-1.gif" ><B>Figure 21.1 : </B><I>The security manager and the Java execution stack.</I></A>
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=582><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Because the security manager doesn't really care about the objects themselves-just the classes and class loaders-the documentation for the <TT>SecurityManager</TT> class blurs the distinction a bit. It refers to &quot;the classes on the execution 
+stack&quot; and &quot;the class loaders on the execution stack.&quot; The following paragraphs use the same phrases. Strictly speaking, the classes in question aren't actually on the stack, but they have instances that are. Likewise, the class loaders in 
+question aren't really on the stack, but they are responsible for classes that are. It's just a lot easier to talk about &quot;a <TT>ClassLoader</TT> on the stack&quot; than &quot;an object on the stack that is an instance of a class that was loaded by a 
+<TT>ClassLoader</TT>.&quot;
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The JDK appletviewer application and Netscape Navigator 2.0 have
+simple security models: if a class is not a system class (that
+is, if it wasn't loaded from CLASSPATH), it isn't trusted and
+isn't allowed to do very much. If your security model is that
+simple, your security manager will be simple, too. Calling <TT>SecurityManager.inClassLoader()</TT>
+tells you whether the operation is being requested by untrusted
+code. It returns true if there is any class loader at all on the
+stack. Recall that system classes don't have a class loader, so
+if there's a class loader on the stack anywhere, there's an untrusted
+class in control.
+<P>
+If an operation is to be prohibited in general, but allowed if
+it comes from a particular trusted class (as in the <TT>Calendar</TT>
+example), you can investigate further. <TT>SecurityManager.class
+<BR>
+LoaderDepth()</TT> tells you how deep on the stack the
+first class loader is. Coupled with <TT>SecurityManager.classDepth(String)</TT>,
+it's possible to determine whether a particular trusted class
+is really in control:
+<BLOCKQUOTE>
+<TT>if (classDepth(&quot;COM.Neato.Calendar&quot;)
+&lt; classLoaderDepth()) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The Calendar class is in control, so
+we can allow the request.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;return;
+<BR>
+}<BR>
+else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;throw new SecurityException(&quot;attempted
+to read file&quot; + filename);<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>inClass(String)</TT> method
+might also be helpful in this situation, if you're confident that
+the class you're interested in doesn't call any untrusted classes
+along the way. Be careful, however, because <TT>inClass</TT>
+simply tells you that the specified class is on the stack somewhere.
+It says nothing about how deep the class is or what classes lie
+above it on the stack.
+<P>
+Currently, Java applications typically don't support multiple
+levels of trust-a class is either trusted or it's not. If you
+are designing an application that can verify the source of a class,
+you may suddenly need more information about the class loader
+responsible for the object requesting an operation. The <TT>currentClassLoader()</TT>
+method returns the <TT>ClassLoader</TT>
+object highest on the stack. You can query that object for application-specific
+information about the source of the class.
+<P>
+Finally, if all those other methods aren't enough to implement
+your security policy, <TT>SecurityManager</TT>
+provides the <TT>getClassContext()</TT>
+method. It returns an array of <TT>Class</TT>
+objects, in the order that they appear on the stack, from top
+to bottom. You can use any <TT>Class</TT>
+methods on them to learn various things: <TT>getName()</TT>,
+<TT>getSuperclass()</TT>, and <TT>getClassLoader()</TT>,
+among others.
+<P>
+Building your application's security manager takes work, and it
+can be complicated, but it doesn't have to be a nightmare. Just
+be sure to design a coherent, application-specific security policy
+<I>first</I>.
+<H2><A NAME="Summary"><B><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></B></A>
+</H2>
+<P>
+Any application that loads and executes Java code from untrusted
+sources must have an effective, coherent security policy. Designing
+and implementing the security policy are two of the most important
+tasks in Java application development.
+<P>
+An application security policy must build upon and interact with
+the Java security model. The <TT>SecurityManager</TT>
+class provides the basis for a security policy implementation,
+including the methods that actually make access decisions and
+utility methods that provide important information about the execution
+environment. <TT>ClassLoader</TT>
+objects, responsible for dynamically loading classes from various
+sources, cooperate with the <TT>SecurityManager</TT>
+by providing information about the origin of particular classes.
+By building specialized versions of <TT>SecurityManager</TT>
+and <TT>ClassLoader</TT>, you can
+implement the security policies that meet the needs of your application
+and your users. 
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch20.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch22.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

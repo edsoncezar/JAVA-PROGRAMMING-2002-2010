@@ -1,0 +1,854 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Introducing Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0362-0368.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0376-0376.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-369"><P>Page 369</P></A>
+
+
+
+
+
+
+<PRE>
+
+   }
+
+   catch(InterruptedException e)
+
+   {
+
+    System.out.println(e);
+
+   }
+
+
+
+   synchronized(gas.clientVector)
+
+   {
+
+    clientNumber = gas.clientVector.size();
+
+    for (int i = 0; i &lt; clientNumber; i++)
+
+    {
+
+     ClientConnect cc =
+
+      (ClientConnect)gas.clientVector.elementAt(i);
+
+     if (cc.isAlive() == false)
+
+     {
+
+      gas.clientVector.removeElementAt(i);
+
+      gas.clientList.delItem(i);
+
+            clientNumber&#151;;
+
+      i&#151;;
+
+     }
+
+    }
+
+   }
+
+  }
+
+ }
+
+}
+
+</PRE>
+
+
+
+
+<H4><A NAME="ch10_ 23">
+
+The Chat Client
+
+</A></H4>
+
+
+
+<P>AppletServer is fairly simple. It passes data received back to all clients and is designed
+
+to be easily modified and extended. The client side of the program, ChatApplet, is similar.
+
+It sends all input to the server and displays all responses (see listing 10.34). All the
+
+code here is in one class; however, the code is discussed in three sections. The first
+
+section covers the init(), start(), and stop() methods. The next section discusses the run()
+
+method. The last section covers event handling and several other methods.
+
+</P>
+
+
+
+<P>The init() method serves two functions; it lays out the screen and reads a parameter
+
+from the HTML file. The port number must be specified in the HTML file. If it reads a
+
+number less than 1024, it defaults to port 1976. The rest of the method is devoted to laying out
+
+the GUI. Basically, three panels are used, each being laid out with the BorderLayout.
+
+One panel contains the connect, send, and disconnect Buttons. Another only holds
+
+the TextArea where the conversation is displayed. The final panel holds a TextField where
+
+the user enters input.
+
+</P>
+
+
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-370"><P>Page 370</P></A>
+
+
+
+
+
+
+
+<P>Listing 10.34 Continued
+
+</P>
+
+
+
+
+
+<P>Listing 10.34 ChatApplet.java First of Three
+
+</P>
+
+
+<PRE>
+
+import java.net.*;
+
+import java.io.*;
+
+import java.lang.*;
+
+import java.awt.*;
+
+import java.applet.*;
+
+
+
+public class ChatApplet extends Applet implements Runnable
+
+{
+
+ int port;
+
+ Socket socket;
+
+ DataInputStream dis;
+
+ PrintStream ps;
+
+ String name;
+
+ boolean connected;
+
+ boolean newbie = true;
+
+ Thread thread;
+
+ int reconTries = 0;
+
+
+
+ TextField writemsg;
+
+ TextArea msgs;
+
+ Button connect;
+
+ Button send;
+
+ Button disconnect;
+
+
+
+ public void init()
+
+ {
+
+  String p = new String(this.getParameter(&quot;port&quot;));
+
+  port = Integer.parseInt(p);
+
+  if (port &lt; 1024)
+
+  {
+
+    System.out.println(&quot;defaulting to port 1976&quot;);
+
+    port = 1976;
+
+  }
+
+
+
+  writemsg = new TextField();
+
+  msgs = new TextArea();
+
+  connect = new Button(&quot;Connect&quot;);
+
+  send = new Button(&quot;Send&quot;);
+
+  disconnect = new Button(&quot;Disconnect&quot;);
+
+
+
+  Panel p1 = new Panel();
+
+  p1.setLayout(new BorderLayout());
+
+</PRE>
+
+
+
+
+
+
+<A NAME="PAGENUM-371"><P>Page 371</P></A>
+
+
+
+
+
+
+
+
+<PRE>
+
+  p1.add(&quot;Center&quot;, msgs);
+
+
+
+  Panel p2 = new Panel();
+
+  p2.setLayout(new BorderLayout());
+
+  p2.add(&quot;Center&quot;, writemsg);
+
+
+
+  Panel p3 = new Panel();
+
+  p3.setLayout(new GridLayout(1, 3));
+
+  p3.add(connect);
+
+  p3.add(send);
+
+  p3.add(disconnect);
+
+  this.setBackground(Color.white);
+
+  this.setForeground(Color.black);
+
+  this.setLayout(new BorderLayout());
+
+  this.add(&quot;South&quot;, p2);
+
+  this.add(&quot;North&quot;, p3);
+
+  this.add(&quot;Center&quot;, p1);
+
+  this.show();
+
+ }
+
+
+
+ public void start()
+
+ {
+
+  msgs.setText(&quot;Please enter your name before&quot;);
+
+  msgs.appendText(&quot;pressing connect.\n&quot;);
+
+ }
+
+
+
+ public void stop()
+
+ {
+
+  try
+
+  {
+
+   send(name + &quot; has left the chat room&quot;);
+
+   dis.close();
+
+   ps.close();
+
+   socket.close();
+
+  }
+
+  catch(IOException e)
+
+  {
+
+   System.out.println(&quot;error shutting down connection&quot;);
+
+   System.out.println(e);
+
+  }
+
+
+
+  if ((thread != null) &amp;&amp; thread.isAlive())
+
+  {
+
+   thread.stop();
+
+   thread = null;
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-372"><P>Page 372</P></A>
+
+
+
+
+
+
+<PRE>
+
+  }
+
+ }
+
+</PRE>
+
+
+
+
+<P>Listing 10.35 consists solely of the run() method. The run() method loops endlessly
+
+(until disconnection), listening for data from the server. Each time a string is read via
+
+the DataInputStream, it is appended to the conversation unless it is an empty string. If
+
+the string is empty, the client assumes there is an error. It tries to reconnect to the server.
+
+After three failures, the applet gives up, notifies the user, and shuts down. Listing 10.35
+
+shows the run() method.
+
+</P>
+
+
+
+
+
+<P>Listing 10.35 ChatApplet.java Second of Three
+
+</P>
+
+
+
+
+<PRE>
+
+ public void run()
+
+ {
+
+  String str;
+
+  try
+
+  {
+
+   for(;;)
+
+   {
+
+    try
+
+    {
+
+     thread.sleep(1000);
+
+    }
+
+    catch(InterruptedException e)
+
+    {}
+
+    str = dis.readLine();
+
+
+
+    if(str != null)
+
+    {
+
+     msgs.appendText(str + &quot;\n&quot;);
+
+    }
+
+    else
+
+    {
+
+         if (reconTries &lt;= 2)
+
+         {
+
+      msgs.appendText(&quot;Connection Lost\n&quot;);
+
+      msgs.appendText(&quot;Attempting to restore connection\n&quot;);
+
+          reconTries++;
+
+      reconnect();
+
+         }
+
+         else
+
+         {
+
+          msgs.appendText(&quot;Tried to reconnect 3 times.\n&quot;);
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-373"><P>Page 373</P></A>
+
+
+
+
+
+
+
+
+<PRE>
+
+          msgs.appendText(&quot;Giving up, the server is down.\n&quot;);
+
+          try
+
+          {
+
+           dis.close();
+
+           ps.close();
+
+           socket.close();
+
+          }
+
+          catch(IOException e)
+
+          {
+
+            System.out.println(&quot;error closing connection&quot;);
+
+            System.out.println(e);
+
+          }
+
+           thread.stop();
+
+           thread = null;
+
+         }
+
+    }
+
+   }
+
+  }
+
+  catch(IOException e)
+
+  {
+
+   System.out.println(&quot;error communicating with server&quot;);
+
+   System.out.println(e);
+
+  }
+
+ }
+
+</PRE>
+
+
+
+
+<P>The final section of ChatApplet handles events and contains several methods used
+
+for communication purposes (see listing 10.36). The action() method determines whether
+
+the user is trying to send data, connect, or disconnect. If the user wants to send data, the
+
+applet first checks to make sure the user has connected to the server. Likewise, if the user
+
+is trying to connect, the client ensures that she has not already connected. The
+
+disconnect button calls the stop() method and resets the display if the user wants to reconnect.
+
+</P>
+
+
+
+<P>The connect() method is called when the user enters her name and presses the
+
+Connect button. It opens the Socket, DataInputStream, and PrintStream and starts the thread.
+
+The reconnect() method calls the connect() method if the connection is lost. Lastly, the
+
+send() method sends messages out over the PrintStream. The rest of the code follows:
+
+</P>
+
+
+
+<P>Listing 10.36 ChatApplet.java Third of Three
+
+</P>
+
+
+
+
+<PRE>
+
+ public boolean action(Event e, Object o)
+
+ {
+
+  if ((e.target == send) &amp;&amp; (e.arg != &quot;&quot;))
+
+  {
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+
+
+<A NAME="PAGENUM-374"><P>Page 374</P></A>
+
+
+
+
+
+<P>Listing 10.36 Continued
+
+</P>
+
+
+
+
+
+
+<PRE>
+
+   if (newbie == true)
+
+   {
+
+    msgs.appendText(&quot;You must first connect to the server.\n&quot;);
+
+     msgs.appendText(&quot;Please type your name and press connect.\n&quot;);
+
+      writemsg.requestFocus();
+
+   }
+
+   else
+
+   {
+
+    send(writemsg.getText());
+
+    writemsg.setText(&quot;&quot;);
+
+      writemsg.requestFocus();
+
+    return true;
+
+   }
+
+  }
+
+  else if (e.target == connect)
+
+  {
+
+    if (newbie == true)
+
+     {
+
+    connect();
+
+      newbie = false;
+
+      name = writemsg.getText();
+
+      writemsg.setText(&quot;&quot;);
+
+      writemsg.requestFocus();
+
+      msgs.setText(&quot;Begin chatting\n&quot;);
+
+     }
+
+   else
+
+    msgs.appendText(&quot;already connected!\n&quot;);
+
+   return true;
+
+  }
+
+  else if (e.target == disconnect)
+
+  {
+
+   stop();
+
+   newbie = true;
+
+     msgs.setText(&quot;enter your name and press connect\n&quot;);
+
+     writemsg.requestFocus();
+
+   return true;
+
+  }
+
+  return false;
+
+ }
+
+
+
+ public boolean connect()
+
+ {
+
+  boolean con = true;
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-375"><P>Page 375</P></A>
+
+
+
+
+
+
+<PRE>
+
+  try
+
+  {
+
+    socket = new Socket(this.getCodeBase().getHost(), port);
+
+    dis = new DataInputStream(socket.getInputStream());
+
+    ps = new PrintStream(socket.getOutputStream());
+
+      thread = new Thread(this);
+
+      thread.start();
+
+  }
+
+  catch(IOException e)
+
+  {
+
+   con = false;
+
+   System.out.println(&quot;connection failed&quot;);
+
+   System.out.println(e);
+
+  }
+
+  return con;
+
+ }
+
+
+
+ public boolean reconnect()
+
+ {
+
+  boolean recon;
+
+
+
+  recon = connect();
+
+  if (recon)
+
+  {
+
+   recon = true;
+
+  }
+
+  else
+
+  {
+
+   recon = false;
+
+  }
+
+  return recon;
+
+ }
+
+
+
+ public void send(String str)
+
+ {
+
+  ps.println(name + &quot;: &quot; + str);
+
+ }
+
+}
+
+</PRE>
+
+
+
+
+<H4><A NAME="ch10_ 24">
+
+Chat Wrap-Up
+
+</A></H4>
+
+
+
+<P>Overall, ChatApplet is fairly simple. It sends whatever the user types to a server
+
+and displays everything it is sent. Possible additions include a display window showing who
+
+is connected, private messages, or even multiple chat channels. All these require code that
+
+is
+
+</P>
+
+
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0362-0368.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0376-0376.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

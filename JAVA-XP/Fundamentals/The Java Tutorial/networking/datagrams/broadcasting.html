@@ -1,0 +1,238 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Broadcasting to Multiple Recipient</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="clientserver.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="..\end.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/networkingHeader.gif" width=26 height=26 align=bottom border=0 alt="Custom Networking | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>All About Datagrams</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Broadcasting to Multiple Recipient
+</h2>
+<p>
+<blockquote>
+
+In addition to <code>DatagramSocket</code>, which lets programs send
+packets to one another, java.net includes a class called
+<code>MulticastSocket</code>. This kind of socket is used on the
+client-side to listen for packets that the server broadcasts to
+multiple clients.
+<p>
+Let's rewrite the quote server so that it broadcasts
+<code>DatagramPacket</code>s to multiple recipients. Instead of sending
+quotes to a specific client that makes a request, the new server now
+needs to broadcast quotes at a regular interval. The client needs to be
+modifies sot that it passively listens for quotes and does so on a
+<code>MulticastSocket</code>.
+<p>
+This example is comprised of three classes which are modifications of
+the three classes from the previous example:
+<a href="example-1dot1\multicastserver.java"><code>MulticastServer</code></a>,
+<a href="http://docs.rinet.ru/Jtuta/networking/datagrams/example-1dot1/MulticastServerThread.java">
+<code>MulticastServerThread</code></a>, and
+<a href="http://docs.rinet.ru/Jtuta/networking/datagrams/example-1dot1/MulticastClient.java"><code>MulticastClient</code></a>.
+This discussion highlights
+the interesting parts of these classes.
+<p>
+Here is the new version of the server's main program.
+The differences between this code and the previous version,
+<code>QuoteServer</code>, are shown in bold:
+<blockquote>
+<pre>
+import java.io.*;
+public class <strong>MulticastServer</strong> {
+    public static void main(String[] args) throws IOException {
+        new <strong>MulticastServerThread</strong>().start();
+    }
+}
+</pre>
+</blockquote>
+Basically, the server got a new name
+and creates a <code>MulticastServerThread</code>
+instead of a <code>QuoteServerThread</code>.
+Now let's look at the <code>MulticastServerThread</code>
+which contains the heart of the server. Here's its class declaration:
+<blockquote>
+<pre>
+public class MulticastServerThread extends QuoteServerThread {
+    ...
+}
+</pre>
+</blockquote>
+We've made this class a subclass of <code>QuoteServerThread</code>
+so that it can use the constructor,
+and inherit some member variable and the <code>getNextQuote</code> method.
+Recall that <code>QuoteServerThread</code> creates a
+<code>DatagramSocket</code> bound to port 4445 and opens the quote file.
+The <code>DatagramSocket</code>'s port number doesn't actually matter
+in this example because the client never send anything to the server.
+<p>
+The only method explicitly implemented in <code>MulticastServerThread</code>
+is its <code>run</code> method. The differences between this <code>run</code>
+method and the one in <code>QuoteServerThread</code> are shown in bold:
+<blockquote>
+<pre>
+public void run() {
+    while (moreQuotes) {
+        try {
+            byte[] buf new byte[256];
+            <strong>// don't wait for request...just send a quote</strong>
+
+            String dString = null;
+            if (in == null)
+                dString = new Date().toString();
+            else
+                dString = getNextQuote();
+            buf = dString.getBytes();
+
+            <strong>InetAddress group = InetAddress.getByName(
+                                            "230.0.0.1");</strong>
+            DatagramPacket packet;
+            packet = new DatagramPacket(buf, buf.length, 
+                                        <strong>group, 4446</strong>);
+            socket.send(packet);
+
+            try {
+                sleep((long)Math.random() * FIVE_SECONDS);
+            } catch (InterruptedException e) { }
+        } catch (IOException e) {
+            e.printStackTrace();
+            moreQuotes = false;
+        }
+    }
+    socket.close();
+}
+</pre>
+</blockquote>
+The interesting change is how the <code>DatagramPacket</code> is
+constructed, in particular, the <code>InetAddress</code> and port used to construct
+the <code>DatagramPacket</code>. Recall that the previous example
+retrieved the <code>InetAddress</code> and port number from the packet sent to the
+server from the client. This was because the server needed to reply
+directly to the client. Now, the server needs to address multiple
+clients. So this time both the <code>InetAddress</code> and the port number are
+hard-coded.
+<p>
+The hard-coded port number is 4446 (the client must have a
+<code>MulticastSocket</code> bound to this port). The hard-coded
+<code>InetAddress</code> of the <code>DatagramPacket</code> is "230.0.0.1" and is a
+group identifier (rather than the Internet address of the machine on
+which a single client is running). This particular address was
+arbitrarily chosen from the reserved for this purpose.
+<p>
+Created in this way, the <code>DatagramPacket</code> is destined for
+all clients listening to port number 4446 who are member of the
+"230.0.0.1" group.
+<p>
+To listen to port number 4446, the new client program just created its
+<code>MulticastSocket</code> with that port number. To become a member
+of the "230.0.0.1" group, the client calls the
+<code>MulticastSocket</code>'s <code>joinGroup</code> method with the
+<code>InetAddress</code> that identifies the group. Now, the client is set up to
+receive <code>DatagramPacket</code>s destined for the port and group
+specified. Here's the relevant code from the new client program (which
+was also rewritten to passively receive quotes rather than actively
+request them). The bold statements are the ones that interact with the
+<code>MulticastSocket</code>:
+<blockquote>
+<pre>
+<strong>MulticastSocket socket = new MulticastSocket(4446);
+InetAddress group = InetAddress.getByName("230.0.0.1");
+socket.joinGroup(group);</strong>
+
+DatagramPacket packet;
+for (int i = 0; i &lt; 5; i++) {
+    byte[] buf = new byte[256];
+    packet = new DatagramPacket(buf, buf.length);
+    <strong>socket.receive(packet);</strong>
+
+    String received = new String(packet.getData());
+    System.out.println("Quote of the Moment: " + received);
+}
+<strong>socket.leaveGroup(group);</strong>
+socket.close();
+</pre>
+</blockquote>
+Notice that the server uses a <code>DatagramSocket</code> to broadcast
+packet received by the client over a <code>MulticastSocket</code>.
+Alternatively, it could have used a <code>MulticastSocket</code>. The
+socket used by the server to send the <code>DatagramPacket</code> is
+not important. What's important when broadcasting packets is the
+addressing information contained in the <code>DatagramPacket</code>,
+and the socket used by the client to listen for it
+<p>
+<hr>
+<strong>Try this</strong>:
+Run the <code>MulticastServer</code> and several clients.
+Watch how the clients all get the same quotes.	
+<hr>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="clientserver.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="..\end.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/networkingHeader.gif" width=26 height=26 align=top border=0 alt="Custom Networking | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>All About Datagrams</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

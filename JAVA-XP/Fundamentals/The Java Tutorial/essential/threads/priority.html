@@ -1,0 +1,376 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Understanding Thread Priority</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="lifecycle.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="multithreaded.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=bottom border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Understanding Thread Priority
+</h2>
+<p>
+<blockquote>
+
+Previously, this lesson claimed that threads run concurrently.
+While conceptually this is true, in practice it usually isn't. Most computer
+configurations have a single CPU, so threads actually run one at a time
+in such a way as to provide an illusion of concurrency. Execution of multiple
+threads on a single CPU, in some order, is called <em>scheduling</em>.
+The Java runtime supports a very simple, deterministic scheduling
+algorithm known as <em>fixed priority scheduling</em>. This algorithm
+schedules threads based on their <em>priority</em> relative to
+other runnable threads.
+<p>
+When a Java thread is created, it inherits its priority from the
+thread that created it. You can also modify a thread's priority at
+any time after its creation using the <code>setPriority</code> method.
+Thread priorities are integers ranging between
+<code>MIN_PRIORITY</code> and <code>MAX_PRIORITY</code> (constants defined in the <code>Thread</code> class).
+The higher the integer, the higher the priority.
+At any given time, when multiple threads are ready to be executed,
+the runtime system chooses the runnable thread with the highest
+priority for execution. Only when that thread stops, yields, or becomes
+not runnable for some reason
+will a lower priority thread start executing.
+If two threads of the same priority are waiting for the CPU,
+the scheduler chooses one of them to run in a round-robin fashion.
+The chosen thread will run until one of the following conditions is true:
+<ul>
+<li>
+A higher priority thread becomes runnable.
+<li>
+It yields, or its <code>run</code> method exits.
+<li>
+On systems that support time-slicing, its time allotment has expired.
+</ul>
+Then the second thread is given a chance to run, and so on, until the
+interpreter exits.
+<p>
+The Java runtime system's thread scheduling algorithm is also <em>preemptive</em>. If at
+any time a thread with a higher priority than all other runnable threads
+becomes runnable, the runtime system chooses the new higher priority
+thread for execution. The new higher priority thread is said to <em>preempt</em>
+the other threads.
+<p>
+<hr>
+<strong>Rule of thumb:</strong> At any given time, the highest priority
+thread is running. However, this is not guaranteed. The thread scheduler
+may choose to run a lower priority thread to avoid starvation. For this
+reason, use priority only to affect scheduling policy for efficiency
+purposes. Do not rely on thread priority for algorithm correctness.
+<hr>
+
+<h4>The 400,000 Micron Thread Race</h4>
+<blockquote>
+This <a href="http://docs.rinet.ru/Jtuta/essential/threads/example-1dot1/RaceApplet.java">Java source code</a> implements
+an applet that animates a race between two "runner" threads with
+different priorities. When you click the mouse down over the applet,
+it starts the two runners. The top runner, labelled "2", has a priority
+of 2. The second runner,
+labelled "3", has a priority of 3.
+<p>
+<strong>Try this:</strong> Click the applet below to start the race.
+<br>
+<applet codebase=http://docs.rinet.ru:8080/Jtuta/essential/threads/example code=RaceApplet.class width=500 height=50>
+<param name="type" value="unfair">
+</applet>
+
+<blockquote><hr><strong>Note:</strong> Because some old browsers don't support 1.1, the above applet is a <em>1.0</em> version (here is the <a href="http://docs.rinet.ru/Jtuta/essential/threads/example/RaceApplet.java">1.0 code</a>; here's the <a href="http://docs.rinet.ru/Jtuta/essential/threads/example-1dot1/RaceApplet.java">1.1 code</a>).  To run the <em>1.1</em> version of the applet, go to <a href="example-1dot1\raceapplet.html"><code>example-1dot1/RaceApplet.html</code></a>. For more information about running applets, refer to <a href="..\..\information\examples.html">About Our Examples</a>.<hr></blockquote>
+<p>
+This is the <code>run</code> method for both
+<a href=example-1dot1\runner.java>runners</a>.
+<blockquote>
+<pre>
+public int tick = 1;
+public void run() {
+    while (tick &lt; 400000)
+        tick++;
+} 
+</pre>
+</blockquote>
+This <code>run</code> method simply counts from 1 to 400,000.
+The instance variable <code>tick</code> is public because the
+applet uses this value to determine how far the runner has progressed
+(how long its line is).
+<p>
+In addition to the two runner threads, this applet also has a third
+thread that handles the drawing. The drawing thread's <code>run</code>
+method contains an infinite loop; during each iteration of the loop it
+draws a line for each runner (whose length is computed from the runner's
+<code>tick</code> variable), and then sleeps for 10 milliseconds.
+The drawing thread has a thread priority of 4--higher than either runner.
+So, whenever the drawing thread wakes up after 10 milliseconds, it
+becomes the highest priority thread, preempting whichever runner is
+currently running, and draws the lines. You can see the lines
+inch their way across the page
+<p>
+This is not a fair race because one runner has
+a higher priority than the other. Each time the drawing thread
+yields the CPU by going to sleep for 10 milliseconds, the scheduler
+chooses the highest priority runnable thread to run; in this case,
+it's always runner 3. Here is another version
+of the applet that implements a fair race, that is, both of the
+runners have the same priority and they have an equal chance of
+being chosen to run.
+<p>
+<strong>Try this:</strong> Click the mouse to start the race.
+<br>
+<applet codebase=http://docs.rinet.ru:8080/Jtuta/essential/threads/example code=RaceApplet.class width=500 height=50>
+<param name="type" value="fair">
+</applet>
+
+<blockquote><hr><strong>Note:</strong> Because some old browsers don't support 1.1, the above applet is a <em>1.0</em> version (here is the <a href="http://docs.rinet.ru/Jtuta/essential/threads/example/RaceApplet.java">1.0 code</a>; here's the <a href="http://docs.rinet.ru/Jtuta/essential/threads/example-1dot1/RaceApplet.java">1.1 code</a>).  To run the <em>1.1</em> version of the applet, go to <a href="example-1dot1\raceapplet.html"><code>example-1dot1/RaceApplet.html</code></a>. For more information about running applets, refer to <a href="..\..\information\examples.html">About Our Examples</a>.<hr></blockquote>
+In this race, each time the drawing thread yields the CPU by
+going to sleep, there are two runnable threads of equal
+priority--the runners--waiting for the CPU; the scheduler
+must choose one of the threads to run. In this situation,
+the scheduler chooses the next thread to run in a round-robin
+fashion.
+</blockquote>
+
+<h4>Selfish Threads</h4>
+<blockquote>
+The <code>Runner</code> class used in the races above actually implements "socially-impaired"
+thread behavior. Recall the <code>run</code> method from the Runner class used
+in the races above:
+<blockquote>
+<pre>
+public int tick = 1;
+public void run() {
+    while (tick &lt; 400000)
+        tick++;
+} 
+</pre>
+</blockquote>
+The <code>while</code> loop in the <code>run</code> method is in a tight loop.
+Once the scheduler chooses a thread with this thread body
+for execution, the thread never voluntarily relinquishes control of the CPU--the
+thread continues to run until the <code>while</code> loop terminates naturally
+or until the thread is preempted by a higher priority thread.
+This thread is called a <em>selfish thread</em>.
+<p>
+In some situations, having selfish threads doesn't cause any problems because
+a higher priority thread preempts the selfish one (just as the drawing thread
+in the RaceApplet preempts the selfish runners). However, in other situations,
+threads with CPU-greedy <code>run</code> methods, such as the <code>Runner</code> class,
+can take over the CPU and cause other threads to wait for a long
+time before getting a chance to run.
+</blockquote>
+
+<h4>Time-Slicing</h4>
+<blockquote>
+Some systems, such as Windows 95/NT, fight selfish thread behavior with a strategy known as
+<em>time-slicing</em>. Time-slicing comes into play when there are multiple
+"Runnable" threads of equal priority and those threads are the highest priority
+threads competing for the CPU. For example, this
+<a href=http://docs.rinet.ru/Jtuta/essential/threads/example/RaceTest.java>stand-alone Java program</a> (which is based on
+the RaceApplet above) creates two equal priority
+<a href=http://docs.rinet.ru/Jtuta/essential/threads/example/SelfishRunner.java>selfish threads</a>
+that have the following <code>run</code> method.
+<blockquote>
+<pre>
+public void run() {
+    while (tick &lt; 400000) {
+        tick++;
+        if ((tick % 50000) == 0)
+            System.out.println("Thread #" + num + ", tick = " + tick);
+    }
+}    
+</pre>
+</blockquote>
+This <code>run</code> contains a tight loop that increments the integer <code>tick</code>
+and every 50,000 ticks prints out the thread's identifier and its <code>tick</code> count.
+<p>
+When running this program on a time-sliced system, you will see messages from both
+threads intermingled with one another. Like this:
+<blockquote>
+<pre>
+Thread #1, tick = 50000
+Thread #0, tick = 50000
+Thread #0, tick = 100000
+Thread #1, tick = 100000
+Thread #1, tick = 150000
+Thread #1, tick = 200000
+Thread #0, tick = 150000
+Thread #0, tick = 200000
+Thread #1, tick = 250000
+Thread #0, tick = 250000
+Thread #0, tick = 300000
+Thread #1, tick = 300000
+Thread #1, tick = 350000
+Thread #0, tick = 350000
+Thread #0, tick = 400000
+Thread #1, tick = 400000
+</pre>
+</blockquote>
+This output is produced because a time-sliced system divides the CPU into time slots and iteratively
+gives each of the equal-and-highest priority threads a time slot in which to run.
+The time-sliced system iterates through the equal-and-highest priority
+threads, allowing each one a bit of time to run, until one or more of them finishes
+or until a higher priority thread preempts them. Notice that time-slicing makes no guarantees as to
+how often or in what order threads are scheduled to run.
+<p>
+When running this program on a non-time-sliced system, however, you will see messages
+from one thread finish printing before the other thread ever gets a chance to print
+one message. Like this:
+<blockquote>
+<pre>
+Thread #0, tick = 50000
+Thread #0, tick = 100000
+Thread #0, tick = 150000
+Thread #0, tick = 200000
+Thread #0, tick = 250000
+Thread #0, tick = 300000
+Thread #0, tick = 350000
+Thread #0, tick = 400000
+Thread #1, tick = 50000
+Thread #1, tick = 100000
+Thread #1, tick = 150000
+Thread #1, tick = 200000
+Thread #1, tick = 250000
+Thread #1, tick = 300000
+Thread #1, tick = 350000
+Thread #1, tick = 400000
+</pre>
+</blockquote>
+This is because a non-time-sliced system chooses one of the equal-and-highest
+priority threads to run and allows that thread to run until it relinquishes the
+CPU (by sleeping, yielding, finishing its job) or until a higher priority preempts it.
+<p>
+<hr>
+<strong>Note:</strong> The Java runtime does not implement (and therefore does
+not guarantee) time-slicing. However, some systems on which you can run Java
+do support time-slicing. Your Java programs should not rely on time-slicing as it
+may produce different results on different systems.
+<hr>
+<p>
+<strong>Try this:</strong> Compile and run the <a href=http://docs.rinet.ru/Jtuta/essential/threads/example/RaceTest.java>RaceTest</a>
+and <a href=http://docs.rinet.ru/Jtuta/essential/threads/example/SelfishRunner.java>SelfishRunner</a> classes on
+your computer. Can you tell if you have a time-sliced system?
+<p>
+As you can imagine, writing CPU-intensive code can have negative repercussions
+on other threads running in the same process. In general, you should try to
+write "well-behaved" threads that voluntarily relinquish the CPU periodically and
+give other threads an opportunity to run. In particular, you should never
+write Java code that relies on time-sharing--this will practically guarantee
+that your program will give different results on different computer systems.
+<p>
+A thread can voluntarily yield the CPU without going to sleep or some other
+drastic means by calling the <code>yield</code> method. The <code>yield</code>
+method gives other threads of the same priority a chance to run. If there
+are no equal priority threads that are runnable, then the yield is ignored.
+<p>
+<strong>Try this:</strong> Rewrite the SelfishRunner class to be a
+<a href=http://docs.rinet.ru/Jtuta/essential/threads/example/PoliteRunner.java>PoliteRunner</a> by calling the
+<code>yield</code> method from the <code>run</code> method.
+Be sure to modify the <a href=http://docs.rinet.ru/Jtuta/essential/threads/example/RaceTest2.java>main program</a>
+to create <code>PoliteRunner</code>s instead of <code>SelfishRunner</code>s. Compile and run the new
+classes on your computer. Now isn't that better?
+</blockquote>
+
+<h4>Summary</h4>
+<ul>
+<li>
+Most computers have only one CPU, so threads must share
+the CPU with other threads. The execution of multiple threads on a
+single CPU, in some order, is called scheduling. The Java runtime
+supports a very simple, deterministic scheduling algorithm known as
+fixed priority scheduling.
+<li>
+Each Java thread is given a numeric priority between <code>MIN_PRIORITY</code> and
+<code>MAX_PRIORITY</code> (constants defined in the <code>Thread</code> class). At any given time,
+when multiple threads are ready to be executed, the thread with the
+highest priority is chosen for execution. Only when that thread
+stops, or is suspended for some reason, will a lower priority thread
+start executing.
+<li>
+Scheduling of the CPU is fully preemptive. If a thread with a higher
+priority than the currently executing thread needs to execute, the
+higher priority thread is immediately scheduled.
+<li>
+The Java runtime will not preempt the currently running thread for
+another thread of the same priority. In other words, the Java runtime
+does not time-slice. However, the system implementation of threads
+underlying the Java Thread class may support time-slicing.
+Do not write code that relies on time-slicing.
+<li>
+In addition, a given thread may, at any time, give up its right to
+execute by calling the <code>yield</code> method. Threads can only
+yield the CPU to other threads of the same priority--attempts to
+yield to a lower priority thread are ignored.
+<li>
+When all the runnable threads in the system have the same priority,
+the scheduler chooses the next thread to run in a simple, non-preemptive,
+round-robin scheduling order.
+</ul>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="lifecycle.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="multithreaded.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=top border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

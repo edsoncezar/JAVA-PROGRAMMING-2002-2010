@@ -1,0 +1,280 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-18.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-20.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Clients send the acknowledge method, as defined below, to the server to indicate receipt. Acknowledging a destination uses the histories vectors to determine the last message sent to the client and notifies the message store with the largest message number received.
+</P>
+<PRE>
+    public void acknowledge(Destination d,String name)
+     throws JMSException
+    {
+        if(transacted) return;
+
+        Vector history = historyFor(d,name);
+        Message m =null;
+        long num;
+
+        if(history.size()&gt0) m = (Message) history.lastElement();
+
+        try
+        {
+            if((m!=null)
+                &amp&amp(m.propertyExists(MiniJMSMessageStore.MSG_NUM)))
+            {
+                num =
+                 m.getLongProperty(MiniJMSMessageStore.MSG_NUM);
+
+                store.acknowledge(d,name,num);
+                history.removeAllElements();
+            }
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>The history vectors are stored by name and destination. The session implements two internal methods for getting the history based on a message or a destination and name. These methods are listed here:
+</P>
+<PRE>
+    protected Vector historyFor(Message m)
+    {
+        Destination d=null;
+        String name=null;
+
+        try
+        {
+            d = m.getJMSDestination();
+
+            name =
+             m.getStringProperty(MiniJMSMessageStore.REG_NAME);
+        }
+        catch(Exception exp)
+        {
+            name = null;
+        }
+
+        if(name == null) name = clientId;
+
+        return historyFor(d,name);
+    }
+
+    protected Vector historyFor(Destination d,String name)
+    {
+        Vector retVal=null;
+        HistoryPair pair;
+
+        if((d==null)||(name==null)) return null;
+
+        synchronized(histories)
+        {
+            pair = new HistoryPair();
+            pair.destination = d;
+            pair.name = name;
+
+            retVal = (Vector) histories.get(pair);
+
+            if(retVal == null)
+            {
+                retVal = new Vector();
+                histories.put(pair,retVal);
+            }
+        }
+
+        return retVal;
+    }
+</PRE>
+<P>When a client session registers for messages to a particular destination, the remote session is told. The registerFor method, shown here, takes the destination, a name to register with, and a flag indicating if the registration is durable and should last beyond the close method. Temporary destinations are treated as non-durable, even if the flag is true. This method also resumes the sessions polling thread because it now has at least one destination that may receive messages in the message store.
+</P>
+<PRE>
+    public void registerFor(Destination dest
+                            ,boolean durable,String name)
+        throws RemoteException,JMSException
+    {
+        try
+        {
+            store.registerFor(dest,clientId,name);
+
+            //Always unregister for temporary items.
+            if(!durable || (dest instanceof TemporaryTopic)
+                    ||(dest instanceof TemporaryQueue))
+            {
+                Object[] unreg = new Object[2];
+
+                unreg[0] = dest;
+                unreg[1] = name;
+                unregOnClose.addElement(unreg);
+            }
+
+            checker.resume();
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>Unregistering for a destination is passed directly to the store using the sessions client ID and the provided name.
+</P>
+<PRE>
+    public void unregisterFor(Destination dest,String name)
+        throws RemoteException,JMSException
+    {
+        try
+        {
+            store.unregisterFor(dest,clientId,name);
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>The run method, listed here, defines the code executed by the session&#146;s polling thread. As implemented, run simply checks the store for messages and calls addMessage to send them to the client.
+</P>
+<PRE>
+    public void run()
+    {
+        while(store != null)
+        {
+            Message next;
+
+            try
+            {
+                next = store.nextMessageFor(clientId);
+
+                if(next != null) addMessage(next);
+            }
+            catch(Exception ignore)
+            {
+            }
+        }
+    }
+}
+</PRE>
+<P>In the same way that the MiniSession is the workhorse on the client, the RemoteMiniSessionImp, combined with the message store, are the workhorses on the server. RemoteMiniSessionImp demonstrates how objects that represent client connections can be used to implement a multithreaded server.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading16"></A><FONT COLOR="#000077">The Server: MiniJMS</FONT></H4>
+<P>The server itself is implemented in a small class called MiniJMS, listed here. This class contains only a main method. The server must be run with an IP address on the command line, indicating the machine containing the server&#146;s rmiregistery. For example, you might run it using:
+</P>
+<PRE>
+&gt java minijmsserver.MiniJMS 192.168.0.172
+</PRE>
+<P>The main method creates the message store using a hard-coded properties file discussed here. The store creates the JNDI context into which the server binds a TopicConnectionFactory and a QueueConnectionFactory. The ObjectFactories for these two classes are also provided to the JNDI context.
+</P>
+<P>Finally, the server creates the MiniJMSServerImp object and binds it to the RMI registry. At this point, the server is running and waiting for connections. Notice that the connection factories bound into JNDI use the same server IP as the RMI registry, allowing the server to potentially register with another computer. However, the file system context used in this example doesn&#146;t support this type of access, so you would need to use another provider like LDAP to make the MiniJMS server a distributed application.</P>
+<P>The server prints message to the console indicating its status during each stage of initialization.</P>
+<PRE>
+package minijmsserver;
+
+//Imports removed to save space.
+
+public class MiniJMS
+{
+    public static void main(String args[])
+    {
+        MiniJMSServerImp server;
+        MiniJMSMessageStore store;
+        Context context;
+        String serverURL=null;
+
+        System.setErr(System.out);
+
+        try
+        {
+            if(args.length&gt0)
+            {
+                serverURL = &#147;//&#148;&#43;args[0]&#43;&#147;/&#148;
+                                &#43;MiniJMSServer.SERVER_NAME;
+            }
+            else
+            {
+                System.out.println(&#147;No Server Specified.&#148;);
+                System.exit(0);
+            }
+
+            System.out.println(&#147;Creating store.&#148;);
+            store = new MiniJMSMessageStore(&#147;minijmsserver/&#148;
+                               &#43;&#147;minijmsserver.properties&#148;);
+
+            System.out.println(&#147;Created store.&#148;);
+
+            System.out.println(&#147;Creating server.&#148;);
+            server = new MiniJMSServerImp(store);
+            System.out.println(&#147;Created server.&#148;);
+
+            System.out.println(&#147;Binding factories to context.&#148;);
+            context = store.getJNDIContext();
+
+            context.addToEnvironment(Context.OBJECT_FACTORIES,
+                                 &#147;minijms.MiniTConnFactoryFactory&#148;);
+
+            context.addToEnvironment(Context.OBJECT_FACTORIES,
+                                 &#147;minijms.MiniQConnFactoryFactory&#148;);
+
+            context.rebind(&#147;QueueConnectionFactory&#148;
+                   ,new MiniQueueConnectionFactory(serverURL));
+
+            context.rebind(&#147;TopicConnectionFactory&#148;
+                   ,new MiniTopicConnectionFactory(serverURL));
+
+            System.out.println(&#147;Bound factories to context.&#148;);
+
+            System.out.println(&#147;Starting to bind server.&#148;);
+
+            Naming.rebind(serverURL, server);
+
+            System.out.println(&#147;Mini JMS bound in registry&#148;);
+        }
+        catch (Exception e)
+        {
+            System.out.println(&#147;Mini JMS: &#148;
+                                 &#43; e.getMessage());
+            e.printStackTrace();
+            System.exit(0);
+        }
+    }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-18.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-20.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

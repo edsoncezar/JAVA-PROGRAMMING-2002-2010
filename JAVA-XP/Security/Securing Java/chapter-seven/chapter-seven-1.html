@@ -1,0 +1,270 @@
+<html>
+<head>
+<title>Guidelines for Java Developers (Ch. 7, Sec. 1) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-seven.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Java Security Guidelines: Developing and Using Java More Securely
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <b>1</b> / <a href="chapter-seven-2.html">2</a> / <a href="chapter-seven-3.html">3</a><p>
+
+<font size="+2" color="#000000"><b>Section 1 -- Guidelines for Java Developers</b></font>
+</td><td width=60 align=center>
+<a href="chapter-seven-2.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+This section introduces 12 rules for writing security-critical Java code; 12 rules that all Java developers should abide by. If you are charged with managing a gaggle of Java developers, or if your business relies on the security of Java, make sure your developers follow these rules.<p>
+
+These rules have not been sugar-coated for mass consumption. They get fairly technical and require broad knowledge of Java. Although experienced Java developers will understand all of the rules, less-experienced Java developers may have a bit of homework to do. Nevertheless, these rules are important and can make your Java code more secure.<p>
+
+The rules listed here were built on the experiences of many people who have generously discussed their experiences in building secure Java code. We are particularly grateful to Andrew Appel, Dirk Balfanz, Drew Dean, and Dan Wallach, of the Secure Internet Programming Team at Princeton, for helping us understand these issues. Others who have contributed significantly to the behind-the-scenes thinking that went into these rules include David Hopwood, Li Gong, and Jim Roskind.<p>
+
+The rules are based on much experience in hunting down Java security bugs, and on advice and observations from people who write and review security-critical Java code for a living. Each rule is designed to eliminate an unexpected "gotcha" that you might face.<p>
+
+Of course, security is an elusive goal, and following these rules certainly won't provide any guarantee that your code is secure. It is easy to write insecure code that follows these rules. The goal of these rules is not to guarantee security, but to eliminate certain kinds of security attacks that you might not have thought of. If you follow these rules, certain kinds of attacks will be impossible; other kinds will still be possible. So think of these rules as a first step. If you are writing code that may be linked or run in conjunction with untrusted code, then you should definitely consider following these rules.<p>
+
+Every attempt was made to keep the rules simple enough that you can treat them as a checklist to be followed in mechanical fashion. That way, you can save your brainpower for other security issues.<p><br>
+
+
+<center><font size="+1"><b>Rule 1: Don't Depend on Initialization</b></font></center><p>
+
+Most Java developers think that there is no way to allocate an object without running a constructor. This is not true: There are several ways to allocate uninitialized objects.<p>
+
+The easy way to protect yourself against this problem is to write your classes so that before any object does anything, it verifies that it has been initialized. You can do this as follows:
+<UL>
+	<LI>Make all variables private. If you want to allow outside code to access variables in an object, this should be done via get/set methods. (This keeps outside code from accessing uninitialized variables.) If you're following Rule 3, you'll make the get and set methods final.
+	<LI>Add a new private boolean variable, called initialized, to each object.
+	<LI>Have each constructor set the initialized variable as its last action before returning.
+	<LI>Have each nonconstructor method verify that initialized is true, before doing anything. (Note that you may have to make exceptions to this rule for methods that are called by your constructors. If you do this, it is best to make the constructors call only private methods.)
+	<LI>If your class has a static initializer, you will need to do the same thing at the class level. Specifically, for any class that has a static initializer, follow these steps:
+	<LI>Make all static variables private. If you want to allow outside code to access static variables in the class, this should be done via static get/set methods. This keeps outside code from accessing uninitialized static variables. If you're following Rule 3, you'll make the get and set methods final. 
+	<LI>Add a new private static boolean variable, called classInitialized to the class.
+	<LI>Have the static constructor set the classInitialized variable as its last action before returning.
+	<LI>Have each static method, and each constructor, verify that 
+classInitialized is true, before doing anything. (Note: Constructors are required to call a constructor of the superclass or another constructor of the same class as their first action. Therefore, you will have to do that before you check classInitialized.)
+</UL>
+<p><br>
+
+
+<center><font size="+1"><b>Rule 2: Limit Access to Your Classes, Methods, and Variables</b></font></center><p>
+
+Every class, method, and variable that is not private provides a potential entry point for an attacker. By default, everything should be private. Make something non-private only if there is a good reason, and document that reason.<p><br>
+
+
+<center><font size="+1"><b>Rule 3: Make Everything Final, Unless There's a Good Reason Not To</b></font></center><p>
+
+If a class or method is non-final, an attacker could try to extend it in a dangerous and unforeseen way. By default, everything should be final. Make something non-final only if there is a good reason, and document that reason.<p>
+
+You might think that you can prevent an attacker from extending your class or its methods by declaring the class non-public. However, if a class is not public, it must be accessible from within the same package, and as we shall see, Rule 4 says not to rely on package-scope access restrictions for security.<p>
+
+This advice may seem harsh. After all, the rule is asking you to give up extensibility, which is one of the main benefits of using an object-oriented language like Java. When you're trying to provide security, however, extensibility is your enemy; it just provides an attacker with more ways to cause trouble.<p><br>
+
+
+<center><font size="+1"><b>Rule 4: Don't Depend on Package Scope</b></font></center><p>
+
+Classes, methods, and variables that are not explicitly labeled as public, private, or protected are accessible within the same package. Don't rely on this for security. Java classes are not closed, so an attacker could introduce a new class inside your package, and use this new class to access the things you thought you were hiding. (A few packages, such as java.lang, are closed by default, and a few JVMs let you close your own packages. However, you're better off assuming that packages are not closed.)<p>
+
+Package scope makes a lot of sense from a software-engineering standpoint, since it prevents innocent, accidental access to things that you want to hide. But don't depend on it for security.  Maybe we'll get sealed classes in the future.<p><br>
+
+
+<center><font size="+1"><b>Rule 5: Don't Use Inner Classes</b></font></center><p>
+
+Some Java language books say that inner classes can only be accessed by the outer classes that enclose them. This is not true. Java byte code has no concept of inner classes, so inner classes are translated by the compiler into ordinary classes that happen to be accessible to any code in the same package. And Rule 4 says not to depend on package scope for protection.<p>
+
+But wait, it gets worse. An inner class gets access to the fields of the enclosing outer class, even if these fields are declared private. And the inner class is translated into a separate class. In order to allow this separate class access to the fields of the outer class, the compiler silently changes these fields from private to package scope! It's bad enough that the inner class is exposed, but it's even worse that the compiler is silently overruling your decision to make some fields private. Don't use inner classes if you can help it. (Ironically, the new Java 2 doPrivileged() API usage guidelines suggest that you use an inner class to write privileged code. That's one reason we don't like the doPrivileged() API.)<p><br>
+
+
+<center><font size="+1"><b>Rule 6: Avoid Signing Your Code</b></font></center><p>
+
+Code that is not signed will run without any special privileges. And if your code has no special privileges, then it is much less likely to do damage.<p>
+
+Of course, some of your code might have to acquire and use privileges to perform some dangerous operation. Work hard to minimize the amount of privileged code, and audit the privileged code more carefully than the rest.<p><br>
+
+
+<center><font size="+1"><b>Rule 7: If You Must Sign Your Code, Put It All in One Archive File</b></font></center><p>
+
+The goal of this rule is to prevent an attacker from carrying out a mix-and-match attack in which the attacker constructs a new applet or library that links some of your signed classes together with malicious classes, or links together signed classes that you never meant to be used together. By signing a group of classes together, you make this attack more difficult.<p>
+
+Existing code-signing systems do an inadequate job of preventing mix-and-match attacks, so this rule cannot prevent such attacks completely. But using a single archive can't hurt.<p>
+
+Some code-signing systems let you examine other classes to see who signed them. If you are using a code-signing system that allows this, you can put code into the static constructors of your classes to verify that the "surrounding" classes have been signed by the same person as expected. Examining signers is one way to avoid the example shown in Figure 7.1. This doesn't completely prevent mix-and-match attacks, since an adversary can still mix together classes that you signed at different times; for example, by mixing version 1 of Class A with version 2 of Class B. If you're worried about this kind of interversion mix-and-match attack, you can put each class's "version stamp" in a public final variable and then have each class check the version stamps of its surrounding classes.<p>
+
+<center>
+<table border=0 width=216><tr><td>
+<img src="..\images\fig07.01.gif" width=216 height=131 alt="Fig 7.1"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 7.1  A mix and match attack.</b></center><br>
+In one type of mix and match attack, signed code with special privilege is linked or otherwise grouped together with unsigned code. The danger is that the unsigned code will be replaced in the group, leading to undefined and possibly dangerous behavior.</font>
+</td></tr></table>
+</center>
+<p><br>
+
+
+<center><font size="+1"><b>Rule 8: Make Your Classes Uncloneable</b></font></center><p>
+
+Java's object-cloning mechanism can allow an attacker to manufacture new instances of classes you define, without executing any of your constructors. If your class is not cloneable, the attacker can define a subclass of your class, and make the subclass implement java.lang.Cloneable. This allows the attacker to make new instances of your class. The new instances are made by copying the memory images of existing objects; although this is sometimes an acceptable way to make a new object, it often is not.<p>
+
+Rather than worry about this, you're better off making your objects uncloneable. You can do this by defining the following method in each of your classes:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>public final void clone() throws java.lang.CloneNotSupportedException {
+     throw new java.lang.CloneNotSupportedException();
+}</pre>
+</td></tr></table></center><p>
+
+If you want your class to be cloneable, and you've considered the consequences of that choice, then you can still protect yourself. If you're defining a clone method yourself, make it final. If you're relying on a nonfinal clone method in one of your superclasses, then define this method:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>public final void clone() throws java.lang.CloneNotSupportedException {
+     super.clone();
+}</pre>
+</td></tr></table></center><p>
+
+This prevents an attacker from redefining your clone method.<p><br>
+
+
+<center><font size="+1"><b>Rule 9: Make Your Classes Unserializeable</b></font></center><p>
+
+Serialization is dangerous because it allows adversaries to get their hands on the internal state of your objects. An adversary can serialize one of your objects into a byte array that can be read. This allows the adversary to inspect the full internal state of your object, including any fields you marked private  as well as the internal state of any objects you reference.<p>
+
+To prevent this, you can make your object impossible to serialize. The way to do this is to declare the writeObject method:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>private final void writeObject(ObjectOutputStream out)
+throws java.io.IOException {
+     throw new java.io.IOException("Object cannot be serialized");
+}</pre>
+</td></tr></table></center><p>
+
+This method is declared final so that a subclass defined by the adversary cannot override it.<p><br>
+
+
+<center><font size="+1"><b>Rule 10: Make Your Classes Undeserializeable</b></font></center><p>
+
+This rule is even more important than the preceding one. Even if your class is not serializeable, it may still be deserializeable. An adversary can create a sequence of bytes that happens to deserialize to an instance of your class. This is dangerous, since you do not have control over what state the deserialized object is in. You can think of deserialization as another kind of public constructor for your object; unfortunately, it is a kind of constructor that is difficult for you to control.<p>
+
+You can prevent this kind of attack by making it impossible to deserialize a byte stream into an instance of your class. You can do this by declaring the readObject method:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>private final void readObject(ObjectInputStream in)
+throws java.io.IOException {
+     throw new java.io.IOException("Class cannot be deserialized");
+}</pre>
+</td></tr></table></center><p>
+
+As in Rule 9, this method is declared final to prevent the adversary from overriding it.<p><br>
+
+
+<center><font size="+1"><b>Rule 11: Don't Compare Classes by Name</b></font></center><p>
+
+Sometimes you want to compare the classes of two objects to see whether they are the same, or you want to see whether an object has a particular class. When you do this, you need to be aware that there can be multiple classes with the same name in a JVM. It is a mistake to compare classes by name since different classes can have the same name.<p>
+
+A better way is to compare class objects for equality directly. For example, given two objects, a and b, if you want to see whether they are the same class, you should use this code:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>if(a.getClass() == b.getClass()){
+     // objects have the same class
+}else{
+     // objects have different classes
+}</pre>
+</td></tr></table></center><p>
+
+You should also be on the lookout for cases of less-direct by-name comparisons. Suppose, for example, you want to see whether an object "has the class Foo." Here is the wrong way to do it:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>if(obj.getClass().getName().equals("Foo"))   // Wrong!
+     // objects class is named Foo
+}else{
+     // object's class has some other name
+}</pre>
+</td></tr></table></center><p>
+
+Here is a better way to do it:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>if(obj.getClass() == this.getClassLoader().loadClass("Foo")){
+     // object's class is equal to the class that this class calls "Foo"
+}else{
+     // object's class is not equal to the class that 
+     // this class calls "Foo"
+}</pre>
+</td></tr></table></center><p>
+
+Note the legalistic comments in the last example. Whenever you use classnames, you are opening yourself up to mix-and-match attacks, as described in Rule 7. You should also know that the Java language forces you to use classnames all the time: in variable declarations, instanceof expressions, and exception-catching blocks. Only the designers of Java can prevent mix-and-match attacks, but you can avoid making the problem worse by avoiding by-name class comparisons.<p><br>
+
+
+<center><font size="+1"><b>Rule 12: Secrets Stored in Your Code Won't Protect You</b></font></center><p>
+
+You might be tempted to store secrets such as cryptographic keys in the code for your application or library. Secrets stored in this way are completely accessible to anyone who runs your code. There is nothing to stop a malicious programmer or virtual machine from looking inside your code and learning its secrets.<p>
+
+Code obfuscation is another way to store a secret in your code; in the case of obfuscation, the secret is simply the algorithm used by your code. There's not much harm in using an obfuscator, but you shouldn't believe that it provides strong protection. There is no real evidence that it is possible to obfuscate Java source code or byte code so that a dedicated adversary with good tools cannot reverse the obfuscation.<p><br>
+
+
+<center><font size="+1"><b>The Take Home Message</b></font></center><p>
+
+Writing secure Java code is very difficult. There is no magic bullet that will solve your security problems; all you can do is think hard (perhaps with help from formal analysis tools) and use prudent engineering practices to minimize risks. Sometimes a pair of objective outside eyes can help. The rules set forth here are intended to describe some prudent engineering practices for writing secure Java code. They won't solve your security problems, but they will reduce the number of ways in which things can go wrong.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-seven-2.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<

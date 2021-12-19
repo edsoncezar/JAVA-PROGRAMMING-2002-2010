@@ -1,0 +1,217 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H3><A NAME="Heading15"></A><FONT COLOR="#000077">Multithreaded Servlets</FONT></H3>
+<P>The section &#147;SingleThreadModel&#148; discussed the decision of whether or not to make a servlet multithreaded. Given the environment that servlets live in, the question remains: Should a servlet be multithreaded, and if it is, how do we write it? Put simply, a multithreaded servlet is one that allows its service method to be called by more than one thread at a time. This means that any data accessed in service must be protected and thread safe. This section covers some of the techniques specific to servlets that support multiple threads.
+</P>
+<P>There are two basic ways to handle thread issues in servlets. One way is to make sure that each request works independently of the others, without sharing data. The other mechanism is to use synchronization to protect shared resources. For servlets that can work autonomously, handling each request with resources that are independent of other requests, write them that way. This is especially easy for servlets that perform an algorithmic task and don&#146;t actually return data from another source. These servlets can usually store all of the data they need in local variables, preventing overlap between one thread&#146;s execution of the service method and another thread&#146;s.</P>
+<P>In the case of a servlet that shares resources between requests, the shared resources are often files or database connections. Sometimes you might also share objects in memory. Protecting files and connections can be a complex task because the object representing that resource may not be able to provide true thread-safe access. For example, a file can&#146;t protect itself between the time you ask if it exists and the time you test its length. There is always a chance that in this small amount of time, another thread will execute code to delete the file.</P>
+<P>As an example of one way to deal with this situation within a servlet, we have created a FileLock object listed in the code below. This object uses standard lock/unlock semantics to protect a file object. Servlets can use these lock objects to protect their access to shared files. Unfortunately, this object is limited to working within a single virtual machine and requires the program to be written with locking in mind. Although several servlets may share the FileLock class and thus the locks for that server, another Web server instance or another program can still create an unsafe situation. The solution to these situations is to minimize the chance of their occurrence by copying files, caching, and so on.</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+
+public class FileLock extends Object
+{
+    private boolean locked;
+    private File file;
+
+
+    private static Hashtable locks;
+</PRE>
+<P>The getLockFor method gets a file lock for a file. It is synchronized so that multiple requests block until the first one is finished.
+</P>
+<PRE>
+<B>    public static synchronized
+        FileLock getLockFor(String path)
+</B>    {
+        FileLock retVal = null;
+        File tmp = new File(path);
+        String absPath = tmp.getAbsolutePath();
+
+        try
+        {
+            if(locks == null)
+            {
+                locks = new Hashtable();
+            }
+            else
+            {
+                retVal = (FileLock) locks.get(absPath);
+            }
+
+            if(retVal == null)
+            {
+                retVal = new FileLock(tmp);
+                locks.put(absPath,retVal);
+            }
+        }
+        catch(Exception exp)
+        {
+            retVal = null;
+        }
+
+        return retVal;
+
+    }
+</PRE>
+<P>Each FileLock object knows which File it is associated with and stores this information in the file instance variable.
+</P>
+<PRE>
+    protected FileLock(File f)
+    {
+        file = f;
+
+    }
+    public File getFile()
+    {
+        return file;
+
+    }
+</PRE>
+<P>When a thread attempts to lock the file, it waits until the locked flag is not true or it can assign a time-out and only wait until the time-out occurs. Time-outs result in exceptions.
+</P>
+<PRE>
+    //Waits to acquire a lock.
+    public synchronized void lock()
+    {
+        while(locked)
+        {
+            try
+            {
+                wait();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+
+        locked = true;
+    }
+
+    //Waits to acquire a lock.
+    //timeout in millis
+    public synchronized void lock(int timeout)
+    throws InterruptedException
+    {
+        while(locked)
+        {
+            wait(timeout);
+        }
+
+        //If wait throws and exception
+        //we don&#146;t get here.
+        locked = true;
+
+    }
+</PRE>
+<P>Unlocking the FileLock sets the locked flag to false and notifies any waiting threads that the lock is not available.
+</P>
+<PRE>
+    //Notifies threads waiting for lock.
+    public synchronized void unlock()
+    {
+        locked = false;
+        notifyAll();
+    }
+
+}
+</PRE>
+<P>The following servlet called FileLockingServlet was written to test the file lock and appends messages to a specific file. By using the lock, the servlet is guaranteeing that each message will be written fully before the next message begins. Locks are obtained from the FileLock class, by file path. Each lock should be unique for a specific path. Once the lock is acquired, it can be locked. There are two versions of the lock method: one takes a time-out and the other doesn&#146;t. If you use the time-out and the time-out occurs, you will get an exception. Handle this exception appropriately, keeping in mind that the file lock was not acquired if the time-out occurred and the file is not safe to access. When the servlet is done with the file, it unlocks it.
+</P>
+<PRE>
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class FileLockingServlet extends GenericServlet
+{
+   public void service(ServletRequest    request,
+                        ServletResponse    response)
+                        throws ServletException, IOException
+    {
+        PrintWriter    out;
+        String message;
+        FileOutputStream fileOut;
+        PrintWriter log;
+        FileLock lock;
+        File file;
+
+        response.setContentType(&#147;text/html&#148;);
+
+        out = response.getWriter();
+
+        out.println(&#147;&ltHTML&gt&ltHEAD&gt&ltTITLE&gt&#148;);
+        out.println(&#147;Log Tester&#148;);
+        out.println(&#147;&lt/TITLE&gt&lt/HEAD&gt&ltBODY&gt&#148;);
+
+        out.println(&#147;&ltH1&gtLogged&lt/H1&gt&#148;);
+
+        message = request.getParameter(&#147;Message&#148;);
+
+        out.println(Thread.currentThread()&#43;&#147; &#148;&#43;message);
+
+        out.println(&#147;&lt/BODY&gt&lt/HTML&gt&#148;);
+
+<B>        /*
+          The servlet gets a file lock for the locktest.txt file.
+          This may block if other clients are trying to access the
+          same file.
+        */
+        lock = FileLock.getLockFor(&#147;c:\\temp\\locktest.txt&#148;);
+        lock.lock();
+
+        // Once the file is actually locked, read in the file.
+        file = lock.getFile();
+</B>        fileOut = new
+                     FileOutputStream(file.getAbsolutePath(),true);
+        log = new PrintWriter(fileOut,true);
+        log.println(Thread.currentThread().hashCode()&#43;&#147; &#148;
+                          &#43;message);
+        log.close();
+
+<B>        // Done with the file, release it for other clients.
+        lock.unlock();
+</B>
+        out.close();
+    }
+
+}
+</PRE>
+<P>Another way to deal with the problem of shared resources is to create a cache. If the resources are used only for reading and aren&#146;t changed, they can be cached in memory and accessed freely. Reading resources is not a problem with multiple threads; writing is the problem. We have even heard of one example in which a company created a servlet that cached an entire directory of files and handled all requests from this read-only cache. Although this is extreme, the authors of this servlet report no thread issues, and they say that the servlet&#146;s performance is great.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

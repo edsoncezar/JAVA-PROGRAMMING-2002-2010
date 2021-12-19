@@ -1,0 +1,130 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Discussion: container-managed persistence</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch05.html" title="Chapter 5. Using container-managed persistence"><link rel="previous" href="ch05s10.html" title="Creating a test client "><link rel="next" href="ch06.html" title="Chapter 6. Customizing JAWS"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch05.html"><img src="images\toc.gif" border="0"></a><a href="ch05s10.html"><img src="images\prev.gif" border="0"></a><a href="ch06.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e1951"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e1951"></a>Discussion: container-managed persistence</h2></div></div><p>   If you followed the tutorial on container-managed persistence with JBoss, 
+you will have seen that creating persistent, distributed objects is not
+really any more difficult than creating transient ones. The EJB container does 
+most of the hard work; all the programmer needs to do is to tell it
+which fields are persistent. However, it isn't quite as simple as that, and 
+naive use of CMP can lead to very inefficient programs. To see why,
+it's necessary to understand at least in outline how the EJB server deals with 
+container-managed persistence. 
+   </p><div class="section"><a name="d0e1956"></a><div class="titlepage"><div><h3 class="title"><a name="d0e1956"></a>Technical overview </h3></div></div><p>In the EJB field there is a very strong correspondence between "rows of a 
+database table", and "instances of an object". It is clear that the EJB
+developers had this notion in mind from the very beginning. While the 
+specification doesn't stipulate that persistence is provided by database
+tables, in practice it always is. Moreover, it is tacitly assumed that the 
+communication between the Beans and the database will be by means of
+SQL statements. What does this imply for container-managed persistence? </p><p>       When an persistent object is instantiated, the EJB container must 
+generate SQL code that will write a row in the table. When the object is
+deleted, it must generate SQL to remove it. This isn't much of a problem. When 
+one object asks for a reference to another, the container must
+find (or create) that object's row in the table, read the columns, instantiate 
+the object in the JVM, and write the data from the table into its
+instance variables. Because this process can be quite slow, the EJB server may 
+choose to defer it. That is, when one object gets a reference to
+an object that is container-managed, the latter object may be uninitialized. 
+Initialization from the database table takes place later, perhaps
+when one of the methods is called. This late initialization reduces 
+inefficiencies arising from initializing objects that are never read, but has 
+its own problems, as we shall see. </p></div><div class="section"><a name="d0e1963"></a><div class="titlepage"><div><h3 class="title"><a name="d0e1963"></a>Limitations of CMP </h3></div></div><div class="section"><a name="d0e1966"></a><div class="titlepage"><div><h4 class="title"><a name="d0e1966"></a>Efficiency limitations </h4></div></div><p>The main limitation is that the EJB container will probably not be able to 
+generate database access statements with the efficiency of a human
+programmer. Consider this example: suppose I have an database table containing 
+details of my music CD collection. I want to search ithe
+collection for any one which has the text "Chopin" (case insensitive) in 
+either the "title" or "notes" column. In SQL I could write a statement like
+this: 
+
+ <pre class="programlisting"> SELECT FROM CD WHERE title LIKE "%chopin%" OR notes LIKE "%chopin%";          
+ </pre>
+				</p><p>The % character is an SQL wild-card and takes care of finding the required 
+string somewhere inside the field; the "LIKE" operator is
+case-insensitive by default. How could we achieve this with a 
+container-managed EJB? If "CD" is an EJB, the container-supplied method
+"findAll()" in its home interface will get all the current instances of "CD". 
+In practice it will do this by executing a statement like 
+
+
+  <pre class="programlisting"> 
+  SELECT FROM CD; 
+  </pre>
+				</p><p>and then instantiating CD for each row found. At some point it will probably 
+store the primary key from each row of the database into the
+appropriate attribute of each CD instance. Then the program must examine the 
+objects one at a time, checking whether they meet the required
+criteria (i.e., the word "Chopin" in the appropriate attributes). As the 
+program iterates throuugh the objects, the server must cause their
+attributes to be read from the table; it won't have done this until now 
+because it would try to conserve memory. So for each object examined
+the server will generate SQL code like this: 
+
+
+ <pre class="programlisting"> SELECT FROM CD WHERE ID=xxxx;
+ </pre>
+				</p><p>Suppose there are 200 CDs known to the system. Rather than executing one SQL 
+statement to get a list of all matching CDs, the CMP scheme
+has executed over 200 SQL statements to achieve the same effect. We can't 
+improve the situation by using a call to findByTitle then
+findByNotes() because these methods only provide exact string matches. </p><p>Another efficiency limitation comes from the way the database table is updated 
+when attributes change. There are two main ways to
+achieve this. The server could execute an instruction like this:
+
+ <pre class="programlisting"> UPDATE CD SET artist="Bloggs" WHERE ID="200";
+ </pre>
+				</p><p>for example. This is efficient, but requires the that "Artist" field really be 
+called "artist". This makes it difficult to change the names of columns in
+the table. Alternatively the server could do a SELECT to get the current 
+column values, delete the whole row, then insert a row with modified
+values. This allows a number of values to change at once and, because all 
+values are written, it doesn't matter what the columns are called.
+This is the approach that JBoss uses. The problem is that if a class has ten 
+persistent attributes, and they are altered one after the other, in the
+worst case this results in ten row deletions and ten row insertions. </p></div><div class="section"><a name="d0e1993"></a><div class="titlepage"><div><h4 class="title"><a name="d0e1993"></a>Limitations of late initialization </h4></div></div><p>Suppose we want to find whether a CD with a specific ID exists on the system. 
+With CMP this corresponds to finding whether there is a row in
+the database table with the corresponding value of the "id" column. The code 
+in Java might look like this:<pre class="programlisting">// Get a reference to a CD Bean
+Object ref  = jndiContext.lookup("cd/CD");
+
+// Get a reference from this to the Bean's Home interface
+CDHome home = (CDHome)
+        PortableRemoteObject.narrow (ref, CDHome.class);
+
+// Find the matching CD
+CD cd = home.findByPrimaryKey("xxx");</pre>
+				</p><p>What will happen if "XXX" is not the ID of a CD that exists? There would seem 
+to be two sensible approaches. Either "findByPrimaryKey"
+could throw an exception, or perhaps it could return a null reference. In 
+either case the client could easily tell whether the object exists. In
+practice, the EJB server may do neither of these things. It may well return a 
+reference to a CD bean instance, which appears to be a perfectly
+valid object. However, none of the object's attributes will be initialized; 
+initialization won't happen until the object is really required. This is done
+to improve efficiency; there is, after all, no need to initialize the object 
+unless it will be needed. However, if the program continues to execute on
+the basis that "cd" refers to a valid object, an exception will be thrown 
+later when the program tries to interact with it. This may not be a
+problem; if the ID had been generated from some earlier database access then 
+we may be sure it really exists, and any failure to find it in the
+database represents a serious failure. However, if the data has come from the 
+user, it is reasonable to expect some errors of typing or memory.
+Things can be made more predictable by always reading one of the attributes of 
+an object after getting a reference to it, like this:<pre class="programlisting">CD cd = home.findByPrimaryKey("xxx");
+String dummy = cd.getId();</pre>
+				</p><p>If there is no CD whose ID field is "XXX" then this will throw a 
+java.rmi.NoSuchObjectException. This gets around the problem
+of late initialization, but at the cost of an additional SQL access.</p></div><div class="section"><a name="d0e2008"></a><div class="titlepage"><div><h4 class="title"><a name="d0e2008"></a>Suitability of container-managed persistence </h4></div></div><p>In many applications of object-oriented programming we have had to accept that 
+some things that are philosophically objects are in reality
+implemented as something else. The "something else" may be a row of a database 
+table, or a line of a text file, or whatever; at some point we
+had to code the interface between the object-oriented system and the 
+"something elses". Entity JavaBeans goes some way towards
+eliminating this problem; things that are philosophically object can be 
+modelled as objects, with methods and persistence. But this comes at a
+cost. It's worth asking whether the "CD" EJB in the tutorial example really is 
+an object in a meaningful sense. It has attributes, but it doesn't do
+very much. We don't really gain all that much by making it an object; it could 
+have remained a database row, and been manipulated through the
+"CDCollection" class. Of course this isn't as elegant, but elegance can come 
+at a high price. </p><p>In summary then, container-managed persistence is straightforward to 
+implement using JBoss (or any other EJB server, for that matter)
+but needs to be used quite carefully if serious inefficiencies are to be 
+avoided.</p></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch05.html"><img src="images\toc.gif" border="0"></a><a href="ch05s10.html"><img src="images\prev.gif" border="0"></a><a href="ch06.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

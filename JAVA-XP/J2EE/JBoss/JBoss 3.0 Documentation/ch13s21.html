@@ -1,0 +1,211 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>How to use Applets to access EJBs in JBoss</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s16.html" title="How to Integrate a Web Container into JBoss"><link rel="next" href="ch13s26.html" title="How to Integrate Custom Services via MBeans"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s16.html"><img src="images\prev.gif" border="0"></a><a href="ch13s26.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="howtoclientapplet"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="howtoclientapplet"></a>How to use Applets to access EJBs in JBoss</h2></div></div><p>Author: <span class="author">Sacha Labourey</span>
+					<tt>&lt;<a href="mailto:sacha.labourey@cogito-info.ch">sacha.labourey@cogito-info.ch</a>&gt;</tt>
+				</p><p>
+					<div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e9424"></a>Note</h3><p>This document applies to JBoss release 2.4 and later. If you are
+using an earlier version of JBoss upgrade to the 2.4 version or later.</p></div>
+				</p><div class="section"><a name="ClientAppletIntroduction"></a><div class="titlepage"><div><h3 class="title"><a name="ClientAppletIntroduction"></a>Introduction</h3></div></div><p>This chapter describes how to access EJBs running in JBoss from an Applet running in a browser.</p><p>When a JVM runs an Applet, it verifies its conformity to a set of security rules which have been established in order to protect the user from malicious code. Some of these rules are:</p><div class="itemizedlist"><ul><li><p><a name="d0e9436"></a>No access to the local filesystem</p></li><li><p><a name="d0e9439"></a>No access to any host on the Internet but the one from which the Applet was downloaded</p></li><li><p><a name="d0e9442"></a>Restricted access to system properties</p></li></ul></div><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e9445"></a>Note</h3><p>More information on the Applet security model can be found here: <a href="http://java.sun.com/sfaq/" target="_top">http://java.sun.com/sfaq/</a>
+						</p></div><p>These restrictions do have consequences on what can be done from a client Applet that want to access EJBs over the network.</p><div class="itemizedlist"><ul><li><p><a name="d0e9454"></a>
+								<a href="ch13s21.html#clientappletunsigned" title="Restricted (unsigned) Applet">Unsigned client applet</a>
+							</p></li><li><p><a name="d0e9460"></a>
+								<a href="ch13s21.html#clientappletsigned" title="Signed client Applet">Signed client applet</a>
+							</p></li></ul></div></div><div class="section"><a name="clientappletunsigned"></a><div class="titlepage"><div><h3 class="title"><a name="clientappletunsigned"></a>Restricted (unsigned) Applet</h3></div></div><p>The main consequence of the sandbox on EJB access from an Applet is that we will need to download the Applet from a Web server that has the same IP address as the J2EE server running the EJB we want to access. Nevertheless, it is still possible, thanks to IP traffic load-balancers for example, to have more than one server hidden behind a single IP address.</p><p>In our example, we will build a stateless session bean that simply returns the server date and hostname in a friendly message. To try this example, you&#8217;d better install the Java plug-in: support for Java in Web  browsers in somewhat hazardous.</p><p>We first build our remote interface:</p><pre class="programlisting">public interface TestApplet extends EJBObject
+{
+   public String getMessage() throws RemoteException;
+}</pre><p>And the Home interface:</p><pre class="programlisting">public interface TestAppletHome extends EJBHome
+{
+   public TestApplet create() throws RemoteException, CreateException;
+}</pre><p>Now the simple EJB implementation:</p><pre class="programlisting">public class TestAppletBean implements SessionBean
+{
+   private SessionContext sessionContext;
+
+   public void ejbCreate() {}
+   public void ejbRemove() {}
+   public void ejbActivate() {}
+   public void ejbPassivate(){}
+   public void setSessionContext(SessionContext context)
+   {
+      sessionContext = context;
+   }
+   public String getMessage()
+   {
+      String hostname = "Unknown host";
+
+      try
+      {
+         hostname = java.net.InetAddress.getLocalHost ().getHostName ();
+      } catch (java.net.UnknownHostException uhe) { }
+
+      String now = java.text.DateFormat.getDateInstance().format (new java.util.Date());
+
+      System.out.println ("getMessage has been called from Applet!");
+
+      return "Hello from " + hostname + ", here it is: " + now + ".";
+   }
+}</pre><p>And its associated ejb-jar.xml descriptor:</p><pre class="programlisting">&lt;?xml version="1.0"?&gt;
+
+&lt;!DOCTYPE ejb-jar PUBLIC '-//Sun Microsystems, Inc.//DTD Enterprise JavaBeans 1.1//EN' 'http://java.sun.com/j2ee/dtds/ejb-jar_1_1.dtd'&gt;
+
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;ejb-name&gt;TestAppletBean&lt;/ejb-name&gt;
+      &lt;home&gt;org.jboss.docs.appletclient.interfaces.TestAppletHome&lt;/home&gt;
+      &lt;remote&gt;org.jboss.docs.appletclient.interfaces.TestApplet&lt;/remote&gt;
+      &lt;ejb-class&gt;org.jboss.docs.appletclient.ejb.TestAppletBean&lt;/ejb-class&gt;
+      &lt;session-type&gt;Stateless&lt;/session-type&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;assembly-descriptor&gt;
+    &lt;container-transaction&gt;
+      &lt;method&gt;
+	&lt;ejb-name&gt;TestAppletBean&lt;/ejb-name&gt;
+	&lt;method-intf&gt;Remote&lt;/method-intf&gt;
+	&lt;method-name&gt;*&lt;/method-name&gt;
+      &lt;/method&gt;
+      &lt;trans-attribute&gt;Required&lt;/trans-attribute&gt;
+    &lt;/container-transaction&gt;
+  &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;</pre><p>We now implements a simple Applet that will have a single button. When pressed, the Applet will call the EJB and display its message.</p><pre class="programlisting">public class AppletEjbCaller extends JApplet
+{
+   JPanel buttonPanel = new JPanel();
+   JButton callEjbButton = new JButton();
+   JPanel labelPanel = new JPanel();
+   JLabel ejbMessageLabel = new JLabel();
+
+
+   // Construct the Applet
+   //
+   public AppletEjbCaller () {}
+
+   // Initialize the applet
+   //
+   public void init()
+   {
+      try
+      {
+         this.setSize(new Dimension(400, 65));
+         callEjbButton.setText("Get server message");
+         callEjbButton.addActionListener(new java.awt.event.ActionListener()
+         {
+            public void actionPerformed(ActionEvent e)
+            {
+               callEjbButton_actionPerformed(e);
+            }
+         });
+         ejbMessageLabel.setText("no call performed yet.");
+         this.getContentPane().add(buttonPanel, BorderLayout.CENTER);
+         buttonPanel.add(callEjbButton, null);
+         this.getContentPane().add(labelPanel, BorderLayout.SOUTH);
+         labelPanel.add(ejbMessageLabel, null);
+      }
+      catch(Exception e)
+      {
+         e.printStackTrace();
+      }
+   }
+
+   /**Get Applet information*/
+   public String getAppletInfo()
+   {
+      return "JBoss EJB client Applet demo";
+   }
+
+   void callEjbButton_actionPerformed(ActionEvent e)
+   {
+      try
+      {
+         Properties jndiProps = new Properties() ;
+         String myServer = this.getCodeBase().getHost ();
+         jndiProps.setProperty("java.naming.factory.initial", "org.jnp.interfaces.NamingContextFactory" ) ;
+         jndiProps.setProperty("java.naming.provider.url", myServer ) ;
+         jndiProps.setProperty("java.naming.factory.url.pkgs", "org.jboss.naming:org.jnp.interfaces" ) ;
+         TestAppletHome home = (TestAppletHome)PortableRemoteObject.narrow( new InitialContext(jndiProps).lookup( "TestAppletBean" ),
+                                                                            TestAppletHome.class) ;
+         TestApplet remote = home.create() ;
+         ejbMessageLabel.setText( remote.getMessage() ) ;
+      }
+      catch ( SecurityException se )
+      {
+         se.printStackTrace ();
+         ejbMessageLabel.setText (se.toString ());
+      }
+      catch( Exception ex )
+      {
+         System.err.println( "APPLET" );
+         ex.printStackTrace();
+      }
+   }
+}</pre><p>One of the most important part of this Applet are these two lines:</p><pre class="programlisting">String myServer = this.getCodeBase().getHost ();
+jndiProps.setProperty("java.naming.provider.url", myServer ) ;</pre><p>We make sure that we access the server from which we have just been downloaded. Attempt to access another server would raise a security exception.</p><div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e9499"></a>Warning</h3><p>you need to access your HTML page from the hostname or IP address to which the EJB server is bound! For the sandbox, 192.168.1.1 and 127.0.0.1 are two different hosts even if in reality they represent the same host.</p><p>Consequently, if you access your web page through http://127.0.0.1/TestApplet.html and, in your code, attempt to reach your EJB at IP 192.168.1.1, an exception will be raised.</p><p>Un-trusted Applets are very sensitive to their environment! For example, imagine you access your web page through the 127.0.0.1 IP address. The Applet will use this address when performing the lookup on the JNDI tree to get the home proxy. This will work. But you have no control on:<div class="itemizedlist"><ul><li><p><a name="d0e9507"></a>The codebase address used by the RMI subsystem on the server to allow dynamic code downloading</p></li><li><p><a name="d0e9510"></a>The RMI target that the proxy holds</p></li></ul></div>
+						</p><p>In consequence, as soon as the first EJB invocation will be fired or as soon as the client will need to dynamically load code from the server, it will use the address specified on the server i.e. 192.168.1.1 and a security exception will be raised.</p></div><p>We also need an HTML page from which the Applet will be launched:</p><pre class="programlisting">&lt;HTML&gt;
+&lt;HEAD&gt;
+&lt;META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=windows-1252"&gt;
+&lt;TITLE&gt;
+HTML Test Page
+&lt;/TITLE&gt;
+&lt;/HEAD&gt;
+&lt;BODY&gt;
+Here is the demo Applet for EJB access coming below...&lt;BR&gt;
+
+&lt;!--"CONVERTED_APPLET"--&gt;
+&lt;!-- CONVERTER VERSION 1.3 --&gt;
+&lt;SCRIPT LANGUAGE="JavaScript"&gt;&lt;!--
+    var _info = navigator.userAgent; var _ns = false;
+    var _ie = (_info.indexOf("MSIE") &gt; 0 &amp;&amp; _info.indexOf("Win") &gt; 0 &amp;&amp; _info.indexOf("Windows 3.1") &lt; 0);
+//--&gt;&lt;/SCRIPT&gt;
+&lt;COMMENT&gt;&lt;SCRIPT LANGUAGE="JavaScript1.1"&gt;&lt;!--
+    var _ns = (navigator.appName.indexOf("Netscape") &gt;= 0 &amp;&amp; ((_info.indexOf("Win") &gt; 0 &amp;&amp; 
+               _info.indexOf("Win16") &lt; 0 &amp;&amp; java.lang.System.getProperty("os.version").indexOf("3.5") &lt; 0) 
+               || (_info.indexOf("Sun") &gt; 0) || (_info.indexOf("Linux") &gt; 0)));
+//--&gt;&lt;/SCRIPT&gt;&lt;/COMMENT&gt;
+
+&lt;SCRIPT LANGUAGE="JavaScript"&gt;&lt;!--
+    if (_ie == true) document.writeln('&lt;OBJECT classid="clsid:8AD9C840-044E-11D1-B3E9-00805F499D93" WIDTH = 400 
+                     HEIGHT = 100 NAME = "AppletEjbCaller"
+                     codebase="http://java.sun.com/products/plugin/1.3/jinstall-13-win32.cab#Version=1,3,0,0"&gt;
+                     &lt;NOEMBED&gt;&lt;XMP&gt;');
+    else if (_ns == true) document.writeln('&lt;EMBED type="application/x-java-applet;version=1.3"  
+                          CODE = "org.jboss.docs.appletclient.applet.AppletEjbCaller" CODEBASE = "." 
+                          ARCHIVE = "AppletClient.jar, jboss-client.jar, jboss-j2ee.jar, jbosssx-client.jar,
+                          jnp-client.jar, jndi.jar, jaas.jar" NAME = "AppletEjbCaller" WIDTH = 400 HEIGHT = 100  
+                          scriptable=false pluginspage="http://java.sun.com/products/plugin/1.3/plugin-install.html"&gt;
+                          &lt;NOEMBED&gt;&lt;XMP&gt;');
+//--&gt;&lt;/SCRIPT&gt;
+&lt;APPLET  CODE = "org.jboss.docs.appletclient.applet.AppletEjbCaller" CODEBASE = "." ARCHIVE = "AppletClient.jar, 
+jboss-client.jar, jboss-j2ee.jar, jbosssx-client.jar, jnp-client.jar, jndi.jar, jaas.jar" WIDTH = 400 
+HEIGHT = 100 NAME = "AppletEjbCaller"&gt;&lt;/XMP&gt;
+&lt;PARAM NAME = CODE VALUE = "org.jboss.docs.appletclient.applet.AppletEjbCaller" &gt;
+&lt;PARAM NAME = CODEBASE VALUE = "." &gt;
+&lt;PARAM NAME = ARCHIVE VALUE = "AppletClient.jar, jboss-client.jar, jboss-j2ee.jar, jbosssx-client.jar,
+jnp-client.jar, jndi.jar, jaas.jar" &gt;
+&lt;PARAM NAME = NAME VALUE = "AppletEjbCaller" &gt;
+&lt;PARAM NAME="type" VALUE="application/x-java-applet;version=1.3"&gt;
+&lt;PARAM NAME="scriptable" VALUE="false"&gt;
+
+&lt;/APPLET&gt;
+
+&lt;/NOEMBED&gt;&lt;/EMBED&gt;&lt;/OBJECT&gt;
+
+
+&lt;!--
+&lt;APPLET CODE = "org.jboss.docs.appletclient.applet.AppletEjbCaller" CODEBASE = "." ARCHIVE = "AppletClient.jar, 
+jboss-client.jar, jboss-j2ee.jar, jbosssx-client.jar, jnp-client.jar, jndi.jar, jaas.jar" 
+WIDTH = 400 HEIGHT = 100 NAME = "AppletEjbCaller"&gt;
+
+
+&lt;/APPLET&gt;
+--&gt;
+&lt;!--"END_CONVERTED_APPLET"--&gt;
+
+
+
+&lt;/BODY&gt;
+&lt;/HTML&gt;</pre><p>This HTML file has been transformed, from a standard HTML file with a standard &lt;applet&gt; tag definition by the SUN HTML converter for their Java plugin. This tools reads HTML files and replaces standard applet definition by browser specific declarations that will call the Java Plugin at runtime instead of the embedded JVM.</p><p>You then need to:<div class="itemizedlist"><ul><li><p><a name="d0e9525"></a>deploy our stateless session bean</p></li><li><p><a name="d0e9528"></a>copy the AppletEjbCaller.jar, jboss-client.jar, jboss-j2ee.jar, jbosssx-client.jar, jnp-client.jar, jndi.jar, jaas.jar (found in the Jboss/client folder) and the HTML file in a directory and share it for web access.</p></li></ul></div>
+						You should now be able to use your applet to access your bean.
+					</p><p>While building the provided example, if the JBoss distribution is correctly referenced in the build script, the build process will automatically deploy the bean in JBoss and copy the Applet JAR and HTML file to the JBoss client folder.</p></div><div class="section"><a name="clientappletsigned"></a><div class="titlepage"><div><h3 class="title"><a name="clientappletsigned"></a>Signed client Applet</h3></div></div><p>One way to easily use Applets for EJB access is to circumvents the sandbox! This can be done by signing the Applet and all code it uses. When downloaded from a browser, it indicates to the user that this Applet is signed by a particular entity and ask for the permission to suppress the sandbox restriction.</p><p>The main problem with Applet signing is that almost each JVM vendor/browser requires its own method! For this reason, we will concentrate on the JDK 1.3 plugin from SUN that can be plugged in any browser on many platforms. Thus, use of signed Applets is more interesting in a controlled environment such as an intranet.</p><div class="section"><a name="d0e9541"></a><div class="titlepage"><div><h4 class="title"><a name="d0e9541"></a>Signing an Applet</h4></div></div><p>To sign an Applet, you first need to obtain a valid certificate. There are mainly two ways:<div class="orderedlist"><ol type="1"><li><p><a name="d0e9547"></a>Buy a code signing certificate from a recognised Java Plugin company (Thawtes or Verisign for example). <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e9550"></a>Note</h3><p>To get the list of the recognised emitters for a particular JDK Plugin, you can run this command:</p><pre class="programlisting">keytool -keystore KEY_STORE -list</pre><p>where KEY_STORE represent your JDK default keystore, generally available in %JDK%/lib/security/cacerts.</p><p>When asked for a password, the default value is "changeit".</p></div>
+									</p></li><li><p><a name="d0e9560"></a>Generate your own certificate. For this, you can run this command:<pre class="programlisting">keytool -keystore KEY_STORE -genkey</pre>You will then be prompted for your key information. You then need to insert this key in the key store of all computers that will be used to access the Applet. This can be done by this command:				<pre class="programlisting">keytool -keystore KEY_STORE -import -alias ANY_NAME -file YOUR_CERT_FILENAME</pre>
+									</p></li></ol></div>
+						</p><p>As you can see it, if you can afford a certificate from a recognised emitter, it is worth the pain.</p><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e9572"></a>Note</h3><p>The Java plugin security documentation states that, on WIN32 systems, the JVM will also look in Windows keystore for recognised certificates emitters. Thus it would also be possible to get a certificate from on of the Internet Explorer emitters or add you own key to Windows keystore (which is just a matter of double-clicking on a certificate file). While this has been true for the first release of the JDK 1.3, future revision (1.3_001 and 1.3_002) have lost this capability without the documentation being updated. Recent feedback seems to indicate that this feature is again supported in release 1.3.1 of the Java Plugin.</p></div><p>Next, you need to sign your JARs. Not only your Applet Jar, but all JARs that are being used by your Applet. Consequently, all JBoss JARs mentioned in the first part (jboss-client.jar, jboss-j2ee.jar, jbosssx-client.jar, jnp-client.jar, jndi.jar, jaas.jar) also need to be signed. You may also group all these JARs in a single JAR and thus sign only the resulting JAR.</p><p>Signing a JAR can be done by executing the following command:</p><pre class="programlisting">jarsigner -keystore KEY_STORE -genkey -storepass STORE_PASS JAR_FILE KEY_ALIAS_NAME</pre><p>Or, if using ANT:</p><pre class="programlisting">&lt;signjar jar="${build.lib.dir}/monitron_Applet_client_bean.jar" keystore="${key.store.db}" alias="${key.store.alias}" storepass="${key.store.pw}"/&gt;</pre><p>Everytime the JAR is re-generated, it needs to be signed again. As the signing operation can be quite time consuming, it is generally better to first sign JBoss JAR and then only sign your own JAR(s). Thus, JBoss JARs need only be signed once.</p></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s16.html"><img src="images\prev.gif" border="0"></a><a href="ch13s26.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

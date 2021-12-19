@@ -1,0 +1,2818 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 24 -- The Java Virtual Machine</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<!--Begin JavaScript roadmap code.  If editing downloaded HTML source, delete
+ this portion.-->
+
+<script language="JavaScript">
+<!--
+
+function TripodShowPopup()
+{
+   var bName=navigator.appName;
+   var bVer=parseInt(navigator.appVersion);
+   var now = new Date();
+   var popupURL = "/adm/popup/roadmap.shtml?"+"member_name=er4ebus&path=peternortonjavaprograming&client_ip=200.190.100.218&ts=1015337437&ad_type=POPUP&category=net&id=6ca8591081269ad9bd25f57a310c5863";
+   var popupName = "TripodPopup";
+
+   if (bName=="Netscape" && bVer<=3)
+   {
+      var popup = window.open("", popupName,'toolbar=0,location=0,directories=0,status=0,menubar=0,scrollbars=0,resizable=0,width=614,height=150');
+   }
+   else
+   {
+      var popup = window.open("", popupName,'toolbar=0,location=0,directories=0,status=0,menubar=0,scrollbars=0,resizable=0,width=604,height=135');
+   }
+   popup.location = popupURL;
+}
+
+if(window.parent==window)
+{
+   TripodShowPopup();
+}
+
+// -->
+</script>
+
+<script language="JavaScript1.2">
+<!--
+
+function changeOpenFunction()
+{
+   var original_window_open = window.open;
+   function new_open_function(url, name, features, replace)
+   {
+      if(name != "TripodPopup")
+         return original_window_open(url, name, features, replace);
+   }
+   window.open = new_open_function;
+}
+var bName = navigator.appName;
+
+if(bName != "Netscape")
+   changeOpenFunction();
+
+// -->
+</script>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT COLOR=#Ff0000>Chapter 24</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#Ff0000>The Java Virtual Machine</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+<UL>
+<LI><A HREF="#IntroducingtheVirtualMachine" >Introducing the Virtual Machine</A>
+<LI><A HREF="#TheBasicPartsoftheJavaVirtualMach" >The Basic Parts of the Java Virtual Machine</A>
+<UL>
+<LI><A HREF="#Registers" >Registers</A>
+<LI><A HREF="#TheStack" >The Stack</A>
+<LI><A HREF="#TheExecutionEnvironment" >The Execution Environment</A>
+<LI><A HREF="#TheGarbageCollectedHeap" >The Garbage-Collected Heap</A>
+<LI><A HREF="#TheConstantPool" >The Constant Pool</A>
+<LI><A HREF="#TheMethodArea" >The Method Area</A>
+<LI><A HREF="#TheBytecodeInstructionSet" >The Bytecode Instruction Set</A>
+</UL>
+<LI><A HREF="#ExaminingBytecode" >Examining Bytecode</A>
+<LI><A HREF="#AWalkthroughoftheInstructionSet" >A Walk-through of the Instruction Set</A>
+<UL>
+<LI><A HREF="#PushingConstantsontotheStack" >Pushing Constants onto the Stack</A>
+<LI><A HREF="#LoadingLocalVariablesontotheStack" >Loading Local Variables onto the Stack</A>
+<LI><A HREF="#StoringStackValuesintoLocalVariable" >Storing Stack Values into Local Variables</A>
+<LI><A HREF="#HandlingArrays" >Handling Arrays</A>
+<LI><A HREF="#HandlingtheStack" >Handling the Stack</A>
+<LI><A HREF="#PerformingArithmetic" >Performing Arithmetic</A>
+<LI><A HREF="#LogicalInstructions" >Logical Instructions</A>
+<LI><A HREF="#HandlingConversions" >Handling Conversions</A>
+<LI><A HREF="#ControlTransferInstructions" >Control Transfer Instructions</A>
+<LI><A HREF="#ReturningfromMethods" >Returning from Methods</A>
+<LI><A HREF="#TableJumping" >Table Jumping</A>
+<LI><A HREF="#ManipulatingObjectFields" >Manipulating Object Fields</A>
+<LI><A HREF="#InvokingMethods" >Invoking Methods</A>
+<LI><A HREF="#ExceptionHandling" >Exception Handling</A>
+<LI><A HREF="#MiscellaneousObjectOperations" >Miscellaneous Object Operations</A>
+<LI><A HREF="#Monitors" >Monitors</A>
+</UL>
+<LI><A HREF="#BreakingDowntheClassFileFormat" >Breaking Down the Class File Format</A>
+<LI><A HREF="#Signatures" >Signatures</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+Throughout this book, I have referenced the Java Virtual Machine
+and the mysterious bytecodes it reads. Without the Java Virtual
+Machine, Java would not be architecture neutral and you would
+not be able to run Java programs on platforms running different
+operating systems. To understand the Java Virtual Machine, you
+need to examine its basic parts, the objects it uses, and the
+bytecodes that make it work.
+<H2><A NAME="IntroducingtheVirtualMachine"><B><FONT SIZE=5 COLOR=#Ff0000>Introducing
+the Virtual Machine</FONT></B></A></H2>
+<P>
+Using an interpreter, all Java programs are compiled to an intermediate
+level called <I>bytecode</I>. You can run the compiled bytecode
+on any computer with the Java runtime environment installed on
+it. The runtime environment consists of the virtual machine and
+its supporting code.
+<P>
+The Java interpreter translates bytecode into sets of instructions
+the computer can understand. Because the bytecode is in an intermediate
+form, there is only a slight delay caused by the translation.
+<P>
+The difficult part of creating Java bytecode is that the source
+code is compiled for a machine that does not exist. This machine
+is called the <I>Java Virtual Machine</I>, and it exists only
+in the memory of your computer. Fooling the Java compiler into
+creating bytecode for a nonexistent machine is only one-half of
+the ingenious process that makes Java architecture neutral. The
+Java interpreter must also make your computer and the bytecode
+file believe they are running on a real machine. It does this
+by acting as the intermediary between the Virtual Machine and
+your real machine.
+<H2><A NAME="TheBasicPartsoftheJavaVirtualMach"><B><FONT SIZE=5 COLOR=#Ff0000>The
+Basic Parts of the Java Virtual Machine</FONT></B></A></H2>
+<P>
+Creating a Virtual Machine within your computer's memory banks
+requires building every major function of a real computer down
+to the very environment within which programs operate. For our
+purposes here, we'll break down these functions into seven basic
+parts:
+<UL>
+<LI>A set of registers
+<LI>A stack
+<LI>An execution environment
+<LI>A garbage-collected heap
+<LI>A constant pool
+<LI>A method storage area
+<LI>An instruction set
+</UL>
+<H3><A NAME="Registers"><B>Registers</B></A></H3>
+<P>
+The <I>registers</I> of the Java Virtual Machine are similar to
+the registers in your computer. However, because the Virtual Machine
+is stack based, its registers are not used for passing or receiving
+arguments. In Java, registers hold the machine's state and are
+updated after each line of bytecode is executed to maintain that
+state. The following four registers hold the state of the virtual
+machine:
+<UL>
+<LI><TT><FONT FACE="Courier">frame</FONT></TT>, the reference
+frame, contains a pointer to the execution environment of the
+current method.
+<LI><TT><FONT FACE="Courier">optop</FONT></TT>, the operand top,
+contains a pointer to the top of the operand stack and is used
+to evaluate arithmetic expressions.
+<LI><TT><FONT FACE="Courier">pc</FONT></TT>, the program counter,
+contains the address of the next bytecode to be executed.
+<LI><TT><FONT FACE="Courier">vars</FONT></TT>, the variable register,
+contains a pointer to local variables.
+</UL>
+<P>
+All these registers are 32 bits wide and are allocated immediately.
+This is possible because the compiler knows the size of the local
+variables and operand stack and because the interpreter knows
+the size of the execution environment.
+<H3><A NAME="TheStack"><B>The Stack</B></A></H3>
+<P>
+The Java Virtual Machine uses an <I>operand stack</I> to supply
+parameters to methods and operations, and to receive results back
+from them. All bytecode instructions take operands from the stack,
+operate on them, and return results to the stack. Like registers
+in the virtual machine, the operand stack is 32 bits wide.
+<P>
+The operand stack follows the last-in first-out (LIFO) methodology
+and expects the operands on the stack to be in a specific order.
+For example, the <TT><FONT FACE="Courier">isub</FONT></TT> bytecode
+instruction expects two integers to be stored on the top of the
+stack, which means that the operands must have been pushed there
+by the previous set of instructions. <TT><FONT FACE="Courier">isub</FONT></TT>
+pops the operands off the stack, subtracts them, and then pushes
+the results back onto the stack.
+<P>
+In Java, integers are a primitive data type. Each primitive data
+type has unique instructions that tell it how to operate on operands
+of that type. For example, the <TT><FONT FACE="Courier">lsub</FONT></TT>
+bytecode is used to perform long integer subtraction, the <TT><FONT FACE="Courier">fsub</FONT></TT>
+bytecode is used to perform floating-point subtraction, and the
+<TT><FONT FACE="Courier">dsub</FONT></TT> bytecode is used to
+perform long integer subtraction. Because of this, it is illegal
+to push two integers onto the stack and then treat them as a single
+long integer. However, it is legal to push a 64-bit long integer
+onto the stack and have it occupy two 32-bit slots. Aren't you
+glad the Java compiler checks the rules for you as it compiles
+your program?
+<P>
+Each method in your Java program has a stack frame associated
+with it. The <I>stack frame</I> holds the state of the method
+with three sets of data: the method's local variables, the method's
+execution environment, and the method's operand stack. Although
+the sizes of the local variable and execution environment data
+sets are always fixed at the start of the method call, the size
+of the operand stack changes as the method's bytecode instructions
+are executed. Because the Java stack is 32 bits wide, 64-bit numbers
+are not guaranteed to be 64-bit aligned.
+<H3><B><A NAME="TheExecutionEnvironment">The Execution Environment</A></B></H3>
+<P>
+The <I>execution environment</I> is maintained within the stack
+as a data set and is used to handle dynamic linking, normal method
+returns, and exception generation. To handle dynamic linking,
+the execution environment contains symbolic references to methods
+and variables for the current method and current class. These
+symbolic calls are translated into actual method calls through
+dynamic linking to a symbol table.
+<P>
+Whenever a method completes normally, a value is returned to the
+calling method. The execution environment handles normal method
+returns by restoring the registers of the caller and incrementing
+the program counter of the caller to skip the method call instruction.
+Execution of the program then continues in the calling method's
+execution environment.
+<P>
+If execution of the current method completes normally, a value
+is returned to the calling method. This occurs when the calling
+method executes a return instruction appropriate to the return
+type.
+<P>
+If the calling method executes a return instruction that is not
+appropriate to the return type, the method throws an exception
+or an error. Errors that can occur include dynamic linkage failure,
+such as a failure to find a class file, or runtime errors, such
+as a reference outside the bounds of an array. When errors occur,
+the execution environment generates an exception. (<A HREF="ch8.htm" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/ch8.htm" >See Chapter 8</A>,
+&quot;Tying It All Together: Threads, Exceptions, and More,&quot;
+for a discussion of exception handling.)
+<H3><A NAME="TheGarbageCollectedHeap"><B>The Garbage-Collected
+Heap</B></A></H3>
+<P>
+Each program running in the Java runtime environment has a <I>garbage-collected
+heap</I> assigned to it. Because instances of class objects are
+allocated from this heap, another word for the heap is the <I>memory
+allocation pool</I>. By default, the heap size is set to 1MB on
+most systems.
+<P>
+Although the heap is set to a specific size when you start a program,
+it can grow-for example, when new objects are allocated. To ensure
+that the heap does not get too large, objects that are no longer
+in use are automatically deallocated or garbage-collected by the
+Java Virtual Machine.
+<P>
+Java performs automatic garbage collection as a background thread.
+Each thread running in the Java runtime environment has two stacks
+associated with it: The first stack is used for Java code; the
+second is used for C code. Memory used by these stacks draws from
+the total system memory pool. Whenever a new thread starts execution,
+it is assigned a maximum stack size for Java code and for C code.
+By default on most systems, the maximum size of the Java code
+stack is 400KB and the maximum size of the C code stack is 128KB.
+<P>
+If your system has memory limitations, you can force Java to perform
+more aggressive cleanup and thus reduce the total amount of memory
+used. To do this, reduce the maximum size of the Java and C code
+stacks. If your system has lots of memory, you can force Java
+to perform less aggressive cleanup, thus reducing the amount of
+background processing. To do this, increase the maximum size of
+the Java and C code stacks.
+<H3><A NAME="TheConstantPool"><B>The Constant Pool</B></A></H3>
+<P>
+Each class in the heap has a <I>constant pool</I> associated with
+it. Because constants do not change, they are usually created
+at compile time. Items in the constant pool encode all the names
+used by any method in a particular class. The class contains a
+count of how many constants exist and an offset that specifies
+where a particular listing of constants begins within the class
+description.
+<P>
+All information associated with a constant follows a specific
+format based on the type of the constant. For example, <I>class-level
+constants</I> are used to represent a class or an interface and
+have the following format:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">CONSTANT_Class_info {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;u1 tag;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;u2 name_index;<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<P>
+where <TT><FONT FACE="Courier">tag</FONT></TT> is the value of
+<TT><FONT FACE="Courier">CONSTANT_Class</FONT></TT> and the <TT><FONT FACE="Courier">name_index</FONT></TT>
+provides the string name of the class. The class name for <TT><FONT FACE="Courier">int[][]</FONT></TT>
+is <TT><FONT FACE="Courier">[[I</FONT></TT>. The class name for
+<TT><FONT FACE="Courier">Thread[]</FONT></TT> is <TT><FONT FACE="Courier">[Ljava.lang.Thread;</FONT></TT>.
+<H3><A NAME="TheMethodArea"><B>The Method Area</B></A></H3>
+<P>
+Java's <I>method area</I> is similar to the compiled code areas
+of the runtime environments used by other programming languages.
+It stores bytecode instructions that are associated with methods
+in the compiled code and the symbol table the execution environment
+needs for dynamic linking. Any debugging or additional information
+that might need to be associated with a method is stored in this
+area as well.
+<H3><A NAME="TheBytecodeInstructionSet"><B>The Bytecode Instruction
+Set</B></A></H3>
+<P>
+Although programmers prefer to write code in a high-level format,
+your computer cannot execute this code directly, which is why
+you must compile Java programs before you can run them. Generally,
+compiled code is either in a machine-readable format called <I>machine
+language</I> or in an intermediate-level format such as the assembly
+language or Java bytecode.
+<P>
+The bytecode instructions used by the Java Virtual Machine resemble
+Assembler instructions. If you have ever used Assembler, you know
+that the instruction set is streamlined to a minimum for the sake
+of efficiency and that tasks, such as printing to the screen,
+are accomplished using a series of instructions. For example,
+the Java language allows you to print to the screen using a single
+line of code, such as
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">System.out.println(&quot;Hello world!&quot;);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+At compile time, the Java compiler converts the single-line print
+statement to the following bytecode:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;&nbsp;&nbsp;0 getstatic #6 &lt;Field
+java.lang.System.out Ljava/io/PrintStream;&gt;<BR>
+&nbsp;&nbsp;&nbsp;3 ldc #1 &lt;String &quot;Hello world!&quot;&gt;
+<BR>
+&nbsp;&nbsp;&nbsp;5 invokevirtual #7 &lt;Method java.io.PrintStream.println(Ljava/lang/String;)V&gt;
+<BR>
+&nbsp;&nbsp;&nbsp;8 return</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The JDK provides a tool for examining bytecode called the <I>Java
+class file disassembler</I>. As you will see later in this chapter,
+you can run the disassembler by typing <TT><FONT FACE="Courier">javap</FONT></TT>
+at the command line or by starting a graphical disassembler that
+you got with a third-party toolkit.
+<P>
+Because the bytecode instructions are in such a low-level format,
+your programs execute at nearly the speed of programs compiled
+to machine language. All instructions in machine language are
+represented by byte streams of <TT><FONT FACE="Courier">0</FONT></TT>s
+and <TT><FONT FACE="Courier">1</FONT></TT>s. In a low-level language,
+byte streams of <TT><FONT FACE="Courier">0</FONT></TT>s and <TT><FONT FACE="Courier">1</FONT></TT>s
+are replaced by suitable mnemonics, such as the bytecode instruction
+<TT><FONT FACE="Courier">isub</FONT></TT>. As with the assembly
+language, the basic format of a bytecode instruction is
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&lt;operation&gt; &lt;operands(s)&gt;</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Therefore, an instruction in the bytecode instruction set consists
+of a 1-byte opcode specifying the operation to be performed, and
+zero or more operands that supply parameters or data that will
+be used by the operation.
+<H2><A NAME="ExaminingBytecode"><B><FONT SIZE=5 COLOR=#Ff0000>Examining
+Bytecode</FONT></B></A></H2>
+<P>
+If you are familiar with how intermediate-level languages like
+Assembler are used, you should see the true beauty of Java. Here's
+a language that allows you to compile the source code to a machine-independent,
+intermediate form that will execute nearly as quickly as if it
+were fully compiled.
+<P>
+To allow you to examine bytecode instructions, the JDK includes
+a tool called the <I>Java class file disassembler</I>. The name
+of this tool is somewhat deceptive: You can use it to look at
+the internals of Java class files, but you cannot disassemble
+a compiled class file to create a Java source file.
+<P>
+You can use the disassembler for several purposes:
+<UL>
+<LI>To gain quick insight into how a class works.
+<LI>To see how a class uses system resources.
+<LI>To check your import statements and dependencies
+</UL>
+<P>
+Two versions of the disassembler are included in the JDK. The
+first version, <TT><FONT FACE="Courier">javap</FONT></TT>, is
+optimized for normal use and has only limited debugging capabilities.
+The second version, <TT><FONT FACE="Courier">javap_g</FONT></TT>,
+is optimized for debugging and is intended for use with the Java
+debugger.
+<P>
+You run the Java disassembler from the command line and pass it
+the name of your Java class file without the <TT><FONT FACE="Courier">.class</FONT></TT>
+extension. If you invoke the disassembler with no options, it
+outputs the name of the file you compiled the class file from
+and abbreviated declarations for public variables, methods, and
+classes. If you created the <TT><FONT FACE="Courier">FirstApplet</FONT></TT>
+program in <A HREF="ch23.htm" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/ch23.htm" >Chapter 23</A>, &quot;Advanced
+Debugging and Troubleshooting,&quot; you can use <TT><FONT FACE="Courier">javap</FONT></TT>
+to disassemble the applet by changing to the directory with the
+compiled class file and typing the following:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">javap FirstApplet</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The output to your screen should be similar to this:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">Compiled from FirstApplet.java<BR>
+public class FirstApplet extends java.applet.Applet {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;java.awt.Image NewImage;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(java.awt.Graphics);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public FirstApplet();<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Although the output looks rather terse, it is extremely useful.
+From this output, you can see all public fields and the basic
+structure of the program at a glance. This gives you a fair idea
+of how the program actually works. You can also see exactly where
+Java needs fully qualified paths to classes and what those paths
+are. The previous example shows that <TT><FONT FACE="Courier">FirstApplet</FONT></TT>
+uses three classes in the Java API:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">java.applet.Applet<BR>
+<BR>
+java.awt.Image<BR>
+<BR>
+java.awt.Graphics</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Beginning Java programmers can use the output of <TT><FONT FACE="Courier">javap</FONT></TT>
+as a guide to see if they are importing too many classes. To check
+this, compare which classes are actually used to the classes you
+are importing. You can also use <TT><FONT FACE="Courier">javap</FONT></TT>
+to clean up your code. Using the fully qualified class names,
+you could rewrite the <TT><FONT FACE="Courier">FirstApplet</FONT></TT>
+program so that it does not need import statements. Because the
+Java compiler no longer has to search the namespace for specific
+class instances, this new version of <TT><FONT FACE="Courier">FirstApplet</FONT></TT>
+compiles slightly faster than the old version. The new version
+of <TT><FONT FACE="Courier">FirstApplet</FONT></TT> follows:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">public class FirstApplet extends java.applet.Applet
+{<BR>
+java.awt.Image NewImage;<BR>
+<BR>
+&nbsp;&nbsp;public void init() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize(300,300);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NewImage = getImage(getCodeBase(),&quot;New.gif&quot;);
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public void paint(java.awt.Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g.drawImage(NewImage,50,50,this);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;play(getCodeBase(),&quot;New.au&quot;);
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<P>
+You can use the <TT><FONT FACE="Courier">-v</FONT></TT> option
+to get verbose output from the disassembler. Verbose output gives
+you some idea of the stacks, local variables, and arguments used
+by the program. If you use this option on the <TT><FONT FACE="Courier">FirstApplet</FONT></TT>
+program by typing
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">javap -v FirstApplet</FONT></TT>
+</BLOCKQUOTE>
+<P>
+the output to your screen should be similar to this:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">Compiled from FirstApplet.java<BR>
+public class FirstApplet extends java.applet.Applet {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;java.awt.Image NewImage;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init();<BR>
+/* Stack=4, Locals=1, Args_size=1 */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(java.awt.Graphics);
+<BR>
+/* Stack=5, Locals=2, Args_size=2 */<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public FirstApplet();<BR>
+/* Stack=1, Locals=1, Args_size=1 */<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<P>
+You can use the <TT><FONT FACE="Courier">-p</FONT></TT> and <TT><FONT FACE="Courier">-c</FONT></TT>
+options to get more information about a program. The <TT><FONT FACE="Courier">-p</FONT></TT>
+option specifies that you want <TT><FONT FACE="Courier">javap</FONT></TT>
+to print out private and protected variables, methods, and classes
+in addition to the public ones. You use the <TT><FONT FACE="Courier">-c</FONT></TT>
+option to disassemble compiled code to bytecode instructions.
+<BR>
+<P><CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=590>
+<BLOCKQUOTE>
+You can use the Java disassembler to examine the bytecode instructions of any Java class file.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Bytecode instructions are useful when you want to see exactly
+what the Java Virtual Machine is doing when it runs the bytecode.
+However, bytecode instructions do not resemble your original source
+code. In fact, they more closely resemble an assembler program.
+For example, the four-line <TT><FONT FACE="Courier">paint()</FONT></TT>
+method of <TT><FONT FACE="Courier">FirstApplet</FONT></TT> is
+displayed in bytecode as the following:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">Method void paint(java.awt.Graphics)
+<BR>
+&nbsp;&nbsp;&nbsp;0 aload_1<BR>
+&nbsp;&nbsp;&nbsp;1 aload_0<BR>
+&nbsp;&nbsp;&nbsp;2 getfield #12 &lt;Field FirstApplet.NewImage
+Ljava/awt/Image;&gt;<BR>
+&nbsp;&nbsp;&nbsp;5 bipush 50<BR>
+&nbsp;&nbsp;&nbsp;7 bipush 50<BR>
+&nbsp;&nbsp;&nbsp;9 aload_0<BR>
+&nbsp;&nbsp;10 invokevirtual #8 &lt;Method java.awt.Graphics.drawImage(Ljava/awt/Image;
+<BR>
+&nbsp;&nbsp;&Acirc;IILjava/awt/image/ImageObserver;)Z&gt;<BR>
+&nbsp;&nbsp;13 pop<BR>
+&nbsp;&nbsp;14 aload_0<BR>
+&nbsp;&nbsp;15 aload_0<BR>
+&nbsp;&nbsp;16 invokevirtual #9 &lt;Method java.applet.Applet.getCodeBase()Ljava/net/URL;&gt;
+<BR>
+&nbsp;&nbsp;19 ldc #2 &lt;String &quot;New.au&quot;&gt;<BR>
+&nbsp;&nbsp;21 invokevirtual #7 &lt;Method java.applet.Applet.play
+<BR>
+&nbsp;&nbsp;&Acirc;(Ljava/net/URL;Ljava/lang/String;)V&gt;<BR>
+&nbsp;&nbsp;24 return</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The entire listing of bytecode instructions for the <TT><FONT FACE="Courier">FirstApplet.class</FONT></TT>
+file is shown in Listing 24.1.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 24.1. Bytecode for </B><TT><B><FONT FACE="Courier">FirstApplet</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">Compiled from FirstApplet.java<BR>
+public class FirstApplet extends java.applet.Applet {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;java.awt.Image NewImage;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(java.awt.Graphics);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public FirstApplet();<BR>
+<BR>
+Method void init()<BR>
+&nbsp;&nbsp;&nbsp;0 aload_0<BR>
+&nbsp;&nbsp;&nbsp;1 sipush 300<BR>
+&nbsp;&nbsp;&nbsp;4 sipush 300<BR>
+&nbsp;&nbsp;&nbsp;7 invokevirtual #11 &lt;Method java.applet.Applet.resize(II)V&gt;
+<BR>
+&nbsp;&nbsp;10 aload_0<BR>
+&nbsp;&nbsp;11 aload_0<BR>
+&nbsp;&nbsp;12 aload_0<BR>
+&nbsp;&nbsp;13 invokevirtual #9 &lt;Method java.applet.Applet.getCodeBase()Ljava/net/URL;&gt;
+<BR>
+&nbsp;&nbsp;16 ldc #1 &lt;String &quot;New.gif&quot;&gt;<BR>
+&nbsp;&nbsp;18 invokevirtual #10 &lt;Method java.applet.Applet.getImage
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&Acirc;(Ljava/net/URL;Ljava/lang/String;)Ljava/awt/Image;&gt;
+<BR>
+&nbsp;&nbsp;21 putfield #12 &lt;Field FirstApplet.NewImage Ljava/awt/Image;&gt;
+<BR>
+&nbsp;&nbsp;24 return<BR>
+<BR>
+Method void paint(java.awt.Graphics)<BR>
+&nbsp;&nbsp;&nbsp;0 aload_1<BR>
+&nbsp;&nbsp;&nbsp;1 aload_0<BR>
+&nbsp;&nbsp;&nbsp;2 getfield #12 &lt;Field FirstApplet.NewImage
+Ljava/awt/Image;&gt;<BR>
+&nbsp;&nbsp;&nbsp;5 bipush 50<BR>
+&nbsp;&nbsp;&nbsp;7 bipush 50<BR>
+&nbsp;&nbsp;&nbsp;9 aload_0<BR>
+&nbsp;&nbsp;10 invokevirtual #8 &lt;Method java.awt.Graphics.drawImage(Ljava/awt/Image;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; &Acirc;IILjava/awt/image/ImageObserver;)Z&gt;
+<BR>
+&nbsp;&nbsp;13 pop<BR>
+&nbsp;&nbsp;14 aload_0<BR>
+&nbsp;&nbsp;15 aload_0<BR>
+&nbsp;&nbsp;16 invokevirtual #9 &lt;Method java.applet.Applet.getCodeBase()Ljava/net/URL;&gt;
+<BR>
+&nbsp;&nbsp;19 ldc #2 &lt;String &quot;New.au&quot;&gt;<BR>
+&nbsp;&nbsp;21 invokevirtual #7 &lt;Method java.applet.Applet.play
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&Acirc;(Ljava/net/URL;Ljava/lang/String;)V&gt;
+<BR>
+&nbsp;&nbsp;24 return<BR>
+<BR>
+Method FirstApplet()<BR>
+&nbsp;&nbsp;&nbsp;0 aload_0<BR>
+&nbsp;&nbsp;&nbsp;1 invokenonvirtual #6 &lt;Method java.applet.Applet.&lt;init&gt;()V&gt;
+<BR>
+&nbsp;&nbsp;&nbsp;4 return<BR>
+<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+As you can see from the previous examples, when you compile a
+Java program the compiler translates each line of high-level code
+into multiple lines of low-level instructions. These instructions
+are organized by the key class-level and method objects.
+<P>
+In the sections that follow, I examine the bytecode instruction
+set to give you a firm understanding of both the Java Virtual
+Machine and Java bytecode.
+<P>
+You can also use the disassembler to create minimal C header files.
+To do this, you use the <TT><FONT FACE="Courier">-h</FONT></TT>
+option. If you generate a header file for <TT><FONT FACE="Courier">FirstApplet</FONT></TT>
+using <TT><FONT FACE="Courier">javap</FONT></TT>, you will find
+that the resulting output is very different from the output generated
+by <TT><FONT FACE="Courier">javah</FONT></TT>. For this reason,
+you should really use the <TT><FONT FACE="Courier">javap</FONT></TT>
+tool for what it was designed for and not to generate C header
+files.
+<P>
+Other useful options are <TT><FONT FACE="Courier">-classpath</FONT></TT>
+and <TT><FONT FACE="Courier">-verify</FONT></TT>. The <TT><FONT FACE="Courier">-classpath</FONT></TT>
+option lets you override the default and current <TT><FONT FACE="Courier">CLASSPATH</FONT></TT>
+setting. If the program you are disassembling makes use of any
+classes that are not stored in the current directory, you should
+either set the <TT><FONT FACE="Courier">CLASSPATH</FONT></TT>
+environment variable or use the <TT><FONT FACE="Courier">-classpath</FONT></TT>
+option. The <TT><FONT FACE="Courier">-verify</FONT></TT> option
+lets you validate the Java class file. The general message you
+will get if the class file is valid is
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">Class classname succeeds</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The command-line syntax for the disassembler is
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">javap [options] classname</FONT></TT>
+</BLOCKQUOTE>
+<P>
+or
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">javap [options] classname1 classname2
+classname3 &#133;</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The disassembler takes these options:<BR>
+<P><CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><I>Option</I></TD><TD WIDTH=472><I>Description</I>
+</TD></TR>
+<TR><TD WIDTH=118><TT><FONT FACE="Courier">-c</FONT></TT></TD>
+<TD WIDTH=472>Disassembles compiled code to bytecode instructions
+</TD></TR>
+<TR><TD WIDTH=118><TT><FONT FACE="Courier">-classpath</FONT></TT>
+</TD><TD WIDTH=472>Overrides the default or current <TT><FONT FACE="Courier">CLASSPATH</FONT></TT> environment variable setting
+</TD></TR>
+<TR><TD WIDTH=118><TT><FONT FACE="Courier">-h</FONT></TT></TD>
+<TD WIDTH=472>Creates a minimal C header file</TD></TR>
+<TR><TD WIDTH=118><TT><FONT FACE="Courier">-p</FONT></TT></TD>
+<TD WIDTH=472>Displays private and protected variables, methods, and classes in addition to the public ones
+</TD></TR>
+<TR><TD WIDTH=118><TT><FONT FACE="Courier">-v</FONT></TT></TD>
+<TD WIDTH=472>Displays verbose output and gives you some idea of the stacks, local variables, and arguments used by the program
+</TD></TR>
+<TR><TD WIDTH=118><TT><FONT FACE="Courier">-verify</FONT></TT>
+</TD><TD WIDTH=472>Validates the Java class file</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="AWalkthroughoftheInstructionSet"><B><FONT SIZE=5 COLOR=#Ff0000>A
+Walk-through of the Instruction Set</FONT></B></A></H2>
+<P>
+The instruction set walkthrough that follows should help you understand
+how the Java Virtual Machine uses bytecode instructions. As you
+read this section, keep in mind that each instruction in the bytecode
+instruction set consists of a 1-byte opcode specifying the operation
+to be performed, and zero or more operands that supply parameters
+or data that will be used by the operation. Most bytecode instructions
+take as an operand a numeric value, an object name, or both, such
+as
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">bipush 50</FONT></TT>
+</BLOCKQUOTE>
+<P>
+or
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">getfield #12 &lt;Field FirstApplet.NewImage
+Ljava/awt/Image;&gt;</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Knowing this, you can key in on the most important aspect of the
+bytecode instruction set: understanding how the instruction affects
+the stack. For this reason, along with a brief description of
+what a bytecode instruction does, I present a text picture of
+the operand stack before and after the operation associated with
+a bytecode instruction is performed, such as the following example:
+<P>
+or
+<P>
+The first stack drawing shows that the <TT><FONT FACE="Courier">bipush</FONT></TT>
+instruction expects no operands to be on the top of the stack
+but does push a value onto the stack. The second drawing shows
+that the <TT><FONT FACE="Courier">iadd</FONT></TT> instruction
+expects two operands-<TT><FONT FACE="Courier">v1</FONT></TT> and
+<TT><FONT FACE="Courier">v2</FONT></TT>-to be on the top of the
+stack. These values are in turn popped off the stack and operated
+on to produce the result, and the result is pushed back onto the
+top of the stack.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=542>
+<BLOCKQUOTE>
+After <TT><FONT FACE="Courier">v1</FONT></TT> and <TT><FONT FACE="Courier">v2</FONT></TT> are operated on, only the result is pushed back on the stack. The variables have served their purpose.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Bytecode instructions that do not affect control flow simply execute
+and advance the program counter register so that it points to
+the address of the next bytecode instruction. Otherwise, the program
+counter is advanced over any operand bytes so that it points to
+the next bytecode in sequence. In the sections that follow, references
+to <TT><FONT FACE="Courier">byte1</FONT></TT>, <TT><FONT FACE="Courier">byte2</FONT></TT>,
+and so on, refer to the bytes following the opcode.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Tip</B></TD></TR>
+<TR><TD WIDTH=570>
+<BLOCKQUOTE>
+To better understand the walkthrough of the bytecode instruction set that follows, you might want to disassemble some of the class files you created as you read this book. You can also disassemble any of the class files on the CD-ROM.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><A NAME="PushingConstantsontotheStack"><B>Pushing Constants
+onto the Stack</B></A></H3>
+<P>
+One of the most basic tasks of the virtual machine is to push
+constants onto the stack. The next section looks at instructions
+that are used to do this.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">bipush</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push a 1-byte signed integer.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The first byte following the opcode, <TT><FONT FACE="Courier">byte1</FONT></TT>,
+is interpreted as a signed 8-bit value. This value is expanded
+to a 32-bit integer and pushed onto the operand stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">sipush</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push a 2-byte signed integer.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The first and second byte following the opcode,
+<TT><FONT FACE="Courier">byte1</FONT></TT> and <TT><FONT FACE="Courier">byte2</FONT></TT>,
+are assembled into a signed 16-bit value. This value is expanded
+to a 32-bit integer and pushed onto the operand stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ldc1</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push item from constant pool.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> <TT><FONT FACE="Courier">byte1</FONT></TT>
+is used as an unsigned 8-bit index into the constant pool of the
+current class. After the item at that index is resolved, it is
+pushed onto the stack.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=590>
+<BLOCKQUOTE>
+This bytecode instruction throws an <TT><FONT FACE="Courier">OutOfMemoryError</FONT></TT> if a <TT><FONT FACE="Courier">String</FONT></TT> object is being pushed and there is not enough memory to allocate space for it.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ldc2</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push 2-byte item from constant pool.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> <TT><FONT FACE="Courier">byte1</FONT></TT>
+and <TT><FONT FACE="Courier">byte2</FONT></TT> are used to construct
+an unsigned 16-bit index into the constant pool of the current
+class. After the item at that index is resolved, it is pushed
+onto the stack.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=590>
+<BLOCKQUOTE>
+This bytecode instruction throws an <TT><FONT FACE="Courier">OutOfMemoryError</FONT></TT> if a <TT><FONT FACE="Courier">String</FONT></TT> object is being pushed and there is not enough memory to allocate space for it.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ldc2w</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push long or double from constant pool.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> <TT><FONT FACE="Courier">byte1</FONT></TT>
+and <TT><FONT FACE="Courier">byte2</FONT></TT> are used to construct
+an unsigned 16-bit index into the constant pool of the current
+class. After the two-word constant at that index is resolved,
+it is pushed onto the stack.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=590>
+<BLOCKQUOTE>
+This bytecode instruction throws an <TT><FONT FACE="Courier">OutOfMemoryError</FONT></TT> if a <TT><FONT FACE="Courier">String</FONT></TT> object is being pushed and there is not enough memory to allocate space for it.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">aconst_null</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push a null object reference.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> This bytecode pushes a null object reference
+onto the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iconst_m1</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push the integer constant <TT><FONT FACE="Courier">-1</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> This bytecode pushes the integer constant
+<TT><FONT FACE="Courier">-1</FONT></TT> onto the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iconst_&lt;C&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push the integer constant <TT><FONT FACE="Courier">&lt;C&gt;</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> This bytecode pushes an integer constant onto
+the stack. There are six associated bytecodes, one for each of
+the integers 0-5: <TT><FONT FACE="Courier">iconst_0</FONT></TT>,
+<TT><FONT FACE="Courier">iconst_1</FONT></TT>, <TT><FONT FACE="Courier">iconst_2</FONT></TT>,
+<TT><FONT FACE="Courier">iconst_3</FONT></TT>, <TT><FONT FACE="Courier">iconst_4</FONT></TT>,
+and <TT><FONT FACE="Courier">iconst_5</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lconst_&lt;LC&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push the long integer constant <TT><FONT FACE="Courier">&lt;LC&gt;</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> This bytecode pushes a long integer constant
+onto the stack. There are two associated bytecodes, one for each
+of the integers 0-1: <TT><FONT FACE="Courier">lconst_0</FONT></TT>
+and <TT><FONT FACE="Courier">lconst_1</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fconst_&lt;F&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push the single-precision floating-point number
+<TT><FONT FACE="Courier">&lt;F&gt;</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> This bytecode pushes a single-precision floating-point
+number onto the stack. There are three associated bytecodes, one
+for each of the integers 0-2: <TT><FONT FACE="Courier">fconst_0</FONT></TT>,
+<TT><FONT FACE="Courier">fconst_1</FONT></TT>, and <TT><FONT FACE="Courier">fconst_2</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dconst_&lt;D&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Push the double-precision floating-point number
+<TT><FONT FACE="Courier">&lt;D&gt;</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> This bytecode pushes a double-precision floating-point
+number onto the stack. There are two associated bytecodes, one
+for each of the integers 0-1: <TT><FONT FACE="Courier">dconst_0</FONT></TT>
+and <TT><FONT FACE="Courier">dconst_1</FONT></TT>.
+</BLOCKQUOTE>
+<H3><A NAME="LoadingLocalVariablesontotheStack"><B>Loading Local
+Variables onto the Stack</B></A></H3>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iload</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load integer from local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The value of the local variable in the current
+Java frame is pushed onto the operand stack. This value must be
+of type integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iload_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load integer from local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The value of the local variable <TT><FONT FACE="Courier">&lt;l&gt;
+</FONT></TT>in the current Java frame is pushed onto the operand
+stack. This value must be of type integer. There are four of these
+bytecodes, one for each of the integers 0-3: <TT><FONT FACE="Courier">iload_0</FONT></TT>,
+<TT><FONT FACE="Courier">iload_1</FONT></TT>, <TT><FONT FACE="Courier">iload_2</FONT></TT>,
+and <TT><FONT FACE="Courier">iload_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lload</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load long integer from local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The values of the local variables <TT><FONT FACE="Courier">word1</FONT></TT>
+and <TT><FONT FACE="Courier">word2</FONT></TT> in the current
+Java frame are pushed onto the operand stack. These values together
+must form a long integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lload_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load long integer from local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The values of the local variables <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+and <TT><FONT FACE="Courier">&lt;l&gt;+1</FONT></TT> in the current
+Java frame are pushed onto the operand stack. These values together
+must form a long integer. There are four of these bytecodes, one
+for each of the integers 0-3: <TT><FONT FACE="Courier">lload_0</FONT></TT>,
+<TT><FONT FACE="Courier">lload_1</FONT></TT>, <TT><FONT FACE="Courier">lload_2</FONT></TT>,
+and <TT><FONT FACE="Courier">lload_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fload</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load single float from local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The value of the local variable in the current
+Java frame is pushed onto the operand stack. This value must be
+a single-precision floating-point number.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fload_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load single float from local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The value of the local variable <TT><FONT FACE="Courier">&lt;l&gt;
+</FONT></TT>in the current Java frame is pushed onto the operand
+stack. This value must be a single-precision floating-point number.
+There are four of these bytecodes, one for each of the integers
+0-3: <TT><FONT FACE="Courier">fload_0</FONT></TT>, <TT><FONT FACE="Courier">fload_1</FONT></TT>,
+<TT><FONT FACE="Courier">fload_2</FONT></TT>, and <TT><FONT FACE="Courier">fload_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dload</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load double float from local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The values of the local variables <TT><FONT FACE="Courier">word1</FONT></TT>
+and <TT><FONT FACE="Courier">word2</FONT></TT> in the current
+Java frame are pushed onto the operand stack. These values together
+must form a double-precision floating-point number.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dload_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load double float from local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The values of the local variables <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+and <TT><FONT FACE="Courier">&lt;l&gt;+1</FONT></TT> in the current
+Java frame are pushed onto the operand stack. These values together
+must form a double-precision floating-point number. There are
+four of these bytecodes, one for each of the integers 0-3: <TT><FONT FACE="Courier">dload_0</FONT></TT>,
+<TT><FONT FACE="Courier">dload_1</FONT></TT>, <TT><FONT FACE="Courier">dload_2</FONT></TT>,
+and <TT><FONT FACE="Courier">dload_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">aload</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load object reference from local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The value of the local variable in the current
+Java frame is pushed onto the operand stack. This value must contain
+a return address or be a reference to an object or array.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">aload_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load object reference from local variable with
+specific index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The value of the local variable <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+in the current Java frame is pushed onto the operand stack. This
+value must contain a return address or be a reference to an object
+or array. There are four of these bytecodes, one for each of the
+integers 0-3: <TT><FONT FACE="Courier">aload_0</FONT></TT>, <TT><FONT FACE="Courier">aload_1</FONT></TT>,
+<TT><FONT FACE="Courier">aload_2</FONT></TT>, and <TT><FONT FACE="Courier">aload_3</FONT></TT>.
+</BLOCKQUOTE>
+<H3><A NAME="StoringStackValuesintoLocalVariable"><B>Storing Stack
+Values into Local Variables</B></A></H3>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">istore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store integer into local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable in the current Java frame is
+set to a value. This value must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">istore_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store integer into local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+in the current Java frame is set to a value. This value must be
+an integer. There are four of these bytecodes, one for each of
+the integers 0-3: <TT><FONT FACE="Courier">istore_0</FONT></TT>,
+<TT><FONT FACE="Courier">istore_1</FONT></TT>, <TT><FONT FACE="Courier">istore_2</FONT></TT>,
+and <TT><FONT FACE="Courier">istore_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lstore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store long integer into local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variables <TT><FONT FACE="Courier">word1</FONT></TT>
+and <TT><FONT FACE="Courier">word2</FONT></TT> in the current
+Java frame are set to a value. This value must be a long integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lstore_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store long integer into local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variables <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+and <TT><FONT FACE="Courier">&lt;l&gt;+1</FONT></TT> in the current
+Java frame are set to a value. This value must be a long integer.
+There are four of these bytecodes, one for each of the integers
+0-3: <TT><FONT FACE="Courier">lstore_0</FONT></TT>, <TT><FONT FACE="Courier">lstore_1</FONT></TT>,
+<TT><FONT FACE="Courier">lstore_2</FONT></TT>, and <TT><FONT FACE="Courier">lstore_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fstore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store single float into local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable in the current Java  frame
+is set to a value. This value must be a single-precision floating-point
+number.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fstore_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store single float into local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+in the current Java frame is set to a value. This value must be
+a single-precision floating-point number. There are four of these
+bytecodes, one for each of the integers 0-3: <TT><FONT FACE="Courier">lstore_0</FONT></TT>,
+<TT><FONT FACE="Courier">lstore_1</FONT></TT>, <TT><FONT FACE="Courier">lstore_2</FONT></TT>,
+and <TT><FONT FACE="Courier">lstore_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dstore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store double-precision floating-point number into
+local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variables <TT><FONT FACE="Courier">word1</FONT></TT>
+and <TT><FONT FACE="Courier">word2</FONT></TT> in the current
+Java frame are set to a value. The value must be a double-precision
+floating-point number.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dstore_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store double float into local variable with specific
+index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variables <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+and <TT><FONT FACE="Courier">&lt;l&gt;+1</FONT></TT> in the current
+Java frame are set to a value. The value must be a double-precision
+floating-point number. There are four of these bytecodes, one
+for each of the integers 0-3: <TT><FONT FACE="Courier">dstore_0</FONT></TT>,
+<TT><FONT FACE="Courier">dstore_1</FONT></TT>, <TT><FONT FACE="Courier">dstore_2</FONT></TT>,
+and <TT><FONT FACE="Courier">dstore_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">astore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store object reference into local variable.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable at the index in the current
+Java frame is set to a value. The value must be a return address
+or a reference to an object.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">astore_&lt;l&gt;</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store object reference into local variable with
+specific index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable <TT><FONT FACE="Courier">&lt;l&gt;</FONT></TT>
+in the current Java frame is set to a value. The value must be
+a return address or a reference to an object. There are four of
+these bytecodes, one for each of the integers<BR>
+0-3: <TT><FONT FACE="Courier">astore_0</FONT></TT>, <TT><FONT FACE="Courier">astore_1</FONT></TT>,
+<TT><FONT FACE="Courier">astore_2</FONT></TT>, and <TT><FONT FACE="Courier">astore_3</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iinc</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Increment local variable by constant.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable at <TT><FONT FACE="Courier">byte1</FONT></TT>
+in the current Java frame must contain an integer. Its value is
+incremented by the value <TT><FONT FACE="Courier">byte2</FONT></TT>,
+where <TT><FONT FACE="Courier">byte2</FONT></TT> is treated as
+a signed 8-bit quantity.
+</BLOCKQUOTE>
+<H3><A NAME="HandlingArrays"><B>Handling Arrays</B></A></H3>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">newarray</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Allocate new array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> A new array of a specific array type, capable
+of holding <TT><FONT FACE="Courier">size</FONT></TT> elements,
+is allocated. The result is a reference to the new object. Allocation
+of an array large enough to contain <TT><FONT FACE="Courier">size</FONT></TT>
+items of the specific array type is attempted and all elements
+of the array are initialized to <TT><FONT FACE="Courier">0</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">size</FONT></TT> represents the number
+of elements in the new array and must be an integer. The result
+is stored with an internal code that indicates the type of array
+to allocate. Possible values for the type of array are as follows:
+<TT><FONT FACE="Courier">T_BOOLEAN</FONT></TT>(<TT><FONT FACE="Courier">4</FONT></TT>),
+<TT><FONT FACE="Courier">T_chAR</FONT></TT>(<TT><FONT FACE="Courier">5</FONT></TT>),
+<TT><FONT FACE="Courier">T_FLOAT</FONT></TT>(<TT><FONT FACE="Courier">6</FONT></TT>),
+<TT><FONT FACE="Courier">T_DOUBLE</FONT></TT>(<TT><FONT FACE="Courier">7</FONT></TT>),
+<TT><FONT FACE="Courier">T_BYTE</FONT></TT>(<TT><FONT FACE="Courier">8</FONT></TT>),
+<TT><FONT FACE="Courier">T_SHORT</FONT></TT>(<TT><FONT FACE="Courier">9</FONT></TT>),
+<TT><FONT FACE="Courier">T_INT</FONT></TT>(<TT><FONT FACE="Courier">10</FONT></TT>),
+and <TT><FONT FACE="Courier">T_LONG</FONT></TT>(<TT><FONT FACE="Courier">11</FONT></TT>).
+<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=521>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NegativeArraySizeException</FONT></TT> is thrown if <TT><FONT FACE="Courier">size</FONT></TT> is less than <TT><FONT FACE="Courier">0</FONT></TT>. An <TT><FONT FACE="Courier">OutOfMemoryError</FONT></TT> is thrown if there is not 
+enough memory to allocate the array.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">anewarray</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Allocate new array of objects.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> A new array of the indicated class type and
+capable of holding <TT><FONT FACE="Courier">size</FONT></TT> elements
+is allocated. The result is a reference to the new object. Allocation
+of an array large enough to contain <TT><FONT FACE="Courier">size</FONT></TT>
+elements of the given class type is attempted and all elements
+of the array are initialized to null.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">size</FONT></TT> represents the number
+of elements in the new array and must be an integer. <TT><FONT FACE="Courier">byte1</FONT></TT>
+and <TT><FONT FACE="Courier">byte2</FONT></TT> are used to construct
+an index into the constant pool of the current class. When the
+item at that index is resolved, the resulting entry must be a
+class.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=521>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NegativeArraySizeException</FONT></TT> is thrown if <TT><FONT FACE="Courier">size</FONT></TT> is less than <TT><FONT FACE="Courier">0</FONT></TT>. An <TT><FONT FACE="Courier">OutOfMemoryError</FONT></TT> is thrown if there is not 
+enough memory to allocate the array.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<BLOCKQUOTE>
+The <TT><FONT FACE="Courier">anewarray</FONT></TT> instruction
+is used to create a single-dimension array. For example, the declaration
+<TT><FONT FACE="Courier">new Thread[7]</FONT></TT> generates the
+following bytecode instructions:
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">bipush 7<BR>
+anewarray &lt;Class &quot;java.lang.Thread&quot;&gt;</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The <TT><FONT FACE="Courier">anewarray</FONT></TT> instruction
+can also be used to create the outermost dimension of a multidimensional
+array. For example, the array declaration <TT><FONT FACE="Courier">new
+int[6][]</FONT></TT> generates the following bytecode instructions:
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">bipush 6<BR>
+anewarray &lt;Class &quot;[I&quot;&gt;</FONT></TT>
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">multianewarray</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Allocate new multidimensional array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> A new multidimensional array of a specific
+array type is allocated. The number of dimensions in the array
+is determined by <TT><FONT FACE="Courier">sizeN</FONT></TT>. The
+value of <TT><FONT FACE="Courier">sizeN</FONT></TT> represents
+the number of elements in the new array and must be an integer.
+<TT><FONT FACE="Courier">byte1</FONT></TT> and <TT><FONT FACE="Courier">byte2</FONT></TT>
+are used to construct an index in the constant pool of the current
+class. The item at that index is resolved and the resulting entry
+must be an array class of one or more dimensions.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=530>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NegativeArraySizeException</FONT></TT> is thrown if <TT><FONT FACE="Courier">sizeN</FONT></TT> is less than <TT><FONT FACE="Courier">0</FONT></TT>. An <TT><FONT FACE="Courier">OutOfMemoryError</FONT></TT> is thrown if there is 
+not enough memory to allocate the array.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">arraylength</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Get length of array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The length of the array is determined and
+replaces <TT><FONT FACE="Courier">aref</FONT></TT> on the top
+of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT> must
+be a reference to an array object.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=475>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NullPointerException</FONT></TT> is thrown if the <TT><FONT FACE="Courier">aref</FONT></TT> is null.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iaload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load integer from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The integer value at the array <TT><FONT FACE="Courier">index</FONT></TT>
+is retrieved and pushed onto the top of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT>
+must be a reference to an array of integers; likewise, the <TT><FONT FACE="Courier">index</FONT></TT>
+into the array must be an integer.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=505>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NullPointerException</FONT></TT> is thrown if <TT><FONT FACE="Courier">aref</FONT></TT> is null. An <TT><FONT FACE="Courier">ArrayIndexOutOfBoundsException</FONT></TT> is thrown if the array index is not within the bounds of the 
+array.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">laload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load long integer from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The long integer value at the array <TT><FONT FACE="Courier">index</FONT></TT>
+is retrieved and pushed onto the top of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT>
+must be a reference to an array of long integers; likewise, the
+<TT><FONT FACE="Courier">index</FONT></TT> into the array must
+be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">faload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load single float from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The single-precision floating-point number
+at the array <TT><FONT FACE="Courier">index</FONT></TT> is retrieved
+and pushed onto the top of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT>
+must be a reference to an array of single-precision floating-point
+numbers, and the index into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">daload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load double float from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The double-precision floating-point number
+at the array <TT><FONT FACE="Courier">index</FONT></TT> is retrieved
+and pushed onto the top of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT>
+must be a reference to an array of double-precision floating-point
+numbers, and the index into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">aaload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load object reference from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The object reference at the array <TT><FONT FACE="Courier">index</FONT></TT>
+is retrieved and pushed onto the top of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT>
+must be a reference to an array of object references, and the
+index into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">baload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load signed byte from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The signed byte value at the array <TT><FONT FACE="Courier">index</FONT></TT>
+is retrieved, expanded to an integer, and pushed onto the top
+of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT> must
+be a reference to an array of signed byte values, and the index
+into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">caload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load character from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The character value at the array <TT><FONT FACE="Courier">index</FONT></TT>
+is retrieved, expanded to an integer, and pushed onto the top
+of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT> must
+be a reference to an array of character values, and the index
+into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">saload</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Load short integer from array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> The short integer value at the array <TT><FONT FACE="Courier">index</FONT></TT>
+is retrieved, expanded to an integer, and pushed onto the top
+of the stack. The <TT><FONT FACE="Courier">aref</FONT></TT> must
+be a reference to an array of short integer values and the index
+into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iastore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into integer array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> An integer value is popped off the stack and
+stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">aref</FONT></TT> must be a reference
+to an array of integer values, and the index into the array must
+be an integer as well.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lastore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into long integer array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> A long integer value is popped off the stack
+and stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">arrayref</FONT></TT> must be a reference
+to an array of long integer values, and the index into the array
+must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fastore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into single float array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> A single-precision floating-point number is
+popped off the stack and stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">arrayref</FONT></TT> must be a reference
+to an array of single-precision floating-point numbers, and the
+index into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dastore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into double float array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> A double-precision floating-point number is
+popped off the stack and stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">arrayref</FONT></TT> must be a reference
+to an array of double-precision floating-point numbers, and the
+index into the array must be an integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">aastore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into object reference array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> An object reference is popped off the stack
+and stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">arrayref</FONT></TT> must be a reference
+to an array of objects, and the index into the array must be an
+integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">bastore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into signed byte array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> An integer is popped off the stack, converted
+to a signed byte, and stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">arrayref</FONT></TT> must be a reference
+to an array of signed bytes, and the index into the array must
+be an integer. If the integer value is too large to be a signed
+byte, it is truncated.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">castore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into character array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> An integer is popped off the stack, converted
+to a character, and stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">arrayref</FONT></TT> must be a reference
+to an array of characters and the index into the array must be
+an integer. If the integer value is too large to be a character,
+it is truncated.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">sastore</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Store into short array.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> An integer is popped off the stack, converted
+to a short integer, and stored in the array at the <TT><FONT FACE="Courier">index</FONT></TT>.
+The <TT><FONT FACE="Courier">aref </FONT></TT>must be a reference
+to an array of short integers, and the index into the array must
+be an integer. If the integer value is too large to be a short
+integer, it is truncated.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=585>
+<BLOCKQUOTE>
+Now that you are familiar with bytecode instructions, I will only provide descriptions as necessary.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><A NAME="HandlingtheStack"><B>Handling the Stack</B></A></H3>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">nop</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Do nothing.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">pop</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Pop the top word from the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">pop2</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Pop the top two words from the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dup</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Duplicate the top word on the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dup2</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Duplicate the top two words on the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dup_x1</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Duplicate the top word on the stack and insert
+a copy two words down in the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dup2_x1</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Duplicate the top two words on the stack and insert
+the copies two words down in the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dup_x2</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Duplicate the top word on the stack and insert
+the copy three words down in the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dup2_x2</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Duplicate the top two words on the stack and insert
+the copies three words down in the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">swap</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Swap the top two elements on the stack.
+</BLOCKQUOTE>
+<H3><A NAME="PerformingArithmetic"><B>Performing Arithmetic</B></A>
+</H3>
+<P>
+Bytecode arithmetic is performed at a very basic level. In general,
+values are popped off the stack, an arithmetic function is performed,
+and the result of the operation is placed back on the stack, which
+effectively replaces the original values. To perform the bytecode
+arithmetic correctly, both values must be of the same type.
+<H4><B>Addition</B></H4>
+<P>
+In bytecode addition, two values are popped off the stack and
+added; then the sum is placed back on the stack.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iadd</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer add.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ladd</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer add.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fadd</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point add.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dadd</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point add.
+</BLOCKQUOTE>
+<H4><B>Subtraction</B></H4>
+<P>
+In bytecode subtraction, two values are popped off the stack,
+the second value is subtracted from the first, and the result
+is placed back on the stack.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">isub</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer subtract.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lsub</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer subtract.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fsub</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point subtract.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dsub</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point subtract.
+</BLOCKQUOTE>
+<H4><B>Multiplication</B></H4>
+<P>
+In bytecode multiplication, the values are popped off the stack
+and multiplied; then the product is placed back on the stack.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">imul</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer multiply.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lmul</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer multiply.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fmul</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point multiply.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dmul</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point multiply.
+</BLOCKQUOTE>
+<H4><B>Division</B></H4>
+<P>
+In bytecode division, two values are popped off the stack, the
+first value is divided by the second value, and the quotient is
+placed back on the stack. The result is truncated to the nearest
+integer.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=530>
+<BLOCKQUOTE>
+For integers, shorts, and long integers, an attempt to divide by zero results in an <TT><FONT FACE="Courier">ArithmeticException</FONT></TT>. For floating-point numbers, an attempt to divide by zero results in the quotient being not a number. If you 
+remember NAN from calculus, you'll know that it's immeasurable and will distort your results. The Virtual Machine can check for NAN values using bytecodes that perform comparisons.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">idiv</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer divide.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ldiv</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer divide.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fdiv</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point divide.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ddiv</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point divide.
+</BLOCKQUOTE>
+<H4><B>Remainders</B></H4>
+<P>
+To get a remainder for division operations on integers and long
+integers, two values are popped off the stack, the first value
+is divided by the second value, and the remainder is placed back
+on the stack. The result is always truncated to the nearest integer.
+Therefore, to get a quotient and a remainder, two division operations
+are done by the compiler.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=530>
+<BLOCKQUOTE>
+For integers, shorts, and long integers, an attempt to divide by zero results in an <TT><FONT FACE="Courier">ArithmeticException</FONT></TT>.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">irem</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer remainder.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lrem</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer remainder.
+</BLOCKQUOTE>
+<P>
+To get a remainder for division operations on floating-point numbers,
+two values are popped off the stack. The first value is divided
+by the second value and then multiplied by the second value. The
+product is subtracted from the first value, and the result is
+placed back on the stack. The result always rounds to the nearest
+integer, with a tie going to the even number.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=588>
+<BLOCKQUOTE>
+For floating-point numbers, an attempt to divide by zero results in the quotient being not a number.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">frem</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point remainder.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">drem</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point remainder.
+</BLOCKQUOTE>
+<H4><B>Negation</B></H4>
+<P>
+In bytecode negation, a value is popped off the stack and negated,
+and the result is placed back on the stack.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ineg</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer negate.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lneg</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer negate.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fneg</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point negate.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dneg</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point negate.
+</BLOCKQUOTE>
+<H3><A NAME="LogicalInstructions"><B>Logical Instructions</B></A>
+</H3>
+<P>
+<I>Logical instructions</I> include operations to shift values
+and perform logical <TT><FONT FACE="Courier">AND</FONT></TT>,
+logical <TT><FONT FACE="Courier">OR</FONT></TT>, or logical <TT><FONT FACE="Courier">XOR</FONT></TT>.
+To perform logical functions, both values must be of the same
+type.
+<H4><B>Shifting Values</B></H4>
+<P>
+When values are left-shifted, the sign of the value is not affected.
+However, when values are right-shifted, the sign of the value
+can be affected. For this reason, values are right-shifted in
+one of two ways: with the sign extension (called <I>arithmetic
+shifting</I>) or without the sign extension (called <I>logical</I>
+or <I>unsigned shifting</I>).
+<P>
+For right arithmetic shifting, the first value is generally shifted
+by the amount indicated by the low 6 bits of the second value.
+For right logical shifting, the first value is generally shifted
+by the amount indicated by the low 5 bits of the second value.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ishl</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer shift left.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ishr</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer arithmetic shift right.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iushr</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer logical shift right.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lshl</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer shift left.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lshr</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer arithmetic shift right.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lushr</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer logical shift right.
+</BLOCKQUOTE>
+<H4><B>Logical </B><TT><B><FONT FACE="Courier">AND</FONT></B></TT>
+</H4>
+<P>
+For logical <TT><FONT FACE="Courier">AND</FONT></TT>, two values
+are popped off the stack and replaced on the stack by their bitwise
+logical <TT><FONT FACE="Courier">AND</FONT></TT>. A logical <TT><FONT FACE="Courier">AND</FONT></TT>
+is also called the <I>conjunction</I> of the values.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iand</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer boolean <TT><FONT FACE="Courier">AND</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">land</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer boolean <TT><FONT FACE="Courier">AND</FONT></TT>.
+</BLOCKQUOTE>
+<H4><B>Logical </B><TT><B><FONT FACE="Courier">OR</FONT></B></TT>
+</H4>
+<P>
+For logical <TT><FONT FACE="Courier">OR</FONT></TT>, two values
+are popped off the stack and replaced on the stack by their bitwise
+logical <TT><FONT FACE="Courier">OR</FONT></TT>. A logical <TT><FONT FACE="Courier">OR</FONT></TT>
+is also called the <I>disconjunction</I> of the values.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ior</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer boolean <TT><FONT FACE="Courier">OR</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lor</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer boolean <TT><FONT FACE="Courier">OR</FONT></TT>.
+</BLOCKQUOTE>
+<H4><B>Logical </B><TT><B><FONT FACE="Courier">XOR</FONT></B></TT>
+</H4>
+<P>
+For logical <TT><FONT FACE="Courier">XOR</FONT></TT>, two values
+are popped off the stack and replaced on the stack by their bitwise
+logical <TT><FONT FACE="Courier">XOR</FONT></TT>. A logical <TT><FONT FACE="Courier">XOR</FONT></TT>
+is also called an <I>exclusive disconjunction</I> of the values.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ixor</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer boolean <TT><FONT FACE="Courier">XOR</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lxor</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer boolean <TT><FONT FACE="Courier">XOR</FONT></TT>.
+</BLOCKQUOTE>
+<H3><A NAME="HandlingConversions"><B>Handling Conversions</B></A>
+</H3>
+<P>
+Conversions in the Java Virtual Machine are handled by a specific
+set of bytecode instructions. As you know, Java allows you to
+convert from one type of value to another either implicitly or
+explicitly. When a conversion occurs, such as an integer to single-precision
+floating-point, one of these bytecodes is used.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=558>
+<BLOCKQUOTE>
+If the conversion is to a type of smaller bit width, truncation may occur. There is no notification when truncation occurs.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">i2l</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer-to-long integer conversion.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">i2f</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer to single float.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">i2d</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer to double float.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">l2i</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer to integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">l2f</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer to single float.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">l2d</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer to double float.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">f2i</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single float to integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">f2l</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single float to long integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">f2d</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single float to double float.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">d2i</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double float to integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">d2l</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double float to long integer.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">d2f</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double float to single float.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">int2byte</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer to signed byte.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">int2char</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer to char.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">int2short</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Integer to short.
+</BLOCKQUOTE>
+<H3><A NAME="ControlTransferInstructions"><B>Control Transfer
+Instructions</B></A></H3>
+<P>
+Instructions that transfer control are a big part of any language
+structure. In the Java bytecode instruction set, control transfer
+is handled by instructions that perform branching, comparisons,
+and movement to and from subroutines.
+<H4><B>Unconditional Branching</B></H4>
+<P>
+One way to transfer control is with <I>unconditional branching</I>.
+The Virtual Machine handles this type of branching with the bytecodes
+discussed in this section.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">goto</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Execution proceeds at the signed 16-bit offset
+from the address of this instruction. The offset is constructed
+from <TT><FONT FACE="Courier">byte1</FONT></TT> and <TT><FONT FACE="Courier">byte2</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">goto_w</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch always for wide index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Execution proceeds at the signed 32-bit offset
+from the address of this instruction. The offset is constructed
+from <TT><FONT FACE="Courier">byte1</FONT></TT>, <TT><FONT FACE="Courier">byte2</FONT></TT>,
+<TT><FONT FACE="Courier">byte3</FONT></TT>, and <TT><FONT FACE="Courier">byte4</FONT></TT>.
+</BLOCKQUOTE>
+<H4><B>Handling Subroutines and Breakpoints</B></H4>
+<P>
+Instructions that jump to a subroutine push the return address
+onto the stack. This address is retrieved from a local variable.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">jsr</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Jump subroutine.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Execution proceeds at the signed 16-bit offset
+from the address of this instruction. The offset is constructed
+from <TT><FONT FACE="Courier">byte1</FONT></TT> and <TT><FONT FACE="Courier">byte2</FONT></TT>.
+The address of the instruction immediately following the current
+instruction is pushed onto the stack to provide a return address
+from the subroutine.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">jsr_w</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Jump subroutine for wide index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Execution proceeds at the signed 32-bit offset
+from the address of this instruction. The offset is constructed
+from <TT><FONT FACE="Courier">byte1</FONT></TT>, <TT><FONT FACE="Courier">byte2</FONT></TT>,
+<TT><FONT FACE="Courier">byte3</FONT></TT>, and <TT><FONT FACE="Courier">byte4</FONT></TT>.
+The address of the instruction immediately following the current
+instruction is pushed onto the stack to provide a return address
+from the subroutine.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ret</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return from subroutine.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable in the current Java frame must
+contain a return address. The contents of the local variable are
+written into the program counter.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ret_w</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return from subroutine for wide index.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Local variable in the current Java frame must
+contain a return address. The contents of the local variable are
+written into the program counter.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">breakpoint</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Breakpoint.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Stop and pass control to breakpoint handler.
+</BLOCKQUOTE>
+<H4><B>Conditional Branching</B></H4>
+<P>
+Branching instructions check for a specific value. If the value
+is as expected, execution proceeds at an offset from the address
+of the current instruction. Otherwise, execution proceeds to the
+next instruction.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ifeq</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if equal.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ifnull</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if null.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">iflt</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if less than.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ifle</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if less than or equal.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ifne</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if not equal.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ifnonnull</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if not null.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ifgt</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if greater than.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ifge</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if greater than or equal.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_icmpeq</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if integers <TT><FONT FACE="Courier">v1</FONT></TT>
+and <TT><FONT FACE="Courier">v2</FONT></TT> are equal.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_icmpne</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if integers <TT><FONT FACE="Courier">v1</FONT></TT>
+and <TT><FONT FACE="Courier">v2</FONT></TT> are not equal.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_icmplt</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if integer <TT><FONT FACE="Courier">v1</FONT></TT>
+is less than integer <TT><FONT FACE="Courier">v2</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_icmpgt</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if integer <TT><FONT FACE="Courier">v1</FONT></TT>
+is greater than integer <TT><FONT FACE="Courier">v2</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_icmple</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if integer <TT><FONT FACE="Courier">v1</FONT></TT>
+less than or equal to integer <TT><FONT FACE="Courier">v2</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_icmpge</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if integer <TT><FONT FACE="Courier">v1</FONT></TT>
+greater than or equal to integer <TT><FONT FACE="Courier">v2</FONT></TT>.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_acmpeq</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if object references equal.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">if_acmpne</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Branch if object references not equal.
+</BLOCKQUOTE>
+<H4><B>Comparisons</B></H4>
+<P>
+<I>Comparison instructions</I> compare two values. If <TT><FONT FACE="Courier">v1</FONT></TT>
+is less than <TT><FONT FACE="Courier">v2</FONT></TT>, the value
+<TT><FONT FACE="Courier">-1</FONT></TT> is pushed onto the stack.
+If the values are equal, the value <TT><FONT FACE="Courier">0</FONT></TT>
+is pushed onto the stack. If <TT><FONT FACE="Courier">v1</FONT></TT>
+is greater than <TT><FONT FACE="Courier">v2</FONT></TT>, the value
+<TT><FONT FACE="Courier">+1</FONT></TT> is pushed onto the stack.
+<P>
+For floating-point numbers, if either <TT><FONT FACE="Courier">v1</FONT></TT>
+or <TT><FONT FACE="Courier">v2</FONT></TT> is not a number, the
+value <TT><FONT FACE="Courier">-1</FONT></TT> is pushed onto the
+stack for the first pair of bytecodes and the value <TT><FONT FACE="Courier">+1</FONT></TT>
+is pushed onto the stack for the second pair of bytecodes. The
+process of checking for the infamous not-a-number problem is handled
+by performing two comparisons. The first comparison checks for
+the value <TT><FONT FACE="Courier">-1</FONT></TT>, and the second
+checks for the value <TT><FONT FACE="Courier">+1</FONT></TT>.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lcmp</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Long integer compare.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fcmpl</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point number compare;
+return <TT><FONT FACE="Courier">-1</FONT></TT> if <TT><FONT FACE="Courier">v1</FONT></TT>
+or <TT><FONT FACE="Courier">v2</FONT></TT> is not a number.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dcmpl</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point number compare;
+return <TT><FONT FACE="Courier">-1</FONT></TT> if <TT><FONT FACE="Courier">v1</FONT></TT>
+or <TT><FONT FACE="Courier">v2</FONT></TT> is not a number.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">fcmpg</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Single-precision floating-point number compare;
+return <TT><FONT FACE="Courier">+1</FONT></TT> if <TT><FONT FACE="Courier">v1</FONT></TT>
+or <TT><FONT FACE="Courier">v2</FONT></TT> is not a number.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dcmpg</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Double-precision floating-point number compare;
+return <TT><FONT FACE="Courier">+1</FONT></TT> if <TT><FONT FACE="Courier">v1</FONT></TT>
+or <TT><FONT FACE="Courier">v2</FONT></TT> is not a number.
+</BLOCKQUOTE>
+<H3><A NAME="ReturningfromMethods"><B>Returning from Methods</B></A>
+</H3>
+<P>
+Returns are handled in one of two ways by bytecode instructions:
+<TT><FONT FACE="Courier">return (void)</FONT></TT> or <TT><FONT FACE="Courier">return
+(normal)</FONT></TT>. <I>Void returns</I> are used to back out
+cleanly from the previous method. Thus, all values on the operand
+stack are discarded and the interpreter then returns control to
+its caller. <I>Normal returns</I> are used to proceed normally
+with execution and push a value associated with the previous method
+onto the stack. After the return value is pushed onto the stack,
+any other values on the operand stack are discarded and the interpreter
+then returns control to its caller.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=582>
+<BLOCKQUOTE>
+Java's operand stack is not contiguous like the operand stacks you may be familiar with from programming in other languages. Because each method has its own section of the operand stack, when the operand stack for the method is discarded, only the section 
+related to the method is cleared out.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">return</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return (void) from method.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">ireturn</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return integer from function.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lreturn</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return long integer from function.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">freturn</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return single float from function.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">dreturn</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return double float from function.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">areturn</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Return object reference from function.
+</BLOCKQUOTE>
+<H3><A NAME="TableJumping"><B>Table Jumping</B></A></H3>
+<P>
+In Java, complex addressing is handled using <I>jump tables</I>.
+These jump tables are accessed with index switches or key lookups.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">tableswitch</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Access jump table by index and jump.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Immediately after the <TT><FONT FACE="Courier">tableswitch</FONT></TT>
+instruction, padding consisting of 0-3 zeros is inserted so that
+the next byte begins at an address that is a multiple of four.
+A series of offsets follows the padding. These offsets are signed
+4-byte quantities and consist of a default offset, a low offset,
+and a high offset, followed by additional <TT><FONT FACE="Courier">high
+- low + 1</FONT></TT> offsets. These additional offsets are treated
+as a 0-based jump table.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The <TT><FONT FACE="Courier">index</FONT></TT> the offsets point
+to must be an integer. If the <TT><FONT FACE="Courier">index</FONT></TT>
+is less than the low offset or greater than the high offset, the
+default offset is added to the address of the current instruction.
+Otherwise, the low offset is subtracted from the index, and the
+element at the position <TT><FONT FACE="Courier">index - low offset</FONT></TT>
+in the jump table is extracted and added to the address of the
+current instruction.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">lookupswitch</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Access jump table by key match and jump.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Immediately after the <TT><FONT FACE="Courier">lookupswitch</FONT></TT>
+instruction, padding consisting of 0-3 zeros is inserted so that
+the next byte begins at an address that is a multiple of four.
+A series of pairs of offsets follows the padding. These offsets
+are signed 4-byte quantities. The first item in the pair is the
+default offset, and the second item in the pair gives the number
+of pairs that follow. The additional pairs consist of a match
+and an offset.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The integer <TT><FONT FACE="Courier">key</FONT></TT> on the stack
+is then compared against each of the matches. If the <TT><FONT FACE="Courier">key</FONT></TT>
+is equal to one of the matches, the offset is added to the address
+of the current instruction. If the <TT><FONT FACE="Courier">key</FONT></TT>
+does not match any of the matches, the default offset is added
+to the address of the current instruction.
+</BLOCKQUOTE>
+<H3><A NAME="ManipulatingObjectFields"><B>Manipulating Object
+Fields</B></A></H3>
+<P>
+Java manipulates two types of fields: dynamic and static. Whereas
+dynamic fields change, static fields do not. These fields are
+manipulated using simple <TT><FONT FACE="Courier">get</FONT></TT>
+and <TT><FONT FACE="Courier">put</FONT></TT> mechanisms.
+<H4><B>Putting Fields</B></H4>
+<P>
+The <TT><FONT FACE="Courier">put</FONT></TT> mechanism uses <TT><FONT FACE="Courier">byte1</FONT></TT>
+and <TT><FONT FACE="Courier">byte2</FONT></TT> to construct an
+index into the constant pool of the current class. The item at
+the index is a field reference to a class name and a field name,
+which is resolved to a field block pointer that has both the field
+width and the field offset. The field at the offset from the start
+of the object referenced is set to the value on the top of the
+stack.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=572>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NullPointerException</FONT></TT> is generated if the referenced object is null. For static fields, an <TT><FONT FACE="Courier">IncompatibleClassChangeError</FONT></TT> is thrown if the specified field is a static field.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">putfield</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Set 32-bit field in object.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">putfield</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Set 64-bit field in object.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">putstatic</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Set 32-bit static field in class.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">putstatic</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Set 64-bit static field in class.
+</BLOCKQUOTE>
+<H4><B>Getting Fields</B></H4>
+<P>
+The <TT><FONT FACE="Courier">get</FONT></TT> mechanism uses <TT><FONT FACE="Courier">byte1</FONT></TT>
+and <TT><FONT FACE="Courier">byte2</FONT></TT> to construct an
+index into the constant pool of the current class. The item at
+the index is a field reference to a class name and a field name,
+which is resolved to a field block pointer that has both the field
+width and the field offset. The value at the offset replaces the
+object reference on the top of the stack.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=572>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NullPointerException</FONT></TT> is generated if the referenced object is null. For static fields, an <TT><FONT FACE="Courier">IncompatibleClassChangeError</FONT></TT> is thrown if the specified field is a static field.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">getfield</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Fetch 32-bit field from object.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">getfield</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Fetch 64-bit field from object.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">getstatic</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Get 32-bit static field from class.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">getstatic</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Get 64-bit static field from class.
+</BLOCKQUOTE>
+<H3><A NAME="InvokingMethods"><B>Invoking Methods</B></A></H3>
+<P>
+Method invocation is a complex process. To invoke a method, the
+operand stack must contain a reference to an object and some number
+of arguments. The object reference is used as a pointer to the
+object's method table, which contains the method signature. The
+method signature is guaranteed to exactly match one of the method
+signatures in the table. The arguments <TT><FONT FACE="Courier">byte1</FONT></TT>
+and <TT><FONT FACE="Courier">byte2</FONT></TT> are used to construct
+an index into the constant pool of the current class, which contains
+the complete method signature.
+<P>
+The result of the lookup is an index into the method table of
+the named class. This index is used with the referenced object's
+dynamic type to look in the method table of that type, where a
+pointer to the method block for the matched method is found. The
+method block indicates the type of method, such as native or synchronized,
+and the number of arguments expected on the operand stack.
+<P>
+The object reference and arguments are popped off the method's
+operand stack and become the initial values of the local variables
+of the new method. Execution continues with the first instruction
+of the new method.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=579>
+<BLOCKQUOTE>
+The monitor associated with the referenced object is entered if the method is marked as synchronized. A <TT><FONT FACE="Courier">NullPointerException</FONT></TT> is thrown if the object reference on the operand stack is null. A <TT><FONT 
+FACE="Courier">StackOverflowError</FONT></TT> is thrown if a stack overflow is detected during the method invocation.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">invokevirtual</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Invoke method based on runtime type.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">invokenonvirtual</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Invoke method based on compile-time type.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">invokestatic</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Invoke a class (static) method.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">invokeinterface</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Invoke interface method.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=554>
+<BLOCKQUOTE>
+Unlike <TT><FONT FACE="Courier">invokevirtual</FONT></TT> and <TT><FONT FACE="Courier">invokenonvirtual</FONT></TT>, the method block does not indicate the number of available arguments. This number is taken from the bytecode.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><A NAME="ExceptionHandling"><B>Exception Handling</B></A>
+</H3>
+<P>
+Because exception handling is a major feature of the Java programming
+language, you might be surprised to learn that exceptions are
+handled with a single bytecode instruction. When exceptions occur,
+the object thrown must be a reference to an object of the subclass
+<TT><FONT FACE="Courier">Throwable</FONT></TT>, and the current
+Java stackframe is searched for the most recent <TT><FONT FACE="Courier">catch</FONT></TT>
+clause that catches exceptions of this class or a superclass of
+this class. When a matching <TT><FONT FACE="Courier">catch</FONT></TT>
+clause is found, the program counter is reset to the address indicated
+by the <TT><FONT FACE="Courier">catch</FONT></TT> clause and execution
+continues from there. When no appropriate <TT><FONT FACE="Courier">catch</FONT></TT>
+clause is found, that frame is popped and the object is rethrown.
+If a <TT><FONT FACE="Courier">catch</FONT></TT> clause is then
+found, the clause will contain the location of the code for the
+exception, the program counter is reset to that location, and
+execution continues. Otherwise, the frame is popped and the object
+is rethrown.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=544>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NullPointerException</FONT></TT> is thrown instead if the referenced object is null.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">athrow</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Throw exception or error.
+</BLOCKQUOTE>
+<H3><A NAME="MiscellaneousObjectOperations"><B>Miscellaneous Object
+Operations</B></A></H3>
+<P>
+Several miscellaneous object operations are grouped together here.
+<H5><TT><B><FONT SIZE=2 FACE="Courier">new</FONT></B></TT></H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Create new object.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> <TT><FONT FACE="Courier">byte1</FONT></TT>
+and <TT><FONT FACE="Courier">byte2</FONT></TT> are used to construct
+an index into the constant pool of the current class, which must
+be a class name that can be resolved to a class pointer. A new
+instance of that class is then created, and a reference to the
+object is pushed on the stack.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">checkcast</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Make sure object is of given type.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Determines whether the referenced object can
+be cast to be a reference to an object of another class. A null
+object reference can be cast to any class. Otherwise, the referenced
+object must be an instance of the expected class or one of its
+superclasses. <TT><FONT FACE="Courier">byte1</FONT></TT> and <TT><FONT FACE="Courier">byte2</FONT></TT>
+are used to construct an index into the constant pool of the current
+class, which is presumed to be a class name that can be resolved
+to a class pointer.<BR>
+</BLOCKQUOTE>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=559>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">ClassCastException</FONT></TT> is thrown if the referenced object cannot be cast to the expected class.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">instanceof</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Determine if an object is of given type and return
+result.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<I>Description:</I> Determines whether the referenced object can
+be cast to be a reference to an object of the expected class.
+This instruction will overwrite the object reference with <TT><FONT FACE="Courier">1</FONT></TT>
+if the object is an instance of the expected class or one of its
+superclasses. Otherwise, the object reference is overwritten by
+<TT><FONT FACE="Courier">0</FONT></TT>.
+</BLOCKQUOTE>
+<H3><A NAME="Monitors"><B>Monitors</B></A></H3>
+<P>
+<I>Monitors</I> are used to obtain exclusive access to a referenced
+object using a lock. Because a single thread can have multiple
+locks on a single object, careful checks are performed before
+granting an exclusive lock. Likewise, checks are done before releasing
+a lock. The locking and unlocking process is handled with monitors.
+<P>
+To <I>lock</I> an object, the monitor checks the object's status.
+When the object is not locked by another thread, an <I>exclusive
+lock</I> is obtained. When another thread already has the object
+locked, the current thread waits until the object is unlocked.
+<P>
+When the lock on the object is released, the monitor checks to
+see if this is the last lock that this thread has on the object.
+If it is, then other threads waiting for the object are allowed
+to gain access to and possibly lock the object.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=544>
+<BLOCKQUOTE>
+A <TT><FONT FACE="Courier">NullPointerException</FONT></TT> is thrown instead if the referenced object is null.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">monitorenter</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Enter monitored region of code.
+</BLOCKQUOTE>
+<H5><TT><B><FONT SIZE=2 FACE="Courier">monitorexit</FONT></B></TT>
+</H5>
+<BLOCKQUOTE>
+<I>Meaning:</I> Exit monitored region of code.
+</BLOCKQUOTE>
+<H2><A NAME="BreakingDowntheClassFileFormat"><B><FONT SIZE=5 COLOR=#Ff0000>Breaking
+Down the Class File Format</FONT></B></A></H2>
+<P>
+Source files are organized by object, and so are compiled source
+files in bytecode. When you compile source code, the Java compiler
+places each class in its own file. This class file represents
+a single object that is in turn made up of smaller objects.
+<P>
+By breaking down the objects used in the compiled class files,
+you can gain a better understanding of how the Java Virtual Machine
+works. For this reason, this section examines the class file format
+and formats for related objects, including methods, method signatures,
+fields, and attributes.
+<P>
+To ensure that Java programs are portable to any computer platform,
+the compiled files with the <TT><FONT FACE="Courier">.class</FONT></TT>
+extension must follow a specific format. This format is known
+as the <TT><FONT FACE="Courier">.class</FONT></TT><I> file format</I>.
+Because Java interfaces are essentially abstract classes, the
+<TT><FONT FACE="Courier">.class</FONT></TT> file format is also
+used for Java classes and Java interfaces.
+<P>
+At its most basic level, the <TT><FONT FACE="Courier">.class</FONT></TT>
+file format is represented by streams of 8-bit bytes, which means
+that all 16-bit and 32-bit values are constructed by reading in
+two or four 8-bit bytes, respectively. As with assembly language,
+the byte order of 16-bit and 32-bit values is extremely important.
+Therefore, in order to accurately reconstruct a 16-bit or 32-bit
+value, bytes must be stored either in low-byte order or high-byte
+order.
+<P>
+<I>Low-byte order</I> places the entire 16-bit or 32-bit value
+in one contiguous stream. Although it seems logical to store a
+byte stream in low-byte order, not all computers store bytes in
+this manner. In fact, many computers follow the high-byte order,
+where the highest 8 or 16 bits are stored first.
+<P>
+In assembly language it is perfectly acceptable to read assembly
+code in high-byte order on one platform and low-byte order on
+another platform. However, because Java can be used across multiple
+platforms with disparate operating systems and architecture, it
+was not enough to simply use the byte order specific to the local
+machine. For this reason, all byte streams are stored in high-byte
+order.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD WIDTH=579>
+<BLOCKQUOTE>
+Other terms for high-byte order are <I>network order</I> and <I>big-endian order</I>. If you want to read or write files in this format, you can use the <TT><FONT FACE="Courier">java.io.DataInput</FONT></TT> and <TT><FONT 
+FACE="Courier">java.io.DataOutput</FONT></TT> interfaces.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Listing 24.2 shows the top-level format of class files. C programmers
+may recognize this format as being similar to the structures used
+in C. However, unlike a C struct, each field in the structure
+is represented without padding or alignment, and arrays may contain
+elements of various sizes. The types <TT><FONT FACE="Courier">u1</FONT></TT>,
+<TT><FONT FACE="Courier">u2</FONT></TT>, and <TT><FONT FACE="Courier">u4</FONT></TT>
+represent an unsigned 1-, 2-, or 4-byte value, respectively.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 24.2. The </B><TT><B><FONT FACE="Courier">.class</FONT></B></TT><B>
+file structure format.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">ClassFile {<BR>
+&nbsp;u4 magic;<BR>
+&nbsp;u2 minor_version;<BR>
+&nbsp;u2 major_version;<BR>
+&nbsp;u2 constant_pool_count;<BR>
+&nbsp;cp_info constant_pool[constant_pool_count - 1];<BR>
+&nbsp;u2 access_flags;<BR>
+&nbsp;u2 this_class;<BR>
+&nbsp;u2 super_class;<BR>
+&nbsp;u2 interfaces_count;<BR>
+&nbsp;u2 interfaces[interfaces_count];<BR>
+&nbsp;u2 fields_count;<BR>
+&nbsp;field_info fields[fields_count];<BR>
+&nbsp;u2 methods_count;<BR>
+&nbsp;method_info methods[methods_count];<BR>
+&nbsp;u2 attributes_count;<BR>
+&nbsp;attribute_info attributes[attribute_count];<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+All fields listed in the <TT><FONT FACE="Courier">.class</FONT></TT>
+files follow a specific variable-length format. (See Listing 24.3.)
+The type <TT><FONT FACE="Courier">u2</FONT></TT> represents an
+unsigned 2-byte value.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 24.3. Field formats.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">field_info {<BR>
+&nbsp;u2 access_flags;<BR>
+&nbsp;u2 name_index;<BR>
+&nbsp;u2 signature_index;<BR>
+&nbsp;u2 attributes_count;<BR>
+&nbsp;attribute_info  attributes[attribute_count];<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+All methods listed in the <TT><FONT FACE="Courier">.class</FONT></TT>
+files follow a specific variable-length format as well. (See Listing
+24.4.) Again, the type <TT><FONT FACE="Courier">u2</FONT></TT>
+represents an unsigned 2-byte value.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 24.4. Method formats.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">method_info {<BR>
+&nbsp;u2 access_flags;<BR>
+&nbsp;u2 name_index;<BR>
+&nbsp;u2 signature_index;<BR>
+&nbsp;u2 attributes_count;<BR>
+&nbsp;attribute_info  attributes[attribute_count];<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The final format for <TT><FONT FACE="Courier">.class</FONT></TT>
+files pertains to attributes. All attributes have the format shown
+in Listing 24.5. The types <TT><FONT FACE="Courier">u1</FONT></TT>,
+<TT><FONT FACE="Courier">u2</FONT></TT>, and <TT><FONT FACE="Courier">u4</FONT></TT>
+represent an unsigned 1-, 2-, or 4-byte value, respectively.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 24.5. Attribute formats.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">GenericAttribute_info {<BR>
+&nbsp;u2 attribute_name;<BR>
+&nbsp;u4 attribute_length;<BR>
+&nbsp;u1 info[attribute_length];<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="Signatures"><B><FONT SIZE=5 COLOR=#Ff0000>Signatures</FONT></B></A>
+</H2>
+<P>
+Each object in the class file has a specific <I>signature</I>.
+Signatures are strings representing a type of method, field, or
+array.
+<P>
+The signature for a field represents the value of a function's
+argument or the value of a variable. The following syntax structure
+generates the series of bytes that form the signature of a field:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&lt;field_signature&gt; ::= &lt;field_type&gt;
+<BR>
+<BR>
+&lt;field_type&gt; ::= &lt;base_type&gt;|&lt;object_type&gt;|&lt;array_type&gt;
+<BR>
+<BR>
+&lt;base_type&gt; ::= B|C|D|F|I|J|S|Z<BR>
+<BR>
+&lt;object_type&gt; ::= L&lt;fullclassname&gt;;<BR>
+<BR>
+&lt;array_type&gt; ::= [&lt;optional_size&gt;&lt;field_type&gt;
+<BR>
+<BR>
+&lt;optional_size&gt; ::= [0-9]*</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The base type value determines the base type of the field as a
+<TT><FONT FACE="Courier">B</FONT></TT> (byte), <TT><FONT FACE="Courier">C
+</FONT></TT>(character), <TT><FONT FACE="Courier">D</FONT></TT>
+(double), <TT><FONT FACE="Courier">F</FONT></TT> (float), <TT><FONT FACE="Courier">I</FONT></TT>
+(integer), <TT><FONT FACE="Courier">J</FONT></TT> (long integer),
+<TT><FONT FACE="Courier">S</FONT></TT> (short integer), or <TT><FONT FACE="Courier">Z</FONT></TT>
+(boolean).
+<P>
+The signature for return type represents the return value from
+a method. In the following code line, the character <TT><FONT FACE="Courier">V</FONT></TT>
+indicates that the method returns no value:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&lt;return_signature&gt; ::= &lt;field_type&gt;
+| V</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The signature for an argument represents an argument passed to
+a method and is represented by the following:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&lt;argument_signature&gt; ::= &lt;field_type&gt;</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Finally, the signature for a method represents the arguments the
+method expects and the value the method returns. Method signatures
+are represented by
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&lt;method_signature&gt; ::= (&lt;arguments_signature&gt;)
+&lt;return_signature&gt;<BR>
+<BR>
+&lt;arguments_signature&gt;: := &lt;argument_signature&gt;*</FONT></TT>
+</BLOCKQUOTE>
+<P>
+To put these rules to use, you can build a method signature for
+an arbitrary method. For example, let's create a method called
+<TT><FONT FACE="Courier">construct()</FONT></TT> in the class
+<TT><FONT FACE="Courier">your.package.constructors</FONT></TT>.
+This method takes four arguments, two integers, a boolean, and
+a two-dimensional array of characters. Then the method signature
+is
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">(II[[C)Lyour.package.constructors.constructor;</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Complete method signatures are usually prefixed by the name of
+the method or the full package name to the class level followed
+by a forward slash and the name of the method. Therefore, the
+complete method signature for the <TT><FONT FACE="Courier">construct()</FONT></TT>
+method would look like this:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">your_package_constructors/constructor(II[[C)Lyour.package.
+<BR>
+&Acirc;constructors.constructor;</FONT></TT>
+</BLOCKQUOTE>
+<H2><A NAME="Summary"><B><FONT SIZE=5 COLOR=#Ff0000>Summary</FONT></B></A>
+</H2>
+<P>
+The Java Virtual Machine exists only in the memory of your computer.
+Reproducing a machine within your computer's memory requires seven
+key objects: a set of registers, a stack, an execution environment,
+a garbage-collected heap, a constant pool, a method storage area,
+and a mechanism to tie it all together. This mechanism is the
+bytecode instruction set.
+<P>
+To examine bytecode, you can use the Java class file disassembler,
+<TT><FONT FACE="Courier">javap</FONT></TT>. By examining bytecode
+instructions in detail, you gain valuable insight into the inner
+workings of the Java Virtual Machine and Java itself. Each bytecode
+instruction performs a specific function of extremely limited
+scope, such as pushing an object onto the stack or popping an
+object off the stack. Combinations of these basic functions represent
+the complex high-level tasks defined as statements in the Java
+programming language. As amazing as it seems, sometimes dozens
+of bytecode instructions are used to carry out the operation specified
+by a single Java statement. When you use these bytecode instructions
+with the seven key objects of the virtual machine, Java gains
+its platform independence and becomes the most powerful and versatile
+programming language in the world.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch23.htm" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/ch23.htm"><IMG SRC="pc.gif" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="cc.gif" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="index.htm" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/index.htm"><IMG SRC="hb.gif" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="appa.htm" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/appa.htm"><IMG 
+SRC="nc.gif" tppabs="http://www.mcp.com/835574400/1-57521/1-57521-088-6/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>

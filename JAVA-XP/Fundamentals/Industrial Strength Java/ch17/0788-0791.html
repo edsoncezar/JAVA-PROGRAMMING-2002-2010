@@ -1,0 +1,259 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:JDBC:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0784-0787.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0792-0794.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-788"><P>Page 788</P></A>
+
+
+<P>Listing 17.4Querying the Databases
+</P>
+
+<PRE>
+Statement stmt1 = connection1.createStatement();
+ResultSet set1 = stmt1.executeQuery(&quot;SELECT * from SHOP_MACON ORDER BY
+ Pump_Id&quot;);
+          // Pump_Id is the primary key which represents a unique pump
+          // identification number
+     Statement stmt2 = connection2.createStatement();
+     ResultSet set2 = stmt2.executeQuery(&quot;SELECT * from SHOP_ATLANTA
+ ORDER
+ BY Pump_No&quot;);
+          // Pump_No is essentially same as Pump_Id but was named
+          // differently by the Atlanta database designers.
+</PRE>
+
+<P>After the preceding two statements are executed, all the unique tuples from each site
+are stored in ResultSets, set1 and set2. The executeQuery method of Statement interface
+is usually used to execute a non-update query. You can also use
+java.sql.PreparedStatement for this purpose. A PreparedStatement can be used to specify IN parameters to
+query statements. IN parameters are used to dynamically change the query statement as
+required. For example, if the prospective shopper was interested only in pumps that cost less than
+a particular value, it might be efficient to have a PreparedStatement with IN parameters,
+as shown in the following line of code:
+</P>
+
+<PRE>
+PreparedStatement stmt3 = connection1.prepareStatement(&quot;SELECT *FROM
+ SHOP_MACON WHERE (Pump_Cost &lt; ?)&quot;);
+</PRE>
+
+<P>The question mark symbolizes an unknown IN parameter. To determine all the
+pumps whose cost is lower than 500 dollars, the following may be done:
+</P>
+
+<PRE>
+stmt3.setInt(1, 500);
+ResultSet set3 = stmt3.executeQuery();
+</PRE>
+
+<P>The statement numbered 1, sets the value of the first IN parameter to an integer value
+of 500. If there had been more than one &quot;?&quot; symbols in the PrepapredStatement, it
+would mean that more than one IN parameters exist. The parameter number (the first
+argument that is sent to the setInt method) is used to set one of the IN parameter values while
+using one of the setXXX methods (XXX stands for either Int, String, Byte, and so on) that
+is defined for the PreparedStatement interface.
+</P>
+
+<P>In order to modify the above query to search for pumps costing less than 1,000 dollars,
+all that needs to be done is to change the IN parameter as shown in the following lines of code:
+</P>
+
+<PRE>
+stmt3.setInt(1, 1000);
+ResultSet set4 = stmt3.executeQuery();
+</PRE>
+
+<A NAME="PAGENUM-789"><P>Page 789</P></A>
+
+
+<P>ResultSet set4 now contains all the pumps costing less than $1,000. As can be seen
+from the previous examples, PreparedStatements are an efficient way to code
+dynamically changing queries.
+</P>
+
+<P>Getting back to H2O's web shopping system, the ResultSets from querying both
+databases have been obtained. These results have to be processed correctly in order to give the
+web shopper a complete picture. Now, it is perfectly possible that the number of
+attributes (columns) in ResultSets set1 and set2 vary and that the names of the
+corresponding attributes are different. So, the application programmer might need to obtain the names
+of the attributes for processing the obtained data. This can be achieved using the
+ResultSet-     MetaData interface as shown in the code listing 17.5.
+</P>
+
+<P>Listing 17.5Using ResultSetMetaData
+</P>
+
+<PRE>
+ResultSetMetaData rset1 = set1.getMetaData();
+int num_columns_in_set1 = rset1.getColumnCount();
+ String[] col_names1 = new String[num_columns_in_set1];
+ for (int iterator=0; iterator&lt;num_columns_in_set1; iterator++) {
+     try {
+          col_names1[iterator] = rset1.getColumnName(iterator);
+          }
+      catch (SQLException e) {e.getMessage()}
+     }
+</PRE>
+
+<P>Listing 17.5 first defines a ResultSetMetaData object (in line 1) then uses the
+metadata object to obtain the number of columns in the result (in line 2). The application
+programmer can use the getColumnName method of the metadata object to determine the
+column names of the attributes in ResultSet set1. This information can be used for
+printing purposes; for example, in a report header.
+</P>
+
+<P>Assume for simplicity that the web shopper is to be presented with three attributes
+from each table&#151;Pump_Id in set1 and Pump_No in set2, Pump_Name in set1 and
+Pump_Label in set2, and Pump_Cost in set1 and Pump_Price in set2.
+</P>
+
+<P>Furthermore, assume that these attributes are columns numbered one, two, and
+three, respectively, in the actual tables; hence, they are numbered similarly in the ResultSets.
+</P>
+
+<P>The following code in listing 17.6 extracts the required information from the
+ResultSets set1 and set2.
+</P>
+
+
+<A NAME="PAGENUM-790"><P>Page 790</P></A>
+
+
+<P>Listing 17.6Navigating through the set1 ResultSet Object
+</P>
+
+<PRE>
+while (set1.next()) {
+     String  Pump_ID = set1.getString(1);
+     String      Pump_NAME = set1.getString(2);
+     float     Pump_COST = set1.getFloat(3);
+     Process_Row(Pump_ID, Pump_NAME, Pump_COST);
+     }
+</PRE>
+
+<P>The ResultSet object is automatically assigned a cursor at the time of its creation.
+The name of the cursor can be obtained using the getCursorName() method of the
+ResultSet interface. To obtain the names and prices of the pumps satisfying the query, it is
+necessary to iterate through the ResultSet using the next() method, which
+advances the cursor's position by one. Similarly, the results from ResultSet set2 must also be read. This can
+be accomplished by implementing the code in listing 17.7.
+</P>
+
+<P>Listing 17.7Navigating through the set2 ResultSet Object
+</P>
+
+<PRE>
+while (set2.next()) {
+     String  Pump_ID = set2.getString(&quot;Pump_No&quot;);
+     String      Pump_NAME = set1.getString(&quot;Pump_Label&quot;);
+     float     Pump_COST = set1.getFloat(&quot;Pump_Price&quot;);
+     Process_Row(Pump_ID, Pump_NAME, Pump_COST);
+   // Process_Row is a method that combines the results
+   // from the two tables.
+     }
+</PRE>
+
+<P>Note that the column names are used to index into each row in the ResultSet
+directly. Although this produces much more readable code, it is not as efficient as using
+column indexes to index into each row.
+</P>
+
+<P><B>
+Step Three: Furthering the Scenario with Update <BR>
+Operations
+</B></P>
+
+<P>The Java component of the system displays the information requested by the web
+shopper. It then offers the shopper an opportunity to place an order.
+</P>
+
+<P>Assume, the web shopper decides to purchase two HG55-E (Pump Id) High Power
+Water Pumps. After carefully considering the buyer's location, the business logic component
+has decided that the pumps shall be delivered to the customer from the Atlanta unit of
+H2O. The database must be updated to reflect the potential sale. This is illustrated in listing 17.8.
+</P>
+
+
+<A NAME="PAGENUM-791"><P>Page 791</P></A>
+
+
+
+<P>Listing 17.8Updating the Database at Atlanta
+</P>
+
+<PRE>
+Statement stmt4 = connection2.createStatement();
+String query = new String(&quot;UPDATE SHOP_ ATLANTA SET Pump_Units =
+Pump_Units
+- 2 WHERE Pump_Id = &quot;);
+     // Pump_Units represents the number of pumps available in
+     // the inventory at that given instant.
+query.concat(selected_Pump_Id);
+          //Selected_Pump_Id represents the String object containing
+          //the Id of the pump the shopper wants to buy
+try {
+     return_code = stmt4.executeUpdate(query);
+     }
+catch (SQLException e) {
+     System.out.println(e.getMessage());
+     }
+</PRE>
+
+<P>As can be seen from the code in listing 17.8, the
+executeUpdate() method of Statement interface is used to execute SQL statements that may make some changes to the
+database. This includes UPDATE, INSERT, DELETE, and DDL (Data Definition
+Language) commands.
+</P>
+
+<P>The execution of the code in listing 17.8 does not indicate that the transaction has
+been completed. The web shopper needs to be mailed an invoice, and the shipping office
+needs to be informed of the requested delivery. The entire logic associated with these
+processes may be handled by a stored procedure named &quot;shipping_and_invoice&quot; which takes
+these parameters: Selected_Pump_Id, Quantity_Purchased, User_Name, and User_Address.
+</P>
+
+<P>The following code calls the stored shipping_and_invoice procedure.
+</P>
+
+<P>Listing 17.9Calling a Stored Procedure
+</P>
+
+<PRE>
+try {
+     CallableStatement call_stmt = connection1.prepareCall(&quot;{ ? = call
+          &Acirc;shipping_and_invoice(?, ?, ?, ?)}&quot;);
+     }
+catch (SQLException e) {}
+call<U>_</U>stmt.registerOutParameter(1, java.sql.Types.Bit);
+call<U>_</U>stmt.setString(2, Selected_Pump_Id);
+call<U>_</U>stmt.setInt(3, Quantity_Purchased);
+call<U>_</U>stmt.setString(4, User_Name);
+</PRE>
+<PRE>
+                                    continues
+</PRE>
+
+<P><CENTER>
+<a href="0784-0787.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0792-0794.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

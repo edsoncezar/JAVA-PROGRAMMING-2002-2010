@@ -1,0 +1,262 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0529-0532.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0537-0541.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-533"><P>Page 533</P></A>
+
+<P>Setting the maximum priority does not affect threads already in the group that have
+higher priorities than the new maximum&#151;it just &quot;caps&quot; any priority values in future calls
+to Thread.setpriority() in that ThreadGroup. You might use this in the spreadsheet example
+to set the maximum priority for the Document's ThreadGroup at startup
+to NORM_PRIORITY -1. Thus, any calculation threads subsequently created would have
+a priority lower than normal, biasing the scheduler to favor the GUI thread. This
+would improve the application's response to the user and prevent the application from
+appearing to lock up when many sheets require complex, time-consuming recalculations.
+</P>
+
+<H4><A NAME="ch13_ 25">
+Handling Empty ThreadGroups
+</A></H4>
+
+<P>Threads are removed from their ThreadGroup when they die, and it's therefore
+possible for a ThreadGroup to become empty. It's sometimes convenient to delete a
+ThreadGroup object when it becomes empty. In the Spreadsheet example, it might be useful to delete
+a Document's ThreadGroup when all Sheet threads exit. Java provides a &quot;daemon&quot; flag
+for ThreadGroups that enables their deletion that is set and checked by the methods shown
+in listing 13.25.
+</P>
+
+<P>Listing 13.25 java.lang.ThreadGroup Method Operating on Priorities
+</P>
+
+<PRE>
+//Set the daemon flag for this ThreadGroup.
+public final void setDaemon(boolean daemon);
+
+//Get the daemon flag for this ThreadGroup.
+public final boolean isDaemon();
+</PRE>
+
+<P>ThreadGroups, like Threads, can also be marked as daemons and inherit the daemon
+status of their parent ThreadGroups. A daemon ThreadGroup can contain both daemon and
+non-daemon Threads. Marking a ThreadGroup as a daemon does not affect the daemon
+status of the Threads in that group.
+</P>
+
+<P>In fact, all the daemon flag means for ThreadGroups is that they are
+automatically destroyed when all the Threads in it have completed and all the ThreadGroups in it
+have been destroyed&#151;when it becomes empty. The daemon name is a little misleading
+because the daemon status of a ThreadGroup is not related to the daemon status of any Threads
+in that group and does not affect how the JVM behaves when exiting.
+</P>
+
+<H4><A NAME="ch13_ 26">
+The ThreadGroup Hierarchy
+</A></H4>
+
+<P>At any time, there is only one hierarchy of ThreadGroups that contains all the Threads
+and ThreadGroups in the Java VM system. The getParent() method returns, for
+any
+</P>
+
+
+<A NAME="PAGENUM-534"><P>Page 534</P></A>
+
+
+
+
+<P>ThreadGroup, the ThreadGroup object of which it is a member and the parentOf()
+method enables checking of whether one ThreadGroup is the ancestor of another.
+</P>
+
+<P>The ThreadGroup class also contains a number of methods that enable the monitoring
+and display of the current Thread and ThreadGroup hierarchy as shown in listing 13.26.
+</P>
+
+<P>Listing 13.26 java.lang.ThreadGroup Method for Access to and Display of the
+ThreadGroup Hierarchy
+</P>
+
+<PRE>
+//Return the parent group of this ThreadGroup
+//or null if this is the top-level system ThreadGroup.
+public final ThreadGroup getParent();
+
+//Return true if this ThreadGroup is a parent of
+//g, or anywhere in g's ancestors.
+public final boolean parentOf(ThreadGroup g);
+
+//List the ThreadGroup.  Prints a tree display of the
+//entire hierarchy of ThreadGroups and Threads below
+//and including this ThreadGroup on System.out.
+//Useful for debugging.
+public void list();
+
+//Returns an estimate of the number of active Threads in
+//this Thread group and all subgroups.
+public int activeCount();
+
+//Returns an estimate of the number of active ThreadGroups
+//in this Thread group and all subgroups.
+public int activeGroupCount()
+
+//Copies, into the specified array, references to every
+//active Thread in this Thread group and all active
+//subgroups. Use the activeCount() method to get an
+//estimate of how big the array should be.  Returns the
+//number of Threads put into the array.
+public int enumerate(Thread list[]);
+
+//As enumerate(Thread[]), but if recurse is false only
+//enumerates Threads for this ThreadGroup, not any
+//subgroups.
+public int enumerate(Thread list[],
+                     boolean recurse);
+</PRE>
+
+<P>The activeCount() and activeGroupCount() methods both return an estimate. An
+estimated
+</P>
+
+<A NAME="PAGENUM-535"><P>Page 535</P></A>
+
+
+<P>count is possible only because Threads might be added, removed, or die in
+the ThreadGroup hierarchy during processing (for example, between calling activeCount()
+to obtain an estimate of the number of threads in the group and creating an array of that
+size to pass to enumerate() the contents of the ThreadGroup might change). The only way
+to traverse the hierarchy of Threads and ThreadGroups and know that the results are
+complete is to subclass ThreadGroup and perform the traversal in a method of that
+class.
+</P>
+
+
+<P>Because all the methods of ThreadGroup that affect the hierarchy are
+synchronized (refer to the section on synchronization), a synchronized method of a subclass of
+ThreadGroup can safely traverse the Threads in that group without the risk of the contents of
+the ThreadGroup changing during the traversal.
+</P>
+
+<P>For example, suppose a server application has threads of two classes and needs to
+return counts of the number of threads of each class as seen in listing 13.27.
+</P>
+
+<P>Listing 13.27 Example of Subclassing ThreadGroup
+</P>
+<PRE>
+public class ThreadTypeA extends Thread {
+        //some subclass of Thread...
+}
+
+public class ThreadTypeB extends Thread {
+        //some other subclass of Thread...
+}
+
+public class CountingThreadGroup extends ThreadGroup {
+
+//Default constructor
+public CountingThreadGroup() {
+        super(Thread.currentThread().getThreadGroup(), &quot;NoName&quot;);
+}
+
+//Enumerate all the Threads in this group
+//and all subgroups into an array.
+private Thread[] enumerateAll() {
+        int count = this.activeCount();
+        Thread[] t = new Thread[count];
+        this.enumerate(t);
+        return t;
+}
+
+//Count only threads of class c.
+public synchronized int countType(Class c) {
+        Thread[] t = enumerateAll();
+        int count = 0;
+        for(int i=0; i&lt;t.length; i++)
+</PRE>
+
+<A NAME="PAGENUM-536"><P>Page 536</P></A>
+
+
+<PRE>
+                if(t[i].getClass() == c)
+                        count++;
+        return count;
+}
+
+}
+</PRE>
+
+
+
+<P>The countType() method can safely check all the Threads that are members of
+the CountingThreadGroup without the risk that threads will die or be added to the
+group during the counting because it is a synchronized method. The later section on
+synchronization explains this, but for now you can assume that while a thread is in this
+synchronized method, no other thread can call another synchronized method of
+the CountingThreadGroup object.
+</P>
+
+<H4><A NAME="ch13_ 27">
+ThreadGroups and Exceptions
+</A></H4>
+
+<P>An exception occurring in any thread is thrown to the outermost catch that applies. If
+no catch to handle the &quot;this&quot; subclass of Throwable is found, the thread is killed (after
+all applicable &quot;finally&quot; blocks have been executed.) The last action of a dying thread is to
+call its ThreadGroup's uncaughtException() method.
+</P>
+
+<P>Listing 13.28 java.lang.ThreadGroup uncaughtException Method
+</P>
+<PRE>
+public void uncaughtException(Thread t,
+                  Throwable e);
+</PRE>
+
+<P>The default java.lang.ThreadGroup implementation of uncaughtException() passes
+Thread object and Throwable to the uncaughtException() method of the ThreadGroup's
+parent, thus propagating the call up the hierarchy of ThreadGroups. If there is no parent&#151;that
+is, the ThreadGroup is the top of the hierarchy&#151;Throwable's
+printStackTrace() method is called. The printStackTrace() method outputs to System.out a trace of all the methods
+that have been called on the way to where the exception occurred. It's the method that
+prints the stack trace that's seen when any uncaught Exception occurs in a Java application.
+</P>
+
+<P>The uncaughtException() method is not final and can be overridden by subclasses
+of ThreadGroup to perform clean-up operations. When called, uncaughtException()
+cannot prevent the thread from dying.
+</P>
+
+<H3><A NAME="ch13_ 28">
+Thread Security
+</A></H3>
+
+<P>A running Java VM can contain classes from a variety of packages. This is especially
+true
+</P>
+
+<P><CENTER>
+<a href="0529-0532.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0537-0541.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

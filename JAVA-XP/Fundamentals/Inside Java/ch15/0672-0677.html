@@ -1,0 +1,321 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Inside Java:Java Beans: Java's Component Architecture:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+<P><CENTER>
+<a href="0667-0671.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0678-0683.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-672"><P>Page 672</P></A>
+
+<P>
+<a href="images\ch15fg04.jpg"><img src="images\tn_ch15fg04.jpg"></a><BR>
+Figure 15.4 <I>The Calendar1 Bean and PropertySheet in the BDK BeanBox.</I>
+</P>
+
+
+<P>
+as a DateEventListener. The application's appearance is identical to Calendar1,
+which was shown in figures 15.3 and 15.4.
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Two more classes, which will be covered in the advanced section of this chapter,
+are associated with the Calendar2 Bean, and are contained in listings 15.15 and
+15.17. Listing 15.15 (Calendar2BeanInfo.java) depicts how you can use the BeanInfo
+interface to provide explicit data to the introspection process; in this case, the data
+provides information about the icons associated with a Bean. Listing 15.17 (DateEditor.java) is
+a property editor that can be used with a builder tool to enable the user to edit a
+property that is represented by a Date instance.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+<P>Listing 15.6
+</P>
+<PRE>
+Line==================Java Source=================
+001   //////////
+002   // Calendar2.java  An example Java Bean that demonstrates
+003   // emitting a custom made event type (named DateEvent).
+</PRE>
+
+<A NAME="PAGENUM-673"><P>Page 673</P></A>
+
+
+
+
+<PRE>
+004   //
+005   // Author: James L. Weaver  JDK 1.1 beta1
+006   //////////
+007   package chapter15.code.calendar2;
+008
+009   import java.awt.*;
+010   import java.awt.event.*;
+011   import java.io.Serializable;
+012   import java.util.*;
+013
+014   public class Calendar2 extends Panel
+015                implements Serializable, ActionListener
+016   {
+017       protected Date date;
+018       protected GregorianCalendar calendar;
+019       protected Panel header = null;
+020       protected Panel body = null;
+021       protected Button prevMonth, nextMonth;
+022       protected Label monthLabel;
+023
+024       protected String days = new String(&quot;SunMonTueWedThuFriSat&quot;);
+025       protected String months =
+026                 new String(&quot;JanFebMarAprMayJunJulAugSepOctNovDec&quot;);
+027
+028       // Create a Vector to hold DateListeners
+029       protected Vector dateListeners = new Vector();
+030
+031       public Calendar2() {
+032           // Get current date and time info
+033           calendar = new GregorianCalendar();
+034
+035           setSize(200, 200);
+036           setLayout(new BorderLayout());
+037
+038           // Put month and year at top of applet,
+039           // as well as next and previous buttons.
+040           header = new Panel();
+041           prevMonth = new Button(&quot;&lt;&lt;&quot;);
+042           prevMonth.addActionListener(this);
+</PRE>
+<PRE>
+                                                       <I>continues</I>
+</PRE>
+
+
+
+<A NAME="PAGENUM-674"><P>Page 674</P></A>
+
+
+<P>
+Listing 15.6, Continued
+</P>
+<PRE>
+
+043           nextMonth = new Button(&quot;&gt;&gt;&quot;);
+044           nextMonth.addActionListener(this);
+045           header.add(prevMonth);
+046           monthLabel = new Label(null, Label.CENTER);
+047           header.add(monthLabel);
+048           header.add(nextMonth);
+049           add(&quot;North&quot;, header);
+050
+051           // Create a Panel with a GridLayout for putting in
+052           // the days and dates of the month.
+053           body = new Panel();
+054           body.setLayout(new GridLayout(0, 7));
+055
+056           // Put the day of the week headers at the top
+057           for (int i=0; i&lt;21; i+=3) {
+058               body.add(new Label(days.substring(i, i+3), Label.CENTER));
+059           }
+060           add(&quot;Center&quot;, body);
+061
+062           // Create and display the date buttons
+063           displayCalendar();
+064       }
+065
+066       // The &quot;date&quot; property accessor methods
+067       public synchronized Date getDate() {
+068           return calendar.getTime();
+069       }
+070
+071       public synchronized void setDate(Date date) {
+072           calendar.setTime(date);
+073           displayCalendar();
+074           // Call the DateEvent processing method so that each
+075           // DateListener is notified of the change
+076           processDateEvent(new DateEvent(this, calendar.getTime()));
+077       }
+078
+079       protected synchronized void displayCalendar() {
+080           // Save the current values
+</PRE>
+
+
+<A NAME="PAGENUM-675"><P>Page 675</P></A>
+
+
+<PRE>
+
+081           int yearNum = calendar.get(Calendar.YEAR);
+082           int monthNum = calendar.get(Calendar.MONTH);
+083           int dayNum = calendar.get(Calendar.DATE);
+084
+085           // Build a string containing month and year
+086           // to display at the top between the buttons
+087           String monthStr = months.substring(monthNum * 3,
+088                                              monthNum * 3 + 3);
+089           monthLabel.setText(monthStr + &quot; &quot; + yearNum);
+090           monthLabel.repaint();
+091
+092           // Remove all the grid cells except day names
+093           while (body.getComponentCount() &gt; 7)
+094               body.remove(7);
+095
+096           // Calendar day of week method is not working in
+097           // JDK 1.1 beta 1, so use date method to find
+098           // out which day the 1st of the month falls on
+099           calendar.set(Calendar.DATE, 1);
+100           date = calendar.getTime();
+101           int day = date.getDay();
+102
+103           // Make blank cells until 1st of month
+104           for (int i=0; i&lt;day; i++) {
+105               body.add(new Label());
+106           }
+107
+108           // Put the date buttons in
+109           Button dayBtn;
+110           for (int i=1; i&lt;=32; i++) {
+111               // Convert integers to strings
+112               dayBtn = new Button(new Integer(i).toString());
+113               dayBtn.addActionListener(this);
+114               body.add(dayBtn);
+115
+116               // Increment the date
+117               calendar.add(Calendar.DATE, 1);
+118
+119               // Make the currently selected date receive focus.
+</PRE>
+<PRE>
+                                                       <I>continues</I>
+</PRE>
+
+
+<A NAME="PAGENUM-676"><P>Page 676</P></A>
+
+<P>
+Listing 15.6, Continued
+</P>
+<PRE>
+
+120               if (i == dayNum)
+121                   dayBtn.requestFocus();
+122
+123               // Stop adding buttons when a new month is reached.
+124               if (calendar.get(Calendar.DATE) &lt;= 1)
+125                   break;
+126           }
+127           // Restore the current values
+128           calendar.set(yearNum, monthNum, dayNum);
+129           body.validate();
+130       }
+131
+132       public synchronized void actionPerformed(ActionEvent e) {
+133           if (e.getSource() == prevMonth || e.getSource() == nextMonth) {
+134               // The previous or next month button was clicked, so
+135               // set the day of the month to 1, and go to the
+136               // proper month.
+137               calendar.set(Calendar.DATE, 1);
+138               calendar.add(Calendar.MONTH,
+139                            e.getSource() == prevMonth ? _1 : 1);
+140               displayCalendar();
+141           }
+142           else {
+143             // One of the day buttons was clicked, so set the
+144             // calendar object to that date.
+145             calendar.set(Calendar.DATE, Integer.parseInt(
+146                            ((Button)e.getSource()).getLabel()));
+147           }
+148           // Call the DateEvent processing method so that each
+149           // DateListener is notified of the change.
+150           processDateEvent(new DateEvent(this, calendar.getTime()));
+151       }
+152
+153       // The application that uses this Bean will call this method
+154       // to register the Bean with a DateListener.
+155       public synchronized void addDateListener(DateListener dl) {
+156           dateListeners.addElement(dl);
+157       }
+</PRE>
+
+<A NAME="PAGENUM-677"><P>Page 677</P></A>
+
+
+
+<PRE>
+
+158
+159       // The application that uses this Bean will call this method
+160       // to deregister the Bean from DateListener.
+161       public synchronized void removeDateListener(DateListener dl) {
+162           dateListeners.removeElement(dl);
+163       }
+164
+165       // This should be called from within the Bean whenever the
+166       // selected date changes so that each DateListener is notified.
+167       protected void processDateEvent(DateEvent evt) {
+168           Vector list;
+169
+170           // Make a copy of the listeners vector, in case listeners are
+171           // added or removed while events are being delivered.
+172           synchronized(this) {
+173               list = (Vector)dateListeners.clone();
+174           }
+175           for (int i=0; i&lt;list.size(); i++) {
+176               ((DateListener)list.elementAt(i)).dateChanged(evt);
+177           }
+178       }
+179   }
+</PRE>
+
+<P>The DateEvent class in listing 15.7 defines the event that is fired when the date
+selected in the Calendar2 Bean changes.
+</P>
+
+<P>Listing 15.7
+</P>
+<PRE>
+Line==================Java Source=================
+01   //////////
+02   // DateEvent.java  Example of an event created for
+03   // enabling the Calendar2 Bean to communicate with listeners
+04   //
+05   // Author: James L. Weaver  JDK 1.1 beta1
+06   //////////
+07   package chapter15.code.calendar2;
+08
+09   import java.util.*;
+10
+11   public class DateEvent extends EventObject
+</PRE>
+<PRE>
+                                                       <I>continues</I>
+</PRE>
+
+
+<P><CENTER>
+<a href="0667-0671.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0678-0683.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+

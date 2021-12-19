@@ -1,0 +1,938 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 19 -- Creating CORBA Servers </TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;19</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Creating CORBA Servers </FONT>
+</H1>
+<P>
+<I><B>by Mark Wutka</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#CreatingaBasicCORBAServer">
+Creating a Basic CORBA Server</A>
+<UL>
+<LI><A HREF="#UsingClassesDefinedbyIDLStructs">
+Using Classes Defined by IDL Structs</A>
+<LI><A HREF="#VisiBrokerSkeletons">
+VisiBroker Skeletons</A>
+<LI><A HREF="#UsingtheVisiBrokerTIEInterface">
+Using the VisiBroker TIE Interface</A>
+<LI><A HREF="#JavaIDLSkeletons">
+JavaIDL Skeletons</A>
+</UL>
+<LI><A HREF="#CreatingCallbacksinCORBA">
+Creating Callbacks in CORBA</A>
+<LI><A HREF="#WrappingCORBAAroundanExistingObject">
+Wrapping CORBA Around an Existing Object</A>
+<UL>
+<LI><A HREF="#MappingtoandfromCORBADefinedTypes">
+Mapping to and from CORBA-Defined Types</A>
+<LI><A HREF="#CreatingRemoteMethodWrappers">
+Creating Remote Method Wrappers</A>
+<LI><A HREF="#ImplementingWrappedCallbacks">
+Implementing Wrapped Callbacks</A>
+</UL>
+</UL>
+<HR>
+<P>
+ACORBA server has objects whose methods are invoked remotely by
+its clients. A single server can have any number of objects, and
+can activate and deactivate objects at any time. An active object
+is visible to the clients, whereas an inactive object cannot be
+accessed by clients.
+<H2><A NAME="CreatingaBasicCORBAServer"><FONT SIZE=5 COLOR=#FF0000>
+Creating a Basic CORBA Server</FONT></A></H2>
+<P>
+The interface between the ORB and the implementation of a server
+is called a <I>skeleton</I>. A skeleton for an IDL interface gets
+information from the ORB, invokes the appropriate server method,
+and sends the results back to the ORB.
+<P>
+You normally don't have to write the skeleton itself; you just
+supply the implementation of the remote methods. Figure 19.1 illustrates
+the flow of a method invocation through a skeleton to your implementation.
+<P>
+<A HREF="f19-1.gif"><B>Figure 19.1 : </B><I>The </I><TT>Skeleton</TT><I>
+class translates COBRA requests into method invocation</I>.</A>
+<P>
+Listing 19.1 shows an IDL definition of a simple banking interface.
+You will see how to create a server for this interface in both
+JavaIDL and VisiBroker.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.1&nbsp;&nbsp;Source Code for Banking.idl<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+module banking {
+
+     enum AccountType {
+          CHECKING,
+          SAVINGS
+     };
+
+     struct AccountInfo {
+          string id;
+          string password;
+          AccountType which;
+     };
+
+     exception InvalidAccountException {
+          AccountInfo account;
+     };
+
+     exception InsufficientFundsException {
+     };
+
+     interface Banking {
+
+          long getBalance(in AccountInfo account)
+               raises (InvalidAccountException);
+
+          void withdraw(in AccountInfo account, in long amount)
+               raises (InvalidAccountException,
+                    InsufficientFundsException);
+
+          void deposit(in AccountInfo account, in long amount)
+               raises (InvalidAccountException);
+
+          void transfer(in AccountInfo fromAccount,
+               in AccountInfo toAccount, in long amount)
+               raises (InvalidAccountException,
+                    InsufficientFundsException);
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="UsingClassesDefinedbyIDLStructs">
+Using Classes Defined by IDL Structs</A></H3>
+<P>
+When an IDL struct is turned into a Java class, it does not have
+custom <TT>hashCode</TT> and <TT>equals</TT>
+methods. This means that two instances of this class having identical
+data are not equal.
+<P>
+If you want to add custom methods to these structs, you have to
+create a separate class and define methods to convert from one
+class to the other.
+<P>
+In <A HREF="ch16.htm" >Chapter 16</A>, &quot;Creating 3-Tier Distributed Applications
+with RMI,&quot; the RMI-based banking application defines an <TT>Account</TT>
+class that has its own <TT>hashCode</TT>
+and <TT>equals</TT> methods. This
+allows it to be stored in a hash table.
+<P>
+The following code shows the two methods that need to be added
+to the <TT>Account</TT> class to convert
+to and from <TT>AccountInfo</TT> objects.
+<BLOCKQUOTE>
+<PRE>
+// Allow this object to be created from an AccountInfo instance
+
+        public Account(AccountInfo acct)
+        {
+                this.id = acct.id;
+                this.password = acct.password;
+                this.which = acct.which;
+        }
+
+// Convert this object to an AccountInfo instance
+
+        public AccountInfo toAccountInfo()
+        {
+                return new AccountInfo(id, password, which);
+        }
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="VisiBrokerSkeletons">
+VisiBroker Skeletons</A></H3>
+<P>
+VisiBroker implements skeletons in a traditional way. When you
+generate your skeletons and stubs for an IDL module, it generates
+an abstract skeleton class.
+<P>
+This class has all the code to communicate with the ORB and to
+invoke the remote methods. It leaves the remote methods themselves
+as abstract methods.
+<P>
+When you use the remote methods, you create a subclass of the
+skeleton class and use those abstract methods. The name of the
+skeleton class generated for an IDL interface, at least for VisiBroker,
+is the name of the interface, prefaced by <TT>_sk_</TT>.
+<P>
+Every object that uses a CORBA interface in VisiBroker must identify
+itself by a name. The constructor for the skeleton class sends
+this name to the ORB itself.
+<P>
+When you create a subclass of the skeleton, you must create a
+constructor that passes a name up to the superclass, for example:
+<BLOCKQUOTE>
+<PRE>
+public class BankingImpl extends _sk_Banking
+{
+     public BankingImpl(String bankingObjectName)
+     {
+          super(bankingObjectName);
+     // other initialization code here
+     }
+</PRE>
+</BLOCKQUOTE>
+<P>
+The implementation of the skeleton methods is straightforward.
+In fact, you can use the implementation of the <TT>BankingImpl</TT>
+class from <A HREF="ch16.htm" >Chapter 16</A>, changing only the <TT>java.rmi.RemoteException</TT>
+exceptions to <TT>CORBA.SystemException</TT>.
+<P>
+The following code fragment is an example of one of the methods
+from the <TT>BankingImpl</TT> for
+VisiBroker:
+<BLOCKQUOTE>
+<PRE>
+// getBalance returns the amount of money in the account (in cents).
+// If the account is invalid, it throws an InvalidAccountException
+
+     public int getBalance(AccountInfo accountInfo)
+     throws CORBA.SystemException, InvalidAccountException
+     {
+
+// Fetch the account from the table
+          Integer balance = (Integer) accountTable.get(
+               new Account(accountInfo));
+
+// If the account wasn't there, throw an exception
+          if (balance == null) {
+               throw new InvalidAccountException(accountInfo);
+          }
+
+// Return the account's balance
+          return balance.intValue();
+     }
+</PRE>
+</BLOCKQUOTE>
+<P>
+Once you create an object that uses a remote interface, you need
+a program that creates instances of these objects so the clients
+can use them. To do this, you must first initialize the VisiBroker
+ORB with the following line:
+<BLOCKQUOTE>
+<PRE>
+CORBA.ORB orb = CORBA.ORB.init();
+</PRE>
+</BLOCKQUOTE>
+<P>
+Next, you must create an instance of the Basic Object Adapter,
+or BOA. The BOA is a standard CORBA object used to communicate
+with the ORB. 
+<P>
+It was intended for systems where the ORB and the server are separate
+programs or even on separate machines. The BOA has methods for
+activating and deactivating objects, and for activating and deactivating
+the entire server.
+<P>
+You create an instance of a BOA with the following line:
+<BLOCKQUOTE>
+<PRE>
+CORBA.BOA boa = orb.BOA_init();
+</PRE>
+</BLOCKQUOTE>
+<P>
+Next, create an instance of your implementation object. In this
+case, the implementation object is the <TT>BankingImpl</TT>
+object.
+<P>
+While you are instantiating a <TT>BankingImpl</TT>
+object, you want to refer to it as an instance of the <TT>Banking</TT>
+object, as far as the BOA is concerned, so you should store the
+new object in a variable of type <TT>Banking</TT>.
+<P>
+Also, when you create the implementation, you must give it the
+name that the other clients will use to access it. In this case,
+the name is <TT>Bank</TT>. You create
+the instance with the following line:
+<BLOCKQUOTE>
+<PRE>
+Banking banking = new BankingImpl(&quot;Bank&quot;);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Even though you have created an implementation object, the ORB
+still does not know about it. You must identify the object to
+the BOA by calling the <TT>obj_is_ready</TT>
+method:
+<BLOCKQUOTE>
+<PRE>
+boa.obj_is_ready(banking);
+</PRE>
+</BLOCKQUOTE>
+<P>
+If you have more than one implementation object, you should identify
+them all to the BOA at this point. Once all the objects have been
+identified, call the BOA's <TT>impl_is_ready</TT>
+to tell the ORB that everything is ready to go:
+<BLOCKQUOTE>
+<PRE>
+boa.impl_is_ready();
+</PRE>
+</BLOCKQUOTE>
+<P>
+When you have called <TT>impl_is_ready</TT>,
+your server is ready to go, and clients can begin connecting to
+it.
+<P>
+Listing 19.2 shows a startup object that initializes the ORB,
+creates an instance of the <TT>BankingImpl</TT>
+class, and activates it using the BOA.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.2&nbsp;&nbsp;Source Code for BankingServer.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+
+// This class creates a BankingImpl object and activates
+// it through the BOA (Basic Object Adaptor).
+
+public class BankingServer
+{
+
+     public static void main(String[] args)
+     {
+
+          try {
+
+// Initialize the ORB
+               CORBA.ORB orb = CORBA.ORB.init();
+
+// Create a BOA
+               CORBA.BOA boa = orb.BOA_init();
+
+// Create the banking service implementation. Clients will
+// request access to the object by the name &quot;Bank&quot;.
+               Banking banking = new BankingImpl(&quot;Bank&quot;);
+
+// Tell the BOA about the banking object
+               boa.obj_is_ready(banking);
+
+// Activate all the objects in the BOA
+               boa.impl_is_ready();
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception: &quot;+e);
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="UsingtheVisiBrokerTIEInterface">
+Using the VisiBroker TIE Interface</A></H3>
+<P>
+The traditional approach of using an abstract skeleton class with
+an implementation subclass works well for many situations. In
+fact, in C++ you may never have any problems with it, since C++
+allows multiple inheritance.
+<P>
+In Java, however, you can run into some hairy problems using this
+method. You may want to create a remote object that is a subclass
+of a non-CORBA object. Using the normal skeleton class provided
+by VisiBroker uses up your one permitted inheritance.
+<P>
+The VisiBroker TIE interface addresses this problem. The concept
+of the TIE is common in several ORBs and is sometimes called <I>delegation</I>.
+<P>
+TIE doesn't stand for anything. It refers to the idea that it
+ties a CORBA object to a non-CORBA object, providing remote access
+to the non-CORBA object.
+<P>
+In the regular skeleton implementation, the skeleton <I>is</I>
+the implementation. In the TIE implementation, the skeleton and
+the implementation are separate objects.
+<P>
+VisiBroker's implementation of the TIE in Java is quite simple.
+When you create Java files from IDL, VisiBroker creates a Java
+interface for each interface you define in IDL. The name of the
+Java interface is the name of the IDL interface with the word
+Operations appended to it.
+<P>
+For instance, the IDL interface <TT>Banking</TT>
+would generate a Java interface called <TT>BankingOperations</TT>.
+VisiBroker also generates a skeleton TIE implementation, whose
+name is the name of the IDL interface, prefaced by _tie_, like
+<TT>_tie_Banking</TT>.
+<P>
+Unlike the normal skeleton class, the TIE skeleton class is not
+an abstract class. Instead, it uses the methods in the IDL interface.
+<P>
+All these methods do, however, is invoke identical methods in
+an instance of <TT>BankingOperations</TT>.
+In other words, the TIE skeleton class works like a pass-thru.
+<P>
+Figure 19.2 illustrates the relationship between a TIE skeleton
+and an object using the <TT>BankingOperations</TT>
+interface.
+<P>
+<A HREF="f19-2.gif"><B>Figure 19.2 : </B><I>The TIE skeleton invokes implementation
+methods in another object</I>.</A>
+<P>
+When you create an implementation object for a TIE interface,
+it does not have to be a subclass of the skeleton. In fact, it
+shouldn't be.
+<P>
+Instead, it must use an <TT>Operations</TT>
+interface (<TT>BankingOperations</TT>,
+for example). The only link that the implementation has to CORBA
+is that each method in the <TT>Operations</TT>
+interface can throw the <TT>CORBA.SystemException</TT>
+exception.
+<P>
+Unlike the regular skeleton implementation, the constructor for
+the TIE implementation object does not have to accept the object's
+name. You can use the empty constructor if you like.
+<P>
+The only difference in start-up between the regular skeleton implementation
+and the TIE implementation is that for the TIE implementation,
+you first create the TIE implementation object, and then you create
+an instance of the TIE skeleton, passing it the implementation
+object.
+<P>
+The following code fragment creates a TIE implementation of the
+<TT>Banking</TT> interface, followed
+by the TIE skeleton for that interface:
+<BLOCKQUOTE>
+<PRE>
+BankingTieImpl impl = new BankingTieImpl();
+Banking banking = new _tie_Banking(impl, &quot;Bank&quot;);
+</PRE>
+</BLOCKQUOTE>
+<P>
+As you can see, the object's name is passed to the constructor
+for the TIE skeleton, not to the TIE implementation.
+<H3><A NAME="JavaIDLSkeletons">
+JavaIDL Skeletons</A></H3>
+<P>
+JavaIDL doesn't even bother with an abstract skeleton class. Instead,
+it always generates a TIE interface for every class, although
+the JavaIDL specification never uses the term <I>TIE</I>.
+<P>
+Like VisiBroker, JavaIDL creates an <TT>Operations</TT>
+interface that has Java versions of the methods defined in the
+IDL interface. The only difference between the interface created
+by JavaIDL and the interface created by VisiBroker is the name
+of the CORBA system exception. JavaIDL calls it <TT>sunw.corba.SystemException</TT>.
+<P>
+The implementation object you create does not use the <TT>Operations</TT>
+interface directly. Instead, it uses the <TT>Servant</TT>
+interface, which extends the <TT>Operations</TT>
+interface. For example, your implementation for the <TT>Banking</TT>
+interface might be declared as
+<BLOCKQUOTE>
+<PRE>
+public class BankingImpl implements BankingServant
+</PRE>
+</BLOCKQUOTE>
+<P>
+Although JavaIDL is intended to be Sun's recommendation for mapping
+IDL into Java, it was released with a lightweight ORB called the
+Door ORB. This ORB provides just enough functionality to get clients
+and servers talking to each other, but not much more.
+<P>
+Depending on the ORB, the initialization varies, as does the activation
+of the objects. For the Door ORB distributed with JavaIDL, you
+initialize the ORB with the following line:
+<BLOCKQUOTE>
+<PRE>
+sunw.door.Orb.initialize(servicePort);
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>servicePort</TT> parameter
+you pass to the ORB is the port number it should use when listening
+for incoming clients. It must be an integer value. Your clients
+must use this port number when connecting to your server.
+<P>
+After you initialize the orb, you can instantiate your implementation
+object. For example:
+<BLOCKQUOTE>
+<PRE>
+BankingImpl impl = new BankingImpl();
+</PRE>
+</BLOCKQUOTE>
+<P>
+Next, you create the skeleton, passing it the implementation object:
+<BLOCKQUOTE>
+<PRE>
+BankingRef server = BankingSkeleton.createRef(impl);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Finally, you activate the server by publishing the name of the
+object:
+<BLOCKQUOTE>
+<PRE>
+sunw.door.Orb.publish(&quot;Bank&quot;, server);
+</PRE>
+</BLOCKQUOTE>
+<P>
+Listing 19.3 shows the complete JavaIDL startup program for the
+banking server.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.3&nbsp;&nbsp;Source Code for BankingServer.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package banking;
+
+public class BankingServer
+{
+
+// Define the port that clients will use to connect to this server
+     public static final int servicePort = 5150;
+
+     public static void main(String[] args)
+     {
+
+// Initialize the orb
+          sunw.door.Orb.initialize(servicePort);
+
+          try {
+
+               BankingImpl impl = new BankingImpl();
+// Create the server
+               BankingRef server =
+                    BankingSkeleton.createRef(impl);
+
+// Register the object with the naming service as &quot;Bank&quot;
+               sunw.door.Orb.publish(&quot;Bank&quot;, server);
+
+          } catch (Exception e) {
+               System.out.println(&quot;Got exception: &quot;+e);
+               e.printStackTrace();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="CreatingCallbacksinCORBA"><FONT SIZE=5 COLOR=#FF0000>
+Creating Callbacks in CORBA</FONT></A></H2>
+<P>
+Callbacks are a handy mechanism in distributed computing. You
+use them whenever your client wants to be notified of some event
+but doesn't want to sit and poll the server to see if the event
+has occurred yet.
+<P>
+In a regular Java program, you'd just create a callback interface
+and pass the server an object that uses the callback interface.
+When the event occurs, the server invokes a method in the callback
+object.
+<P>
+As it turns out, callbacks are just that easy in CORBA. You define
+a callback interface in your IDL file and then create a method
+in the server's interface that takes the callback interface as
+a parameter. The following IDL file defines a server interface
+and a callback interface:
+<BLOCKQUOTE>
+<PRE>
+module callbackDemo
+{
+     interface callbackInterface {
+          void doNotify(in string whatHappened);
+     };
+
+     interface serverInterface {
+          void setCallback(in callbackInterface callMe);
+     };
+};
+</PRE>
+</BLOCKQUOTE>
+<P>
+Under JavaIDL, the <TT>setCallback</TT>
+method would be defined as:
+<BLOCKQUOTE>
+<PRE>
+void setCallback(callbackDemo.callbackInterfaceRef callMe)
+    throws sunw.corba.SystemException;
+</PRE>
+</BLOCKQUOTE>
+<P>
+Once you have the <TT>callbackDemo.callbackInterfaceRef</TT>
+object, you can invoke its <TT>whatHappened</TT>
+method at any time. At this point, the client and server are on
+a peer-to-peer level. They are each other's client and server.
+<H2><A NAME="WrappingCORBAAroundanExistingObject"><FONT SIZE=5 COLOR=#FF0000>
+Wrapping CORBA Around an Existing Object</FONT></A></H2>
+<P>
+When you create CORBA implementation objects, you are tying that
+object to a CORBA implementation. Even if you use the TIE interface
+in your ORB, your methods still can throw the CORBA <TT>SystemException</TT>
+exception.
+<P>
+This is not the ideal situation. Even though JavaIDL and VisiBroker
+are similar, you still have to make minor changes when going from
+one to the other. If the conversion is a one-time thing, that
+may not be a big deal.
+<P>
+If, on the other hand, you have to maintain multiple versions
+of a complex object, you don't want to keep multiple copies of
+the actual implementation code.
+<P>
+You can solve this problem, but it takes a little extra work up
+front. First, concentrate on using the object you want, without
+using CORBA, RMI, or any other remote interface mechanism. 
+<P>
+This is the one copy you use across all your implementations.
+This object, or set of objects, can define its own types, exceptions,
+and interfaces.
+<P>
+Next, to make this object available remotely, define an IDL interface
+that is as close to the object's interface as you can get. There
+may be cases where they won't match exactly, but you can take
+care of that.
+<P>
+Once you generate the Java classes from the IDL definition, create
+an implementation that simply invokes methods on the real implementation
+object. This is essentially the same as a TIE interface, with
+one major exception: the implementation class has no knowledge
+of CORBA.
+<P>
+You can even use this technique to provide multiple ways to access
+a remote object. Figure 19.3 shows a diagram of the various ways
+you might provide access to your implementation object.
+<P>
+<A HREF="f19-3.gif"><B>Figure 19.3 : </B><I>A single object can be accessed by many
+types of remote object systems</I>.</A>
+<P>
+Although this may sound simple, it has some additional complexities
+that you must address. If your implementation object defines its
+own exceptions, you must map those exceptions to CORBA exceptions.
+You must also map between Java objects and CORBA-defined objects.
+<P>
+Once again, the banking interface is a good starting point for
+illustrating the problems and solutions in separating the application
+from CORBA.
+<P>
+The original banking interface is defined with a hierarchy of
+exceptions, a generic <TT>BankingException</TT>,
+with <TT>InsufficientFundsException</TT>
+and <TT>InvalidAccountException</TT>
+as subclasses. This poses a problem in CORBA, since exceptions
+aren't inherited.
+<P>
+You must define a <TT>BankingException</TT>
+exception in your IDL file, this way:
+<BLOCKQUOTE>
+<PRE>
+exception BankingException {};
+</PRE>
+</BLOCKQUOTE>
+<P>
+In addition, since you probably want the banking application itself
+to be in the banking package, change the IDL module name to <TT>remotebanking</TT>.
+<P>
+The implementation for the <TT>Banking</TT>
+interface in the remotebanking module must do two kinds of mapping.
+First, it must convert instances of the <TT>Account</TT>
+object to instances of the <TT>AccountInfo</TT>
+object. 
+<P>
+This may seem like a pain and, frankly, it is, but it's a necessary
+pain. If you start to intermingle the classes defined by CORBA
+with the real implementation of the application, you end up having
+to carry the CORBA portions along with the application, even if
+you don't use CORBA.
+<H3><A NAME="MappingtoandfromCORBADefinedTypes">
+Mapping to and from CORBA-Defined Types</A></H3>
+<P>
+You can define static methods to handle the conversion from the
+application data types to the CORBA-defined data types. For example,
+the banking application defines an <TT>Account</TT>
+object. 
+<P>
+The remotebanking module defines this object as <TT>AccountInfo</TT>.
+You can convert between the two with the following methods:
+<BLOCKQUOTE>
+<PRE>
+// Create a banking.Account from an AccountInfo object
+
+public static banking.Account makeAccount(AccountInfo info)
+{
+        return new banking.Account(info.id, info.password,
+                info.which);
+}
+
+// Create an AccountInfo object from a banking.Account object
+
+public static AccountInfo makeAccountInfo(banking.Account account)
+{
+        return new AccountInfo(account.id, account.password,
+                account.which);
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Your remote implementation of the banking interface needs access
+to the real implementation, so the constructor for the <TT>RemoteBankingImpl</TT>
+object needs a reference to the <TT>banking.BankingImpl</TT>
+object:
+<BLOCKQUOTE>
+<PRE>
+protected banking.BankingImpl impl;
+
+public RemoteBankingImpl(banking.BankingImpl impl)
+{
+        this.impl = impl;
+}
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="CreatingRemoteMethodWrappers">
+Creating Remote Method Wrappers</A></H3>
+<P>
+Now all your remote methods have to do is convert any incoming
+<TT>AccountInfo</TT> objects to <TT>banking.Account</TT>
+objects, catch any exceptions, and throw the proper remote exceptions.
+Here is the implementation of the remote <TT>withdraw</TT>
+method:
+<BLOCKQUOTE>
+<PRE>
+// call the withdraw function in the real implementation, catching
+// any exceptions and throwing the equivalent CORBA exception
+
+public synchronized void withdraw(AccountInfo accountInfo, int amount)
+throws sunw.corba.SystemException, InvalidAccountException,
+        InsufficientFundsException, BankingException
+{
+
+        try {
+
+// Call the real withdraw method, converting the accountInfo object
+// to a banking.Account object first
+
+                impl.withdraw( makeAccount(accountInfo), amount);
+
+        } catch (banking.InvalidAccountException excep) {
+
+// The banking.InvalidAccountException contains an Account object.
+// Convert it to an AccountInfo object when throwing the CORBA exception
+
+                throw new InvalidAccountException(
+                        makeAccountInfo(excep.account));
+
+        } catch (banking.InsufficientFundsException nsf) {
+                throw new InsufficientFundsException();
+        } catch (banking.BankingException e) {
+                throw new BankingException();
+        }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Although it would be nice if you could get the IDL-to-Java converter
+to generate this automatically, it has no way of knowing exactly
+how the real implementation looks.
+<H3><A NAME="ImplementingWrappedCallbacks">
+Implementing Wrapped Callbacks</A></H3>
+<P>
+The notion of the callback is particularly nasty, since you can't
+just encapsulate the CORBA calls going to the server. The server
+has to make CORBA calls back to the client.
+<P>
+The stock quote system introduced in <A HREF="ch16.htm" >Chapter 16</A> has a good example
+of a callback system. Unfortunately, there's one feature in the
+stock quote system that needs to be changed. 
+<P>
+Whenever you create a callback system, leave room for the callback
+to throw an exception. You may never use it, but it makes it much
+easier to create a distributed version of the application. 
+<P>
+Figure 19.4 illustrates the relationship between the real implementation
+and the CORBA wrappers in a callback system.
+<P>
+<A HREF="f19-4.gif"><B>Figure 19.4 : </B><I>Callbacks need special handling in a CORBA
+system</I>.</A>
+<P>
+The revised version of the <TT>StockQuoteClient</TT>
+interface is shown in Listing 19.4.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.4&nbsp;&nbsp;Source Code for StockQuoteClient.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package stocks;
+
+// Defines a callback interface for the StockQuoteServer so
+// it can notify its clients of new stock quotes.
+
+public interface StockQuoteClient
+{
+     public void quote(StockQuote quote) throws
+           StockQuoteClientException;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>StockQuoteClientException</TT>
+is a simple subclass of <TT>Exception</TT>
+with no extra parameters. The stock-quote server likes to know
+when it can no longer send quotes to a client. If an error occurs,
+it removes the client from its tables.
+<P>
+The trick to wrapping CORBA around a callback system is that you
+have to create a wrapper for the callback as well as for the server.
+The wrapper uses the methods that the non-CORBA server defines
+for its callback and then invokes the corresponding method in
+the CORBA client.
+<P>
+Listing 19.5 shows the implementation of the <TT>RemoteStockCallback</TT>
+object, which does the distributed callback.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.5&nbsp;&nbsp;Source Code for RemoteStockCallback.java
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+package remotestocks;
+
+public class RemoteStockCallback implements stocks.StockQuoteClient
+{
+
+// Client is the CORBA client whose methods we want to invoke
+     protected StockQuoteClientRef client;
+
+// Server is the CORBA-wrapper for the stock quote server. If there
+// is an error sending a quote to the client, we tell the wrapper
+// about it so it can remove this client from its tables.
+     protected RemoteStockQuoteImpl server;
+
+// makeRemoteStockQuote converts a stocks.StockQuote object (the Non-CORBA
+// object) into a remotestocks.StockQuote object (the CORBA version of
+// the stock quote).
+
+     protected static StockQuote makeRemoteStockQuote(
+          stocks.StockQuote quote)
+     {
+          return new StockQuote(quote.stock, quote.amount,
+               quote.change);
+     }
+
+     public RemoteStockCallback(StockQuoteClientRef client,
+          RemoteStockQuoteImpl server)
+     {
+          this.client = client;
+          this.server = server;
+     }
+
+// quote is invoked by the real stock quote server implementation, not
+// the CORBA server.
+
+     public void quote(stocks.StockQuote quote) throws
+           stocks.StockQuoteClientException
+     {
+// Try to invoke the remote method, converting the stocks.StockQuote
+// to the CORBA version, remotestocks.StockQuote
+          try {
+               client.quote(makeRemoteStockQuote(quote));
+          } catch (Exception e) {
+
+// If there was an error, remove this client from the server, then
+// throw an exception to the real implementation server.
+
+               try {
+                    server.removeCallback(client);
+               } catch (Exception ignore) {
+               }
+               throw new stocks.StockQuoteClientException();
+          }
+     }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now in the normal implementation of the stock quote system, the
+client calls the <TT>addWatch</TT>
+method in the server, passing it the reference to the client and
+the name of the stock to watch. The server adds this client to
+its tables and invokes the <TT>quote</TT>
+method in the client every time the stock's value changes.
+<P>
+With a CORBA front-end on the server, things change slightly.
+When the request comes into the CORBA wrapper, it creates an instance
+of <TT>RemoteStockCallback</TT>, passing
+to its constructor the client stub that was passed in the <TT>addWatch</TT>
+call.
+<P>
+The wrapper then calls the <TT>addWatch</TT>
+method in the real server implementation, passing it the <TT>RemoteStockCallback</TT>.
+Here is the implementation of the <TT>addWatch</TT>
+method in the CORBA wrapper:
+<BLOCKQUOTE>
+<PRE>
+// addWatch adds a client to the list of clients watching a stock
+
+public void addWatch(StockQuoteClientRef client, String stock)
+throws sunw.corba.SystemException, UnknownStock
+{
+
+// See if we have already created a callback object for this client.
+        RemoteStockCallback callback = (RemoteStockCallback)
+                stockClients.get(client);
+
+// If we didn't already have a callback, create one and add it
+// to the table.
+        if (callback == null) {
+                callback = new RemoteStockCallback(client, this);
+
+                stockClients.put(client, callback);
+        }
+
+// Now call the addWatch method in the real implementation
+        try {
+                impl.addWatch(callback, stock);
+        } catch (stocks.UnknownStockException e) {
+                throw new UnknownStock(stock);
+        }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Now when the real stock quote server publishes a stock quote,
+it ends up calling the <TT>quote</TT>
+method in the <TT>RemoteStockCallback</TT>
+object. This callback object, in turn, calls the <TT>quote</TT>
+method in the distributed client. 
+<P>
+Figure 19.5 illustrates the sequence of events for publishing
+a stock quote.
+<P>
+<A HREF="f19-5.gif"><B>Figure 19.5 : </B><TT>RemoteStockCallback</TT><I>
+acts as a proxy for a distributed client</I>.</A>
+<HR>
+
+<CENTER><P><A HREF="ch18.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch20.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

@@ -1,0 +1,209 @@
+<html>
+<head>
+<title>Signing Java Applets with Microsoft's Authenticode (Appdx. C, Sec. 2) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\appdx-c.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="appdx-c-1.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>How to Sign Java Code
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="appdx-c-1.html">1</a> / <b>2</b> / <a href="appdx-c-3.html">3</a> / <a href="appdx-c-4.html">4</a> / <a href="appdx-c-5.html">5</a> / <a href="appdx-c-6.html">6</a> / <a href="appdx-c-7.html">7</a> / <a href="appdx-c-8.html">8</a><p>
+
+<font size="+2" color="#000000"><b>Section 2 -- Signing Java Applets with Microsoft's Authenticode</b></font>
+</td><td width=60 align=center>
+<a href="appdx-c-3.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+Next in our tutorial, we'll take on Microsoft's code-signing system for Java. It's a bit peculiar since it does not interact with the JDK 1.1 or Java 2 security models in an intuitive fashion. As usual, step one is securing an identity.<p><br>
+
+
+<center><font size="+1"><b>Getting an Authenticode Certificate</b></font></center><p>
+
+There are several ways to get a certificate for Microsoft Authenticode. One of the things you can do is generate "test certificates," which allows you to try things out. We'll tell you how to do that in a bit, if you just want to play around. However, if you plan on distributing any code, you're going to want to get a real digital ID. This costs money. A number of vendors distribute certificates, one of them being VeriSign, which we'll use in our examples.<p>
+
+To obtain a VeriSign certificate for Authenticode, point Internet Explorer to <a href="http://digitalid.verisign.com/developer/ms_pick.htm">digitalid.verisign.com/developer/ms_pick.htm</a>.<p>
+
+Select a flavor of ID. For personal use, select a Class 2 ID. For business use, select Class 3.<p>
+
+You'll be given a form to fill out. Note that the personal Class 2 ID is $20, and you'll have to pay by charge card. Once you submit the form, VeriSign will try to verify you are who you say you are, mainly by running a credit check. Sometimes the credit check won't have up-to-date information, so if you get rejected and you can remember the address for the last place you lived (which is the most common problem), you might want to try it again using old information, pretending you never moved. (Not that we condone this strategy, mind you.)<p>
+
+Once your data are approved, VeriSign will send you an email with instructions on picking up the certificate. When downloading your certificate, two files will need to be saved: your private key file, and your certificate file. You should probably save these files to a floppy disk instead of your hard drive, so that someone can't just snag your certificate off your computer (although, without knowing the password you use to protect your private key, snagging the files alone may not do a bad guy much good). Remember the password used to protect the private key; it will be needed when it comes time to sign code. For the sake of simplicity, we'll assume you saved your certificate as a:\Cert.spc and your private key as a:\Key.pvc.<p><br>
+
+
+<center><font size="+1"><b>Getting the Signing Software</b></font></center><p>
+
+Before signing anything with the new certificates, download and install the Microsoft Java SDK. It's located at <a href="http://www.microsoft.com/msdownload/java/sdk/31f/SDK-JAVA.asp">www.microsoft.com/msdownload/java/sdk/31f/SDK-JAVA.asp</a>.<p>
+
+We'll assume you installed the Java SDK in the directory C:\SDK-Java.31.<p>
+
+All of the programs we're going to need for signing Java code live in C:\SDK-Java.31\Bin\PackSign, so you should probably add that directory to your PATH. Under Windows 95/98, running the following command at the DOS prompt will fix up your PATH for the current session:<p>
+
+<center><pre>PATH=%PATH%;C:\SDK-Java.31\Bin\PackSign</pre></center><p>
+
+You can add that command to your autoexec.bat file to make the change persist through a reboot.<p><br>
+
+
+<center><font size="+1"><b>Cabinet Files</b></font></center><p>
+
+Unlike Netscape's Object Signing and Sun's signing tools (which work on JAR files), Authenticode signing will only work on cabinet (CAB) files. There's nothing special about the CAB format; it's just another way of archiving many files into one. However, it's the only archive format IE supports for signing Java code.<p>
+
+Say we have an applet that consists of two files: file1.class and file2.class. We can create a CAB file in the same directory by typing the following at the DOS prompt:<p>
+
+<center><pre>cabarc N test.cab file1.class file2.class</pre></center><p>
+
+If there are no other class files in the directory, we can also type:<p>
+
+<center><pre>cabarc N test.cab *.class</pre></center><p><br>
+
+
+<center><font size="+1"><b>Security Zones</b></font></center><p>
+
+In order to understand what we're doing when we sign a CAB file, we need to know a little something about what an IE "security zone" is. By default, a security zone is a group of Web sites. Each zone is assigned a security level, which may be Low, Medium, High, or Custom. We won't cover Custom zones, except to say that they can implement arbitrary security policies. For more on security zones, see Chapter 1, "Mobile Code and Security: Why Java Security Is Important."<p>
+
+There's a default zone called Trusted Sites, into which a user can put any server. All code from that zone will be completely trusted (i.e., the zone has a Low security level). Similarly, there's a Restricted Sites zone. Any sites the user puts in this zone will need explicit permission before they can run anything "outside the sandbox." By default, most everything else falls into the Internet zone, which is assigned a Medium security level. Code can run outside the Java sandbox in a very limited manner. For example, code can use up to 1 megabyte of data on your hard drive by using the API com.ms.io.clientstorage, which is included with Microsoft VMs only. (So much for "write once, run anywhere"!) Unlike fully trusted applets, applets restricted to the Medium security level should not otherwise be able to use your file system.<p>
+
+We're going to sign our cabinet file, requesting to run either with Medium or High privileges (we can also request Low privileges, but since we'll always be allowed to run in the sandbox, doing so is mainly useful only to show you vouch for the CAB file). If our code ends up in a Low security zone, our code will always run without prompting the user for permission. If our code ends up in a Medium security zone, then before code that requests Medium level privileges can run, the user will be prompted as to whether to let the code run. If our code ends up in a High security zone, all code that wants to run outside the sandbox will need to be approved through a dialog with the user. See Figure C.2.<p>
+
+<center>
+<table border=0 width=441><tr><td>
+<img src="..\images\figc.02.gif" width=441 height=419 alt="Fig C.2"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure C.2  The security warning dialog used by Microsoft Internet Explorer's Authenticode system.</b></center><br>
+This dialog explains who has vouched for the code (by signing it) and what permissions are being requested. Clicking "Always trust content from &lt;user&gt;" is probably a bad idea.</font>
+</td></tr></table>
+</center>
+<p><br>
+
+
+<center><font size="+1"><b>Signing CAB Files</b></font></center><p>
+
+To sign test.cab, we're going to use the signcode command, which is included in the Java SDK. Here's a typical command line:<p>
+
+<center><pre>signcode -j JavaSign.dll -jp High -spc a:\Cert.spc -v a:\Key.pvk -n "My Applet" -i http://www.mywebpage.com/ test.cab</pre></center><p>
+
+The flags here are a bit arcane. If you want your CAB file to request permissions, the -j flag should always be there, and take JavaSign.dll as a parameter, unless you're signing something other than Java code (the same command can be used to sign ActiveX controls and other mobile code, too). The -jp flag passes a parameter to the DLL. For Java signing, that's how we request High privileges. The -spc flag and -v flag are used to specify the location of your certificate and private key, respectively. The -n option needs to be present, and it specifies the name of the software, which is displayed to the user before the user decides whether to run your code. The -i option specifies where to go for more information about the product, which also gets displayed when the user is prompted to give your code permission to run.<p>
+
+You can also "timestamp" your signature, so that after your certificate expires, your applet will still work. However, doing so requires a timestamp server, which isn't covered here. For more information on Authenticode for Java, visit <a href="http://www.microsoft.com/java/security/">www.microsoft.com/java/security</a>.<p>
+
+To confirm that everything has worked properly so far, run the command:<p>
+
+<center><pre>chkjava test.cab</pre></center><p>
+
+A window should appear similar to the one an end user will see when IE asks if the application should be allowed to run.<p><br>
+
+
+<center><font size="+1"><b>Making Test Certificates</b></font></center><p>
+
+To avoid putting down some cash for a real certificate from a CA and still be able to play around with Authenticode, you can make a test certificate. The first step is to create the certificate with the command:<p>
+
+<center><pre>makecert -sk Key.pvk -n "CN=Your Name" Cert.cer</pre></center><p>
+
+That command makes a certificate and a private key you can use in other applications, but it won't work for code signing. To get it to work with code signing, convert it to a Software Publisher Certificate (SPC) by typing:<p>
+
+<center><pre>cert2spc Cert.cer Cert.spc</pre></center><p>
+
+When you're finished with that, you can use Key.pvk and Cert.spc for testing purposes in the same way as if they came from a CA.<p><br>
+
+
+<center><font size="+1"><b>Special HTML Tag</b></font></center><p>
+
+When deploying a signed CAB file in an HTML page, a slight variation on the &lt;APPLET&gt; tag is necessary. As with all applets, the name of the class that extends java.applet.Applet goes in the CODE attribute. However, instead of putting the name of the CAB file in the ARCHIVE attribute as is done with JAR files, CAB files signed with Authenticode are passed using the PARAM tag. As an illustration, the tag to embed into a web page the signed applet "MyApplet" stored in myapp.cab would look like:<p>
+
+<center><pre>&lt;APPLET CODE="MyApplet.class"&gt; &lt;PARAM name="cabbase" VALUE="myapp.cab"&gt;&lt;/APPLET&gt;</pre></center><p>
+
+The named prameter "cabbase" is how Internet Explorer finds the CAB file containing the class specified in the CODE attribute.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="appdx-c-1.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="appdx-c-3.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="..\chapter-five\index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="..\chapter-five\index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+

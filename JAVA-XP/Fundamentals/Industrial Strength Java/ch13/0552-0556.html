@@ -1,0 +1,311 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0546-0551.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0557-0561.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-552"><P>Page 552</P></A>
+
+
+<P>requires LETTER size paper and this would avoid having
+to change the paper tray. However, because there's no guarantee
+which thread, B or C, gets the lock and enters printJob(), there's
+no guarantee which job will print next.
+</P>
+
+<P>Listing 13.43 demonstrates a second version of the class that
+uses condition variables and attempts to ensure that the most
+appropriate job is printed next.
+</P>
+
+<P>Listing 13.43 EfficientPrinterAccess Class
+</P>
+<PRE>public class EfficientPrinterAccess {
+//paper sizes
+public static final int LETTER=0,
+        LEGAL=1, A4=2,
+        //The number of different paper sizes
+        PAPER_SIZES=3,
+        //A value to indicate no size yet chosen
+        UNKNOWN=-1;
+
+//There are as many elements in these
+//arrays as there are paper sizes and
+//the paper size values above are used
+//to index it.
+private Object flag[];
+
+//Accesses to this array are synchronized on &quot;this.&quot;
+//This array counts the number of jobs of each paper
+//size waiting to print (on the flag[] element of the
+//same array index).  The paper size values are
+//used to index this array.
+private int    count[];
+
+//Keep track of which paper size is
+//in use.  Initially, we don't know
+//what size is set up.
+private int currentPaperSize=UNKNOWN;
+
+//This flag is true while some thread is printing.
+private boolean printing;
+
+private Printer thePrinter;
+
+//Constructor
+public EfficientPrinterAccess() {
+        //Create an Object for each paper size
+        //to use as a condition variable.
+        this.flag = new Object[PAPER_SIZES];
+
+</PRE>
+
+<A NAME="PAGENUM-553"><P>Page 553</P></A>
+
+
+<PRE>
+        for(int i=0; i&lt;=this.flag.length; i++)
+                this.flag[i] = new Object();
+
+        //Use an integer for each paper size to
+        //count the number of jobs waiting.
+        //They're all initialized to zero.
+        this.count = new int[PAPER_SIZES];
+}
+
+private void waitOnQueue(int paperSize) throws InterruptedException {
+        synchronized(flag[paperSize]) {
+                flag[paperSize].wait();
+        }
+}
+
+private void wakeUpQueue(int paperSize) {
+        synchronized(flag[paperSize]) {
+                flag[paperSize].notify();
+        }
+}
+
+public void printJob(String data, int paperSize)
+throws InterruptedException {
+boolean needToWait;
+
+        //Is there anyone printing?
+        synchronized(this) {
+                needToWait = printing;
+                printing = true;
+
+                //If we're going to wait, increment
+                //the count of jobs waiting now so that
+                //we can be sure whichever thread is
+                //printing will notice we're waiting.
+                if(needToWait)
+                        count[paperSize]++;
+        }
+
+        if(needToWait) {
+                //wait on the appropriate queue
+                waitOnQueue(paperSize);
+        }
+
+        //set up the right paper size
+        if(currentPaperSize != paperSize)
+                thePrinter.changePaperTray(paperSize);
+</PRE>
+<PRE>
+                                                                  continues
+</PRE>
+
+<A NAME="PAGENUM-554"><P>Page 554</P></A>
+
+<P>Listing 13.43 Continued
+</P>
+<PRE>
+
+        //print the job
+        thePrinter.printTheJob(data);
+
+        synchronized(this) {
+                //now wake any suspended thread that wants to
+                //use the same paper size as we just did.  If
+                //there's no job using the same size, then just
+                //find any suspended thread and start it.
+
+               boolean wokeSomebody = false;
+
+                if(count[paperSize] &gt; 0) {
+                        wakeUpQueue(paperSize);
+                        wokeSomebody = true;
+                        count[paperSize] -= 1;
+                }
+                else
+                {
+                        for(int i=0; i&lt;count.length; i++) {
+                                if((i != paperSize)
+                                &amp;&amp; (count[i] &gt; 0)) {
+                                        wakeUpQueue(i);
+                                        wokeSomebody = true;
+                                        count[i] -= 1;
+                                        break;
+                                }
+                        }
+                }
+
+                //Finally, clear the printing flag if
+                //we're done (that is, unless we woke
+                //some other thread to print).
+                if(!wokeSomebody)
+                        printing = false;
+        }
+}
+}
+</PRE>
+
+<P>The first point to note about this example is that it's considerably more complex
+than SimplePrinterAccess, which hid all the synchronization by giving this responsibility to
+the Java VM.
+</P>
+
+<P>The printJob() method is not synchronized because more than one thread must be
+allowed
+</P>
+
+<A NAME="PAGENUM-555"><P>Page 555</P></A>
+
+
+
+<P>to execute it at once. The first thread to enter printJob() is allowed to print; if other
+threads enter while that first thread is printing, they are suspended via wait() (in
+waitOnQueue()) until the printing thread is done.
+</P>
+
+<P>To understand the operation of EfficientPrinterAccess, consider the &quot;flag&quot; array of
+Objects and the &quot;count&quot; array as associated. The flag array elements are used as condition
+variables to implement a set of queues, one for each paper size supported. The count
+array records the number of threads waiting in each queue.
+</P>
+
+
+
+<P>The following list details the operation of EfficientPrinterAccess when threads A, B,
+and C call it as described earlier:
+</P>
+
+<OL>
+
+<LI>     The first thread, A, on entering printJob(), tests the &quot;printing&quot; flag to
+determine whether any other thread is currently using the printer. Because this flag is
+shared between threads, this test is placed inside a synchronized block. If printing is
+false, then A doesn't need to wait, and &quot;printing&quot; may be set to true. Thread A
+continues, sets up the paper size if necessary, and calls printTheJob().
+</P>
+
+<LI>     Now the second thread, B, enters printJob(). It also tests printing, but because
+it's now true, B must wait. B can't call wait() from inside the block that is
+synchronized on this because of the deadlock problem discussed earlier. Instead, B
+leaves the synchronized block and calls
+waitOnQueue() to suspend itself on the appropriate condition variable.
+</P>
+
+<LI>      Thread A now completes printing. It enters the second synchronized block
+and examines the count array to determine whether any of the queues have
+threads waiting for the printer. It tests the queue holding jobs for the same paper size
+first. Finding that one queue has thread B suspended, thread A calls
+wakeUpQueue() to notify B. Thread A then exits printJob(). B is rescheduled, sets up the paper
+tray, and prints.
+</P>
+
+<LI>      If thread C enters printJob() before A is done, it too ends up waiting on a
+queue. But because A first checks the queue for jobs requiring the same paper size
+as itself, it schedules C next and avoids changing the paper tray.
+</P>
+
+</OL>
+
+
+
+<P>Unfortunately, this attempt contains a subtle bug. Imagine that thread B enters
+printJob(), checks printing, and must wait. B increments the appropriate count and leaves the
+first synchronized block. At that point, however, B is descheduled before
+calling waitOnQueue() (maybe because the time-slice has expired, or somewhere else in
+the system a higher priority thread has become runnable, preempting B). The next thread to
+be scheduled is A, which completes printing and then checks the queue counts. Because
+one of the counts is nonzero, A calls wakeUpQueue(). But thread B was descheduled
+before calling wait(), so there is no thread to respond to the the notify() call. B, when
+eventually
+</P>
+
+<A NAME="PAGENUM-556"><P>Page 556</P></A>
+
+<P>rescheduled, calls wait(), and waits possibly forever, having missed the notify() call.
+</P>
+
+<P>This type of defect (similar to the problem shown with listing 13.31 in the section
+on Concurrent Thread Interaction) is often called a
+race condition because it only appears if the timing of thread scheduling is exactly right (or exactly wrong, depending on
+your point of view). To overcome this particular problem, a condition variable is required
+to &quot;remember&quot; notify() calls. Such a variable is called a semaphore.
+</P>
+
+<H4><A NAME="ch13_ 35">
+Semaphores
+</A></H4>
+
+<P>If you're familiar with concurrent programming in other languages, you may have
+noticed that Java condition variables are similar (although not identical) to
+Dijkstra's semaphore construct: wait() corresponds to waiting on a semaphore and notify() corresponds
+to signaling. The major difference is that a semaphore may be signaled before any process
+or thread waits, but when no thread is waiting invoking notify() has no effect.
+</P>
+
+<P>Semaphores are like condition variables that don't forget notify() calls if no thread
+is waiting but save them until the next wait(). The behavior of a semaphore is defined
+in listing 13.44.
+</P>
+
+<P>Listing 13.44 Definition of a Semaphore
+</P>
+<PRE>
+wait(s):
+    when s &gt; 0 then
+        s = s - 1
+        continue
+
+signal(s):
+    s = s + 1
+</PRE>
+
+<P>The definition of waiting on a semaphore implies that a process finding s at zero will
+wait until s becomes non-zero, but if s is already non-zero (because the semaphore
+was signaled earlier), the thread can continue without being suspended. Listing 13.45
+shows how simple it is to implement a semaphore in Java.
+</P>
+
+<P>Listing 13.45 The Semaphore Class
+</P>
+<PRE>
+package industrial;
+</PRE>
+
+
+<P><CENTER>
+<a href="0546-0551.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0557-0561.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

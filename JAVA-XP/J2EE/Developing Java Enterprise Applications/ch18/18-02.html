@@ -1,0 +1,155 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Enterprise JavaBean Business Rules Engine</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Because the AlwaysRule is only true or false, its validity is either 0.0 or 1.0. The key code in this example rule is the fact that it implements the Rule interface and the accessor method that is provided to change the key used to determine the rules value from the hash table.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading4"></A><FONT COLOR="#000077">An Example Action</FONT></H4>
+<P>A simple example action is the PrintLnAction provided with the busrules package. This action also has a programmer-defined key. The value in the hash table at this key is printed to System.out whenever the action is executed.
+</P>
+<PRE>
+public class PrintLnAction implements Action
+{
+    protected String key;
+
+<B>    public void setKey(String s)</B>
+    {
+	key = s;
+    }
+
+<B>    public void executeOn(Hashtable data)
+    {
+	System.out.println(data.get(key));
+    }</B>
+}
+</PRE>
+<P>This action was created as a debugging tool because it acts like a logging statement in the context of a rules script.
+</P>
+<P>Another action included in the busrules package is a task. A task stores a list of actions. The Task class provides methods for adding actions to its list, inserting actions in the list, or removing actions from the list. The executeOn method iterates over the list of actions, executing each one with the same data that the task provided. In some cases, this data may get changed by an action so that the next one in the task can use the new data to perform its work. For example, a task might include actions to get data from a database operates on the data and updates the database. The actions in this set communicate by adding data to the hash table passed into their executeOn method.</P>
+<PRE>
+<B>public class Task implements Action</B>
+{
+    Vector actions;
+
+    public Task()
+    {
+	actions = new Vector();
+    }
+
+    public void addItem(Action newItem)
+    {
+	actions.addElement(newItem);
+    }
+
+    public void insertItem(Action newItem)
+    {
+	actions.insertElementAt(newItem,0);
+    }
+
+    public void removeItem(Action delItem)
+    {
+	actions.removeElement(delItem);
+    }
+
+<B>    public void executeOn(Hashtable data)
+    {
+	int i,max;
+	Action curAction;
+	
+	max = actions.size();
+	
+	for(i=0;i&ltmax;i&#43;&#43;)
+	{
+	    curAction = (Action) actions.elementAt(i);
+	    curAction.executeOn(data);
+	}
+    }</B>
+
+    public void removeAllItems()
+    {
+	actions.removeAllElements();
+    }
+}
+</PRE>
+<P>As you can see, the Task class provides methods for managing the list of actions. In larger scripts, tasks can be used to create more complex processes.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading5"></A><FONT COLOR="#000077">The Parser</FONT></H4>
+<P>Given rules and actions, both the ones provided and custom ones, a programmer can create a script that defines how to plug rules together. Actually, you could just write Java code to build complex rules and complex actions. However, one of our goals is to provide a mechanism for changing business rules without having to recompile the enterprise bean or RMI object that acts as an interface for the rule. A simple scripting file is used to make this separation between the definition of a rule and the interface that uses it. Also provided is a class called RulesParser that can read the script files and convert them into Java objects.
+</P>
+<P>To use this scripting tool kit, follow these five steps:</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Create the script file. This file will define either a single rule or a single action. This single rule/action can be built from other rules and actions.
+<DD><B>2.</B>&nbsp;&nbsp;Implement any custom rules and actions and the parsing code required to handle them.
+<DD><B>3.</B>&nbsp;&nbsp;Create a Java object to act as an interface to the rule and/or action.
+<DD><B>4.</B>&nbsp;&nbsp;Implement the Java object to invoke the rules parser. The parser will read the script file and create the Rule or Action object that the script defines.
+<DD><B>5.</B>&nbsp;&nbsp;Use the rule or action created by the parser.
+</DL>
+<P>These steps rely on a key concept; the rule or action defined in the script file is directly created from Java objects that implement the Rule or Action interfaces. In other words, the rules file is a shortcut for implementing the Java code that would, for example, create a Task object and add several actions to it. In other words, nothing is done in the script file that couldn&#146;t be done in Java, but the separation allows the Java code to remain in use while the rules change.
+</P>
+<P>Step two refers to the creation of parsing code. This code is discussed in a moment. It is based on the generic parsing engine that is provided with the busrules package. This generic engine is implemented in the class RulesParser. The RulesParser provides four methods for parsing a script:</P>
+<PRE>
+public Action parseAction(String script, Enumeration handlers)
+	throws ParsingException;
+public Action parseAction(Reader script, Enumeration handlers)
+	throws ParsingException;
+
+public Rule parseRule(String script, Enumeration handlers)
+	throws ParsingException;
+public Rule parseRule(Reader script, Enumeration handlers)
+	throws ParsingException;
+</PRE>
+<P>The first two methods parse a script and return an Action object. The second two parse a script and return a Rule object. For each type of script, a method is provided that supports using a Reader or String to define the script. The second argument to all of these methods is an enumeration of TagHandlers. These are the custom code that you can write to support custom rules and actions in your scripts. All of the methods will throw a ParsingException if the script is bad.
+</P>
+<P>The complete code for RulesParser is provided on the CD-ROM, along with the class called TagParser that performs the actual parsing. The RulesParser is really a front end to a TagParser. This tag parser looks at HTML-like input and calls TagHandler objects for each tag it encounters. Let&#146;s look at an example script to see how the script defines these tags for the parser to evaluate.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading6"></A><FONT COLOR="#000077">An Example Script</FONT></H4>
+<P>This script defines a DecisionTree. A <I>tree</I> is an action that contains rule-action pairs. When the tree is executed, it executes the first action for which the rule is valid.</P>
+<PRE>
+&ltTREE&gt
+
+&ltPAIR&gt
+&ltCOMPARISONRULE OPERATOR=&#147;11&#148; CONSTANT=&#147;true&#148; KEY=&#147;false&#148;&gt
+&ltPRINTLNACTION KEY=&#147;message_one&#148;&gt
+&lt/PAIR&gt
+
+&ltPAIR&gt
+&ltALWAYSRULE KEY=&#147;true&#148;&gt
+&ltPRINTLNACTION KEY=&#147;message_two&#148;&gt
+&lt/PAIR&gt
+
+&lt/TREE&gt
+</PRE>
+<P>This tree has two rule-action pairs. The first uses the ComparisonRule to test if the value at the key &#147;false&#148; is not equal to, using string equality, the constant value &#147;true.&#148; This ComparisonRule object supports a number of comparison operators, including numeric and string comparisons. When the rule is tested, it compares the value at its key with the constant value provided to it using the assigned operator. The second pair in this tree tests whether the value of the key &#147;true&#148; is true. Both rules are associated with PrintLnActions that print a message indicating their success.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="18-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="18-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

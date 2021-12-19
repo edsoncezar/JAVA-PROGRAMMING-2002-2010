@@ -1,0 +1,91 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch06\06-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 7<BR>Programming Servlets
+</FONT></H2>
+<P><I>Servlets</I> represent the extension of applet-style programming onto the Web server. Servlets are usually written by extending an existing class and implementing one or two key methods. However, as servlets have become a common method for implementing server code, they have also become a standard interface between client and server code. This chapter discusses the basic syntax for creating servlets as well as techniques used to design, test, and tune your servlets. As you read through the chapter, you may want to run the examples using the source code on the CD-ROM. In this case, skip to the section &#147;Running and Hosting Servlets&#148; at the end of the chapter for specific information about running the examples. It is important to understand the basics of servlet programming at this point because there are a number of large examples that rely on servlets in later chapters.</P>
+<P>This chapter focuses on the mechanics and concepts of programming servlets and contains small examples. Later chapters provide examples of full-fledged servlets. In particular, Chapter 8, &#147;A Servlet-Based Search Engine,&#148; provides a large example of a servlet that can be used for searching a Web site.</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">A Basic Servlet</FONT></H3>
+<P>The first step in defining a servlet is to create an object that implements the javax.servlet.Servlet interface. Once this class is defined, you can implement methods that handle client requests. There are two standard ways to implement the Servlet interface. The first is to subclass javax.servlet.GenericServlet. GenericServlet essentially implements all of the methods of the Servlet interface, as listed in Table 7.1, and provides a few convenience methods. The second way to implement Servlet is to subclass javax.servlet.http.HttpServlet. This implementation of Servlet provides more methods for dealing with servlets interacting with a Web server. Objects can also implement Servlet directly, although this technique is usually used only in cases in which it is necessary for the object to belong to a different inheritance hierarchy.
+</P>
+<P>The Web server associates servlets with URLs. The server may also allow a servlet to be associated with a complete type of URL. For example, Chapter 9, &#147;What Is Server-Side Scripting?&#148; introduces JavaServer Pages. These pages are compiled by a servlet that handles all requests to &#147;.jhtml&#148; files. Essentially, the servlet handles a file request type rather than a particular URL.</P>
+<P>When the user accesses a URL represented by a servlet, the Web server first checks to see if it has loaded that servlet. Some Web servers provide an administrative tool for preloading servlets; others wait until the first user request before loading the servlet. Loading the servlet is a two-step process. First, an instance of the servlet&#146;s class is created using the default constructor, based on the class name provided when the servlet was configured to a particular URL. Next, the servlet is notified of its loading.</P>
+<P>Like applets, servlets are notified of their instance creation and destruction by the servlet host, usually a Web server. In particular, the servlet is sent the message &#147;init&#148; when it is first loaded and &#147;destroy&#148; when it is unloaded from the server. These specific messages are used in place of relying on the constructor to finalize the method, to give the Web server control over when and how it notifies the servlet. In fact, a server could send init and destroy to the same servlet object several times, assuming that it is unloaded before being initialized again.</P>
+<P>In the servlet model, only one object is created to service each URL. This object receives the init, service, and destroy messages for that URL. In other words, the init method is called once, regardless of the number of requests, and destroy is called once when the servlet is unloaded. The service method is called on the same servlet object every time any client accesses that URL on the server. See Table 7.1.</P>
+<P>The init method takes a ServletConfig object as its argument. For servlets that extend GenericServlet, the configuration object is stored by the servlet for later use in the GenericServlet&#146;s implementation of init. When subclassing GenericServlet and overriding the init method, you should call super.init() in the init method to inherit this behavior. The following code shows the declaration for the init method.</P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 7.1</B> Servlet Interface Methods
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP">METHOD
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>void destroy()</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Cleans up whatever resources are being held.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>ServletConfig getServletConfig()</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns a servlet config object&#151;in particular, the configuration object passed to init.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>String getServletInfo()</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Returns a string containing information about the servlet, such as its author, version, and copyright.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>void init(ServletConfig)</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Initializes the servlet.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>void service(ServletRequest, ServletResponse)</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">Called each time a request is made to the servlet.
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP" COLSPAN="2"><HR>
+</TABLE>
+<PRE>
+public void init(ServletConfig config) throws ServletException
+</PRE>
+<P>Using the provided configuration, init prepares the servlet for work. This initialization might involve creating a network connection, loading a file into memory, or any other potentially lengthy operation. The server guarantees that it will send init once on loading, and it will wait to send any service messages to the servlet until init has returned. This means that init is basically thread safe and will be called only once per servlet load.
+</P>
+<P>If an error occurs during initialization, the servlet throws an exception. The package that contains Servlet also defines the ServletException and UnavailableException classes. UnavailableExceptions are thrown during init if initialization cannot complete. There are two types of unavailable servlets: A servlet can be permanently unavailable, and a servlet can be temporarily unavailable. A permanently unavailable servlet cannot be recovered. A temporarily unavailable servlet can recover after some condition is met. A good example of a permanently unavailable servlet is a servlet configured to use a file that doesn&#146;t exist. A temporarily unavailable servlet is one that uses a database that is currently unavailable. The key differentiator is that permanently unavailable servlets require administrative action. Temporarily unavailable servlets may become available later without administrative action, or they may be self-correcting.</P>
+<P>Table 7.2 shows the UnavailableException methods that provide information to the servlet host or Web server. The most important method for truly self-correcting servlets is getUnavailableSeconds. Servlets use this method to tell the server how long the servlet needs to correct the current problem. All of these values are set by arguments in the constructor for UnavailableException.</P>
+<P>Servlets implement the destroy method to clean up any outstanding resource. For example, a servlet might close a network connection or file that it is holding open. The servlet&#146;s host tries to wait on all service requests to be fulfilled before destroy is sent to the servlet.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch06\06-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

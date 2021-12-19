@@ -1,0 +1,172 @@
+<html>
+<head>
+<title>The Security Manager (Ch. 2, Sec. 8) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-two.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-two-7.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>The Base Java Security Model: The Original Applet Sandbox
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-two-1.html">1</a> / <a href="chapter-two-2.html">2</a> / <a href="chapter-two-3.html">3</a> / <a href="chapter-two-4.html">4</a> / <a href="chapter-two-5.html">5</a> / <a href="chapter-two-6.html">6</a> / <a href="chapter-two-7.html">7</a> / <b>8</b> / <a href="chapter-two-9.html">9</a> / <a href="chapter-two-10.html">10</a> / <a href="chapter-two-11.html">11</a> / <a href="chapter-two-12.html">12</a> / <a href="chapter-two-13.html">13</a><p>
+
+<font size="+2" color="#000000"><b>Section 8 -- The Security Manager</b></font>
+</td><td width=60 align=center>
+<a href="chapter-two-9.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+The third part of the base Java security model is the Security Manager. This part of the security model restricts the ways an applet uses visible interfaces (Java API calls). The Security Manager implements a good portion of the entire security model and is the part of the security model most often encountered (in terms of a SecurityException) by Java applet developers.<p>
+
+The job of the Security Manager is to keep track of who is allowed to do which dangerous operations. A standard Security Manager will disallow most operations when they are requested by untrusted code, and will allow trusted code to do whatever it wants. The old distinction between applets and applications in JDK 1.0.2 used to directly affect which code the Security Manager managed. Applets, being completely untrusted, were subject to the strict rules of the Security Manager, while applications, being completely trusted, were not. This often led to confusion in the past, especially among managers who believed that the way the Security Manager was set up somehow made trusted Java applications more secure. The fact is, running trusted Java applications is just as risky as running any other executable code written in any language. If the trusted code is malicious or buggy, you could be in big trouble.<p>
+
+Although the browser vendors have designed very similar Security Managers for the most popular Java-enabled browsers, there is no strict edict forcing them to do this. The fact that Security Managers applied to untrusted applets generally enforce the same policies makes things easier to understand and leads to a more uniform experience for both Java users and Java applet developers. But Security Managers don't have to follow an all-or-nothing approach to controlling dangerous resources. They could, for example, be written to give specialized access to particular classes. The fact is, Security Managers can be as simple or as complicated as their authors decide to make them. To the extent that applet security is a major concern to you (and it must be, or you would not be reading this book), your choice of a browser should also be of great concern.<p>
+
+This discussion focuses on two central characteristics of Security Managers: how they work, and how they are set up to restrict the activities of untrusted applets in most browsers. Before the introduction of code signing with JDK 1.1, the security policy for untrusted applets was easy to understand (although its enforcement was complicated), and the goal of a Security Manager was thus straightforward. Now that applets come in myriad trust levels, talk of a single Security Manager makes less sense. To be sure, the Security Manager's default rules do serve as the default under there somewhere, but like the rest of the sandbox, they are only a default.<p><br>
+
+
+<center><font size="+1"><b>How the Security Manager Works</b></font></center><p>
+
+The Security Manager is a single Java object that performs runtime checks on dangerous methods. Code in the Java library consults the Security Manager whenever a potentially dangerous operation is attempted. The Security Manager can veto the operation by generating a SecurityException. Decisions made by the Security Manager take into account the origin of the requesting class. Obviously, built-in classes are usually given more privilege than classes loaded across the Net. The Security Manager makes the final decision as to whether a particular operation is permitted or rejected. See Figure 2.7.<p>
+
+<center>
+<table border=0 width=246><tr><td>
+<img src="..\images\fig02.07.gif" width=246 height=175 alt="Fig 2.7"><br>
+<font size="-2" face="Helvetica"><p>
+<center><b>Figure 2.7  The Security Manager keeps tabs on potentially dangerous calls to the native operating system (underlying the VM).</b></center><br>
+In this way, Java can encapsulate resources that could otherwise be abused by mobile code.
+</font>
+</td></tr></table>
+</center>
+<p>
+
+For applet developers, the Security Manager is a behind-the-scenes player that need not be directly invoked. (In any case, no self-respecting hostile applet would deliberately invoke a security check on itself!) The Java API provides all calls necessary to interface to the operating system, thus making isolation of all required security checks possible within the API. When a dangerous call is made to the Java library, the library queries the Security Manager. These queries use a set of methods that check access. For example, the Security Manager in most browsers contains the methods checkWrite() and checkConnect(), which check whether to allow file writing and the creation of network connections, respectively. If the check passes muster, the call quietly returns; otherwise, a security exception is thrown.<p>
+
+The Java library's use of the Security Manager works as follows:
+<UL>
+	<LI>A Java program makes a call to a potentially dangerous operation in the Java API.
+	<LI>The Java API code asks the Security Manager whether the operation should be allowed.
+	<LI>The Security Manager throws a SecurityException back to the Java API if the operation is denied. This exception propagates back to the Java program.
+	<LI>If the operation is permitted, the Security Manager call returns without throwing an exception, and the Java API performs the requested dangerous operation and returns normally.
+</UL>
+
+Each VM can have only one Security Manager installed at a time, and once a Security Manager has been installed it cannot be uninstalled (except by restarting the VM). Java-enabled applications such as Web browsers install a Security Manager as part of their initialization, thus locking in the Security Manager before any potentially untrusted code has a chance to run.<p>
+
+Usually a security exception propagates up through all the methods of the thread that made the disallowed call. When the topmost method finally gets the exception, the thread exits. A thread that exits this way prints the exception and the stack trace of all the methods that led to it. These are the sorts of messages often cut and pasted in comp.lang.java.security by Java developer newbies wanting help with security problems.<p>
+
+One important thing to realize about security exceptions is that it is perfectly possible for a hostile applet to catch any security exceptions it generates in a try/finally block. So don't count on security exceptions to tip you off to hostile applet activities. Purported Java security products that count security exceptions can easily be thwarted by this strategy. A hostile applet can thus probe your Security Manager with impunity. (Besides, a cracker who has done his homework will know in advance what your Security Manager will allow and disallow, so he will never bother trying to make a call that causes a security exception.)<p>
+
+The Security Manager is completely customizable (through subclassing), although applets are not allowed to install Security Managers. A default Security Manager is provided (like the Class Loader) as a template from Sun Microsystems. Each Java-enabled application fills in the template (by subclassing the template class) to meet its own security requirements. The Java runtime library is written so that all requests to perform dangerous operations are referred to the Security Manager. Access checks are used for thread access, OS access, network access, and Java component access.<p><br>
+
+
+<center><font size="+1"><b>What the Security Manager Is Set Up to Do for Untrusted Applets</b></font></center><p>
+
+The Security Manager has the following duties:
+<UL>
+	<LI>Prevent installation of new class loaders. The job of class loaders is to keep the namespaces properly organized. Because security checks are requested by classes in the Java library, applets must be prevented from spoofing the library classes.
+	<LI>Protect threads and thread groups from each other. (Unfortunately, JDK 1.0 implementations of this piece of policy do not function properly. Some malicious applets, discussed in Chapter 4, have been written to take advantage of this. Better thread protection is provided in JDK 1.1 and above.)
+	<LI>Control the execution of other application programs.
+	<LI>Control the ability to shut down the VM.
+	<LI>Control access to other application processes.
+	<LI>Control access to system resources such as print queues, clipboards, event queues, system properties, and windows.
+	<LI>Control file system operations such as read, write, and delete. Access to local files is strictly controlled.
+	<LI>Control network socket operations such as connect and accept. 
+	<LI>Control access to Java packages (or groups of classes), including access to security enforcement classes.
+</UL>
+
+Sun's Security Manager can be customized. The appletviewer, part of the JDK, reads a configuration file with several user-determined security options. These configuration files declare low-level details, such as "myfile.txt should be writable by applets." Such configuration files appear again for use with JDK 1.1 and Java 2, allowing a user to define a security policy that interacts with the code signing system.<p>
+
+The job of the Security Manager has been deeply affected by many of the new code-signing and access-control features now found in the Java security architecture (see <a href="..\chapter-three\index.html">Chapter 3</a>). Using encryption-based authentication methods, the Security Manager in concert with other mechanisms can set up much more sophisticated rules for trusted, partially trusted, and untrusted applets.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-two-7.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-two-9.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="..\chapter-five\index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="..\chapter-five\index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+

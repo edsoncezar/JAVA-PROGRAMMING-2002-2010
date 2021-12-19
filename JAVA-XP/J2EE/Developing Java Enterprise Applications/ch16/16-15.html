@@ -1,0 +1,194 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-14.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-16.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The following example prints the metadata from the IsPrime example:
+</P>
+<PRE>
+package metaclient;
+
+import javax.ejb.*;
+import javax.naming.*;
+import java.rmi.*;
+import java.util.*;
+import java.io.*;
+
+import isprime.*;
+
+public class MetaClient
+{
+    public static void main(String[] args)
+    {
+        Context ctx=null;
+
+        try
+        {
+            ctx = getInitialContext(args);
+
+            <B>IsPrimeHome home = (IsPrimeHome)
+                         ctx.lookup(&#147;isprime.IsPrimeHome&#148;);
+            IsPrime bean = home.create();
+            EJBMetaData data = home.getEJBMetaData();</B>
+
+            System.out.println(&#147;HomeInterfaceClass: &#148;
+                     &#43;<B>data.getHomeInterfaceClass().</B>getName());
+
+            System.out.println(&#147;RemoteInterfaceClass: &#148;
+                      &#43;<B>data.getRemoteInterfaceClass().</B>getName());
+
+            System.out.println(&#147;Session Bean: &#148;
+                         &#43;(<B>data.isSession()</B>?&#147;true&#148;:&#147;false&#148;));
+
+            if(<B>bean.getPrimaryKey()</B> != null)
+            {
+                System.out.println(&#147;PrimaryKeyClass: &#148;
+                              &#43;data.getPrimaryKeyClass().getName());
+            }
+
+            home.remove(bean.getHandle());
+        }
+        catch (Exception e)
+        {
+            System.out.println(&#147;Error.&#148;);
+            e.printStackTrace();
+        }
+        finally
+        {
+            try
+            {
+                ctx.close();
+            }
+            catch(Exception exp)
+            {
+        }
+     }
+    }
+    static public Context getInitialContext(String[] args)
+     throws Exception
+    {
+        //commented out to save space, see the CD-ROM
+    }
+}
+</PRE>
+<P>Basically, beans are simple objects and don&#146;t have a lot of associated metadata. However, this information can be useful to tools that need to determine information about a bean at run time. In particular, this metadata provides access to the bean&#146;s home and remote interface class names that might be needed for testing or development tools.
+</P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 16.8</B> EJB Exception Classes
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH WIDTH="30%" VALIGN="TOP" ALIGN="LEFT">CLASS
+<TH VALIGN="TOP" ALIGN="LEFT">USAGE
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>CreateException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Indicates a failure during a create method. All create methods must declare that they can throw this type of exception.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>DuplicateKeyException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The requested object cannot be created, because an object with the same key already exists.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>EJBException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Generic exception that can be used to wrap other exceptions. For example, you could create an EJBException from a NullPointerException.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>FinderException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">An object with the requested information could not be found. All find methods must declare that they can throw this type of exception.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>ObjectNotFoundException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Used by find methods that return a single EJB to indicate that the object could not be found. This is a subclass of FinderException.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>RemoveException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">The request to remove a bean failed.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+</TABLE>
+<P>As you may have noticed, the Enterprise JavaBeans specification defines a number of exception classes. These are summarized in Table 16.8.
+</P>
+<P>Many of these exceptions are targeted at specific bean life-cycle messages, such as the CreateException and the create methods. Beans can also use custom exceptions to notify callers of a problem. These custom exceptions should be serializable so that they can be transported to the client.</P>
+<P>Both session and entity beans support the concept of handles. A handle is an object that implements the javax.ejb.Handle interface. This handle is a serializable object that contains the information necessary to contact the bean. Another client for the container-managed cart discussed earlier, called HandlingCartClient, is provided on the CD-ROM. This client demonstrates how a bean&#146;s handle can be serialized to disk, then unserialized and used to recontact an enterprise bean. These handles might be used by client applications that need to save their relationship with an EJB to disk.</P>
+<P>The relevant code from the HandlingCartClient example to save a bean to disk is as follows:</P>
+<PRE>
+try
+{
+     fileOut = new FileOutputStream(testFile);
+     objOut = new ObjectOutputStream(fileOut);
+
+     handle = cart.getHandle();
+
+     objOut.writeObject(handle);
+
+     objOut.close();
+}
+catch(Exception exp)
+{
+     exp.printStackTrace();
+     cart = null;
+}
+</PRE>
+<P>To restore the bean connection, the following code is used:
+</P>
+<PRE>
+try
+{
+     fileIn = new FileInputStream(testFile);
+     objIn = new ObjectInputStream(fileIn);
+
+     <B>handle = (Handle) objIn.readObject();</B>
+
+     objIn.close();
+
+     <B>cart = (ShoppingCart) handle.getEJBObject();</B>
+     System.out.println(&#147;Created cart from handle: &#148;
+                                           &#43;cart);
+}
+catch(Exception exp)
+{
+     cart = null;
+     exp.printStackTrace();
+}
+</PRE>
+<P>Unfortunately, there is a problem with serializing the handles provided with our version of the BEA WebLogic server, so this example is not completely tested. However, the specification does state that handles are serializable and can be used for this purpose, and we expect future versions of Tengah to support this technique.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="16-14.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="16-16.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

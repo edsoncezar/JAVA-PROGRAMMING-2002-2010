@@ -1,0 +1,2601 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 4.0">
+<link REL="stylesheet" TYPE="text/css" HREF="../cursos.css" />
+<title>Programação de Servlets: Aplicação de Compras Online</title>
+</head>
+
+<body>
+
+<h1 align="center">Programação de Servlets</h1>
+
+<h1 align="center">Aplicação de Compras On-line</h1>
+
+<ul>
+  <li>Escreveremos uma aplicação mais completa e que usará recursos avançados de servlets</li>
+  <li>Em particular, queremos saber como:<ul>
+      <li>Escrever <font color="#0080FF">filtros</font> que processam em estágios a informação
+        recebida/retornada por um servlet</li>
+      <li>Manter estado do cliente, isto é, criar o conceito de uma <font color="#0080FF">sessão</font>
+        numa aplicação</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>O Problema: Aplicação de Compras On-line</h2>
+
+<ul>
+  <li>A aplicação é de compra de livros on-line</li>
+  <li>Deve-se exibir o catálogo</li>
+  <li>O catálogo deve poder fornecer detalhes sobre um livro</li>
+  <li>Deve-se permitir colocar itens numa cesta de compras</li>
+  <li>Deve ser possível comprar mais de uma cópia de um livro</li>
+  <li>Deve haver uma forma de verificar o conteúdo da cesta de compras</li>
+  <li>Deve-se permitir remover itens da cesta de compras</li>
+  <li>Deve-se permitir que o usuário se encaminhe para o caixa para pagar os livros</li>
+  <li>Para efetuar a compra, o usuário deve fornecer seu nome e número de cartão de
+    crédito</li>
+  <li>A aplicação não precisa contactar um site de aprovação de crédito mas deve manter
+    um log de cada compra</li>
+  <li>A primeira página deve fornecer o link de um livro que o staff da livraria está lendo</li>
+  <li>A informação mantida para cada livro é:<ul>
+      <li>Identificação única</li>
+      <li>Sobrenome do autor</li>
+      <li>Primeiro nome do autor</li>
+      <li>Título do livro</li>
+      <li>O preço do livro</li>
+      <li>O ano de publicação do livro</li>
+      <li>Uma descrição do livro</li>
+    </ul>
+  </li>
+  <li>A aplicação deve exibir páginas em inglês ou português ou espanhol, dependendo das
+    preferências do browser do usuário</li>
+  <li>Os preços dos livros devem ser exibidos na moeda local, isto é dependendo das
+    preferências do browser do usuário <ul>
+      <li>Não faz sentido o preço do livro se US$10.75 para um americano e R$10,75 para um
+        brasileiro</li>
+      <li>Porém, só queremos mostrar como tratar o assunto de internacionalização de moedas</li>
+    </ul>
+  </li>
+  <li>Todas as páginas exibidas devem iniciar com um banner comum</li>
+  <li>A primeira página deve fornecer um contador de hits de visitas</li>
+  <li>Deve haver um log das visitas</li>
+  <li>Uma página de erro adequada deve ser exibida na ocorrência de problemas</li>
+</ul>
+
+<h2>A Demo</h2>
+
+<ul>
+  <li>Exercite a aplicação <a href="http://anjinho.dsc.ufpb.br:8000/ilovebooks/enter">aqui</a><ul>
+      <li><a href="http://anjinho.dsc.ufpb.br:8000/ilovebooks/enter">http://anjinho.dsc.ufpb.br:8000/ilovebooks/enter</a></li>
+      <li>Isso é uma máquina Linux</li>
+    </ul>
+  </li>
+  <li>(Tomará que o professor tenha deixado a aplicação executando antes da aula ...)<ul>
+      <li>Caso contrário, o presente material mostra como implementar e fazer o deployment da
+        aplicação e a demo poderá ser realizada no final</li>
+    </ul>
+  </li>
+  <li>A aplicação poderá aparecer em 1 de 3 línguas, dependendo das preferências de
+    linguagem do browser<ul>
+      <li>Altere as preferências de linguagem do browser para verificar que a aplicação exibe
+        páginas em várias línguas</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>A Teoria necessária sobre Servlets e Java para Resolver o Problema</h2>
+
+<ul>
+  <li>Para entendermos a solução, temos que aprender alguns detalhes adicionais sobre como
+    servlets funcionam</li>
+</ul>
+
+<h3>Mais informação sobre o ServletContext</h3>
+
+<ul>
+  <li>Já falamos do ServletContext antes</li>
+  <li>Ele serve basicamente para armazenar informação relativa à aplicação como um todo</li>
+  <li>Em particular, o ServletContext é usado para:<ul>
+      <li>Conter parâmetros de inicialização da aplicação</li>
+      <li>Armazenar recursos associados à aplicação<ul>
+          <li>Uma conexão de Banco de Dados, por exemplo</li>
+        </ul>
+      </li>
+      <li>Armazenar qualquer atributo da aplicação como objetos</li>
+      <li>Fornecer acesso à funcionalidade de logging</li>
+    </ul>
+  </li>
+  <li>Este último item é importante:<ul>
+      <li>Como fazer para depurar uma aplicação que executa no servidor?</li>
+      <li>Como fazer para logar informação por parte da aplicação?</li>
+    </ul>
+  </li>
+  <li>Ambas as coisas podem ser feitas como segue:</li>
+</ul>
+
+<pre class="clsCode">      contexto.log(String memnsagem);</pre>
+
+<ul>
+  <li>Aqui, o &quot;contexto&quot; se refere ao ServletContext<ul>
+      <li>Ele pode ser obtido de várias formas:</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  // num Servlet qualquer
+  contexto = getServletContext();
+
+  // num ContextListener que recebeu um evento
+  contexto = event.getServletContext();
+
+  // num filtro (ver adiante)
+  contexto = filterConfig.getServletContext();</pre>
+
+<ul>
+  <li>Onde vai o log?<ul>
+      <li>Depende do servidor sendo usado</li>
+      <li>Usando o J2EESDK que estou usando agora no Windows 2000, o arquivo é<br>
+        &lt;J2EE_HOME&gt;\logs\jpsauve\web\catalina.&lt;data-de-hoje&gt;.log</li>
+      <li>usando o J2SDKEE numa máquina Linux, o arquivo é /usr/local/j2sdkee1.3/logs/anjinho.dsc.ufpb.br/web/catalina.&lt;data-de-hoje>.log</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Definição de páginas de erro</h3>
+
+<ul>
+  <li>Nas aplicações anteriores, a página padrão de erro gerada automaticamente quando o
+    container recebe uma exceção do servlet é semelhante à página abaixo<ul>
+      <li>A página abaixo foi obtida ao listar os pedidos de suporte com o Banco de Dados fora do
+        ar</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="erro1.jpg" width="797" height="676"
+alt="wpe2.jpg (114416 bytes)"></p>
+
+<ul>
+  <li>Gostaríamos de associar uma página de erro mais adequada às condições de erro</li>
+  <li>Esta associação deve ser feita durante a montagem da aplicação, usando o deploytool</li>
+  <li>Observe que o servlet deve bufferizar toda informação gerada na página porque pode
+    haver uma exceção e a página de erro não deve ser enviada depois que
+    metade da página
+    &quot;normal&quot; já foi enviada</li>
+</ul>
+
+<h3>Incluindo o conteúdo de outro recurso na resposta</h3>
+
+<ul>
+  <li>Um servlet pode diretamente incluir outro recurso enquanto está executando</li>
+  <li>As duas formas de fazer isso são:<ul>
+      <li>Incluir o conteúdo de outro recurso</li>
+      <li>Encaminhar (forward) o pedido para outro recurso</li>
+    </ul>
+  </li>
+  <li>Usaremos a primeira forma para incluir um banner comum em todas as páginas</li>
+  <li>O primeiro passo para fazer umas dessas duas chamadas é de obter o RequestDispatcher do
+    recurso desejado<ul>
+      <li>Depois, é só chamar o método include(...) do RequestDispatcher</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  // Obtém o dispatcher; ele vai mandar o banner para o usuário
+  RequestDispatcher dispatcher =
+      getServletContext().getRequestDispatcher(&quot;/banner&quot;);
+  if (dispatcher != null) {
+    dispatcher.include(request, response);
+  }</pre>
+
+<ul>
+  <li>O código acima será incluído em todos os servlets da aplicação</li>
+  <li>O alias &quot;/banner&quot; leva ao BannerServlet:<ul>
+      <li>Observe que podemos despachar o BannerServlet tanto a partir de um método doGet ou
+        doPost do servlet original</li>
+      <li>Por isso, o BannerServlet implementa service() em vez de doGet e doPost
+        <ul>
+          <li>Normalmente, service() da classe mãe chama doGet() ou doPost()</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">import java.io.*;
+import java.util.*;
+import java.sql.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import database.*;
+import cart.*;
+
+public class BannerServlet extends HttpServlet { 
+
+  public void service (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+    PrintWriter out = response.getWriter();
+    out.println(&quot;&lt;body  bgcolor=\&quot;#ffffff\&quot;&gt;&quot; +
+                &quot;&lt;center&gt;&quot; +
+                &quot;&lt;hr&gt; &lt;br&gt; &amp;nbsp;&quot; +
+                &quot;&lt;h1&gt;&quot; +
+                &quot;&lt;font size=\&quot;+3\&quot; color=\&quot;#CC0066\&quot;&gt;Duke's &lt;/font&gt; &lt;img src=\&quot;&quot; + request.getContextPath() + &quot;/duke.books.gif\&quot;&gt;&quot; + 
+                &quot;&lt;font size=\&quot;+3\&quot; color=\&quot;black\&quot;&gt;Bookstore&lt;/font&gt;&quot; +
+                &quot;&lt;/h1&gt;&quot; +
+                &quot;&lt;/center&gt;&quot; +
+                &quot;&lt;br&gt; &amp;nbsp; &lt;hr&gt; &lt;br&gt; &quot;);
+  }
+}</pre>
+
+<ul>
+  <li>Observe a montagem do string para a imagem gif:</li>
+</ul>
+
+<pre class="clsCode">  request.getContextPath() + &quot;/duke.books.gif&quot;</pre>
+
+<ul>
+  <li>getContextPath é o path da aplicação na URL, no nosso caso: /ilovebooks<ul>
+      <li>Isso é escolhido no deployment da aplicação</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Internacionalização</h3>
+
+<ul>
+  <li>Para tratar da internacionalização da informação, usaremos recursos do Java que não
+    são particulares a servlets</li>
+</ul>
+
+<h4>Locales</h4>
+
+<ul>
+  <li>A internacionalização de aplicações se baseia no conceito de <font color="#0080FF">locale</font></li>
+  <li>Uma Locale representa uma região específica, seja do ponto de vista geográfico,
+    político ou cultural</li>
+  <li>Uma Locale consiste de até três partes:</li>
+  <li><ul>
+      <li>Língua</li>
+      <li>País</li>
+      <li>Variante</li>
+    </ul>
+  </li>
+  <li>Uma Locale pode ser mais genérica e não incluir Variante e/ou não incluir País</li>
+  <li>A língua é especificada com um código <a
+    href="http://www.ics.uci.edu/pub/ietf/http/related/iso639.txt">ISO639</a> de duas letras
+    minúsculas<ul>
+      <li>pt: português</li>
+      <li>es: espanhol</li>
+      <li>etc.</li>
+    </ul>
+  </li>
+  <li>O país é especificado com um código <a
+    href="http://www.chemie.fu-berlin.de/diverse/doc/ISO_3166.html">ISO3166</a> de duas letras
+    maiúsculas<ul>
+      <li>BR: Brasil</li>
+      <li>US: Estados Unidos</li>
+    </ul>
+  </li>
+  <li>Os códigos de variantes são específicos a fabricantes e browsers<ul>
+      <li>WIN para Windows</li>
+      <li>MAC para MacIntosh</li>
+    </ul>
+  </li>
+  <li>Quando você navega usando um browser, este indica no pedido quais são as locales
+    aceitáveis para o usuário<ul>
+      <li>Pode ter mais de uma locale configurada no browser</li>
+      <li>A primeira é a mais importante</li>
+      <li>Exemplo: meu browser está configurado para a Locale pt-BR</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Resource Bundles</h4>
+
+<ul>
+  <li>Mensagens e outros recursos (objetos) que dependem da locale podem ser armazenados num
+    ResourceBundle</li>
+  <li>A classe Resource Bundle é interessante porque simplifica a localização de um
+    ResourceBundle que mais se adeque às Locales que o usuário prefere</li>
+  <li>Uma vez o bundle localizado, Strings e outros objetos podem ser obtidos do bundle</li>
+  <li>Os recursos podem ser uma classe ou um arquivo de Properties
+    <ul>
+      <li>Um bundle contendo objetos localizados para o Português do Brasil é uma classe
+    Xpto_pt_BR
+        <ul>
+          <li>Na ausência desta classe, o arquivo Xpto_pt_BR.properties pode
+            conter os strings</li>
+        </ul>
+      </li>
+      <li>Se a aplicação pedir o bundle para pt-BR e este bundle não existir, poderei receber o
+        bundle Xpto_pt que é o mais próximo disponível</li>
+      <li>Se nem Xpto_pt_BR, nem Xpto_pt existir, então receberei Xpto que é equivalente a
+        Xpto_en_US</li>
+    </ul>
+  </li>
+  <li>O uso de bundles pode ser visto nas classes abaixo (usando classes):
+    <ul>
+      <li>Exercício: altere isso para usar arquivo de properties</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">package messages;
+
+import java.util.*;
+
+public class <font
+color="#0080FF">BookstoreMessages</font> extends ListResourceBundle {
+  public Object[][] getContents() {
+    return contents;
+  }
+
+  static final Object[][] contents = {
+
+  {&quot;ServerError&quot;, &quot;Your request cannot be completed.  The server got the following error: &quot;},
+  {&quot;TitleServerError&quot;, &quot;Server Error&quot;},
+  {&quot;TitleShoppingCart&quot;, &quot;Shopping Cart&quot;},
+  {&quot;What&quot;, &quot;What We\'re Reading&quot;},
+  // ...
+  {&quot;Submit&quot;, &quot;Submit Information&quot;},
+  {&quot;Catalog&quot;, &quot;Back to the Catalog&quot;},
+  {&quot;ThankYou&quot;, &quot;Thank you for purchasing your books from us &quot;},
+  };
+}</pre>
+
+<hr>
+
+<pre class="clsCode">package messages;
+
+import java.util.*;
+
+public class <font
+color="#0080FF">BookstoreMessages_pt</font> extends ListResourceBundle {
+  public Object[][] getContents() {
+    return contents;
+  }
+
+  static final Object[][] contents = {
+
+  {&quot;ServerError&quot;, &quot;Seu pedido não pode ser completado.  O servidor recebeu o seguinte erro: &quot;},
+  {&quot;TitleServerError&quot;, &quot;Erro de Servidor&quot;},
+  {&quot;TitleShoppingCart&quot;, &quot;Cesta de Compras&quot;},
+  {&quot;What&quot;, &quot;O que Estamos Lendo&quot;},
+  // ...
+  {&quot;Submit&quot;, &quot;Submeter Informação&quot;},
+  {&quot;Catalog&quot;, &quot;Voltar ao Catálogo&quot;},
+  {&quot;ThankYou&quot;, &quot;Obrigado por comprar seus livros conosco &quot;},
+  };
+}</pre>
+
+<hr>
+
+<pre class="clsCode">public class BookStoreServlet extends HttpServlet {
+  // ...
+   public void doGet (HttpServletRequest request,
+                         HttpServletResponse response)
+        throws ServletException, IOException {        
+     // ...
+     HttpSession session = request.getSession();
+     ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+     if (messages == null) {
+       Locale locale=request.getLocale();
+       messages = ResourceBundle.getBundle(&quot;messages.BookstoreMessages&quot;, locale); 
+       session.setAttribute(&quot;messages&quot;, messages);
+     }
+     // ...
+     out.println(&quot;&lt;b&gt;&quot; + messages.getString(&quot;What&quot;) + &quot;&lt;/b&gt;&quot;);  </pre>
+
+<ul>
+  <li>Observações<ul>
+      <li>A Locale do browser é obtida do objeto request</li>
+      <li>Sabendo a locale desejada, o ResourceBundle é obtido</li>
+      <li>Este ResourceBundle contém as mensagens da aplicação na língua apropriada</li>
+      <li>Já que queremos uma língua para uma sessão inteira, armazenamos o bundle no objeto
+        session, com escopo de sessão (vide discussão de sessão adiante)</li>
+      <li>Exercício: Implemente a inicialização do ResourceBundle usando&nbsp;
+        <b>HttpSessionActivationListener</b>,
+        o que parece ser uma solução mais limpa e mais genérica<ul>
+          <li><b>Temos um bug na nossa implementação</b>: se eu não passar por<b> </b>BookStoreServlet e
+            for para outro servlet, as mensagens não estarão inicializadas</li>
+          <li>Veja o que é a interface <b>HttpSessionActivationListener </b> na documentação</li>
+          <li>Não sei se é possível resolver com Listener de sessão:
+            investigue! Pode cair num miniteste!</li>
+          <li>Ache pelo menos uma outra forma de resolver este bug. Tem que
+            cheirar bem.</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Formatação de Números</h4>
+
+<ul>
+  <li>A formatação de moedas de acordo com a Locale pode ser vista abaixo:</li>
+</ul>
+
+<pre class="clsCode">package util;
+
+import java.text.NumberFormat;
+import java.util.*;
+
+public class Currency {
+
+  private Locale locale;
+  private double amount;
+  public Currency() {
+    locale = null;
+    amount = 0.0;
+  }
+
+  public synchronized void setLocale(Locale l) {
+    locale = l;
+  }
+
+  public synchronized void setAmount(double a) {
+    amount = a;
+  }
+
+  public synchronized String getFormat() {
+    NumberFormat nf = NumberFormat.getCurrencyInstance(locale);
+    return nf.format(amount);
+  }
+}</pre>
+
+<ul>
+  <li>Um servlet que queira tratar moedas o fariam assim:<ul>
+      <li>O servlet trata do preço de um livro</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public class BookDetailsServlet extends HttpServlet {
+    // ...
+    // na inicialização
+    Currency c = (Currency)session.getAttribute(&quot;currency&quot;);
+    if (c == null) {
+      c = new Currency();
+      c.setLocale(request.getLocale());
+      session.setAttribute(&quot;currency&quot;, c);
+    }
+    // ...
+    // quando se deseja imprimir o valor de um livro a partir do banco de dados
+    c.setAmount(bd.getPrice());
+    out.println(... + c.getFormat() + ...);</pre>
+
+<h3>Filtros de Pedidos e Respostas</h3>
+
+<ul>
+  <li>Mostraremos agora uma forma de afetar a ação de um servlet, mas sem que esse saiba!</li>
+  <li>Podemos montar cadeias de servlets que processam a informação gerada para o cliente</li>
+  <li>A cadeia consiste de &quot;filtros&quot;<ul>
+      <li>A palavra filtro á apropriada porque podemos montar um pipeline de filtros para gerar a
+        informação final</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="filtro1.gif" width="736" height="232"
+alt="filtro1.gif (6213 bytes)"></p>
+
+<ul>
+  <li>Na figura acima, estamos vendo o fluxo de informação até ser entregue ao cliente<ul>
+      <li>Como se pode ver, cada filtro pode atuar <em>antes</em> do Web Component (no fluxo indo
+        para a direita), ou <em>depois</em> do Web Component (no fluxo indo para a esquerda)</li>
+      <li>O que realmente ocorre é que cada filtro chama o da direita e pode atuar antes da
+        chamada ou depois dela</li>
+    </ul>
+  </li>
+  <li>Filtros são diferentes de Web Components porque eles não geram uma resposta completa<ul>
+      <li>Eles normalmente provêem funcionalidade que pode ser &quot;amarrada&quot; a qualquer
+        Web Component</li>
+    </ul>
+  </li>
+  <li>Portanto, o filtro não deve conhecer nada sobre os Web Components com os quais agirá<ul>
+      <li>Eles poderão assim ser compostos com vários tipos de Web Components</li>
+    </ul>
+  </li>
+  <li>Usos típicos de filtros:
+    <ul>
+      <li>Logar informação</li>
+      <li>Ativar um mecanismo de segurança antes de executar um servlet</li>
+      <li>Converter o formato da saída de um servlet</li>
+    </ul>
+  </li>
+  <li>Usaremos filtros para realizar três tarefas na nossa aplicação:<ul>
+      <li>Colocar o contador de visitas na primeira página</li>
+      <li>Logar as visitas</li>
+      <li>Logar as compras</li>
+    </ul>
+  </li>
+  <li>Operação de um filtro<ul>
+      <li>Normalmente o Web Component obtém um Writer do parâmetro &quot;response&quot; e
+        escreve a resposta</li>
+      <li>Para que filtros possam funcionar, precisamos enganar o Web Component e entregar um
+        objeto que ele acha é a &quot;response&quot; mas que, na realidade, ainda poderá ser
+        manipulado pelo filtro depois que a reposta foi gerada</li>
+      <li>Para resolver isso, usa-se o Design Pattern &quot;Decorator&quot; ou &quot;Wrapper&quot;<ul>
+          <li>Um objeto envolve o objeto &quot;response&quot; original e obedece à mesma interface</li>
+          <li>Assim, o Web Component acha que está enviando a resposta para o cliente mas a está
+            entregando a um outro objeto que a bufferiza, permitindo que o filtro a examine e a altere</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Por exemplo, aqui está um decorador que engana e bufferiza a resposta num array:<ul>
+      <li>O &quot;engano&quot; está sendo feito em getWriter()</li>
+      <li>Em vez de entregar o Writer que vai para o cliente, entrega-se outro Writer que
+        bufferiza a resposta</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">package filters;
+
+import javax.servlet.*;
+import javax.servlet.http.*;
+import java.io.*;
+
+public class CharResponseWrapper extends HttpServletResponseWrapper {
+  private CharArrayWriter output;
+
+  public String toString() {
+    return output.toString();
+  }
+      
+  public CharResponseWrapper(HttpServletResponse response) {
+    super(response);
+    output = new CharArrayWriter();
+  }
+
+  public PrintWriter getWriter() {
+    return new PrintWriter(output);
+  }
+}</pre>
+
+<ul>
+  <li>Agora, podemos ver o HitCounterFilter</li>
+</ul>
+
+<pre class="clsCode">package filters;
+
+import java.io.*;
+import java.sql.Timestamp;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import util.Counter;
+
+public final class HitCounterFilter implements Filter {
+  private FilterConfig filterConfig = null;
+
+  public void init(FilterConfig filterConfig) throws ServletException {
+    this.filterConfig = filterConfig;
+  }
+  
+  public void destroy() {
+    this.filterConfig = null;
+  }
+
+  public void doFilter(ServletRequest request, ServletResponse response,
+    FilterChain chain) throws IOException, ServletException {
+
+    if (filterConfig == null)
+      return;
+
+    HttpServletRequest hr = (HttpServletRequest)request;
+    HttpSession session = hr.getSession();
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+    if (messages == null) {
+      Locale locale=request.getLocale();
+      messages = ResourceBundle.getBundle(&quot;messages.BookstoreMessages&quot;, locale); 
+      session.setAttribute(&quot;messages&quot;, messages);
+    }
+    StringWriter sw = new StringWriter();
+    PrintWriter writer = new PrintWriter(sw);
+
+    Counter counter = (Counter)filterConfig.getServletContext().getAttribute(&quot;hitCounter&quot;);
+    writer.println();
+    writer.println(&quot;=======================================================&quot;);
+    writer.println(&quot;The number of hits is: &quot; + counter.incCounter());
+    writer.println(&quot;=======================================================&quot;);
+
+    // Log the resulting string
+    writer.flush();
+    filterConfig.getServletContext().log(sw.getBuffer().toString());
+
+    PrintWriter out = response.getWriter();
+    CharResponseWrapper wrapper = new CharResponseWrapper((HttpServletResponse)response); 
+    chain.doFilter(request, wrapper);
+    CharArrayWriter caw = new CharArrayWriter();
+    caw.write(wrapper.toString().substring(0, wrapper.toString().indexOf(&quot;&lt;/body&gt;&quot;)-1));
+    caw.write(&quot;&lt;p&gt;\n&lt;center&gt;&lt;center&gt;&quot; + messages.getString(&quot;Visitor&quot;) + &quot;&lt;font color='red'&gt;&quot; + counter.getCounter() + &quot;&lt;/font&gt;&lt;center&gt;&quot;);
+    caw.write(&quot;\n&lt;/body&gt;&lt;/html&gt;&quot;);
+    response.setContentLength(caw.toString().length());
+    out.write(caw.toString());        
+    out.close();
+  }
+
+  public String toString() {
+    if (filterConfig == null)  
+      return (&quot;HitCounterFilter()&quot;);
+    StringBuffer sb = new StringBuffer(&quot;HitCounterFilter(&quot;);
+    sb.append(filterConfig);
+    sb.append(&quot;)&quot;);
+    return (sb.toString());
+  }
+}</pre>
+
+<ul>
+  <li>Observações<ul>
+      <li>O filtro é inicializado com filterConfig que permite acessar o ServletContext</li>
+      <li>doFilter é onde toda a ação ocorre</li>
+      <li>O hitCounter é um objeto de escopo de aplicação armazenado no ServletContext</li>
+      <li>O número de hits é logado pelo filtro</li>
+      <li>Cada filtro deve chamar o doFilter do elemento seguinte na cadeia<ul>
+          <li>Este filtro chama o doFilter do elemento seguinte com um wrapper no lugar do objeto
+            response original</li>
+        </ul>
+      </li>
+      <li>Depois que o método doFilter volta, o filtro insere o contador de hits no lugar
+        apropriado e escreve o resultado no objeto response original</li>
+    </ul>
+  </li>
+  <li>A especificação da cadeia de filtros é feita em tempo de montagem da aplicação,
+    como veremos adiante</li>
+  <li>Características importantes de filtros:
+    <ul>
+      <li>Podem fazer pré-processamento ou pós-processamento</li>
+      <li>Podem gerar conteúdo diretamente sem passar o pedido&nbsp; para o
+        componente seguinte
+        <ul>
+          <li>Um filtro de segurança poderia retornar uma página de erro, por
+            exemplo</li>
+        </ul>
+      </li>
+      <li>Podem redirecionar pedidos
+        <ul>
+          <li>Um filtro pode obter um request dispatcher do&nbsp; ServletContext
+            e fazer forward do pedido para uma nova URL</li>
+        </ul>
+      </li>
+      <li>Podem formar cadeias</li>
+      <li>Não servem apenas para pedidos HTTP</li>
+      <li>Não servem apenas para servlets. Poderia ser para
+        <ul>
+          <li>Filtrar pedidos para um servlet</li>
+          <li>Filtrar pedidos para uma página JSP</li>
+          <li>Filtrar pedidos para qualquer URL arbitrária</li>
+          <li>Filtrar pedidos para um conjunto de URLs que casem com um padrão</li>
+          <li>Filtrar pedidos para arquivos de gráficos</li>
+          <li>Filtrar pedidos para todos os pedidos</li>
+        </ul>
+      </li>
+      <li>Podem adicionar funcionalidade sem alterar os componentes originais
+        <ul>
+          <li>Um filtro é um decorador</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Manutenção do estado do cliente: o conceito de Sessão</h3>
+
+<ul>
+  <li>HTTP não provê estado<ul>
+      <li>Os pedidos são independentes um do outro</li>
+      <li>Não existe conceito de sessão</li>
+    </ul>
+  </li>
+  <li>Em certas aplicações, precisamos que vários pedidos sejam acoplados<ul>
+      <li>Exemplo: pedidos de compras de uma &quot;sessão&quot; de compras devem cair na mesma
+        cesta de compras</li>
+    </ul>
+  </li>
+  <li>Como criar o conceito de sessão?<ul>
+      <li>A API de servlets faz isso para nós (quase) automaticamente</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Acesso à sessão</h4>
+
+<ul>
+  <li>Sessões são representadas por um objeto HttpSession</li>
+  <li>Você acessa a sessão usando request.getSession()<ul>
+      <li>Isso retorna a sessão associada ao pedido, se ele tiver uma, ou cria uma nova sessão,
+        caso contrário</li>
+    </ul>
+  </li>
+  <li>Detalhe importante:<ul>
+      <li>Devido à forma com a qual uma sessão é implementada (usando cookies, ou outro
+        método), o getSession() pode alterar o header do objeto response</li>
+      <li>Portanto, chame getSession() antes de obter um PrintWriter do objeto response (se
+        precisar)</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Associação de atributos à sessão</h4>
+
+<ul>
+  <li>Objetos são atribuídos à sessão através de nomes<ul>
+      <li>Como fizemos com ServletContext</li>
+      <li>Tais objetos podem ser acessados por qualquer Web Component que pertença à mesma
+        aplicação (isto é, Web Context) <em>e</em> que esteja tratando de um pedido na mesma
+        sessão</li>
+    </ul>
+  </li>
+  <li>Na nossa aplicação, usamos a cesta de compra como atributo de sessão<ul>
+      <li>Assim, servlets diferentes mas cooperantes acessam a mesma cesta de compras</li>
+      <li>CatalogServlet adiciona itens à cesta</li>
+      <li>ShowCartServlet mostra a cesta, remove itens da cesta e esvazia a cesta</li>
+      <li>CashierServlet calcula o valor total dos itens na cesta</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public class CashierServlet extends HttpServlet { 
+  public void doGet (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+
+    // Get the user's session and shopping cart
+    HttpSession session = request.getSession();
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+
+    ShoppingCart cart = (ShoppingCart)session.getAttribute(&quot;cart&quot;);
+    if (cart == null) {
+      cart = new ShoppingCart();
+      session.setAttribute(&quot;cart&quot;, cart);
+    }
+    // ...
+    double total = cart.getTotal();
+    // ...</pre>
+
+<h4>Gerência de sessão</h4>
+
+<ul>
+  <li>Não há forma de avisar via HTTP que a sessão acabou</li>
+  <li>Portanto, cada sessão tem um timeout, manipulado com os métodos
+    getMaxInactiveInterval() e setMaxInactiveInterval()</li>
+  <li>Você também pode alterar o timeout no Deployment Descriptor<ul>
+      <li>No deploytool, escolha a orelha &quot;General&quot; e use a caixa &quot;Advanced&quot;</li>
+    </ul>
+  </li>
+  <li>Se você quiser programaticamente terminar a sessão, use o método invalidate()<ul>
+      <li>Fazemos isso no servlet que confirma a compra</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public class ReceiptServlet extends HttpServlet { 
+  public void doPost(HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+
+    // Get the user's session and shopping cart
+    HttpSession session = request.getSession(true);
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+
+    // Payment received -- invalidate the session
+    session.invalidate();
+    // ...</pre>
+
+<h4>Implementação do rastreamento de uma sessão</h4>
+
+<ul>
+  <li>Se o HTTP não tem estado, de que forma criar o conceito de uma sessão?</li>
+  <li>Há dois métodos:<ul>
+      <li>O cliente aceita a gravação de &quot;cookies&quot; no disco e envia esses cookies em
+        cada pedido</li>
+      <li>O Web Component pode reescrever todas as URLs usadas na aplicação de forma a
+        identificar a sessão (URL Rewriting)</li>
+    </ul>
+  </li>
+  <li>Já que o cliente pode inibir o uso de cookies, sua aplicação tem que estar pronta
+    para reescrever as URLs (o segundo método)</li>
+  <li>Para fazer isso, chame response.encodeURL(URL) para cada URL que você gera<ul>
+      <li>O método inclui a identificação da sessão apenas se cookies estiverem desabilitados</li>
+    </ul>
+  </li>
+  <li>Veja um pedaço do ShowCartServlet:</li>
+</ul>
+
+<pre class="clsCode">      // Where to go and what to do next
+      out.println(&quot;&lt;p&gt; &amp;nbsp; &lt;p&gt;&lt;strong&gt;&lt;a href=\&quot;&quot; +
+          response.encodeURL(request.getContextPath() + &quot;/catalog&quot;) +
+          &quot;\&quot;&gt;&quot; + messages.getString(&quot;ContinueShopping&quot;) + &quot;&lt;/a&gt; &amp;nbsp; &amp;nbsp; &amp;nbsp;&quot; +
+                        
+          &quot;&lt;a href=\&quot;&quot; +
+          response.encodeURL(request.getContextPath() + &quot;/cashier&quot;) +
+          &quot;\&quot;&gt;&quot; + messages.getString(&quot;Checkout&quot;) + &quot;&lt;/a&gt; &amp;nbsp; &amp;nbsp; &amp;nbsp;&quot; +
+                        
+          &quot;&lt;a href=\&quot;&quot; + 
+          response.encodeURL(request.getContextPath() + &quot;/showcart?Clear=clear&quot;) +
+          &quot;\&quot;&gt;&quot; + messages.getString(&quot;ClearCart&quot;) + &quot;&lt;/a&gt;&lt;/strong&gt;&quot;);</pre>
+
+<ul>
+  <li>Acima, a primeira URL poderá sair como segue<ul>
+      <li>URL original (com cookies): localhost:8000/ilovebooks/catalog</li>
+      <li>URL reescrita:
+        localhost:8000/ilovebooks/catalog;jsessionid=22D9E3C451F5C0C951F9A4A32422F6A2</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>A Solução</h2>
+
+<ul>
+  <li>Temos informação suficiente para desenvolver uma solução</li>
+  <li>Examinemos novamente nossa lista de requisitos e como podemos solucionar cada caso</li>
+</ul>
+
+<table border="1" width="100%">
+  <tr>
+    <td width="50%" align="center"><big><strong>Requisito</strong></big></td>
+    <td width="50%" align="center"><big><strong>Solução</strong></big></td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>A aplicação é de compra de livros on-line</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Solução J2EE com Web Components e browser como cliente</li>
+      <li>O servlet principal de entrada é <font color="#0080FF">BookStoreServlet </font>que
+        exibe a primeira página</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Deve-se exibir o catálogo</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Servlet chamado <font color="#0080FF">CatalogServlet </font>com o catálogo num BD
+        acessado via JDBC</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>O catálogo deve poder fornecer detalhes sobre um livro</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Servlet chamado <font color="#0080FF">BookDetailsServlet </font>acessando o BD. O
+        servlet é chamado com URL especial <font color="#0080FF">/bookdetails?bookId=&lt;bookId&gt;</font></li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Deve-se permitir colocar itens numa cesta de compras</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>A cesta de compras é armazenada na sessão</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Deve ser possível comprar mais de uma cópia de um livro</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>A cesta de compras sabe diferenciar entre um novo item sendo adicionado e incrementar a
+        quantidade de um item já presente</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Deve haver uma forma de verificar o conteúdo da cesta de compras</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Servlet chamado <font color="#0080FF">ShowCartServlet</font></li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Deve-se permitir remover itens da cesta de compras</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Servlet chamado <font color="#0080FF">ShowCartServlet</font> com URL especial <font
+        color="#0080FF">/showcart?Remove=&lt;bookId&gt;</font></li>
+      <li>Para esvaziar a cesta, a URL é <font color="#0080FF">/showcart?Clear=clear</font></li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Deve-se permitir que o usuário se encaminhe para o caixa para pagar os livros</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Servlet chamado <font color="#0080FF">CashierServlet</font></li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Para efetuar a compra, o usuário deve fornecer seu nome e número de cartão de
+        crédito</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Servlet chamado <font color="#0080FF">CashierServlet </font>produz uma página com
+        formulário para recolher a informação</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>A aplicação não precisa contactar um site de aprovação de crédito mas deve manter
+        um log de cada compra</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>O servlet <font color="#0080FF">ReceiptServlet </font>estará sujeito a uma cadeia de
+        filtro (filter chain) e um filtro tratará de logar a informação com contexto.log(...)</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>A primeira página deve fornecer o link de um livro que o staff da livraria está lendo</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Hardcoded no servlet <font color="#0080FF">BookStoreServlet</font></li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>A informação mantida para cada livro é:<ul>
+          <li>Identificação única</li>
+          <li>Sobrenome do autor</li>
+          <li>Primeiro nome do autor</li>
+          <li>Título do livro</li>
+          <li>O preço do livro</li>
+          <li>O ano de publicação do livro</li>
+          <li>Uma descrição do livro</li>
+        </ul>
+      </li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Isso afeta a definição do Banco de Dados (BookDB) mantido no Cloudscape</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>A aplicação deve exibir páginas em inglês ou português ou espanhol, dependendo das
+        preferências do browser do usuário</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Uso de ResourceBundles com escolha baseada na Locale<ul>
+          <li>BookstoreMessages (inglês)</li>
+          <li>BookstoreMessages_pt (português)</li>
+          <li>BookstoreMessages_es (espanhol)</li>
+        </ul>
+      </li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Os preços dos livros devem ser exibidos na moeda local, isto é dependendo das
+        preferências do browser do usuário</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Uso de NumberFormat.getCurrencyInstance(locale)</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Todas as páginas exibidas deve iniciar com um banner comum</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Cada servlet chama (inclui) o <font color="#0080FF">BannerServlet</font></li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>A primeira página deve fornecer um contador de hits de visitas</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>O <font color="#0080FF">BookStoreServlet </font>faz parte de um filter chain com um
+        filtro tratando de inserir o contador depois que o servlet gerou sua informação</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Deve haver um log das visitas</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>O mesmo filtro acima (que insere um contador de visitas) também as loga usando
+        contexto.log(...)</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><ul>
+      <li>Uma página de erro adequada deve ser exibida na ocorrência de problemas</li>
+    </ul>
+    </td>
+    <td width="50%"><ul>
+      <li>Uma página errorpage.html dizendo que a aplicação não está disponível será usada
+        e associada aos Web Components durante a composição da aplicação</li>
+    </ul>
+    </td>
+  </tr>
+</table>
+
+<ul>
+  <li>Podemos agora examinar o código completo da aplicação e tecer alguns comentários
+    adicionais</li>
+</ul>
+
+<h3>O package util</h3>
+
+<h4>Classe Currency</h4>
+
+<pre class="clsCode">
+import java.text.NumberFormat;
+import java.util.*;
+
+public class Currency {
+
+  private Locale locale;
+  private double amount;
+  public Currency() {
+    locale = null;
+    amount = 0.0;
+  }
+
+  public synchronized void setLocale(Locale l) {
+    locale = l;
+  }
+
+  public synchronized void setAmount(double a) {
+    amount = a;
+  }
+
+  public synchronized String getFormat() {
+    NumberFormat nf = NumberFormat.getCurrencyInstance(locale);
+    return nf.format(amount);
+  }
+}</pre>
+
+<h4>Classe Counter</h4>
+
+<ul>
+  <li>A classe Counter é usada para manter o contador de visitas e o contador de compras</li>
+  <li>Os dois objetos terão escopo de aplicação</li>
+  <li>No código abaixo, observe o uso de synchronized, já que há concorrência no acesso
+    aos counters por parte de vários servlets de sessões diferentes<ul>
+      <li>Lembre que o servidor J2EE tratará cada pedido num thread diferente, potencialmente</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">package util;
+
+public class Counter {
+  private int counter;
+  public Counter() {
+    counter = 0;
+  }
+  public synchronized int getCounter() {
+    return counter;
+  }
+  public synchronized int setCounter(int c) {
+    counter = c;
+    return counter;
+  }
+  public synchronized int incCounter() {
+    return(++counter);
+  }
+}</pre>
+
+<h3>O package messages</h3>
+
+<ul>
+  <li>Contém os 3 ResourceBundles que já vimos acima</li>
+</ul>
+
+<h3>O package listeners</h3>
+
+<ul>
+  <li>Contém o ContextListener usado para inicializar e encerrar a aplicação</li>
+  <li>A inicialização trata de 3 coisas:<ul>
+      <li>Obter acesso ao banco de dados</li>
+      <li>Criar o counter de visitas</li>
+      <li>Criar o counter de compras</li>
+    </ul>
+  </li>
+  <li>O listener será amarrado ao container (cadastrado como listener) usando o deploytool</li>
+</ul>
+
+<pre class="clsCode">package listeners;
+
+import database.BookDB;
+import javax.servlet.*;
+import util.Counter;
+
+public final class ContextListener
+  implements ServletContextListener {
+  private ServletContext context = null;
+
+  public void contextInitialized(ServletContextEvent event) {
+    context = event.getServletContext();
+    
+    try {
+      BookDB bookDB = new BookDB();
+      context.setAttribute(&quot;bookDB&quot;, bookDB);
+    } catch (Exception ex) {
+      context.log(&quot;Couldn't create bookstore database bean: &quot; + ex.getMessage());
+    }
+
+    context.setAttribute(&quot;hitCounter&quot;, new Counter());
+    context.setAttribute(&quot;orderCounter&quot;, new Counter());
+  }
+    
+  public void contextDestroyed(ServletContextEvent event) {
+    context = event.getServletContext();
+    BookDB bookDB = (BookDB)context.getAttribute(&quot;bookDB&quot;);
+    bookDB.remove();
+    context.removeAttribute(&quot;bookDB&quot;);
+    context.removeAttribute(&quot;hitCounter&quot;);
+    context.removeAttribute(&quot;orderCounter&quot;);
+  }
+}</pre>
+
+<h3>O package database</h3>
+
+<ul>
+  <li>Não há novidade aqui</li>
+</ul>
+
+<pre class="clsCode">package database;
+
+import java.sql.*;
+import javax.sql.*;
+import javax.naming.*;
+import java.util.*;
+import exception.*;
+
+public class BookDB {
+
+  private ArrayList books;
+  Connection con;
+  private String dbName = &quot;java:comp/env/jdbc/BookDB&quot;;
+
+  public BookDB () throws Exception {
+    try  {               
+      InitialContext ic = new InitialContext();
+      DataSource ds = (DataSource) ic.lookup(dbName);
+      con =  ds.getConnection();     
+    } catch (Exception ex) {
+      throw new Exception(&quot;Couldn't open connection to database: &quot; + ex.getMessage());
+    }	 	
+  }
+    
+  public void remove () {
+    try {
+      con.close();
+    } catch (SQLException ex) {
+      System.out.println(ex.getMessage());
+    }
+  }
+    
+  public int getNumberOfBooks() throws BooksNotFoundException {
+    return getBooks().size();
+  }
+
+  public Collection getBooks() throws BooksNotFoundException {
+ 		books = new ArrayList();
+    try {
+      String selectStatement = &quot;select * from books&quot;;
+      PreparedStatement prepStmt = con.prepareStatement(selectStatement);
+      ResultSet rs = prepStmt.executeQuery();
+      while (rs.next()) {
+        BookDetails bd = new BookDetails(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), 
+                                         rs.getFloat(5), rs.getInt(6), rs.getString(7));
+        books.add(bd);
+      }
+      prepStmt.close();
+    } catch (SQLException ex) {
+      throw new BooksNotFoundException(ex.getMessage());
+    }
+
+    Collections.sort(books);
+    return books;
+  }
+
+  public BookDetails getBookDetails(String bookId) throws BookNotFoundException {
+    try {
+      String selectStatement = &quot;select * from books where id = ? &quot;;
+      PreparedStatement prepStmt = con.prepareStatement(selectStatement);
+      prepStmt.setString(1, bookId);
+      ResultSet rs = prepStmt.executeQuery();
+      if (rs.next()) {
+        BookDetails bd = new BookDetails(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), 
+                                         rs.getFloat(5), rs.getInt(6), rs.getString(7));
+        prepStmt.close();
+        return bd;
+      } else {					
+        prepStmt.close();
+        throw new BookNotFoundException(&quot;Couldn't find book: &quot; + bookId);
+      }
+    } catch (SQLException ex) {
+      throw new BookNotFoundException(&quot;Couldn't find book: &quot; + bookId + ex.getMessage());
+    }
+  }
+}</pre>
+
+<hr>
+
+<ul>
+  <li>Em BookDetails, observe que a ordenação será por título</li>
+</ul>
+
+<pre class="clsCode">package database;
+
+public class BookDetails implements Comparable {
+  private String bookId = null;
+  private String title = null;
+  private String firstName = null;
+  private String surname = null;
+  private float price = 0.0F;
+  private int year = 0;
+  private String description = null;
+  
+  public BookDetails(String bookId, String surname, String firstName, String title, 
+                     float price, int year, String description) {
+    this.bookId = bookId;
+    this.title = title;
+    this.firstName =  firstName;
+    this.surname = surname;
+    this.price = price;
+    this.year = year;
+    this.description = description;
+  }
+
+  public String getTitle() {
+    return title;
+  }
+  
+  public float getPrice() {
+    return price;
+  }
+
+  public int getYear() {
+    return year;
+  }
+
+  public String getDescription() {
+    return description;
+  }
+
+  public String getBookId() {
+    return this.bookId;
+  }
+
+  public String getFirstName() {
+    return this.firstName;
+  }
+
+  public String getSurname() {
+    return this.surname;
+  }
+  public int compareTo(Object o) {
+     BookDetails n = (BookDetails)o;
+     int lastCmp = title.compareTo(n.title);
+     return (lastCmp);
+  }		
+}
+</pre>
+
+<h3>O package cart</h3>
+
+<pre class="clsCode">package cart;
+
+import java.util.*;
+import database.BookDetails;
+ 
+public class ShoppingCart {
+  HashMap items = null;
+  int numberOfItems = 0;
+
+  public ShoppingCart() {
+    items = new HashMap();
+  }
+
+  public synchronized void add(String bookId, BookDetails book) {
+    if(items.containsKey(bookId)) {
+      ShoppingCartItem scitem = (ShoppingCartItem) items.get(bookId);
+      scitem.incrementQuantity();
+    } else {
+      ShoppingCartItem newItem = new ShoppingCartItem(book);
+      items.put(bookId, newItem);
+    }
+
+    numberOfItems++;
+  }
+
+  public synchronized void remove(String bookId) {
+    if(items.containsKey(bookId)) {
+      ShoppingCartItem scitem = (ShoppingCartItem) items.get(bookId);
+      scitem.decrementQuantity();
+
+      if(scitem.getQuantity() &lt;= 0)
+        items.remove(bookId);
+
+      numberOfItems--;
+    }
+  }
+
+  public synchronized Collection getItems() {
+    return items.values();
+  }
+
+  protected void finalize() throws Throwable {
+    items.clear();
+  }
+
+  public synchronized int getNumberOfItems() {
+    return numberOfItems;
+  }
+  public synchronized double getTotal() {
+    double amount = 0.0;
+
+    for(Iterator i = getItems().iterator(); i.hasNext(); ) {
+      ShoppingCartItem item = (ShoppingCartItem) i.next();
+      BookDetails bookDetails = (BookDetails) item.getItem();
+
+      amount += item.getQuantity() * bookDetails.getPrice();
+    }
+    return roundOff(amount);
+  }
+
+  private double roundOff(double x) {
+    long val = Math.round(x*100); // cents
+    return val/100.0;
+  }
+
+  public synchronized void clear() {
+    items.clear();
+    numberOfItems = 0;
+  }
+}</pre>
+
+<hr>
+
+<pre class="clsCode">package cart;
+
+public class ShoppingCartItem {
+  Object item;
+  int quantity;
+
+  public ShoppingCartItem(Object anItem) {
+    item = anItem;
+    quantity = 1;
+  }
+
+  public void incrementQuantity() {
+    quantity++;
+  }
+
+  public void decrementQuantity() {
+    quantity--;
+  }
+
+  public Object getItem() {
+    return item;
+  }
+
+  public int getQuantity() {
+    return quantity;
+  }
+}</pre>
+
+<h3>O package filters</h3>
+
+<ul>
+  <li>Primeiro, repetimos o wrapper (decorador) discutido acima</li>
+</ul>
+
+<pre class="clsCode">package filters;
+
+import javax.servlet.*;
+import javax.servlet.http.*;
+import java.io.*;
+
+public class CharResponseWrapper extends HttpServletResponseWrapper {
+  private CharArrayWriter output;
+
+  public String toString() {
+    return output.toString();
+  }
+    
+  public CharResponseWrapper(HttpServletResponse response) {
+    super(response);
+    output = new CharArrayWriter();
+  }
+
+  public PrintWriter getWriter() {
+    return new PrintWriter(output);
+  }
+}</pre>
+
+<ul>
+  <li>Em seguida, vejamos o filtro que trata do log de visitas e da inserção de um contador
+    na página inicial da aplicação<ul>
+      <li>Veja que ainda não sabemos <em>onde</em> este filtro será inserido!</li>
+      <li>Ele pode ser usado para colocar um contador em qualquer página</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">package filters;
+
+import java.io.*;
+import java.sql.Timestamp;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import util.Counter;
+
+public final class HitCounterFilter implements Filter {
+  private FilterConfig filterConfig = null;
+
+  public void init(FilterConfig filterConfig) throws ServletException {
+    this.filterConfig = filterConfig;
+  }
+  
+  public void destroy() {
+    this.filterConfig = null;
+  }
+
+  public void doFilter(ServletRequest request, ServletResponse response,
+                       FilterChain chain)
+                       throws IOException, ServletException {
+
+    if (filterConfig == null)
+      return;
+
+    HttpServletRequest hr = (HttpServletRequest)request;
+    HttpSession session = hr.getSession();
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+    if (messages == null) {
+      Locale locale=request.getLocale();
+      messages = ResourceBundle.getBundle(&quot;messages.BookstoreMessages&quot;, locale); 
+      session.setAttribute(&quot;messages&quot;, messages);
+    }
+    StringWriter sw = new StringWriter();
+    PrintWriter writer = new PrintWriter(sw);
+
+    Counter counter = (Counter)filterConfig.getServletContext().getAttribute(&quot;hitCounter&quot;);
+    writer.println();
+    writer.println(&quot;=======================================================&quot;);
+    writer.println(&quot;The number of hits is: &quot; + counter.incCounter());
+    writer.println(&quot;=======================================================&quot;);
+
+    // Log the resulting string
+    writer.flush();
+    filterConfig.getServletContext().log(sw.getBuffer().toString());
+
+    PrintWriter out = response.getWriter();
+    CharResponseWrapper wrapper = new CharResponseWrapper((HttpServletResponse)response); 
+    chain.doFilter(request, wrapper);
+    CharArrayWriter caw = new CharArrayWriter();
+    caw.write(wrapper.toString().substring(0, wrapper.toString().indexOf(&quot;&lt;/body&gt;&quot;)-1));
+    caw.write(&quot;&lt;p&gt;\n&lt;center&gt;&lt;center&gt;&quot; + messages.getString(&quot;Visitor&quot;) + &quot;&lt;font color='red'&gt;&quot; + counter.getCounter() + &quot;&lt;/font&gt;&lt;center&gt;&quot;);
+    caw.write(&quot;\n&lt;/body&gt;&lt;/html&gt;&quot;);
+    response.setContentLength(caw.toString().length());
+    out.write(caw.toString());        
+    out.close();
+  }
+
+  public String toString() {
+    if (filterConfig == null)  
+      return (&quot;HitCounterFilter()&quot;);
+    StringBuffer sb = new StringBuffer(&quot;HitCounterFilter(&quot;);
+    sb.append(filterConfig);
+    sb.append(&quot;)&quot;);
+    return (sb.toString());
+  }
+}</pre>
+
+<ul>
+  <li>Finalmente, o filtro que loga as compras feitas</li>
+</ul>
+
+<pre class="clsCode">package filters;
+
+import java.io.*;
+import java.sql.Timestamp;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import database.BookDetails;
+import cart.*;
+import util.*;
+
+public final class OrderFilter implements Filter {
+
+  private FilterConfig filterConfig = null;
+
+  public void init(FilterConfig filterConfig) throws ServletException {
+      this.filterConfig = filterConfig;
+  }
+
+  public void destroy() {
+    this.filterConfig = null;
+  }
+  public void doFilter(ServletRequest request, ServletResponse response,
+                       FilterChain chain)
+                       throws IOException, ServletException {
+
+    if (filterConfig == null)
+        return;
+  
+    // Render the generic servlet request properties
+    StringWriter sw = new StringWriter();
+    PrintWriter writer = new PrintWriter(sw);
+    ServletContext context = filterConfig.getServletContext();
+    Counter counter = (Counter)context.getAttribute(&quot;orderCounter&quot;);
+    HttpServletRequest hsr = (HttpServletRequest)request;
+    HttpSession session = hsr.getSession();
+    ShoppingCart cart = (ShoppingCart)session.getAttribute(&quot;cart&quot;);
+    Currency c = (Currency)session.getAttribute(&quot;currency&quot;);
+    c.setAmount(cart.getTotal());
+    writer.println();
+    writer.println(&quot;=======================================================&quot;);
+    writer.println(&quot;The total number of orders is: &quot; + counter.incCounter());
+    writer.println(&quot;This order Received at &quot; +
+        (new Timestamp(System.currentTimeMillis())));
+    writer.println();
+    writer.print(&quot;Purchased by: &quot; + request.getParameter(&quot;cardname&quot;));
+    writer.println();
+    writer.print(&quot;Total: &quot;  + c.getFormat());
+    writer.println();
+          
+    int num = cart.getNumberOfItems();
+    if (num &gt; 0) {
+      Iterator i = cart.getItems().iterator();
+      while (i.hasNext()) {
+        ShoppingCartItem item = (ShoppingCartItem) i.next();
+        BookDetails bookDetails = (BookDetails) item.getItem();
+        writer.print(&quot;ISBN: &quot;  + bookDetails.getBookId());
+        writer.print(&quot;   Title: &quot;  + bookDetails.getTitle());
+        writer.print(&quot;   Quantity: &quot; + item.getQuantity());
+        writer.println();       
+      }
+    }
+  
+  
+    writer.println(&quot;=======================================================&quot;);
+  
+    // Log the resulting string
+    writer.flush();
+    context.log(sw.getBuffer().toString());
+    chain.doFilter(request, response);
+  }
+
+  public String toString() {
+    if (filterConfig == null)
+      return (&quot;OrderFilter()&quot;);
+    StringBuffer sb = new StringBuffer(&quot;OrderFilter(&quot;);
+    sb.append(filterConfig);
+    sb.append(&quot;)&quot;);
+    return (sb.toString());
+  }
+}</pre>
+
+<ul>
+  <li>Um conteúdo típico de log seria como segue:</li>
+</ul>
+
+<pre class="clsCode">...
+BookStoreServlet: init
+
+=======================================================
+The number of hits is: 1
+=======================================================
+
+BannerServlet: init
+CatalogServlet: init
+BookDetailsServlet: init
+ShowCartServlet: init
+CashierServlet: init
+ReceiptServlet: init
+
+=======================================================
+The total number of orders is: 1
+This order Received at 2001-10-20 14:53:20.695
+
+Purchased by: Gwen Canigetit
+Total: R$ 32,25
+ISBN: 208   Title: Duke: A Biography of the Java Evangelist   Quantity: 2
+ISBN: 205   Title: From Oak to Java: The Revolution of a Language   Quantity: 1
+=======================================================
+
+
+=======================================================
+The number of hits is: 2
+=======================================================
+
+
+=======================================================
+The total number of orders is: 2
+This order Received at 2001-10-20 14:55:00.669
+
+Purchased by: Gwen Canigetit
+Total: R$ 10,75
+ISBN: 208   Title: Duke: A Biography of the Java Evangelist   Quantity: 1
+=======================================================
+
+
+=======================================================
+The number of hits is: 3
+=======================================================
+
+
+=======================================================
+The total number of orders is: 3
+This order Received at 2001-10-20 18:51:10.704
+
+Purchased by: papi
+Total: R$ 82,25
+ISBN: 201   Title: My Early Years: Growing up on *7   Quantity: 1
+ISBN: 208   Title: Duke: A Biography of the Java Evangelist   Quantity: 1
+ISBN: 207   Title: The Green Project: Programming for Consumer Devices   Quantity: 1
+ISBN: 206   Title: Java Intermediate Bytecodes   Quantity: 1
+ISBN: 205   Title: From Oak to Java: The Revolution of a Language   Quantity: 1
+ISBN: 203   Title: Web Components for Web Developers   Quantity: 1
+ISBN: 202   Title: Web Servers for Fun and Profit   Quantity: 1
+=======================================================
+
+
+=======================================================
+The number of hits is: 4
+=======================================================</pre>
+
+<h3>Os servlets</h3>
+
+<ul>
+  <li>Para entender o código dos servlets, temos que saber os aliases usados para cada
+    servlet</li>
+</ul>
+<div align="center"><center>
+
+<table border="1" width="50%">
+  <tr>
+    <td width="37%" align="center"><a name="tabelaalias"><strong><big>Servlet</big></strong></a></td>
+    <td width="63%" align="center"><strong><big>Alias</big></strong></td>
+  </tr>
+  <tr>
+    <td width="37%">BookStoreServlet</td>
+    <td width="63%">/enter</td>
+  </tr>
+  <tr>
+    <td width="37%">BannerServlet</td>
+    <td width="63%">/banner</td>
+  </tr>
+  <tr>
+    <td width="37%">CatalogServlet </td>
+    <td width="63%">/catalog</td>
+  </tr>
+  <tr>
+    <td width="37%">BookDetailsServlet </td>
+    <td width="63%">/bookdetails</td>
+  </tr>
+  <tr>
+    <td width="37%">ShowCartServlet </td>
+    <td width="63%">/showcart</td>
+  </tr>
+  <tr>
+    <td width="37%">CashierServlet </td>
+    <td width="63%">/cashier</td>
+  </tr>
+  <tr>
+    <td width="37%">ReceiptServlet </td>
+    <td width="63%">/receipt</td>
+  </tr>
+</table>
+</center></div>
+
+<h3>O servlet BookStoreServlet</h3>
+
+<ul>
+  <li>É preferível examinar o código dos servlets juntamente com uma página gerada por
+    cada servlet num browser<ul>
+      <li>Se a aplicação estiver instalada, acompanhe o código juntamente com a aplicação em
+        execução</li>
+    </ul>
+  </li>
+  <li>Neste servlets, observe a bufferização que permite não misturar páginas quando há
+    uma exceção e um desvio para a página de erro</li>
+</ul>
+
+<pre class="clsCode">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import database.*;
+import exception.*;
+/**
+ * An HTTP Servlet that overrides the service method to return a
+ * simple web page.
+ */
+public class BookStoreServlet extends HttpServlet {
+
+  private BookDB bookDB;
+
+  public void init() throws ServletException {
+    bookDB = (BookDB)getServletContext().getAttribute(&quot;bookDB&quot;);
+    if (bookDB == null)
+      throw new UnavailableException(&quot;Couldn't get database.&quot;);
+    }
+
+  public void destroy() {
+    bookDB.remove();
+    bookDB = null;
+  }
+
+      
+  public void doGet (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {        
+            
+    HttpSession session = request.getSession();
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+    if (messages == null) {
+      Locale locale=request.getLocale();
+      messages = ResourceBundle.getBundle(&quot;messages.BookstoreMessages&quot;, locale); 
+      session.setAttribute(&quot;messages&quot;, messages);
+    }
+    
+    
+    // set content-type header before accessing the Writer
+    response.setContentType(&quot;text/html&quot;);
+    response.setBufferSize(8192);
+    PrintWriter out = response.getWriter();
+      
+    // then write the data of the response
+    out.println(&quot;&lt;html&gt;&quot; +
+                &quot;&lt;head&gt;&lt;title&gt;Duke's Bookstore&lt;/title&gt;&lt;/head&gt;&quot;);
+
+    // Get the dispatcher; it gets the banner to the user
+    RequestDispatcher dispatcher =
+        getServletContext().getRequestDispatcher(&quot;/banner&quot;);
+                                     
+    if (dispatcher != null)
+      dispatcher.include(request, response);
+                                   
+    try {      
+      BookDetails bd = bookDB.getBookDetails(&quot;203&quot;);      
+       
+      //Left cell -- the &quot;book of choice&quot;
+      out.println(&quot;&lt;b&gt;&quot; + messages.getString(&quot;What&quot;) + &quot;&lt;/b&gt;&quot; +
+                  &quot;&lt;p&gt;&quot; + &quot;&lt;blockquote&gt;&quot; + 
+                         &quot;&lt;em&gt;&lt;a href=\&quot;&quot; +
+                  response.encodeURL(request.getContextPath() + &quot;/bookdetails?bookId=203&quot;) +
+                  &quot;\&quot;&gt;&quot; + bd.getTitle() + &quot;&lt;/a&gt;&lt;/em&gt;&quot; + messages.getString(&quot;Talk&quot;) + &quot;&lt;/blockquote&gt;&quot;);
+      
+      //Right cell -- various navigation options
+      out.println(&quot;&lt;p&gt;&lt;a href=\&quot;&quot; +
+                  response.encodeURL(request.getContextPath() + &quot;/catalog&quot;) +
+                  &quot;\&quot;&gt;&lt;b&gt;&quot; + messages.getString(&quot;Start&quot;) + &quot;&lt;/b&gt;&lt;/a&gt;&lt;/font&gt;&lt;br&gt;&quot; +
+                  &quot;&lt;br&gt; &amp;nbsp;&quot; +
+                  &quot;&lt;br&gt; &amp;nbsp;&quot; +
+                  &quot;&lt;br&gt; &amp;nbsp;&quot; +
+                  &quot;&lt;/body&gt;&quot; +
+                  &quot;&lt;/html&gt;&quot;);
+    } catch (BookNotFoundException ex) {
+      response.resetBuffer();
+      throw new ServletException(ex);
+    }
+    out.close();
+  }
+
+  public String getServletInfo() {
+    return &quot;The BookStore servlet returns the main web page &quot; +
+           &quot;for Duke's Bookstore.&quot;;
+  }
+}</pre>
+
+<h3>O servlet BannerServlet</h3>
+
+<ul>
+  <li>Chamado pelos outros servlets</li>
+</ul>
+
+<pre class="clsCode">import java.io.*;
+import java.util.*;
+import java.sql.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import database.*;
+import cart.*;
+
+/**
+ * This is a simple example of an HTTP Servlet.  It responds to the GET
+ * method of the HTTP protocol.
+ */
+
+public class BannerServlet extends HttpServlet { 
+
+  public void doGet (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+    writeBanner(request, response);
+  }
+
+  public void doPost (HttpServletRequest request,
+                      HttpServletResponse response)
+                      throws ServletException, IOException {
+    writeBanner(request, response);
+  }
+
+  private void writeBanner (HttpServletRequest request,
+                            HttpServletResponse response)
+                            throws IOException {
+    PrintWriter out = response.getWriter();
+    out.println(&quot;&lt;body  bgcolor=\&quot;#ffffff\&quot;&gt;&quot; +
+                &quot;&lt;center&gt;&quot; +
+                &quot;&lt;hr&gt; &lt;br&gt; &amp;nbsp;&quot; +
+                &quot;&lt;h1&gt;&quot; +
+                &quot;&lt;font size=\&quot;+3\&quot; color=\&quot;#CC0066\&quot;&gt;Duke's &lt;/font&gt; &lt;img src=\&quot;&quot; + request.getContextPath() + &quot;/duke.books.gif\&quot;&gt;&quot; + 
+                &quot;&lt;font size=\&quot;+3\&quot; color=\&quot;black\&quot;&gt;Bookstore&lt;/font&gt;&quot; +
+                &quot;&lt;/h1&gt;&quot; +
+                &quot;&lt;/center&gt;&quot; +
+                &quot;&lt;br&gt; &amp;nbsp; &lt;hr&gt; &lt;br&gt; &quot;);
+  }
+}</pre>
+
+<h3>O servlet CatalogServlet</h3>
+
+<ul>
+  <li>Observe as várias URLs usadas para controlar o processo de manipulação da cesta de
+    compras</li>
+</ul>
+
+<pre class="clsCode">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import database.*;
+import cart.*;
+import util.Currency;
+import exception.*;
+
+/**
+ * This is a simple example of an HTTP Servlet.  It responds to the GET
+ * method of the HTTP protocol.
+ */
+public class CatalogServlet extends HttpServlet { 
+  private BookDB bookDB;
+
+  public void init() throws ServletException {
+    bookDB = (BookDB)getServletContext().getAttribute(&quot;bookDB&quot;);
+    if (bookDB == null)
+      throw new UnavailableException(&quot;Couldn't get database.&quot;);
+  }
+
+  public void destroy() {
+    bookDB.remove();
+    bookDB = null;
+  }
+     
+  public void doGet (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+
+    // Get the user's session and shopping cart
+    HttpSession session = request.getSession(true);
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+
+    ShoppingCart cart = (ShoppingCart)session.getAttribute(&quot;cart&quot;);
+
+    // If the user has no cart, create a new one
+    if (cart == null) {
+      cart = new ShoppingCart();
+      session.setAttribute(&quot;cart&quot;, cart);
+    }
+    // set content-type header before accessing the Writer
+    response.setContentType(&quot;text/html&quot;);
+    response.setBufferSize(8192);
+    PrintWriter out = response.getWriter();
+
+    // then write the data of the response
+    out.println(&quot;&lt;html&gt;&quot; +
+                &quot;&lt;head&gt;&lt;title&gt;&quot; + messages.getString(&quot;TitleBookCatalog&quot;) + &quot;&lt;/title&gt;&lt;/head&gt;&quot;);
+
+    // Get the dispatcher; it gets the banner to the user
+    RequestDispatcher dispatcher =
+        getServletContext().getRequestDispatcher(&quot;/banner&quot;);
+                                   
+    if (dispatcher != null)
+      dispatcher.include(request, response);
+           
+
+    //Information on the books is from the database through its front end
+
+    // Additions to the shopping cart
+    String bookId = request.getParameter(&quot;bookId&quot;);
+    if (bookId != null) {
+      try {
+        BookDetails book = bookDB.getBookDetails(bookId);
+        cart.add(bookId, book);
+        out.println(&quot;&lt;p&gt;&lt;h3&gt;&quot; + &quot;&lt;font color=\&quot;#ff0000\&quot;&gt;&quot; + messages.getString(&quot;CartAdded1&quot;) + 
+         						&quot;&lt;i&gt;&quot; + book.getTitle() + &quot;&lt;/i&gt; &quot; + 
+                    messages.getString(&quot;CartAdded2&quot;) + &quot;&lt;/font&gt;&lt;/h3&gt;&quot;);
+      } catch (BookNotFoundException ex) {
+        response.reset();
+        throw new ServletException(ex);
+      }
+    }
+
+    //Give the option of checking cart or checking out if cart not empty
+    if (cart.getNumberOfItems() &gt; 0) {
+      out.println(&quot;&lt;p&gt;&lt;strong&gt;&lt;a href=\&quot;&quot; +
+                  response.encodeURL(request.getContextPath() + &quot;/showcart&quot;) +
+                  &quot;\&quot;&gt;&quot; + messages.getString(&quot;CartCheck&quot;) + &quot;&lt;/a&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&quot; +
+                  &quot;&lt;a href=\&quot;&quot; +
+                  response.encodeURL(request.getContextPath() + &quot;/cashier&quot;) +
+                  &quot;\&quot;&gt;&quot; + messages.getString(&quot;Buy&quot;) + &quot;&lt;/a&gt;&quot; +
+                  &quot;&lt;/p&gt;&lt;/strong&gt;&quot;);
+    }
+
+    // Always prompt the user to buy more -- get and show the catalog
+    out.println(&quot;&lt;br&gt; &amp;nbsp;&quot; +
+                &quot;&lt;h3&gt;&quot; + messages.getString(&quot;Choose&quot;) + &quot;&lt;/h3&gt;&quot; +
+                &quot;&lt;center&gt; &lt;table&gt;&quot;);
+    
+    try {
+      Collection coll = bookDB.getBooks();
+      Iterator i = coll.iterator();
+      Currency c = (Currency)session.getAttribute(&quot;currency&quot;);
+      if (c == null) {
+        c = new Currency();
+        c.setLocale(request.getLocale());
+        session.setAttribute(&quot;currency&quot;, c);
+      }
+      while (i.hasNext()) {
+        BookDetails book = (BookDetails)i.next();
+        bookId = book.getBookId();
+        c.setAmount(book.getPrice());
+    
+        //Print out info on each book in its own two rows
+        out.println(&quot;&lt;tr&gt;&quot; +
+
+                    &quot;&lt;td bgcolor=\&quot;#ffffaa\&quot;&gt;&quot; +
+                    &quot;&lt;a href=\&quot;&quot; +
+                    response.encodeURL(request.getContextPath() + &quot;/bookdetails?bookId=&quot; + bookId) +
+                    &quot;\&quot;&gt; &lt;strong&gt;&quot; + book.getTitle() +
+                    &quot;&amp;nbsp; &lt;/strong&gt;&lt;/a&gt;&lt;/td&gt;&quot; +
+
+                    &quot;&lt;td bgcolor=\&quot;#ffffaa\&quot; rowspan=2&gt;&quot; +
+                    c.getFormat() +
+                    &quot;&amp;nbsp; &lt;/td&gt;&quot; +
+
+                    &quot;&lt;td bgcolor=\&quot;#ffffaa\&quot; rowspan=2&gt;&quot; +
+                    &quot;&lt;a href=\&quot;&quot; +
+                    response.encodeURL(request.getContextPath() + &quot;/catalog?bookId=&quot; + bookId)
+                    + &quot;\&quot;&gt; &amp;nbsp;&quot; + messages.getString(&quot;CartAdd&quot;) + &quot;&amp;nbsp;&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;&quot; +
+
+                    &quot;&lt;tr&gt;&quot; +
+                    &quot;&lt;td bgcolor=\&quot;#ffffff\&quot;&gt;&quot; +
+                    &quot;&amp;nbsp; &amp;nbsp;&quot; + messages.getString(&quot;By&quot;) + &quot;&lt;em&gt; &quot; + book.getFirstName() +
+                    &quot; &quot; + book.getSurname() + &quot;&lt;/em&gt;&lt;/td&gt;&lt;/tr&gt;&quot;);
+      }
+
+    } catch (BooksNotFoundException ex) {
+       response.reset();
+       throw new ServletException(ex);
+    }
+    out.println(&quot;&lt;/table&gt;&lt;/center&gt;&lt;/body&gt;&lt;/html&gt;&quot;);
+    out.close();
+  }
+
+  public String getServletInfo() {
+    return &quot;The Catalog servlet adds books to the user's &quot; +
+           &quot;shopping cart and prints the catalog.&quot;;
+  }
+}</pre>
+
+<h3>O servlet BookDetailsServlet</h3>
+
+<pre class="clsCode">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import database.*;
+import cart.*;
+import util.Currency;
+import exception.*;
+
+/**
+ * This is a simple example of an HTTP Servlet.  It responds to the GET
+ * method of the HTTP protocol. 
+ */
+public class BookDetailsServlet extends HttpServlet {
+
+  private BookDB bookDB;
+
+  public void init() throws ServletException {
+    bookDB = (BookDB)getServletContext().getAttribute(&quot;bookDB&quot;);
+    if (bookDB == null)
+      throw new UnavailableException(&quot;Couldn't get database.&quot;);
+  }
+
+  public void destroy() {
+    bookDB = null;
+  }
+
+      
+  public void doGet (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+
+    HttpSession session = request.getSession(true);
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+
+    // set headers and buffer size before accessing the Writer
+    response.setContentType(&quot;text/html&quot;);
+    response.setBufferSize(8192);
+    PrintWriter out = response.getWriter();
+
+    // then write the response
+    out.println(&quot;&lt;html&gt;&quot; +
+                &quot;&lt;head&gt;&lt;title&gt;&quot; + messages.getString(&quot;TitleBookDescription&quot;) + &quot;&lt;/title&gt;&lt;/head&gt;&quot;);
+
+    // Get the dispatcher; it gets the banner to the user
+    RequestDispatcher dispatcher =
+        getServletContext().getRequestDispatcher(&quot;/banner&quot;);
+                                   
+    if (dispatcher != null)
+      dispatcher.include(request, response);
+           
+    //Get the identifier of the book to display
+    String bookId = request.getParameter(&quot;bookId&quot;);
+    if (bookId != null) {
+
+      // and the information about the book
+      try {
+        BookDetails bd = bookDB.getBookDetails(bookId);
+        Currency c = (Currency)session.getAttribute(&quot;currency&quot;);
+        if (c == null) {
+          c = new Currency();
+          c.setLocale(request.getLocale());
+          session.setAttribute(&quot;currency&quot;, c);
+        }
+        c.setAmount(bd.getPrice());
+       
+       
+        //Print out the information obtained
+        out.println(&quot;&lt;h2&gt;&quot; + bd.getTitle() + &quot;&lt;/h2&gt;&quot; +
+                    &quot;&amp;nbsp;&quot; + messages.getString(&quot;By&quot;) + &quot; &lt;em&gt;&quot; + bd.getFirstName() + &quot; &quot; +
+                    bd.getSurname() + &quot;&lt;/em&gt; &amp;nbsp; &amp;nbsp; &quot; +
+                    &quot;(&quot; + bd.getYear() + &quot;)&lt;br&gt; &amp;nbsp; &lt;br&gt;&quot; +
+                    &quot;&lt;h4&gt;&quot; + messages.getString(&quot;Critics&quot;)+ &quot;&lt;/h4&gt;&quot; +
+                    &quot;&lt;blockquote&gt;&quot; + bd.getDescription() +
+                    &quot;&lt;/blockquote&gt;&quot; +
+                    &quot;&lt;h4&gt;&quot; + messages.getString(&quot;Price&quot;) + c.getFormat() + &quot;&lt;/h4&gt;&quot; +
+                    &quot;&lt;p&gt;&lt;strong&gt;&lt;a href=\&quot;&quot; +
+                    response.encodeURL(request.getContextPath() + &quot;/catalog?bookId=&quot; + bookId) +
+                    &quot;\&quot;&gt;&quot; + messages.getString(&quot;CartAdd&quot;) + &quot;&lt;/a&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&quot; +
+                    &quot;&lt;a href=\&quot;&quot; + 
+                    response.encodeURL(request.getContextPath() + &quot;/catalog&quot;) + &quot;\&quot;&gt;&quot; + messages.getString(&quot;ContinueShopping&quot;) + &quot;&lt;/a&gt;&lt;/p&gt;&lt;/strong&gt;&quot;);
+      } catch (BookNotFoundException ex) {
+        response.resetBuffer();
+        throw new ServletException(ex);
+      }
+    }
+    out.println(&quot;&lt;/body&gt;&lt;/html&gt;&quot;);
+    out.close();
+  }
+
+  public String getServletInfo() {
+    return &quot;The BookDetail servlet returns information about&quot; +
+           &quot;any book that is available from the bookstore.&quot;;
+  }
+}</pre>
+
+<h3>O servlet ShowCartServlet</h3>
+
+<pre class="clsCode">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import database.*;
+import cart.*;
+import util.Currency;
+import exception.*;
+
+/**
+ * An HTTP servlet that displays the contents of a customer's shopping
+ * cart at Duke's Bookstore.  It responds to the GET and HEAD methods of
+ * the HTTP protocol.  This servlet calls other servlets.
+ */
+public class ShowCartServlet extends HttpServlet { 
+
+  private BookDB bookDB;
+
+  public void init() throws ServletException {
+    bookDB = (BookDB)getServletContext().getAttribute(&quot;bookDB&quot;);
+    if (bookDB == null)
+      throw new UnavailableException(&quot;Couldn't get database.&quot;);
+  }
+
+  public void destroy() {
+    bookDB.remove();
+    bookDB = null;
+  }
+
+      
+  public void doGet (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+
+    // Get the user's session and shopping cart
+    HttpSession session = request.getSession(true);
+    ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+
+    ShoppingCart cart = (ShoppingCart)session.getAttribute(&quot;cart&quot;);
+
+    // If the user has no cart, create a new one
+    if (cart == null) {
+      cart = new ShoppingCart();
+      session.setAttribute(&quot;cart&quot;, cart);
+    }
+
+    // set content type header before accessing the Writer
+    response.setContentType(&quot;text/html&quot;);
+    response.setBufferSize(8192);
+    PrintWriter out = response.getWriter();
+
+    //Print out the response
+    out.println(&quot;&lt;html&gt;&quot; +
+                &quot;&lt;head&gt;&lt;title&gt;&quot; + messages.getString(&quot;TitleShoppingCart&quot;) + &quot;&lt;/title&gt;&lt;/head&gt;&quot; );
+
+    // Get the dispatcher; it gets the banner to the user
+    RequestDispatcher dispatcher =
+        getServletContext().getRequestDispatcher(&quot;/banner&quot;);
+                                   
+    if (dispatcher != null)
+      dispatcher.include(request, response);
+           
+    /* Handle any pending deletes from the shopping cart and
+       indicate the outcome as part of the response */
+    String bookId = request.getParameter(&quot;Remove&quot;);
+    BookDetails bd;
+    if (bookId != null) {
+      try {
+        bd = bookDB.getBookDetails(bookId);
+        cart.remove(bookId);
+        out.println(&quot;&lt;font color=\&quot;#ff00000\&quot; size=\&quot;+2\&quot;&gt;&quot; +
+                    messages.getString(&quot;CartRemoved&quot;) + &quot;&lt;strong&gt;&quot; + bd.getTitle() +
+                    &quot;&lt;/strong&gt; &lt;br&gt; &amp;nbsp; &lt;br&gt;&quot; +
+                    &quot;&lt;/font&gt;&quot;);
+      } catch (BookNotFoundException ex) {
+        response.reset();
+        throw new ServletException(ex);
+      }           
+    } else if (request.getParameter(&quot;Clear&quot;) != null) {
+      cart.clear();
+      out.println(&quot;&lt;font color=\&quot;#ff0000\&quot; size=\&quot;+2\&quot;&gt;&lt;strong&gt;&quot; +
+                  messages.getString(&quot;CartCleared&quot;) +
+                  &quot;&lt;/strong&gt; &lt;br&gt;&amp;nbsp; &lt;br&gt; &lt;/font&gt;&quot;);
+    }
+
+    // Print a summary of the shopping cart
+    int num = cart.getNumberOfItems();
+    if (num &gt; 0) {
+      out.println(&quot;&lt;font size=\&quot;+2\&quot;&gt;&quot; +
+                  messages.getString(&quot;CartContents&quot;) + num + (num==1 ? messages.getString(&quot;CartItem&quot;) : messages.getString(&quot;CartItems&quot;)) +
+                  &quot;&lt;/font&gt;&lt;br&gt;&amp;nbsp;&quot;);
+
+        // Return the Shopping Cart 
+      out.println(&quot;&lt;table&gt;&quot; +
+                  &quot;&lt;tr&gt;&quot; +
+                  &quot;&lt;th align=left&gt;&quot; + messages.getString(&quot;ItemQuantity&quot;) + &quot;&lt;/TH&gt;&quot; +
+                  &quot;&lt;th align=left&gt;&quot; + messages.getString(&quot;ItemTitle&quot;) + &quot;&lt;/TH&gt;&quot; +
+                  &quot;&lt;th align=left&gt;&quot; + messages.getString(&quot;ItemPrice&quot;) + &quot;&lt;/TH&gt;&quot; +
+                  &quot;&lt;/tr&gt;&quot;);
+      
+      Iterator i = cart.getItems().iterator();
+      Currency c = (Currency)session.getAttribute(&quot;currency&quot;);
+      if (c == null) {
+         c = new Currency();
+         c.setLocale(request.getLocale());
+         session.setAttribute(&quot;currency&quot;, c);
+      }
+      while (i.hasNext()) {
+        ShoppingCartItem item = (ShoppingCartItem) i.next();
+        bd = (BookDetails) item.getItem();
+        c.setAmount(bd.getPrice());
+        
+        out.println(&quot;&lt;tr&gt;&quot; +
+                    &quot;&lt;td align=\&quot;right\&quot; bgcolor=\&quot;#ffffff\&quot;&gt;&quot; +
+                    item.getQuantity() +
+                    &quot;&lt;/td&gt;&quot; +
+
+                    &quot;&lt;td bgcolor=\&quot;#ffffaa\&quot;&gt;&quot; +
+                    &quot;&lt;strong&gt;&lt;a href=\&quot;&quot; + 
+                    response.encodeURL(request.getContextPath() + &quot;/bookdetails?bookId=&quot; + bd.getBookId()) +
+                    &quot;\&quot;&gt;&quot; + bd.getTitle() + &quot;&lt;/a&gt;&lt;/strong&gt;&quot; +
+                    &quot;&lt;/td&gt;&quot; +
+
+                    &quot;&lt;td bgcolor=\&quot;#ffffaa\&quot; align=\&quot;right\&quot;&gt;&quot; +
+                    c.getFormat() +
+                    &quot;&lt;/td&gt;&quot; +
+
+                    &quot;&lt;td bgcolor=\&quot;#ffffaa\&quot;&gt;&quot; +
+                    &quot;&lt;strong&gt;&quot; +
+                    &quot;&lt;a href=\&quot;&quot; + 
+                    response.encodeURL(request.getContextPath() + &quot;/showcart?Remove=&quot; + bd.getBookId()) +
+                    &quot;\&quot;&gt;&quot; + messages.getString(&quot;RemoveItem&quot;) + &quot;&lt;/a&gt;&lt;/strong&gt;&quot; +
+                    &quot;&lt;/td&gt;&lt;/tr&gt;&quot;);
+      }
+
+      c.setAmount(cart.getTotal());
+      // Print the total at the bottom of the table
+      out.println(&quot;&lt;tr&gt;&lt;td colspan=\&quot;5\&quot; bgcolor=\&quot;#ffffff\&quot;&gt;&quot; +
+                  &quot;&lt;br&gt;&lt;/td&gt;&lt;/tr&gt;&quot; +
+                  &quot;&lt;tr&gt;&quot; +
+                  &quot;&lt;td colspan=\&quot;2\&quot; align=\&quot;right\&quot;&quot; +
+                  &quot;bgcolor=\&quot;#ffffff\&quot;&gt;&quot; +
+                  messages.getString(&quot;Subtotal&quot;) + &quot;&lt;/td&gt;&quot; +
+                  &quot;&lt;td bgcolor=\&quot;#ffffaa\&quot; align=\&quot;right\&quot;&gt;&quot; +
+                  c.getFormat() + &quot;&lt;/td&gt;&quot; +
+                  &quot;&lt;/td&gt;&lt;td&gt;&lt;br&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&quot;);
+
+      // Where to go and what to do next
+      out.println(&quot;&lt;p&gt; &amp;nbsp; &lt;p&gt;&lt;strong&gt;&lt;a href=\&quot;&quot; +
+                  response.encodeURL(request.getContextPath() + &quot;/catalog&quot;) +
+                  &quot;\&quot;&gt;&quot; + messages.getString(&quot;ContinueShopping&quot;) + &quot;&lt;/a&gt; &amp;nbsp; &amp;nbsp; &amp;nbsp;&quot; +
+                  
+                  &quot;&lt;a href=\&quot;&quot; +
+                  response.encodeURL(request.getContextPath() + &quot;/cashier&quot;) +
+                  &quot;\&quot;&gt;&quot; + messages.getString(&quot;Checkout&quot;) + &quot;&lt;/a&gt; &amp;nbsp; &amp;nbsp; &amp;nbsp;&quot; +
+                  
+                  &quot;&lt;a href=\&quot;&quot; + 
+                  response.encodeURL(request.getContextPath() + &quot;/showcart?Clear=clear&quot;) +
+                  &quot;\&quot;&gt;&quot; + messages.getString(&quot;ClearCart&quot;) + &quot;&lt;/a&gt;&lt;/strong&gt;&quot;);
+    } else {
+
+      // Shopping cart is empty!
+      out.println(&quot;&lt;font size=\&quot;+2\&quot;&gt;&quot; +
+                  messages.getString(&quot;CartEmpty&quot;) + &quot;&lt;/font&gt;&quot; +
+                  &quot;&lt;br&gt; &amp;nbsp; &lt;br&gt;&quot; +
+                  &quot;&lt;center&gt;&lt;a href=\&quot;&quot; +
+                  response.encodeURL(request.getContextPath() + &quot;/catalog&quot;) +
+                  &quot;\&quot;&gt;&quot; + messages.getString(&quot;Catalog&quot;) + &quot;&lt;/a&gt; &lt;/center&gt;&quot;);
+    }
+
+    out.println(&quot;&lt;/body&gt; &lt;/html&gt;&quot;);
+    out.close();
+  }
+
+  public String getServletInfo() {
+    return &quot;The ShowCart servlet returns information about&quot; +
+           &quot;the books that the user is in the process of ordering.&quot;;
+  }
+}</pre>
+
+<h3>O servlet CashierServlet</h3>
+
+<pre class="clsCode">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import cart.*;
+import util.Currency;
+
+/**
+ * An HTTP Servlet that responds to the GET method of the
+ * HTTP protocol.  It returns a form to the user that gathers data.
+ * The form POSTs to another servlet.
+ */
+public class CashierServlet extends HttpServlet { 
+
+  public void doGet (HttpServletRequest request,
+                     HttpServletResponse response)
+                     throws ServletException, IOException {
+    // Get the user's session and shopping cart
+    HttpSession session = request.getSession();
+  	ResourceBundle messages = (ResourceBundle)session.getAttribute(&quot;messages&quot;);
+
+    ShoppingCart cart =
+        (ShoppingCart)session.getAttribute(&quot;cart&quot;);
+    if (cart == null) {
+      cart = new ShoppingCart();
+      session.setAttribute(&quot;cart&quot;, cart);
+    }
+    
+    // set content-type header before accessing Writer
+    response.setContentType(&quot;text/html&quot;);
+    PrintWriter out = response.getWriter();
+    Currency c = (Currency)session.getAttribute(&quot;currency&quot;);
+    if (c == null) {
+      c = new Currency();
+      c.setLocale(request.getLocale());
+      session.setAttribute(&quot;currency&quot;, c);
+    }
+    c.setAmount(cart.getTotal());
+
+    // then write the data of the response
+    out.println(&quot;&lt;html&gt;&quot; +
+                &quot;&lt;head&gt;&lt;title&gt;&quot; + messages.getString(&quot;TitleCashier&quot;) + &quot;&lt;/title&gt;&lt;/head&gt;&quot;);
+
+    // Get the dispatcher; it gets the banner to the user
+    RequestDispatcher dispatcher =
+           getServletContext().getRequestDispatcher(&quot;/banner&quot;);
+                                   
+    if (dispatcher != null)
+      dispatcher.include(request, response);
+           
+    // Print out the total and the form for the user
+    out.println(&quot;&lt;p&gt;&quot; + messages.getString(&quot;Amount&quot;) +
+                &quot;&lt;strong&gt;&quot; + c.getFormat() + &quot;&lt;/strong&gt;&quot; +
+                &quot;&lt;p&gt;&quot; + messages.getString(&quot;Purchase&quot;) +
+                &quot;&lt;form action=\&quot;&quot; +
+                response.encodeURL(request.getContextPath() + &quot;/receipt&quot;) +
+                &quot;\&quot; method=\&quot;post\&quot;&gt;&quot; +
+                &quot;&lt;table&gt;&quot; +
+                &quot;&lt;tr&gt;&quot; +
+                &quot;&lt;td&gt;&lt;strong&gt;&quot; + messages.getString(&quot;Name&quot;)+ &quot;&lt;/strong&gt;&lt;/td&gt;&quot; +
+                &quot;&lt;td&gt;&lt;input type=\&quot;text\&quot; name=\&quot;cardname\&quot;&quot; +
+                &quot;value=\&quot;Gwen Canigetit\&quot; size=\&quot;19\&quot;&gt;&lt;/td&gt;&quot; +
+                &quot;&lt;/tr&gt;&quot; +
+                &quot;&lt;tr&gt;&quot; +
+                &quot;&lt;td&gt;&lt;strong&gt;&quot; + messages.getString(&quot;CCNumber&quot;) + &quot;&lt;/strong&gt;&lt;/td&gt;&quot; +
+                &quot;&lt;td&gt;&quot; +
+                &quot;&lt;input type=\&quot;text\&quot; name=\&quot;cardnum\&quot; &quot; +
+                &quot;value=\&quot;xxxx xxxx xxxx xxxx\&quot; size=\&quot;19\&quot;&gt;&lt;/td&gt;&quot; +
+                &quot;&lt;/tr&gt;&quot; +
+                &quot;&lt;tr&gt;&quot; +
+                &quot;&lt;td&gt;&lt;/td&gt;&quot; +
+                &quot;&lt;td&gt;&lt;input type=\&quot;submit\&quot;&quot; +
+                &quot;value=\&quot;&quot; + messages.getString(&quot;Submit&quot;) + &quot;\&quot;&gt;&lt;/td&gt;&quot; +
+                &quot;&lt;/tr&gt;&quot; +
+                &quot;&lt;/table&gt;&quot; +
+                &quot;&lt;/form&gt;&quot; +
+                &quot;&lt;/body&gt;&quot; +
+                &quot;&lt;/html&gt;&quot;);
+    out.close();
+  }
+
+  public String getServletInfo() {
+    return &quot;The Cashier servlet takes the user's name and &quot; +
+           &quot;credit card number so that the user can buy the books.&quot;;
+  }
+}</pre>
+
+<h3>A página errorpage.html</h3>
+
+<pre class="clsCode">&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;Server Error&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body bgcolor=&quot;white&quot;&gt;
+  &lt;h2&gt;The application is unavailable. Please try later.&lt;/h2&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+
+<h2>A Composição da Aplicação</h2>
+
+<ul>
+  <li>Vamos compilar tudo:</li>
+</ul>
+
+<pre class="clsCode">C:\...\src&gt;ant livros
+Buildfile: build.xml
+
+init:
+
+livros:
+    [mkdir] Created dir: C:\...\build\livros
+     [copy] Copying 2 files to C:\...\build\livros
+    [javac] Compiling 22 source files to C:\...\build\livros
+
+BUILD SUCCESSFUL
+
+Total time: 7 seconds</pre>
+
+<ul>
+  <li>Agora, vamos compor a aplicação usando o deploytool<ul>
+      <li>Criar nova aplicação LivrosApp no diretório src/livros</li>
+      <li>Criar um novo Web component LivrosWAR com conteúdo<ul>
+          <li>Todos os arquivos .class dos 7 servlets, duke.books.gif, e errorpage.html</li>
+          <li>Adicione todos os pacotes (cart, database, exception, filters, listeners, messages e
+            util)</li>
+          <li>Tipo Servlet, com classe de servlet BannerServlet, alias /banner</li>
+        </ul>
+      </li>
+      <li>Adicionar a LivrosWAR os outros servlets com classe e alias mostrados na <a
+        href="#tabelaalias">tabela acima</a></li>
+      <li>Na orelha &quot;Event Listeners&quot;, adicione ContextListener</li>
+      <li>Na orelha &quot;File Refs&quot;, clique em Add no painel &quot;Error mapping&quot;<ul>
+          <li>No campo Error/Exception, digite exception.BookNotFoundException</li>
+          <li>No campo &quot;Resource to be Called&quot;, digite /errorpage.html</li>
+        </ul>
+      </li>
+      <li>Repita para as exceções exception.BooksNotFoundException e
+        javax.servlet.UnavailableException</li>
+      <li>Vamos criar as filter chains<ul>
+          <li>Selecione a orelha &quot;Filter Mapping&quot;</li>
+          <li>Clique em &quot;Edit Filter List&quot;</li>
+          <li>Clique em &quot;Add&quot;</li>
+          <li>Selecione &quot;filters.HitCounterFilter&quot; na coluna &quot;Filter Class&quot;</li>
+          <li>Selecione &quot;HitCounterFilter&quot; na coluna &quot;Display Name&quot;</li>
+          <li>Clique em &quot;Add&quot;</li>
+          <li>Selecione &quot;filters.OrderFilter&quot; na coluna &quot;Filter Class&quot;</li>
+          <li>Selecione &quot;OrderFilter&quot;&nbsp; na coluna &quot;Display Name&quot;</li>
+          <li>Clique em &quot;OK&quot;</li>
+          <li>Clique em &quot;Add&quot;</li>
+          <li>Selecione &quot;HitCounterFilter&quot; na coluna &quot;Filter Name&quot;</li>
+          <li>Selecione &quot;Servlet&quot; na coluna &quot;Target Type&quot;</li>
+          <li>Selecione &quot;BookStoreServlet&quot; na coluna &quot;Target&quot;</li>
+          <li>Repita para &quot;OrderFilter&quot; (Target type é &quot;Servlet&quot; e o target é<br>
+            &quot;ReceiptServlet&quot;)</li>
+        </ul>
+      </li>
+      <li>Salve para criar o arquivo LivrosApp.ear (a aplicação)</li>
+      <li>Envie o arquivo LivrosApp.ear para seu cliente final (junto com a fatura ...)<ul>
+          <li>Na realidade, para testar, o desenvolvedor da aplicação também faria um deployment,
+            é claro</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h2><a name="deployment">O Deployment da Aplicação</a></h2>
+
+<h3>Na máquina de deployment</h3>
+
+<ul>
+  <li>Adiciona referência de recurso para o banco de dados Cloudscape<ul>
+      <li>Selecione LivrosWAR</li>
+      <li>Selecione a orelha &quot;Resource Ref&quot;</li>
+      <li>Clique em &quot;Add&quot;</li>
+      <li>Selecione &quot;javax.sql.DataSource&quot; na coluna Type</li>
+      <li>Insira &quot;jdbc/BookDB&quot; no campo &quot;Coded Name&quot;</li>
+      <li>Insira &quot;jdbc/BookDB&quot; no campo &quot;JNDI Name&quot;</li>
+    </ul>
+  </li>
+  <li>Em LivrosApp, defina um &quot;Context root&quot; com valor &quot;/ilovebooks&quot;</li>
+  <li>Salve</li>
+</ul>
+
+<h3>No servidor de banco de dados</h3>
+
+<ul>
+  <li>Criação do banco de dados<ul>
+      <li>cloudscape -start</li>
+      <li>ant create-livros-db</li>
+    </ul>
+  </li>
+  <li>Os comandos SQL executados para criar o banco de dados estão em sql/books.sql:</li>
+</ul>
+
+<pre class="clsCode">DROP TABLE books;
+
+CREATE TABLE books
+   (id VARCHAR(8) 
+       CONSTRAINT pk_books PRIMARY KEY,
+		surname VARCHAR(24),
+		first_name VARCHAR(24),
+    title VARCHAR(96),
+		price FLOAT,
+		yr INT,
+    description VARCHAR(30));
+
+DELETE FROM books;
+
+INSERT INTO books VALUES('201', 'Duke', '',
+ 'My Early Years: Growing up on *7',
+ 10.75, 1995, 'What a cool book.');
+
+INSERT INTO books VALUES('202', 'Jeeves', '',
+ 'Web Servers for Fun and Profit', 10.75,
+ 2000, 'What a cool book.');
+
+INSERT INTO books VALUES('203', 'Masterson', 'Webster',
+ 'Web Components for Web Developers',
+ 17.75, 2000, 'What a cool book.');
+
+INSERT INTO books VALUES('205', 'Novation', 'Kevin',
+ 'From Oak to Java: The Revolution of a Language',
+ 10.75, 1998, 'What a cool book.');
+
+INSERT INTO books VALUES('206', 'Gosling', 'James',
+ 'Java Intermediate Bytecodes', 10.75,
+ 2000, 'What a cool book.');
+
+INSERT INTO books VALUES('207', 'Thrilled', 'Ben',
+ 'The Green Project: Programming for Consumer Devices',
+ 10.75, 1998, 'What a cool book');
+
+INSERT INTO books VALUES('208', 'Tru', 'Itzal',
+ 'Duke: A Biography of the Java Evangelist',
+ 10.75, 2001, 'What a cool book.');</pre>
+
+<h3>No servidor J2EE</h3>
+
+<ul>
+  <li>Configurar o servidor J2EE para que saiba sobre o nome JNDI <small>jdbc/BookDB</small><ul>
+      <li>Ao entrar no ar, o servidor J2EE fará o bind de <small>jdbc/BookDB com a URL indicada</small></li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">j2ee -stop
+j2eeadmin -addJdbcDatasource jdbc/BookDB jdbc:cloudscape:rmi:BookDB;create=true</pre>
+
+<ul>
+  <li>Agora, o servidor J2EE pode entrar no ar:</li>
+</ul>
+
+<pre class="clsCode">j2ee -verbose</pre>
+
+<ul>
+  <li>Uma das linhas impressas durante a inicialização será:</li>
+</ul>
+
+<pre class="clsCode">Binding DataSource, name = jdbc/BookDB, url = jdbc:cloudscape:rmi:BookDB;create=true</pre>
+
+<h3>Ainda na máquina de deployment</h3>
+
+<ul>
+  <li>Agora passamos para a máquina do cliente final a partir da qual o deployment está
+    sendo feito<ul>
+      <li>Essa máquina não precisa ser o servidor mas pode ser</li>
+      <li>O deployment pode ser remoto</li>
+    </ul>
+  </li>
+  <li>Use o deploytool e escolha Tools/Deploy<ul>
+      <li>Faça deploy de LivrosApp.ear no servidor desejado</li>
+    </ul>
+  </li>
+  <li>Execute a aplicação:<ul>
+      <li><a href="http://anjinho.dsc.ufpb.br:8000/ilovebooks/enter">http://anjinho.dsc.ufpb.br:8000/ilovebooks/enter</a></li>
+    </ul>
+  </li>
+</ul>
+
+<p class="botref">livros <a href="../j2ee-2.htm">programa</a> </p>
+</body>
+</html>

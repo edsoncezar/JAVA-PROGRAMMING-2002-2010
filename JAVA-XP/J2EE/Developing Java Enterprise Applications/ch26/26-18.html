@@ -1,0 +1,274 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-17.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-19.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Closing the session using the close method stops the thread used to poll the message store. Then, if it is transacted, the session rolls back in case there is an uncommitted transaction. Finally, all temporary subscriptions are unregistered with the store. Temporary destinations are also deleted from the store.
+</P>
+<PRE>
+    public RemoteMiniSession close()
+     throws RemoteException, JMSException
+    {
+        try
+        {
+            Object[] unreg;
+            Destination dest;
+
+            <B>checker.stop();
+
+            if(transacted)//rollback the uncommited trans
+                rollback();</B>
+
+            int i,max;
+
+            max = unregOnClose.size();
+
+            for(i=0;i&ltmax;i&#43;&#43;)
+            {
+                unreg = (Object[]) unregOnClose.elementAt(i);
+
+                <B>dest = (Destination)unreg[0];
+
+                unregisterFor(dest,(String)unreg[1]);
+
+                if((dest instanceof TemporaryTopic)
+                    ||(dest instanceof TemporaryQueue))
+                {
+                    store.deleteDestination(dest.toString());
+                }</B>
+            }
+        }
+        catch(Exception ignore)
+        {
+        }
+
+        return null;
+    }
+</PRE>
+<P>The remote session provides an interface, listed here, for the client to the store for creating queues, topics, and deleting destinations. All exceptions are simply passed through from the store to the client.
+</P>
+<PRE>
+    //Throws an exception if one exists.
+    public Queue createQueue(String queueName)
+     throws RemoteException, JMSException
+    {
+        return store.createQueue(queueName);
+    }
+
+    //Throws an exception if one exists.
+    public Topic createTopic(String queueName)
+     throws RemoteException, JMSException
+    {
+        return store.createTopic(queueName);
+    }
+
+    public void deleteDestination(String queueName)
+     throws RemoteException, JMSException
+    {
+        store.deleteDestination(queueName);
+    }
+</PRE>
+<P>When a session is asked to send a message, it either stores the message for sending or sends it, depending on its transacted state. Non-transacted sessions send immediately. Transacted sessions delay sending until the commit method is called.
+</P>
+<PRE>
+    public void send(Message message)
+                 throws RemoteException, JMSException
+    {
+        if(transacted)
+        {
+            synchronized(toSend)
+            {
+                toSend.addElement(message);
+            }
+        }
+        else
+        {
+            reallySend(message);
+        }
+    }
+</PRE>
+<P>Really sending a message, using the reallySend method, involves passing it to the message store. Any exceptions are converted to JMS exceptions to comply with the JMS specification.
+</P>
+<PRE>
+    protected void reallySend(Message message)
+        throws JMSException
+    {
+        try
+        {
+            //Send message to store.
+            //May use persistant store if appropriate.
+            store.send(message);
+        }
+        catch(JMSException exp)
+        {
+            throw exp;
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;Failed to send message.&#148;);
+        }
+    }
+</PRE>
+<P>Committing a transacted remote session causes it to send any messages in the toSend vector. The session also clears out the histories vectors and acknowledges the messages in them; only the message with the highest number is acknowledged. Committing a non-transacted session has no effect. The complete code for commit is listed here:
+</P>
+<PRE>
+    public void commit() throws JMSException
+    {
+        if(!transacted) return;
+
+        int i,max;
+        Message msg;
+        long num=-1;
+
+        try
+        {
+            synchronized(toSend)
+            {
+                max = toSend.size();
+
+                for(i=0;i&ltmax;i&#43;&#43;)
+                {
+                    msg = (Message) toSend.elementAt(i);
+                    reallySend(msg);
+                }
+
+                toSend.removeAllElements();
+            }
+
+            synchronized(histories)
+            {
+                Enumeration cursor = histories.keys();
+                Vector history;
+                HistoryPair pair;
+
+                while(cursor.hasMoreElements())
+                {
+                    pair = (HistoryPair) cursor.nextElement();
+                    history = (Vector) histories.get(pair);
+
+                    max = history.size();
+
+                    for(i=0;i&ltmax;i&#43;&#43;)
+                    {
+                        msg = (Message) history.elementAt(i);
+
+                        if(msg.propertyExists(
+                            MiniJMSMessageStore.MSG_NUM))
+                        {
+                            num = Math.max(num
+                                    ,msg.getLongProperty(
+                                      MiniJMSMessageStore.MSG_NUM));
+                        }
+                    }
+
+                    history.removeAllElements();
+
+                    //Acknowledge as a whole when transacted.
+                    if(num&gt0)
+                        store.acknowledge(pair.destination
+                      ,pair.name,num);
+                }
+            }
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>Rolling back a transacted session removes all of the pending sends in the toSend vector and calls the internal method reallyRecover, discussed here. Recover calls the same method with a different argument. This argument tells the session whether the recovered messages should be marked as redelivered.
+</P>
+<PRE>
+    public void rollback() throws JMSException
+    {
+        if(!transacted) return;
+        toSend.removeAllElements();//throw away sends
+        reallyRecover(false);
+    }
+
+    public void recover() throws JMSException
+    {
+        if(transacted) return;
+        else reallyRecover(true);
+    }
+</PRE>
+<P>Both rollback and recover call the reallyRecover method listed here. This method takes messages from the histories vectors and resends them using addMessage. This causes them to be redelivered if the client is still available.
+</P>
+<PRE>
+    //tf == true -&gt mark redelivered
+    protected void reallyRecover(boolean tf) throws JMSException
+    {
+        try
+        {
+            synchronized(histories)
+            {
+                Enumeration cursor = histories.keys();
+                Vector history;
+                Destination d;
+                int i,max;
+                Message msg;
+                HistoryPair pair;
+                String name;
+
+                while(cursor.hasMoreElements())
+                {
+                    pair = (HistoryPair) cursor.nextElement();
+                    history = (Vector) histories.get(pair);
+
+                    d = pair.destination;
+                    name = pair.name;
+
+                    max = history.size();
+
+                    for(i=0;i&ltmax;i&#43;&#43;)
+                    {
+                        msg = (Message) history.elementAt(i);
+
+                        if(tf) msg.setJMSRedelivered(true);
+
+                        addMessage(msg);
+                    }
+
+                    history.removeAllElements();
+                }
+            }
+        }
+        catch(Exception exp)
+        {
+            throw new JMSException(&#147;Failed to recover completely.&#148;);
+        }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-17.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-19.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

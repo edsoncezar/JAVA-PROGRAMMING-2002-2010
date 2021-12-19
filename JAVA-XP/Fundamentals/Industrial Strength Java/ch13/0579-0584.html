@@ -1,0 +1,365 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0574-0578.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0585-0590.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-579"><P>Page 579</P></A>
+
+
+<PRE>
+//Class variable methods
+//Increment the count of server threads running.
+private static synchronized void incThreadCount() {
+    serverThreads++;
+}
+
+//Decrement the thread count and return the new
+//value.
+private static synchronized int decThreadCount() {
+    return (&#151;serverThreads);
+}
+
+//Object variables.  The socket we use to communicate
+//with the client.
+private Socket s;
+
+//Constructor
+public ThreadedServer(Socket s) {
+    this.s = s;
+}
+
+//Given a socket s, service a client's request on that
+//socket.  This isn't the most efficient way to handle
+//socket IO or file IO; it's kept simple because this
+//is just an example.
+public void run() {
+FileInputStream     fis = null;
+DataInputStream     dis = null;
+DataOutputStream    dos = null;
+
+    //The server now has a new thread.
+    incThreadCount();
+
+    try {
+        //Get streams to listen to and talk to the client.
+        dis = new DataInputStream(s.getInputStream());
+        dos = new DataOutputStream(s.getOutputStream());
+
+        //Read a filename from the client as a UTF
+        //String.
+        String fName = dis.readUTF();
+
+        System.out.println(&quot;Client requested file \&quot;&quot;
+            +fName+&quot;\&quot;&quot;);
+
+        //Open that file.
+
+</PRE>
+<PRE>
+                                                                   continues
+</PRE>
+<A NAME="PAGENUM-580"><P>Page 580</P></A>
+
+
+<P>
+Listing 13.62 Continued
+</P>
+<PRE>
+
+        File f = new File(fName);
+        fis = new FileInputStream(f);
+
+        //Read the file and send it.  First, allocate a
+        //byte array as a buffer.
+        int len = (int)f.length();
+        byte[] b = new byte[1024];
+
+        //Send the length to the client as a single int
+        System.out.println(fName+&quot;: is &quot;+len+&quot; bytes&quot;);
+        dos.writeInt(len);
+
+        //Send the file to the client.
+        int offset=0;
+        do {
+            //Read a block into the array.
+            int blockLen = fis.read(b, 0, b.length);
+
+            dos.write(b, offset, blockLen);
+            len -= blockLen;
+
+            //Yield to let other server threads get
+            //some time.
+            Thread.currentThread().yield();
+        }
+        while(len &gt; 0);
+
+        dos.flush();
+
+        //wait for a confirmation from the client.
+        System.out.println(fName+&quot;: delivered&quot;);
+        String status = dis.readUTF();
+        System.out.println(status);
+    }
+
+    catch(IOException e) {
+        e.printStackTrace();
+    }
+
+    //This may be thrown by FileInputStream(File) in some
+    //versions of the JDK.
+/*
+    catch(FileNotFoundException e) {
+
+</PRE>
+
+
+<A NAME="PAGENUM-581"><P>Page 581</P></A>
+
+
+<PRE>
+    }
+*/
+
+    finally {
+        //finished.
+        try {
+            s.close();
+            if(dis != null)    dis.close();
+            if(fis != null)    fis.close();
+            if(dos != null)    dos.close();
+        }
+        catch(IOException e) {
+            e.printStackTrace();
+        }
+
+        //decrement the server thread
+        //count, then if it has reached
+        //zero (i.e., we're the last
+        //thread) call the garbage
+        //collector.
+        if(decThreadCount() == 0) {
+            System.gc();
+
+        }
+    }
+}
+
+//class methods
+private static boolean serviceClient(Socket s) {
+    //Create a ThreadedServer object.
+    ThreadedServer ts = new ThreadedServer(s);
+
+    //Create a Thread and pass it the ThreadedServer
+    //object as the Runnable.
+    Thread t = new Thread(ts);
+
+    //Start the thread.
+    t.start();
+
+    return true;
+}
+
+//main
+public static void main(String[] args) {
+boolean             looping = true;
+ServerSocket    sock;
+
+</PRE>
+<PRE>
+                                                                   continues
+</PRE>
+
+<A NAME="PAGENUM-582"><P>Page 582</P></A>
+
+<P>Listing 13.62 Continued
+</P>
+<PRE>
+
+    try {
+        //create our socket
+        sock = new ServerSocket(SERVER_PORT);
+    }
+    catch(IOException e) {
+        e.printStackTrace();
+        return;
+    }
+
+    System.out.println(&quot;Accepting requests...&quot;);
+
+    //loop accepting requests.
+    do {
+        try {
+            //accept a connection from a client.
+            Socket s = sock.accept();
+
+            //service that request
+            System.out.println(&quot;Servicing request...&quot;);
+            looping = serviceClient(s);
+        }
+
+        catch(Exception e) {
+            e.printStackTrace();
+           looping = false;
+        }
+    }
+    while(looping);
+}
+}
+</PRE>
+
+<P>The server application operates as follows:
+
+<OL>
+<LI>         When the application starts, the main() method enters the do loop and
+starts waiting for connect requests from clients by calling the accept() method of
+Socket. The initial thread thus spends most of its time suspended in accept().
+<LI>         When a connection is made, main() calls serviceClient() to handle the
+request. After returning from serviceClient(), the initial thread returns and then waits
+in accept(). The main() code has no knowledge  (nor interest) of how
+serviceClient() deals with the connection.
+<LI>        The serviceClient() method deals with each request by creating a new
+Server object
+</OL>
+
+<A NAME="PAGENUM-583"><P>Page 583</P></A>
+
+
+<OL start=4>
+<dl>to serve that client. The Server is passed the Socket when created.</dl>
+<LI>        A Thread object is then created and passed the new Server object as the
+Runnable that it should execute.
+<LI>       Finally, the thread is started by calling it's Thread object's start()
+and serviceClient() returns.
+</OL>
+
+
+<P>The handling of the client request is all accomplished in the run() method that is called
+by the newly started thread. Most of the code in run()is fairly straightforward (and not
+very sophisticated) file and socket I/O. The main points to note are
+</P>
+
+<UL>
+<LI>          The main loop that sends the file contents down the socket to the client includes
+a yield() call after each block is sent. This ensures that all the Server objects
+processing at the same time share the available processor time.
+<LI>          The Server class maintains a count of the number of threads running Server
+objects at any one time. If this count reaches zero at the end of the &quot;finally&quot; block in
+run(), a call to System.gc() is made. This means that whenever a Server finishes and
+is the only one left running, the last thread allocates some time to garbage collection.
+</UL>
+
+
+<H4><A NAME="ch13_ 48">
+Improvements to the Server
+</A></H4>
+
+
+<P>The ThreadedServer class creates as many threads as there are simultaneous
+client requests. On some platforms this might overload the CPU with too many eligible
+threads or too much simultaneous file I/O. The ThreadedServer2 class shown in listing
+13.64 limits the number of threads and recycles existing threaded objects instead of
+creating them on demand.
+</P>
+
+<B>
+The ServerTask class
+</B>
+
+<P>To simplify listing 13.63, the code that serves the client is placed in a separate class,
+the ServerTask.
+</P>
+
+
+
+Listing 13.63 The ServerTask Class
+</P>
+<PRE>
+package industrial;
+import java.io.*;
+import java.net.*;
+
+public class ServerTask implements Runnable {
+</PRE>
+<PRE>
+                                                                 continues
+</PRE>
+
+<A NAME="PAGENUM-584"><P>Page 584</P></A>
+
+<P>Listing 13.63 Continued
+</P>
+
+<PRE>
+//object variables
+//The socket used to communicate with the client
+//(null when ServerTask isn't busy).
+private Socket s;
+
+//The thread that runs the ServerTask object.
+private Thread t;
+
+//Flag set true while this object is busy serving
+//a client.
+private boolean busy;
+
+//Condition variable notified when a ServerTask
+//completed service and becomes non-busy.
+private Object flag;
+
+//object methods
+
+public synchronized boolean isBusy() {
+        return busy;
+}
+
+//serviceRequest is called with the socket for a client
+
+
+//connection to kick an existing ThreadedServer
+//object into handling that request.
+public synchronized void serviceRequest(Socket s) {
+        //make a note of the socket
+        this.s = s;
+
+        //wake the thread
+        this.notify();
+}
+
+//Constructor
+public ServerTask(Socket s, Object flag) {
+        //create a Thread, passing this as the
+        //Runnable.
+        this.t = new Thread(this);
+
+        this.s = s;
+        this.flag = flag;
+
+        //Set the busy flag to true now.
+        this.busy = true;
+
+</PRE>
+
+
+<P><CENTER>
+<a href="0574-0578.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0585-0590.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

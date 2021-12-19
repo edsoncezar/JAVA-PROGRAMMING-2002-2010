@@ -1,0 +1,1937 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 31 -- The Native Method Interface</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 31</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>The Native Method Interface</B>
+</FONT></H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+
+<UL>
+<LI><A HREF="#AJavaClasswithNativeMethods" >A Java Class with Native Methods</A>
+<LI><A HREF="#AcceptingandReturningJavaClasses" >Accepting and Returning Java Classes</A>
+<LI><A HREF="#AccessingArraysofClasses" >Accessing Arrays of Classes</A>
+<LI><A HREF="#AccessingaFloatArray" >Accessing a Float Array</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+In this chapter, you will work through developing three native
+Java applications a step at a time. If you skipped the discussion
+in <A HREF="ch30.htm" >Chapter 30</A>, &quot;When and Why to Use
+Native Methods,&quot; before implementing any Java native class,
+you should first consider the trade-offs between implementing
+in Java versus C. If you are developing from scratch, you should
+consider whether your application needs to use native code at
+all. Native code should be used only in the following situations:
+<UL>
+<LI>The performance demands of your application or applet or target
+computer <BR>
+demand it.
+<LI>Legacy C or C++ code exists with which you must interface.
+</UL>
+<P>
+There are two downsides to native C code:
+<UL>
+<LI>It must be installed by the user manually-it can't be sent
+over the network and run like Java Virtual Machine (JVM) code
+can.
+<LI>It increases the difficulty in porting your program to different
+platforms, which typically means more work for you, the developer.
+</UL>
+<P>
+With that said, there are several ideal applications of Java native
+code. For compute-intensive tasks such as number crunching or
+sorting, there really is no comparison. Because the Java interpreter
+runs off a virtual instruction set known as the Java Virtual Machine,
+it is inherently less efficient than a native language such as
+C that has been compiled down to native assembly language. Instructions
+that perform simple operations such as A*B can be completed in
+one or two instructions in native assembly code, but they take
+multiple instructions when written in the Java Virtual Machine.
+This isn't bad for a single calculation, but when this calculation
+occurs within a loop, it becomes a serious bottleneck. Although
+Just-In-Time (JIT) compilers promise to take Java Virtual Machine
+instructions at the client end and compile them into native assembly
+language instructions, nobody has committed to writing a multiplatform
+version of a JIT compiler as of this writing. For that reason,
+your best performance solution until at least early 1997 will
+be to use native methods.
+<P>
+You can save yourself a lot of design optimization time by reading
+<A HREF="ch33.htm" >Chapter 33</A> and absorbing a few rules of
+thumb about native methods before laying out your design. It'll
+be worth it.
+<P>
+With that said, let's get back to the implementation of native
+methods. The major difficulty with native methods is passing and
+converting Java data into a form usable by C and back again. You
+will look at three examples of doing this in this chapter.
+<P>
+In the first example, the <TT>Triangle</TT>
+class, you look at the process of developing a native method and
+the files that the Java Development Kit (JDK) generates for linking
+Java and C together. Next, you discover how you can access member
+variables from within a native method for that class. Finally,
+you see how to pass back a simple type using the return stack.
+<P>
+In the second example, the <TT>SortedList</TT>
+class, you explore passing strings to and from native methods.
+You also see firsthand how much more complicated a native method
+can be when you do memory allocation in C rather than as a member
+variable of Java.
+<P>
+A common application of native methods is to improve the speed
+with which Java can process arrays of data. In the third and final
+section, you explore the mechanisms necessary for accessing arrays
+from within a native method.
+<H2><A NAME="AJavaClasswithNativeMethods"><B><FONT SIZE=5 COLOR=#FF0000>A
+Java Class with Native Methods</FONT></B></A></H2>
+<P>
+Listing 31.1 is a simple look at a Java class containing native
+methods. This class encapsulates the base and height of a triangle
+and contains a native method named <TT>ComputeArea</TT>
+that calculates the area of the triangle. Although writing a native
+method to do a very simple calculation is one of the things you
+learned <I>not </I>to do in <A HREF="ch30.htm" >Chapter 30</A>,
+keeping the method simple makes it easier to understand the mechanics
+of how a native method is written. You consider more complicated
+examples in the next two examples.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.1. Triangle.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>public class Triangle {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public void SetBase(float
+fInBase) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;fBase = fInBase;<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public void SetHeight(float
+fInHeight) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;fHeight = fInHeight;<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+float ComputeArea();<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;// Load the native
+routines.<BR>
+&nbsp;&nbsp;static {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.loadLibrary(&quot;Triangle&quot;);
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;float fBase;<BR>
+</TT>&nbsp;<TT>&nbsp;float fHeight;
+<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+As you can see, the definition for <TT>ComputeArea</TT>
+is slightly different from the definition of a normal method.
+The keyword <TT>native</TT> is added
+just after the scope of the method and just before the return
+type. This tells the <TT>javac</TT>
+compiler and the Java interpreter that it should look for the
+function body in a dynamically linked library (a DLL, in a Microsoft
+Windows environment) that is loaded using <TT>loadLibrary</TT>,
+a static method in the Java System package.
+<P>
+The <TT>loadLibrary</TT> definition
+directly following the <TT>ComputeArea</TT>
+definition specifies where this dynamically loaded library may
+be found. In the Windows operating system (and with all its variants),
+DLLs are searched for by tracing through the <TT>PATH</TT>
+environmental variable set in your autoexec.bat. If the path you
+set in your autoexec.bat file (or in a manner specific to UNIX
+and Macintosh machines; all the examples in this chapter will
+be for Windows 95) doesn't include the directory containing the
+native method DLL, your DLL won't be found, and the Java interpreter
+will throw an <TT>UnsatisfiedLinkError</TT>
+exception.  You should trap this exception if there is any chance
+that your DLL won't be found.
+<H3><B>Compiling the Java Class</B></H3>
+<P>
+This and all the files you use in the remainder of the chapter
+can be found on the bundled CD. To build your class, copy the
+entire <TT>..\ch34\Triangle</TT> directory
+into <TT>\java\classes\Triangle</TT>.
+From <TT>\java\classes\Triangle</TT>,
+compile the <TT>Triangle</TT> class
+using <TT>javac</TT> just as you normally
+would:
+<BLOCKQUOTE>
+<TT>C:\java\classes\Triangle&gt; javac Triangle.java
+<BR>
+<BR>
+C:\java\classes\Triangle&gt;</TT>
+</BLOCKQUOTE>
+<P>
+In a normal Java program, this would be it-your class would be
+ready. In a native application, however, you have to generate
+or supply three more source files to tie everything together.
+<H3><B>Using </B><TT><B><FONT SIZE=4 >javah</FONT></B></TT><B><FONT SIZE=4>
+to Generate the Header File</FONT></B></H3>
+<P>
+The first file you need to generate is a header file for the Java
+<TT>Triangle</TT> class (see Listing
+31.2). This header file gives the native C code routine the following:
+<UL>
+<LI>A layout of how data is arranged within your Java class
+<LI>A prototype of how the methods from your object-oriented naming
+space class files translate into C's flat naming space
+</UL>
+<P>
+To generate this from the <TT>Triangle.class</TT>
+file, execute <TT>javah</TT> in the
+C:\java\classes\native directory:
+<BLOCKQUOTE>
+<TT>C:\java\classes\Triangle&gt; javah Triangle.java
+<BR>
+<BR>
+C:\java\classes\Triangle&gt;</TT>
+</BLOCKQUOTE>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.2. Triangle.h (generated by <FONT SIZE=1 FACE="MCPdigital">javah</FONT>).
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/* DO NOT EDIT THIS FILE - it is machine
+generated */<BR>
+#include &lt;native.h&gt;<BR>
+/* Header for class Triangle */<BR>
+<BR>
+#ifndef _Included_Triangle<BR>
+#define _Included_Triangle<BR>
+<BR>
+typedef struct ClassTriangle {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;float
+fBase;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float fHeight;<BR>
+} ClassTriangle;<BR>
+HandleTo(Triangle);<BR>
+<BR>
+#ifdef __cplusplus<BR>
+extern &quot;C&quot; {<BR>
+#endif<BR>
+__declspec(dllexport) float Triangle_ComputeArea(struct HTriangle
+*);<BR>
+#ifdef __cplusplus<BR>
+}<BR>
+#endif<BR>
+#endif</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The header file defines a new type called <TT>ClassTriangle</TT>.
+This structure enables access to the internal variables of the
+<TT>Triangle</TT> class. Each intrinsic
+type (a type not defined by the Java class library or the developer)
+in Java has a corresponding type in Java. Table 31.1 shows this
+correlation (for Windows 95 and Microsoft development platforms;
+other combinations may have slight differences).<BR>
+<P>
+<CENTER><B>Table 31.1. Java and C type correspondence.</B></CENTER>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=40%>
+<TR><TD WIDTH=91>Java Type</TD><TD WIDTH=82>C Type</TD></TR>
+<TR><TD WIDTH=91><TT>float</TT></TD>
+<TD WIDTH=82></TT>float</FONT></TD></TR>
+<TR><TD WIDTH=91><TT>double</TT></TD>
+<TD WIDTH=82></TT>double</FONT></TD></TR>
+<TR><TD WIDTH=91><TT>int</TT></TD>
+<TD WIDTH=82></TT>long</FONT></TD></TR>
+<TR><TD WIDTH=91><TT>short</TT></TD>
+<TD WIDTH=82></TT>int</FONT></TD></TR>
+<TR><TD WIDTH=91><TT>long</TT></TD>
+<TD WIDTH=82></TT>long</FONT></TD></TR>
+<TR><TD WIDTH=91><TT>boolean</TT>
+</TD><TD WIDTH=82></TT>long</FONT></TD></TR>
+<TR><TD WIDTH=91><TT>byte</TT></TD>
+<TD WIDTH=82></TT>char</FONT></TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+For developer-defined objects or Java library objects (for example,
+the <TT>String</TT>), there can be
+cases where there are no one-to-one type correspondences with
+C. This can be a major headache in Java-you tackle this problem
+in the second native class example.
+<P>
+In the second part of the <TT>javah</TT>-generated
+header file are the prototypes for the native functions defined
+in the Java class. For the <TT>Triangle</TT>
+class, there is only one prototype, for the <TT>ComputeArea</TT>
+method. The return type is <TT>float</TT>,
+as expected from the type translation table, but the function
+contains a unexpected input parameter of type <TT>struct
+Htriangle *</TT>. This parameter is a handle to the instance
+of the <TT>Triangle</TT> class that
+called the native function. This handle enables you to access
+the <TT>Triangle</TT> class variables
+through the class' <TT>ClassTriangle</TT>
+structure. You see how to access these variables later in this
+chapter when you implement the native function in C.
+<H3><B>Using </B><TT><B><FONT SIZE=4 >javah-stubs</FONT></B></TT><B><FONT SIZE=4>
+to Generate a Stubs File</FONT></B></H3>
+<P>
+Your next task in implementing a native method is to build a stub
+file from Java's class file representation of the <TT>Triangle</TT>
+class. This stub file is responsible for finding the parameters
+and return values on Java's call stack and translating them into
+parameters for the native C method. The java interpreter calls
+this stub, which in turn calls the native method from within the
+DLL you loaded with the <TT>System.loadLibrary</TT>
+call a few sections earlier.
+<P>
+To create the stub file, type the following at your command line:
+<BLOCKQUOTE>
+<TT>C:\java\classes\Triangle&gt; javah -stubs
+Triangle<BR>
+<BR>
+C:\java\classes\Triangle&gt;</TT>
+</BLOCKQUOTE>
+<P>
+This creates the file Triangle.c, which is shown in Listing 31.3.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.3. Triangle.c (generated by <FONT SIZE=1 FACE="MCPdigital">javah-stubs</FONT>).
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/* DO NOT EDIT THIS FILE - it is machine
+generated */<BR>
+#include &lt;StubPreamble.h&gt;<BR>
+<BR>
+/* Stubs for class Triangle */<BR>
+/* SYMBOL: &quot;Triangle/ComputeArea()F&quot;, Java_Triangle_ComputeArea_stub
+*/<BR>
+__declspec(dllexport) stack_item *Java_Triangle_ComputeArea_stub(stack_item
+</TT><FONT FACE="ZapfDingbats">&Acirc;</FONT><TT>*_P_,struct
+execenv *_EE_) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;extern
+float Triangle_ComputeArea(void *);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_P_[0].f = Triangle_ComputeArea(_P_[0].p);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+return _P_ + 1;<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3><B>Developing an Implementation C File</B></H3>
+<P>
+If it seems like this is a lot of work for one puny native method,
+it is; you use a makefile to automate your work in future sessions.
+The worst is over-you're ready now to build an implementation
+of the native function.
+<P>
+In order for the Java interpreter to be able to find the native
+function, it has to match the prototype in the Triangle.h file
+type for type.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The most common mistake in developing native method java classes is a mistake in the return type or one of the passed parameters. This isn't a difficult problem to fix, but it <I>is</I> a tremendous time waster because it isn't noticed until link time. You 
+can save development time by double-checking your prototypes before you compile your program.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Here is the prototype from the generated h file:
+<BLOCKQUOTE>
+<TT>__declspec(dllexport) float Triangle_ComputeArea(struct
+HTriangle *);</TT>
+</BLOCKQUOTE>
+<P>
+In the implementation file, you need to match everything from
+the float return type exactly right. <TT>__declspec(dllexport)</TT>
+doesn't need to be included because it is simply a directive to
+the compiler to inform it that the native functions will eventually
+end up in a DLL.
+<P>
+As shown in Listing 31.3, the implementation file also needs to
+include two header files, StubPreamble.h and Triangle.h. Triangle.h
+is the file you generated with <TT>javah</TT>
+in the previous sections. StubPreamble.h is a Java library that
+includes definitions needed to enable you to access your Java
+data parameters and use certain Java C interpreter calls that
+you will see in later examples.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Tip</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Always name your implementation file with a suffix that uniquely identifies it so that you don't confuse the implementation file with the stubs file generated by <TT>javah-stubs</TT>. Note that all the native method implementation files are named with the 
+suffix Imp to distinguish them from the JDK-generated files.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The final building block you need in order to implement the native
+<TT>ComputeArea</TT> function is a
+way of accessing the class variables from within the native function.
+This is accomplished by using the <TT>unhand</TT>
+macro provided by the StubPreamble.h header file. The <TT>unhand</TT>
+function takes a pointer to a handle to a class, such as the <TT>struct
+Htriangle*</TT>, and returns a pointer to a <TT>Class</TT><FONT SIZE=1 FACE="MCPdigital-I">
+</FONT><I> </I>structure, such as the <TT>ClassTriangle</TT>
+structure described previously. As you may remember, this structure
+contains the representation of the variables in the Java class.
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Because static variables do not belong to any one instantiation of a Java class, you cannot view nor modify them from a native function in C. If you need a static variable that you can modify from your native method, define it in C instead and create 
+accessor methods in the Java class to access it.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+To access the value of the <TT>fBase</TT>
+class variable, use the following syntax:
+<BLOCKQUOTE>
+<TT>unhand(hthis)-&gt;fBase</TT>
+</BLOCKQUOTE>
+<P>
+Doing this for <TT>fHeight</TT> as
+well, you can compute the area of the triangle and return it to
+the Java interpreter and your Java program, as shown in Listing
+31.4.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.4. TriangleImp.c.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>extern &quot;C&quot; {<BR>
+<BR>
+</TT>&nbsp;<TT>#include &lt;StubPreamble.h&gt;
+<BR>
+&nbsp;&nbsp;#include &quot;Triangle.h&quot;<BR>
+<BR>
+&nbsp;&nbsp;float Triangle_ComputeArea(struct HTriangle *hthis)
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return(0.5f * unhand(hthis)-&gt;fBase
+* unhand(hthis)-&gt;fHeight);<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3><B>Building a Triangle DLL</B></H3>
+<P>
+With the four implementation files for the the native method-containing
+Java class completed, you now need only to compile two C source
+files and link them with the java library to form the Triangle
+DLL file.
+<P>
+This discussion used the following command line in Visual C++
+4.0 for Windows 95 to develop the native functions. Because Windows
+95 is the most prevalent Java platform in use today, you'll learn
+how to link the library by using Visual C++. The instructions
+for compiling in UNIX are very similar. Consult the manual supplied
+with your JDK for instructions.
+<P>
+Before you start your build, you need to add a few environmental
+variables so that the Visual C++ compiler can find your tools
+and Java/Netscape can find your native DLL files.
+<P>
+To do this, add the following lines to your autoexec.bat file
+(you use the paths for the standard directories):
+<BLOCKQUOTE>
+<TT>SET LIB=\msdev\lib;\java\lib<BR>
+SET IncLUDE=\java\include;\java\include\win32;\msdev\include<BR>
+SET CLASSPATH=\java\classes;.;C:\netscape20\Program\java\classes</TT>
+</BLOCKQUOTE>
+<P>
+With that change made, reexecute your autoexec.bat file either
+by rebooting your computer or by directly executing it. Then,
+move back to your Java source directory and compile the implementation
+of the native <TT>Triangle</TT> class
+with the following (cl is the Microsoft Visual C++ command line
+compiler.  For other development platforms, substitute the equivalent
+command here):
+<BLOCKQUOTE>
+<TT>C:\java\classes\Triangle&gt; cl /c W3dTriangleImp.c</TT>
+</BLOCKQUOTE>
+<P>
+Likewise, the stubs file should be compiled with this command
+line:
+<BLOCKQUOTE>
+<TT>C:\java\classes\Triangle&gt; cl /c W3dTriangleImp.c</TT>
+</BLOCKQUOTE>
+<P>
+Finally, these two obj files should be linked with the Java interpreter
+library (javai.lib) to form the finished DLL file:
+<BLOCKQUOTE>
+<TT>cl Triangle.obj TriangleImp.obj -FeTriangle.dll
+-MD -LD javai.lib</TT>
+</BLOCKQUOTE>
+<P>
+Listing 31.5 shows a skeleton makefile used to build Java native
+applications. It includes all the commands and dependencies necessary
+to build a Triangle DLL. By replicating the dependency section
+and changing the names, you can reuse this makefile to build your
+own native functions.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.5. Triangle.mak.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>OBJS&nbsp;&nbsp;&nbsp;= Triangle.obj
+TriangleImp.obj<BR>
+LIBS&nbsp;&nbsp;&nbsp;= javai.lib<BR>
+<BR>
+Triangle.dll: $(OBJS)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;cl
+$(OBJS) -FeTriangle.dll -MD -LD $(LIBS)<BR>
+<BR>
+# Build Triangle class<BR>
+<BR>
+Triangle.class: Triangle.java<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;javac Triangle.java<BR>
+<BR>
+Triangle.h: Triangle.class<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;javah
+Triangle<BR>
+<BR>
+Triangle.obj: TriangleImp.cpp Triangle.h<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;cl /c /MLd /Gm /Od /Zi W3dTriangleImp.c
+<BR>
+<BR>
+Triangle.c: Triangle.class<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;javah
+-o Triangle.c -stubs Triangle<BR>
+<BR>
+Triangle.obj: Triangle.c<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;cl /c /MLd /Gm /Od /Zi Triangle.c</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Let's build a test class to demonstrate the new <TT>Triangle</TT>
+class in action. Shown in Listing 31.6 is a test application that
+uses the triangle class. After building it with <TT>javac</TT>,
+use the <TT>Java</TT> interpreter
+to run the application.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.6. TestTriangle.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>public class TestTriangle {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public static
+void main(String argv[]) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Triangle
+theTri;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;theTri
+= new Triangle();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;theTri.SetBase(2.0f);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;theTri.SetHeight(6.0f);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;The Area of the
+Triangle is&quot; +theTri.ComputeArea());<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The following is the output of the TestTriangle execution:
+<BLOCKQUOTE>
+<TT>C:\java\classes\Triangle&gt; java TestTriangle
+<BR>
+<BR>
+The area of the triangle is 6.0<BR>
+<BR>
+C:\java\classes\Triangle&gt;</TT>
+</BLOCKQUOTE>
+<P>
+Hooray! Your first native method works correctly.
+<H2><A NAME="AcceptingandReturningJavaClasses"><B><FONT SIZE=5 COLOR=#FF0000>Accepting
+and Returning Java Classes</FONT></B></A></H2>
+<P>
+Now, let's look at a class that has native methods that accept
+a Java class as one of its parameters.
+<P>
+The class <TT>SortedList</TT>, shown
+in Listing 31.7, maintains a sorted list of strings. Because sorting
+is a compute-intensive task, let's write the sorting algorithm
+as a native method.
+<P>
+The first thing you notice about the native <TT>SortedList</TT>
+class is that there are two Java constructors that immediately
+call native C constructor implementations. This is done for two
+reasons. First, Java doesn't allow constructors to be native,
+so for classes that require native constructors, you must wrap
+this call to the native function inside the Java constructor.
+Secondly, native functions cannot be overloaded within Java, because
+all C function names must be unique and cannot depend on type,
+and the process for converting a Java method to a C function name
+in Java always follows <TT>Package_Class_Method</TT>.
+For Java classes with overloaded constructors, therefore, you
+must overload the constructors in Java and then call the corresponding
+native methods. Not pretty, but the end user of your class won't
+notice the difference.
+<P>
+The next thing you should notice about the <TT>SortedList</TT>
+class is that the class takes and returns a <TT>String</TT>
+from its <TT>AddString</TT> and <TT>GetString</TT>
+methods, respectively. This is different from the first example
+because you are dealing with a Java class, <TT>String</TT>,
+that has no direct counterpart type in C/C++. (Although <TT>(char
+*)</TT> may seem like a direct counterpart, it isn't, because
+it doesn't encapsulate a string's length or allocation.)
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.7. SortedList.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>public class SortedList {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+void constructorA();<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public SortedList()
+{<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;constructorA();
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+void constructorB(int nInitialAllocation);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public SortedList(int
+nInitialAllocation) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;constructorB(nInitialAllocation);
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+void AddString(String szString);<BR>
+&nbsp;&nbsp;public native String GetString(int nIndex);<BR>
+<BR>
+&nbsp;&nbsp;public native int HowMany();<BR>
+<BR>
+&nbsp;&nbsp;static {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.loadLibrary(&quot;SortedList&quot;);
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The C/C++ implementation of the <TT>SortedList</TT>
+implementation is shown in Listing 31.8. The compiler directive
+<TT>extern &quot;C&quot; {</TT> in
+the first line tells the compiler that the definitions of functions
+and variables contained within its braces should be defined internally
+using a C-style definition rather than a C++ style. The difference
+between these two is that the C++ style of definition includes
+information about the types passed to and returned from the function,
+and the C definition style contains only the function name. If
+you leave out the <TT>extern &quot;C&quot;
+{</TT> directive, all the functions will be be defined
+in the C++ style by default. The linker then, looking for a definition
+to match the C-style definitions of the stub file, will be unable
+to link the functions together correctly because they will be
+defined using the C++ style. Notice also, that the <TT>extern
+&quot;C&quot; {</TT> directive also surrounds the Java
+include files. These include files also have prototypes for Java
+interpreter functions that must be defined using the C-style definition.
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Tip</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The linker errors from omitting the <TT>extern &quot;C&quot; {</TT> definition are shown in Listing 31.8. These errors are confusing the first time you see them, but basically they signal the developer that the <TT>extern &quot;C&quot; {</TT> directive was 
+omitted. Add the <TT>extern &quot;C&quot; {</TT> directive as appropriate, and your linking problems should be solved.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.8. Output of linker when <FONT SIZE=1 FACE="MCPdigital">extern
+&quot;C&quot; {</FONT> is omitted.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>Microsoft (R) 32-Bit Incremental Linker
+Version 3.00.5270<BR>
+Copyright (C) Microsoft Corp 1992-1995. All rights reserved.<BR>
+<BR>
+/out:SortedList.dll<BR>
+/dll<BR>
+/implib:SortedList.lib<BR>
+SortedListImp.obj<BR>
+SortedList.obj<BR>
+\java\lib\javai.lib<BR>
+&nbsp;&nbsp;&nbsp;Creating library SortedList.lib and object SortedList.exp
+<BR>
+SortedListImp.obj : error LNK2001: unresolved external symbol
+&quot;char * __cdecl makeCString(structHjava_lang_String*)&quot;(?makeCString@@YAPADPAUHjava_lang_String@@@Z)
+<BR>
+SortedListImp.obj : error LNK2001: unresolved external symbol
+&quot;struct </TT><FONT FACE="ZapfDingbats">&Acirc;</FONT><TT>Hjava_lang_String
+* __cdecl makeJavaString(char *,int)&quot;(?makeJavaString@@YAPAUHjava_lang_String@@PADH@Z)
+<BR>
+SortedList.dll : fatal error LNK1120: 2 unresolved externals<BR>
+NMAKE : fatal error U1077: 'cl' : return code '0x2'<BR>
+Stop.</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+From the length of the implementation file, you should note the
+complexity of implementing data management for your Java native
+class in C.  Because C isn't object-oriented, special wrapper
+code needs to be developed for any native Java class that manages
+its data in C. This is an important design tradeoff-<A HREF="ch32.htm" >Chapter 32</A>,
+&quot;Interfacing to Existing C and C++ Libraries,&quot; describes
+how to manage it.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Tip</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Store your data in Java and use <TT>unhand()</TT> to access it whenever it yields acceptable performance. This will cut down your development time and simplify your code considerably, because it will be unnecessary to write wrapper code to manage the 
+instantiations of your Java class.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+You can't follow the previous tip for the <TT>SortedList</TT>
+implementation, because the overhead from converting strings back
+and forth from Java and C will choke the sorting routine and rob
+you of much of the C performance advantage. By moving the data
+management to C, you only have to convert strings in the <TT>AddString</TT>
+and <TT>GetString</TT> methods and
+not in the performance critical <TT>BubbleSort</TT>
+function.
+<P>
+Next, let's focus on the interface for data from and to Java,
+starting with the <TT>AddString</TT>
+native method.
+<H3><B>Using </B><TT><B><FONT SIZE=4 >makeCString</FONT></B></TT>
+</H3>
+<P>
+The <TT>AddString</TT> method takes
+a <TT>String</TT> and adds it to the
+list maintained by the given object. The prototype for the native
+C function looks like this:
+<BLOCKQUOTE>
+<TT>void SortedList_AddString(struct HSortedList
+*hthis,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+Hjava_lang_String *AddString);</TT>
+</BLOCKQUOTE>
+<P>
+This is pretty much as you expect: the first parameter is the
+handle to the Java <TT>SortedList</TT>
+object and the second is the handle to the Java String being passed.
+Notice that the structure name again follows the <TT>package_package_..._class</TT><I>
+</I>nomenclature.
+<P>
+Java strings are not passed by value, as were all the types that
+you previously considered. Instead, a handle to the Java String
+is passed. If you haven't run into them before, handles can be
+likened to a license plate on a car-they uniquely identify an
+object. Handles are used for two reasons: 
+<UL>
+<LI>To avoid the overhead in passing large objects to functions
+<LI>To provide security that isn't provided if a pointer was given
+to reference the object
+</UL>
+<P>
+With a pointer, you can do almost anything to the object. With
+a handle, you are constrained to the API given to you, providing
+as much security as desired by the API designer.
+<P>
+A Java string is stored in UNICODE to make it more portable. UNICODE
+is a standard similar to ASCII; it enables easier internationalization,
+whereas ASCII is very Eurocentric in nature. For native methods
+that use C and only ASCII, this means that you first must convert
+the Java string from UNICODE into ASCII before you can use strings
+passed to it. The <TT>makeCString</TT>
+interpreter API call does just this. <TT>makeCString</TT>
+converts the <TT>String</TT> referenced
+by a handle and allocates enough memory for the converted string,
+for which it returns a <TT>(char *)</TT>
+pointer. Here is a use of <TT>makeCString</TT>,
+copied from the <TT>AddString</TT>
+function:
+<BLOCKQUOTE>
+<TT>//Add String to the end of the List specified
+by hList.<BR>
+lLists[hList][nStringsUsed[hList]++] = makeCString(AddString);</TT>
+</BLOCKQUOTE>
+<P>
+Interpreter calls are unfortunately a common occurrence in developing
+native Java routines. As of this writing, many of the interpreter
+functions are poorly documented by Sun, but some additional documentation
+can be found in the <TT>interpreter.h</TT>
+and <TT>javaString.h</TT> files found
+in the <TT>\java\include</TT> directory
+of the JDK.
+<P>
+You should include <TT>javaString.h</TT>
+in your <TT>#include</TT> section
+whenever you use the <TT>makeCString</TT>
+function or the <TT>makeJavaString</TT>
+function described in the next section. This include file defines
+the prototypes for these two interpreter functions.
+<H3><B>Using </B><TT><B><FONT SIZE=4 >makeJavaString</FONT></B></TT>
+</H3>
+<P>
+The <TT>GetString</TT> native function
+has a similiar conversion need, as you might expect. In order
+to return the <TT>String</TT> referenced
+by the passed index, it needs to convert the C string stored in
+the C string table back into a handle to a Java <TT>String</TT>.
+The analogous Java interpreter function call needed to convert
+C <TT>(char *)</TT> variables into
+strings is called <TT>makeJavaString(char*
+theString, int strlength)</TT>. <TT>makeJavaString</TT>
+takes a <TT>(char *)</TT> and a string
+length as an <TT>(int)</TT>, instantiates
+a <TT>String</TT> variable in Java
+with that value, and returns a handle to that string (<TT>struct
+Hjava_lang_String *</TT>). The <TT>GetString</TT>
+native function uses <TT>makeJavaString</TT>
+as follows:
+<BLOCKQUOTE>
+<TT>return (makeJavaString(lLists[hList][nIndex],strlen(lLists[hList][nIndex])));</TT>
+</BLOCKQUOTE>
+<P>
+to return the <TT>[nIndex]th String</TT>
+in the <TT>[hList]th List</TT>. Note
+that the <TT>GetString</TT> function
+returns a handle to a Java string (<TT>struct
+Hjava_lang_String*</TT>) just as the <TT>AddString</TT>
+native function accepted one.
+<P>
+The complete <TT>SortedList</TT> implementation
+is shown below in Listing 31.9 for your reference.  This shows
+how all the parts described in the previous sections fit together.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.9. SortedListImp.cpp.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>extern &quot;C&quot; {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;#include &lt;StubPreamble.h&gt;
+<BR>
+&nbsp;&nbsp;#include &lt;javaString.h&gt;<BR>
+</TT>&nbsp;<TT>&nbsp;#include &quot;SortedList.h&quot;
+<BR>
+&nbsp;&nbsp;#include &lt;string.h&gt;<BR>
+<BR>
+&nbsp;&nbsp;/* nLists is a long that contains the number of lists
+that lString<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+has been allocated to contain. */<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;long nListsAllocated
+= 0;<BR>
+&nbsp;&nbsp;long nListsUsed = 0;<BR>
+<BR>
+&nbsp;&nbsp;/* nAllocated is an array of longs that contain the
+number of<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+strings that the indexed List element has been allocated for.
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+e.g. if nAllocated[3] = 16, then the SortedList object whose<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle
+is 3 is allocated for 16 strings in its list. */<BR>
+<BR>
+&nbsp;&nbsp;long *nStringsAllocated;<BR>
+<BR>
+&nbsp;&nbsp;/* lLists is a pointer to an array of lists of strings:
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; lLists --&gt; List [0]<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;|
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;V
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;String[0]
+(char *)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;String[1]
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;...
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--&gt;
+List [1]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+|<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+V<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String[0]
+(char *)<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&
+nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/
+<BR>
+<BR>
+&nbsp;&nbsp;char ***lLists;<BR>
+<BR>
+&nbsp;&nbsp;/* nStringsUsed is an array of longs that contain
+the number of<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+strings that the indexed List element actually contains.&nbsp;&nbsp;*/
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;long *nStringsUsed;
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;long SortedList_ResizeNumLists(long
+nNewAllocation) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;char***
+NewlLists;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long*&nbsp;&nbsp;&nbsp;NewnStringsAllocated;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;long*&nbsp;&nbsp;&nbsp;NewnStringsUsed;
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;NewlLists&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= new char** [nNewAllocation];<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;NewnStringsAllocated&nbsp;&nbsp;=
+new long&nbsp;&nbsp;&nbsp;[nNewAllocation];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;NewnStringsUsed&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= new long&nbsp;&nbsp;&nbsp;[nNewAllocation];<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long i;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for
+(i=0; (i &lt; nListsAllocated) &amp;&amp; (i &lt; nNewAllocation);
+i++) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NewlLists[i]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+lLists[i];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; NewnStringsAllocated[i] =
+nStringsAllocated[i];<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NewnStringsUsed[i]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= nStringsUsed[i];
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for
+(; (i &lt; nNewAllocation); i++) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NewlLists[i]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+NULL;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; NewnStringsAllocated[i] =
+0;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NewnStringsUsed[i]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 0;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;delete lLists;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;delete
+nStringsAllocated;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;delete nStringsUsed;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lLists&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+NewlLists;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;nStringsAllocated
+= NewnStringsAllocated;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nStringsUsed&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+NewnStringsUsed;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (nNewAllocation);<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;long SortedList_ResizeNumStrings(long hList, long
+nNewAllocation) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;char** NewlStrings;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;NewlStrings = new char* [nNewAllocation];
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long i;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for
+(i=0; (i &lt; nListsAllocated) &amp;&amp; (i &lt; nNewAllocation);
+i++) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NewlStrings[i] = lLists[hList][i];<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for
+(; (i &lt; nNewAllocation); i++) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NewlStrings[i] = NULL;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;delete
+lLists[hList];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lLists[hList] = NewlStrings;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;return
+(nNewAllocation);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;void SortedList_constructorA(struct
+HSortedList *hthis) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(nListsAllocated == 0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nListsAllocated = SortedList_ResizeNumLists(1);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long i;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+done = FALSE;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(nListsUsed == nListsAllocated)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nListsAllocated = SortedList_ResizeNumLists(nListsAllocated*2);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nStringsAllocated[nListsUsed] = 0;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;nStringsUsed[nListsUsed]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+0;<BR>
+<BR>
+</TT></TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;unhand(hthis)-&gt;hList
+= nListsUsed++;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;void SortedList_constructorB(struct
+HSortedList *hthis,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+long InitialAllocation) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (nListsAllocated == 0)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nListsAllocated
+= SortedList_ResizeNumLists(1);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;long
+i;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int done = FALSE;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (nListsUsed == nListsAllocated)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nListsAllocated
+= SortedList_ResizeNumLists(nListsAllocated*2);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;nStringsUsed[nListsUsed]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nStringsAllocated[nListsUsed]&nbsp;&nbsp;=
+SortedList_ResizeNumStrings(nListsUsed,<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&
+nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;InitialAllocation);
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;unhand(hthis)-&gt;hList
+= nListsUsed++;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;void BubbleSort(char*
+lSortStrings[], int nElements) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;long
+i,j;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int changed=TRUE;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (j=0; (j &lt; nElements-1) &amp;&amp;
+changed; j++) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* Maintain changed flag
+to remove unneeded interations. */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; changed = FALSE;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; for (i=0; i &lt; nElements-1;
+i++) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(strcmp(lSortStrings[i], lSortStrings[i+1]) &gt; 0) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*
+[i] belongs below [i+1] --&gt; swap! */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char*
+temp = lSortStrings[i];<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lSortStrings[i]
+= lSortStrings[i+1];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lSortStrings[i+1]
+= temp;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;changed
+= TRUE;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;void SortedList_AddString(struct
+HSortedList *hthis,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+Hjava_lang_String *AddString) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int hList = unhand(hthis)-&gt;hList;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (nStringsUsed[hList] == nStringsAllocated[hList])
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nStringsAllocated[hList]
+=<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SortedList_ResizeNumStrings(hList,
+nStringsAllocated[hList]*2);<BR>
+<BR>
+&nbsp;/* makeJavaString:&nbsp;&nbsp;Defined in javaString.h in
+\java\include.&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+</TT>&nbsp;<TT>/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Takes
+a Java string, allocates memory for a&nbsp;&nbsp;&nbsp;*/<BR>
+&nbsp;/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C
+or C++ (char *) with the same contents, and */<BR>
+</TT>&nbsp;<TT>/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;returns
+the (char *) to the string.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+*/<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lLists[hList][nStringsUsed[hList]++]
+= makeCString(AddString);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;BubbleSort(lLists[hList],
+nStringsUsed[hList]);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;struct Hjava_lang_String*
+SortedList_GetString(<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+HSortedList *hthis,<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;long
+nIndex) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+hList = unhand(hthis)-&gt;hList;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+Check for out of bounds.<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(nIndex &gt; nStringsUsed[hList]) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return(NULL);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;/*
+makeJavaString:&nbsp;&nbsp;Defined in javaString.h in \java\include.&nbsp;&nbsp;*/
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Takes
+a C or C++ (char *), instantiates&nbsp;&nbsp;&nbsp;&nbsp;*/<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a
+Java String with the same value, and&nbsp;&nbsp;&nbsp;&nbsp; */
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;returns
+the Java handle to the String.&nbsp;&nbsp;&nbsp;&nbsp; */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (makeJavaString(lLists[hList][nIndex],strlen(lLists[hList][nIndex])));
+<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;long SortedList_HowMany(struct HSortedList* hthis)
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return(nStringsUsed[unhand(hthis)-&gt;hList]);
+<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3><B>Building and Running a Class that Uses </B><TT><B><FONT SIZE=4 >SortedList</FONT></B></TT>
+</H3>
+<P>
+A simple applet that uses the native <TT>SortedList</TT>
+class is shown in Listing 31.10. <TT>SortPresidents</TT>
+was written as an applet just to show that applets also can call
+native functions. (There is one important caveat: the native code
+DLL must be already installed on the client machine within a directory
+contained in your <TT>PATH</TT> before
+the applet is presented to Netscape or <TT>appletviewer</TT>.)
+<TT>SortPresidents</TT> takes a list
+of <TT>Presidents</TT> and sorts them
+based on last name and prints out the results. Notice how <TT>SortedList</TT>
+still &quot;feels&quot; like a Java class to the user. You should
+strive for this feeling in your native Java class design.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.10. SortPresidents.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.applet.*;<BR>
+<BR>
+public class SortPresidents extends Applet {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public void init()
+{<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;thePresidents
+= new SortedList();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Washington,
+George&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Lincoln,
+Abraham&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Kennedy,
+John F&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Nixon,
+Richard&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Carter,
+Jimmy&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Reagan,
+Ronald&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Bush, George&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;thePresidents.AddString(&quot;Clinton,
+Bill&quot;);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+i;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int nNames = thePresidents.HowMany();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;There are &quot;+nNames+&quot;
+entries in our string list.&quot;);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (i=0; i &lt; nNames; i++)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println(thePresidents.GetString(i));<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;SortedList thePresidents;
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+To build your <TT>SortedList</TT>
+class, copy the entire <TT>...\ch34\SortedList</TT>
+directory into <TT>\java\classes\SortedList</TT>.
+From there you use <TT>nmake</TT>
+and the <TT>SortedList.mak</TT> makefile
+to build the <TT>SortedList</TT> class.
+This <TT>makefile</TT> looks identical
+to the one used to build the Triangle class in the last section.
+<P>
+Your <TT>SortedList</TT> should look
+something like:
+<BLOCKQUOTE>
+<TT>C:\java\classes\SortedList&gt; nmake
+SortedList.mak<BR>
+<BR>
+Microsoft (R) Program Maintenance Utility&nbsp;&nbsp;&nbsp;Version
+1.60.5270<BR>
+Copyright&nbsp;&nbsp;Microsoft Corp 1988-1995. All rights reserved.
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javac SortedList.java
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javah
+SortedList<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...
+<BR>
+<BR>
+C:\java\classes\SortedList&gt;</TT>
+</BLOCKQUOTE>
+<P>
+We also need to compile our sample applet <TT>SortPresidents</TT>
+that uses the <TT>SortedList</TT>
+class:
+<BLOCKQUOTE>
+<TT>C:\java\classes\SortedList&gt; javac
+SortPresidents.java<BR>
+</TT>
+</BLOCKQUOTE>
+<P>
+You are now ready to run the applet, Listing 31.11.<BR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.11. SortedList Build.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>C:\java\classes\SortedList&gt; appletviewer
+RunIt.html<BR>
+There are 8 entries in our string list.<BR>
+Bush, George<BR>
+Carter, Jimmy<BR>
+Clinton, Bill<BR>
+Kennedy, John F<BR>
+Lincoln, Abraham<BR>
+Nixon, Richard<BR>
+Reagan, Ronald<BR>
+Washington, George<BR>
+<BR>
+C:\java\classes\SortedList&gt;</TT>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="AccessingArraysofClasses"><B><FONT SIZE=5 COLOR=#FF0000>Accessing
+Arrays of Classes</FONT></B></A></H2>
+<P>
+Due to the drastic performance advantage that C has in performing
+array-based operations, it is very common to pass arrays into
+a native routine. For this reason, in this section you examine
+how to pass and receive arrays from a native method. To demonstrate
+passing arrays to and from Java, the <TT>GradeBook</TT>
+class and its C implementation are shown in Listings 31.12 and
+31.13. The <TT>GradeBook</TT> class
+implements a simple grade tracking and average computing system.
+<P>
+The <TT>GradeBook</TT> class supports
+only one instantiation, unlike the previous <TT>SortedList</TT>
+class. <TT>GradeBook</TT> was designed
+this way to simplify the implementation of <TT>GradeBook</TT>
+to remove the details that were present in the <TT>SortedList</TT>
+class of the last section. A real application that wants to use
+more than one <TT>GradeBook</TT> requires
+a rewrite of this class to support multiple instantiations.
+<P>
+Looking closer at the Java <TT>GradeBook</TT>
+class, you should see two new data types that have not previously
+been passed into a native method. First, the <TT>NameStudents</TT>
+method accepts an array of <TT>String</TT>
+containing the list of students enrolled for the class. Second,
+the <TT>AddTest</TT> method accepts
+an array of <TT>float</TT> for the
+list of scores achieved by the respective students on a test.
+In the implementation file, let's use this example to see how
+you can decode Java arrays into C arrays.
+<P>
+This native class exploits C's array operation performance advantage
+over Java to improve the speed of searching for a student's records
+and computing test and class averages.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.12. GradeBook.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>public class GradeBook {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+void constructor(int nStudents, int nTests);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public GradeBook(int
+nStudents, int nTests) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;constructor(nStudents, nTests);<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+void&nbsp;&nbsp;NameStudents(String lStudents[]);<BR>
+&nbsp;&nbsp;public native int&nbsp;&nbsp;&nbsp;AddTest(float lScores[]);
+<BR>
+<BR>
+&nbsp;&nbsp;public native float GetTestAvg(int nTestNumber);<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+float GetStudentAvg(String szStudentName);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public native
+int&nbsp;&nbsp;&nbsp;HowManyTests();<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;static { System.loadLibrary(&quot;GradeBook&quot;);
+}<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3><B>Accessing a String Array</B></H3>
+<P>
+The implementation file for the <TT>GradeBook</TT>
+class is shown in Listing 31.13.  The file's general skeleton
+is very similar to the last two classes you have considered.
+<P>
+The <TT>NameStudents</TT> method is
+responsible for associating the names of all the students in the
+class with the test scores. This enables the user of this class
+to pull a student's record using the student's name as a query.
+Here is the <TT>NameStudents</TT>
+prototype:
+<BLOCKQUOTE>
+<TT>void GradeBook_NameStudents(struct HGradeBook*&nbsp;&nbsp;&nbsp;&nbsp;
+hthis,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+HArrayOfString* JavalStudents) {</TT>
+</BLOCKQUOTE>
+<P>
+Notice that Java has a special handle type for an array of <TT>String</TT>,
+<TT>struct HArrayOfString*</TT>. This
+handle contains only one element, <TT>body</TT>,
+that you need to consider. This <TT>body</TT>
+element is common to all <TT>struct HArrayOfObject*</TT>
+handles in native method programming and is a pointer to a list
+of handles or, in the case of intrinsic Java types that have C
+equivalents, the actual array of values. For the <TT>struct
+HArrayOfString</TT>, <TT>body</TT>
+points to a list of <TT>String</TT>
+handles that contains the names of all the students in the class.
+<P>
+Reading in the names of the students in the class is then as easy
+as writing a loop that grabs each student's string handle and
+converts it to a C <TT>(char *)</TT>
+using <TT>makeCString</TT>, as described
+in the previous section. To grab the individual string handle
+and convert it, you use the following construct in <TT>NameStudents</TT>:
+<BLOCKQUOTE>
+<TT>struct Hjava_lang_String* hStudentName;
+<BR>
+.<BR>
+.<BR>
+.<BR>
+hStudentName = (struct Hjava_lang_String *)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; (unhand(JavalStudents)-&gt;body)[i];
+<BR>
+<BR>
+lStudents[i] = makeCString(hStudentName);</TT>
+</BLOCKQUOTE>
+<P>
+This accesses the <TT>body</TT> variable
+by first unhanding the <TT>JavalStudents
+(struct HArrayOfString*)</TT> variable using <TT>unhand</TT>.
+As explained previously, <TT>body</TT>
+is a pointer to a list of <TT>String</TT>
+handles, so to obtain the i<FONT SIZE=1>th</FONT> name handle
+in the list, you simply suffix an array index <TT>[i]</TT>
+to the <TT>body</TT> pointer. By iterating
+with a loop over the entire class list, you can fill <TT>lStudents</TT>,
+the C <TT>(char *)</TT> version of
+the class list with the names of the students in the class. <TT>lStudents</TT>
+is then used by the <TT>GetStudentAvg</TT>
+native method to search for the student's grade records by name.
+<H2><A NAME="AccessingaFloatArray"><B><FONT SIZE=5 COLOR=#FF0000>Accessing
+a Float Array</FONT></B></A></H2>
+<P>
+Accessing an array of a basic Java type is easier. In the <TT>GradeBook</TT>
+class, the <TT>AddTest</TT> method
+accepts a list of <TT>float</TT> test
+scores for each student. Its native method implementation prototype
+looks like the following:
+<BLOCKQUOTE>
+<TT>long GradeBook_AddTest(struct HGradeBook&nbsp;&nbsp;&nbsp;&nbsp;*hthis,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+struct HArrayOfFloat *lTestScoresIN);</TT>
+</BLOCKQUOTE>
+<P>
+Again, you have a handle to an array of objects, but this time
+the handle is to <TT>ArrayOfFloat</TT>.
+Accessing <TT>ArrayOfFloat</TT> is
+very similar to accessing the <TT>String</TT>
+array, but because <TT>float</TT>
+is an intrinsic type, you can simply cast the <TT>body</TT>
+pointer into a <TT>(float *)</TT>.
+This pointer can then be used as a normal <TT>(float
+*)</TT> to copy the elements of the array from the Java
+array object into your C array object:
+<BLOCKQUOTE>
+<TT>float* lJavaTestScores = (float *)(unhand(lTestScoresIN)-&gt;body);
+<BR>
+float* lCTestScores = new float[nStudents];<BR>
+<BR>
+int i;<BR>
+for (i=0; i &lt; nStudents; i++) {<BR>
+&nbsp;&nbsp;&nbsp;lCTestScores[i] = lJavaTestScores[i];<BR>
+}<BR>
+<BR>
+lTests[nTests] = lCTestScores;<BR>
+nTests++;<BR>
+</TT>
+</BLOCKQUOTE>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Caution</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+It is tempting to assign <TT>lJavaTestScores</TT> directly to <TT>lTests</TT> rather than to allocate a new C array and copy element by element. If the Java array object you are indirectly referencing with this pointer passes out of scope, however, and is 
+garbage collected by the Java interpreter (because it doesn't have any knowledge of your C copy of the pointer), the pointer you assigned to <TT>lTests</TT> will also suddenly be invalid. Copying the array and assigning the pointer to this copy to 
+<TT>lTests</TT> protects you from this bug. Remember this when you are designing your own classes.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.13. GradeBookImp.cpp.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>extern &quot;C&quot; {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;#include &lt;StubPreamble.h&gt;
+<BR>
+&nbsp;&nbsp;#include &quot;GradeBook.h&quot;<BR>
+</TT>&nbsp;<TT>&nbsp;#include &lt;string.h&gt;
+<BR>
+&nbsp;&nbsp;#include &lt;javaString.h&gt;<BR>
+<BR>
+&nbsp;&nbsp;long&nbsp;&nbsp;&nbsp;&nbsp;nStudents;<BR>
+</TT>&nbsp;<TT>&nbsp;char**&nbsp;&nbsp;lStudents;
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;long&nbsp;&nbsp;&nbsp;&nbsp;nTests;
+<BR>
+&nbsp;&nbsp;float** lTests;<BR>
+<BR>
+&nbsp;&nbsp;void GradeBook_constructor(struct HGradeBook *hthis,
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+long&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nStudentsIN,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+long&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nTotalTests)
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nStudents = nStudentsIN;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lStudents
+= new char* [nStudents];<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;nTests&nbsp;&nbsp;&nbsp;&nbsp;=
+0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTests&nbsp;&nbsp;&nbsp;&nbsp;= new float*
+[nTotalTests];<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;long GradeBook_AddTest(struct HGradeBook&nbsp;&nbsp;&nbsp;&nbsp;*hthis,
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+struct HArrayOfFloat *lTestScoresIN) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+float* lJavaTestScores = (float *)(unhand(lTestScoresIN)-&gt;body);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; float* lCTestScores = new float[nStudents];
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; int i;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+for (i=0; i &lt; nStudents; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lCTestScores[i]
+= lJavaTestScores[i];<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+lTests[nTests] = lCTestScores;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; nTests++;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; return (nTests);<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;void GradeBook_NameStudents(struct HGradeBook*&nbsp;&nbsp;&nbsp;&nbsp;
+hthis,<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+HArrayOfString* JavalStudents) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;struct
+Hjava_lang_String* hStudentName;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+i;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (i=0; i &lt; nStudents; i++) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; hStudentName = (struct Hjava_lang_String
+*)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+(unhand(JavalStudents)-&gt;body)[i];<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+lStudents[i] = makeCString(hStudentName);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;float GradeBook_GetTestAvg(struct
+HGradeBook* hthis,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+long nTestNumber) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int i;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;float*
+lTestScores = lTests[nTestNumber-1];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;fScoreAccum = 0;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (i=0; i &lt; nStudents; i++) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+fScoreAccum += lTestScores[i];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (fScoreAccum/((float)nStudents));
+<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;float GradeBook_GetStudentAvg(struct HGradeBook* hthis,
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+Hjava_lang_String* hStudentName) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+char* szSearchStudent = makeCString(hStudentName);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+long cStudentIndex, bDone;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; for (cStudentIndex=0, bDone=FALSE; (cStudentIndex
+&lt; nStudents) &amp;&amp; !bDone;) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (strcmp(szSearchStudent,
+lStudents[cStudentIndex]) == 0) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bDone
+= TRUE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cStudentIndex++;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; }<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; if (!bDone)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+Student not found!<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+return (-1.0f);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+long&nbsp;&nbsp;cTestNum;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; float fTestScoreAccum;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; for (cTestNum=0, fTestScoreAccum=0.0f;
+cTestNum &lt; nTests; cTestNum++) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fTestScoreAccum
++= lTests[cTestNum][cStudentIndex];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; }<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; float fTestAvg = fTestScoreAccum/((float)nTests);
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; return(fTestAvg);<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;long GradeBook_HowManyTests(struct HGradeBook* hthis)
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return(nTests);<BR>
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+A sample Java application, TeachersPet, that uses the <TT>GradeBook</TT>
+class is shown in Listing 31.14. This application creates a new
+<TT>GradeBook</TT> with <TT>5</TT>
+students and <TT>3</TT> tests. With
+this database created, it then finds the overall average for each
+student and the average for the class as a whole.<BR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 31.14. TeachersPet.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>public class TeachersPet {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;public static
+void main(String argv[]) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+nStudents = 5;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int nTests = 3;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;GradeBook myClass = new GradeBook(nStudents,
+nTests);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The student list<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String lszStudents[] = new String[nStudents];
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lszStudents[0]
+= new String(&quot;Susan Harris&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lszStudents[1] = new String(&quot;Thomas
+Thompson&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lszStudents[2]
+= new String(&quot;Blake Cronin&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lszStudents[3] = new String(&quot;Rotten
+Johnson&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lszStudents[4]
+= new String(&quot;Harrison Jackson&quot;);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;myClass.NameStudents(lszStudents);
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+The student scores for test 1.<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;float
+lTest1Grades[] = new float[nStudents];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest1Grades[0] = 93;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lTest1Grades[1]
+= 86;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest1Grades[2] = 89;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lTest1Grades[3]
+= 65;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest1Grades[4] = 78;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;myClass.AddTest(lTest1Grades);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// The student scores for test 2.<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float lTest2Grades[] = new float[nStudents];
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lTest2Grades[0]
+= 100;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest2Grades[1] = 83;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lTest2Grades[2]
+= 91;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest2Grades[3] = 55;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lTest2Grades[4]
+= 83;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;myClass.AddTest(lTest2Grades);
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+The student scores for test 3.<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;float
+lTest3Grades[] = new float[nStudents];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest3Grades[0] = 89;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lTest3Grades[1]
+= 94;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest3Grades[2] = 82;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;lTest3Grades[3]
+= 59;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;lTest3Grades[4] = 85;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;myClass.AddTest(lTest3Grades);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;// Compute each student's average.<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float fStudentAvg=0.0f;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+cStudent;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for
+(cStudent = 0; cStudent &lt; nStudents; cStudent++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; fStudentAvg = myClass.GetStudentAvg(lszStudents[cStudent]);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println(lszStudents[cStudent]+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;'s
+average on the 3 tests is &quot;+fStudentAvg);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.out.println(&quot;&quot;);
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;//
+Compute the class average.<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;float
+fClassAvg=0.0f;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float fTestAvg;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;cTest;
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;for
+(cTest = 1; cTest &lt; nTests+1; cTest++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; fTestAvg&nbsp;&nbsp;&nbsp;=
+myClass.GetTestAvg(cTest);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println(&quot;The class average on Test #&quot;+cTest+&quot;
+is &quot;+fTestAvg);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; fClassAvg += fTestAvg;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;fClassAvg
+/= ((float)nTests);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;System.out.println(&quot;\nThe
+class average on the 3 tests is &quot;+fClassAvg);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;}<BR>
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Compile the <TT>GradeBook</TT> class
+library and the sample application TeachersPet just as in the
+last two examples:
+<BLOCKQUOTE>
+<TT>C:\java\classes\SortedList&gt; nmake
+GradeBook.mak<BR>
+<BR>
+Microsoft (R) Program Maintenance Utility&nbsp;&nbsp;&nbsp;Version
+1.60.5270<BR>
+Copyright&nbsp;&nbsp;Microsoft Corp 1988-1995. All rights reserved.
+<BR>
+.<BR>
+.<BR>
+.<BR>
+<BR>
+C:\java\classes\SortedList&gt; javac TeachersPet.java<BR>
+<BR>
+C:\java\classes\SortedList&gt;</TT>
+</BLOCKQUOTE>
+<P>
+Finally, give the application a test run:
+<BLOCKQUOTE>
+<TT>C:\java\classes\SortedList&gt; java TeachersPet
+<BR>
+<BR>
+Susan Harris's average on the 3 tests is 94<BR>
+Thomas Thompson's average on the 3 tests is 87.6667<BR>
+Blake Cronin's average on the 3 tests is 87.3333<BR>
+Rotten Johnson's average on the 3 tests is 59.6667<BR>
+Harrison Jackson's average on the 3 tests is 82<BR>
+<BR>
+The class average on Test #1 is 82.2<BR>
+The class average on Test #2 is 82.4<BR>
+The class average on Test #3 is 81.8<BR>
+<BR>
+The class average on the 3 tests is 82.1333<BR>
+<BR>
+C:\java\classes\SortedList&gt;</TT>
+</BLOCKQUOTE>
+<H2><A NAME="Summary"><B><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></B></A>
+</H2>
+<P>
+Native methods compose a very powerful expansion interface for
+Java. Unfortunately, for its importance to many developers, the
+intricacies of native methods are very poorly documented. This
+chapter uncovered some of the difficulties that native methods
+present to you when you first develop them.
+<P>
+If you take nothing else away from this chapter, remember this
+rule of thumb: It is much more complex to handle memory management
+in C than in Java. (Compare the general complexity of a <TT>Triangle</TT>
+class method implementation with the <TT>SortedList</TT>
+class implementation.) Not only is the design more complex, but
+memory management bugs and leaks are also more likely to appear.
+<P>
+In this chapter's <TT>Triangle</TT>
+class, you saw how to access objects encapsulated by the class
+containing the native method and also how to return intrinsic
+types that have a C counterpart.
+<P>
+In the <TT>SortedList</TT> class,
+you learned how to pass more complex Java objects into and from
+a native method, using the Java <TT>String</TT>
+object as an example. You also saw firsthand the complexities
+of doing memory management in C as opposed to accessing the variables
+in the Java class.
+<P>
+In the final example, the <TT>GradeBook</TT>
+class, you examined passing arrays of objects into a native method.
+In this class, you passed both an array of <TT>float</TT>s
+and an array of <TT>String</TT>s into
+native methods.
+<P>
+You've only scratched the surface of the native method interface,
+even though these examples cover the most common needs for the
+native method developer. In <A HREF="ch32.htm" >Chapter 32</A>,
+you examine interfacing Java with C and C++ libraries, and in
+the process, learn more about the intricacies of the native interface.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch30.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch32.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

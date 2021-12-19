@@ -1,0 +1,251 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Using Transactions with Enterprise JavaBeans</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The getInitialContext method shown here is used to create the JNDI context based on properties in the environment. Example values are defined in the DeploymentDescriptor.txt file provided on the CD&#150;ROM. In particular, the following environmental properties are defined:
+</P>
+<DL>
+<DD>driver: weblogic.jdbc.jts.Driver
+<DD>url1: jdbc:weblogic:jts:db1
+<DD>url2: jdbc:weblogic:jts:db2
+<DD>inserthome: insertbean.InsertBeanHome
+</DL>
+<P>These properties assume that the BEAWebLogic server is being used and that it is configured with two database connection pools, one called db1 and the other db2. The JDBC driver used by the TestBean is the BEAWebLogic transaction and connection pool aware driver, and the insert beans are registered with the name insertbean.InsertBeanHome, as indicated in the descriptor.
+</P>
+<PRE>
+    protected Context getInitialContext(Properties env)
+      throws Exception
+    {
+        Properties p = new Properties();
+        String url = null;
+        String user=null;
+        String password=null;
+
+        url = env.getProperty(&#147;jndi_url&#148;);
+        user = env.getProperty(&#147;jndi_user&#148;);
+        password = env.getProperty(&#147;jndi_password&#148;);
+
+        p.put(Context.INITIAL_CONTEXT_FACTORY,
+                &#147;weblogic.jndi.T3InitialContextFactory&#148;);
+
+        if(url != null)
+            p.put(Context.PROVIDER_URL, url);
+        else
+            p.put(Context.PROVIDER_URL, &#147;t3://localhost:7001&#148;);
+
+        if (user != null)
+        {
+            p.put(Context.SECURITY_PRINCIPAL, user);
+
+            if (password == null) password = &#147;&#148;;
+
+            p.put(Context.SECURITY_CREDENTIALS, password);
+        }
+
+        return new InitialContext(p);
+    }
+</PRE>
+<P>The test bean doesn&#146;t do anything when sent the create method. All of the real initialization happens when the context is assigned, as shown in this code:
+</P>
+<PRE>
+    public void ejbCreate()
+    {
+    }
+</PRE>
+<P>What follows is the first testing method called by the client. This method doesn&#146;t begin a transaction before calling the internal test method. This internal method, included in the three methods accessed by the client, performs the actual connection with the other beans.
+</P>
+<PRE>
+    public void testNoTrans(int mode1
+                             ,int mode2
+                             ,String msg)
+      throws Exception
+    {
+        UserTransaction trans = context.getUserTransaction();
+
+        try
+        {
+            test(mode1,mode2,msg);
+        }
+        catch(Exception exp)
+        {
+        }
+    }
+</PRE>
+<P>The next two methods also call test, but both do so inside a transaction scope. The first method commits the transaction and the second rolls it back.
+</P>
+<PRE>
+    public void testCommitNewTrans(int mode1
+                                    ,int mode2
+                                    ,String msg)
+      throws Exception
+    {
+        UserTransaction trans = context.getUserTransaction();
+
+        trans.begin();
+
+        try
+        {
+            test(mode1,mode2,msg);
+        }
+        catch(Exception exp)
+        {
+        }
+        finally
+        {
+            trans.commit();
+        }
+    }
+
+    public void testRollbackNewTrans(int mode1
+                                    ,int mode2
+                                    ,String msg)
+      throws Exception
+    {
+        UserTransaction trans = context.getUserTransaction();
+
+        trans.begin();
+        try
+        {
+            test(mode1,mode2,msg);
+        }
+        catch(Exception exp)
+        {
+        }
+        finally
+        {
+            trans.rollback();
+        }
+    }
+</PRE>
+<P>The test method, which follows, uses the modes provided by the client that tell it what messages to send to the secondary beans. Test is called by one of the previous three methods. The String message is used as the data to insert in the database.
+</P>
+<P>First, the test looks up the EJB home for the secondary beans. Then it creates the beans and messages them. The arguments to the messages are the string to insert in the database and the URL for the database to contact.</P>
+<PRE>
+    public void test(int mode1,int mode2,String msg)
+     throws Exception
+    {
+        InsertBean bean1,bean2;
+        InsertBeanHome otherHome;
+
+        <B>otherHome = (InsertBeanHome) jndi.lookup(insertHome);</B>
+
+        <B>bean1 = otherHome.create();</B>
+
+        try
+        {
+
+            //Try to insert with the first bean.
+            switch(mode1)
+            {
+                case TestBean.NONE:
+
+                    <B>bean1.insertNoTrans(msg,url1);</B>
+                    break;
+
+                case TestBean.REQUIRE:
+
+                    <B>bean1.insertRequireTrans(msg,url1);</B>
+                    break;
+
+                case TestBean.NEW:
+
+                    <B>bean1.insertNewTrans(msg,url1);</B>
+                    break;
+
+                case TestBean.MANDATE:
+
+                    <B>bean1.insertMandateTrans(msg,url1);</B>
+                    break;
+            }
+        }
+        catch(Exception ignore)
+        {
+        }
+        finally
+        {
+            try
+            {
+                <B>bean1.remove();</B>
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+
+        bean2 = otherHome.create();
+
+        try
+        {
+            //Try to insert with the second bean.
+            switch(mode2)
+            {
+                case TestBean.NONE:
+
+                    bean2.insertNoTrans(msg,url2);
+                    break;
+
+                case TestBean.REQUIRE:
+
+                    bean2.insertRequireTrans(msg,url2);
+                    break;
+
+                case TestBean.NEW:
+
+                    bean2.insertNewTrans(msg,url2);
+                    break;
+
+                case TestBean.MANDATE:
+
+                    bean2.insertMandateTrans(msg,url2);
+                    break;
+            }
+        }
+        catch(Exception ignore)
+        {
+        }
+        finally
+        {
+            try
+            {
+                bean2.remove();
+            }
+            catch(Exception exp)
+            {
+            }
+        }
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="23-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="23-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

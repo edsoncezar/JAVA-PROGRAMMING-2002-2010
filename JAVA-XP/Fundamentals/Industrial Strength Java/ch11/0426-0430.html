@@ -1,0 +1,665 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0420-0425.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0431-0436.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-426"><P>Page 426</P></A>
+
+
+
+
+
+
+<PRE>
+
+static KeywordTable keywordTable =
+
+&Acirc;CommandInputStream.createKeywordTable(keywordList);
+
+
+
+    private final static int CMD_RCPT = 0;
+
+    private final static int CMD_MAIL = 1;
+
+    private final static int CMD_DATA = 2;
+
+    private final static int CMD_HELO = 3;
+
+    private final static int CMD_QUIT = 4;
+
+    private final static int CMD_RSET = 5;
+
+    private final static int CMD_NOOP = 6;
+
+
+
+    private final static String delimiters = &quot; \t\r\n&quot;;
+
+
+
+    public SMTPHandler(Socket connection, MailDomain domain) {
+
+    super(connection);
+
+    this.domain = domain;
+
+    }
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Responding to Connection Openings
+
+</B>
+
+</P>
+
+
+
+<P>The protocol processing occurs inside your run() method. After creating the input
+
+and output streams, start the client exchange by sending a reply code of &quot;220&quot; and
+
+your domain name. Essentially, you respond to the connection opening. The first command
+
+you receive should be a HELO, which supplies the clients's name:
+
+</P>
+
+
+
+
+<PRE>
+
+    public void run() {
+
+    try {
+
+      InputStream inStream = new
+
+             &Acirc;TimeoutInputStream(connection.getInputStream());
+
+      in = new CommandInputStream(inStream, keywordTable, delimiters);
+
+      out = new InetOutputStream(connection.getOutputStream(), true);
+
+      String cmdLine;
+
+
+
+      out.println(&quot;220 &quot; + domain.domainName() + &quot; ready&quot;);
+
+      if (in.nextCommand() != CMD_HELO) {
+
+        out.println(&quot;503 Bad sequence of commands&quot;);
+
+        return;
+
+      }
+
+      if (in.hasMoreArgs()) {
+
+        System.out.println(&quot;connected to &quot; + in.nextArg(&quot;\r\n&quot;));
+
+      }
+
+      out.println(&quot;250 &quot; + domain.domainName());
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-427"><P>Page 427</P></A>
+
+
+
+
+
+
+
+<B>
+
+Handling E-Mail Commands
+
+</B>
+
+
+
+<P>After responding, enter a loop of collecting keywords and performing protocol
+
+processing. You support the minimum required set of commands for exchanging e-mail:
+
+</P>
+
+
+
+<UL>
+
+<LI>          MAIL: Command to initiate a message transfer
+
+<LI>          RSET: Command to reset the protocol state
+
+<LI>          NOOP: No operation command
+
+<LI>          QUIT: Command to terminate the session
+
+</UL>
+
+
+
+<P>Receiving any other command indicates an error. MAIL is a complex operation, so
+
+you provide a separate function to perform this operation. For RSET and NOOP,
+
+simply respond &quot;OK&quot;; for QUIT, exit. Again, the &quot;finally&quot; clause ensures proper closing of
+
+the connection. The basic command loop follows:
+
+</P>
+
+
+<PRE>
+
+      while (true) {
+
+        int cmd = in.nextCommand();
+
+        switch (cmd) {
+
+          case CMD_MAIL:
+
+            receiveMAIL();
+
+            break;
+
+
+
+          case CMD_RSET:
+
+          case CMD_NOOP:
+
+            out.println(&quot;250 OK&quot;);
+
+            break;
+
+
+
+          case CMD_QUIT:
+
+            out.println(&quot;221 bye&quot;);
+
+            return;
+
+
+
+          case CommandInputStream.TT_OTHER:
+
+System.out.println(&quot;unknown command - &quot; + in.getCommandString());
+
+
+
+          default:
+
+            out.println(&quot;503 Bad command sequence&quot;);
+
+            return;
+
+        }
+
+      }
+
+    }
+
+    catch (Exception e) {
+
+      System.out.println(e);
+
+    }
+
+    finally {
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-428"><P>Page 428</P></A>
+
+
+
+
+
+
+<PRE>
+
+      try {
+
+        out.close();
+
+      }
+
+      catch (IOException e) {
+
+        System.out.println(e);
+
+      }
+
+    }
+
+    }
+
+</PRE>
+
+
+
+
+<P>As you learned in coding the SMTP client, the MAIL command initiates a sequence
+
+of additional commands that lead to the transmission of the message. You will receive
+
+the following:
+
+</P>
+
+
+
+<UL>
+
+<LI>          The MAIL FROM command, which identifies the sender of the message
+
+<LI>          One or more RECP TO: commands, which identifies the recipients of the message
+
+<LI>          A DATA command, which indicates the start of the message transmission
+
+<LI>          The actual message, which ends with a line containing only a &quot;.&quot; character
+
+</UL>
+
+<P>
+
+<B>
+
+Getting Sender's E-Mail Address
+
+</B>
+
+</P>
+
+
+
+<P>In SMTP, &lt; and &gt; brackets surround all e-mail addresses. You can switch delimiter sets
+
+to extract the next argument, which is the sender's mail address:
+
+</P>
+
+
+
+
+<PRE>
+
+    void receiveMAIL() throws IOException {
+
+    String arg = in.nextArg(&quot; &lt;\r\n&quot;);
+
+    if (!&quot;FROM:&quot;.equalsIgnoreCase(arg)) {
+
+      out.println(&quot;503 Bad command sequence&quot;);
+
+      throw new BadCmdSequence(&quot;MAIL &quot; + arg);
+
+    }
+
+    out.println(&quot;250 OK&quot;);
+
+    String sender = in.nextArg(&quot; &lt;&gt;\r\n&quot;);
+
+</PRE>
+
+
+<P>
+
+
+
+<B>
+
+Collecting E-mail Recipient Addresses
+
+</B>
+
+</P>
+
+
+
+<P>Allocate a Vector to hold the list of recipient addresses. Each address is specified in
+
+its own RCPT TO: command. For each address, you validate your ability to accept mail
+
+for that user, and you continue to collect recipients until receiving the DATA command:
+
+</P>
+
+
+<PRE>
+
+    Vector recipients = new Vector();
+
+    boolean done = false;
+
+    while (!done) {
+
+      switch (in.nextCommand()) {
+
+        case CMD_RCPT:
+
+</PRE>
+
+
+
+
+
+
+<A NAME="PAGENUM-429"><P>Page 429</P></A>
+
+
+
+
+
+
+<PRE>
+
+          arg = in.nextArg(&quot; &lt;\r\n&quot;);
+
+          if (!&quot;TO:&quot;.equalsIgnoreCase(arg)) {
+
+            out.println(&quot;503 Bad command sequence&quot;);
+
+            throw new BadCmdSequence(&quot;RCPT &quot; + arg);
+
+          }
+
+          String recp = in.nextArg(&quot; &lt;&gt;\r\n&quot;);
+
+          if (domain.validateUser(recp)) {
+
+            recipients.addElement(recp);
+
+            out.println(&quot;250 OK&quot;);
+
+          }
+
+          else
+
+            out.println(&quot;550 invalid user&quot;);
+
+          break;
+
+        case CMD_DATA:
+
+          done = true;
+
+          break;
+
+        case CMD_NOOP:
+
+          continue;
+
+        case CMD_RSET:
+
+          return;
+
+        case CMD_QUIT:
+
+          out.println(&quot;221 bye&quot;);
+
+          throw new IOException(&quot;aborted&quot;);
+
+        default:
+
+          out.println(&quot;503 Bad command sequence&quot;);
+
+          throw new BadCmdSequence(in.getCommandString());
+
+      }
+
+    }
+
+    out.println(&quot;354 send message&quot;);
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Collecting the Message Text
+
+</B>
+
+</P>
+
+
+
+<P>The message is transmitted as a sequence of lines terminated by a line containing only
+
+a &quot;.&quot;. To prevent false indication of end-of-message if the message contains lines with only
+
+a &quot;.&quot;, the client adds an extra &quot;.&quot; to any line starting with a &quot;.&quot;. You must reverse this
+
+process and strip the first &quot;.&quot; from any line of more than one character. After collecting
+
+the complete message, deliver the message to the recipients and return the
+
+appropriate response code. Note that the MailDomain class hides all the details of mail storage
+
+from the SMTP server:
+
+</P>
+
+
+
+
+<PRE>
+
+    StringBuffer msg = new StringBuffer();
+
+    while (true) {
+
+      String str = in.readLine();
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-430"><P>Page 430</P></A>
+
+
+
+
+
+
+<PRE>
+
+      if ((str.length() &gt; 0) &amp;&amp; (str.charAt(0) == `.')) {
+
+        if (str.length() == 1)
+
+          break;
+
+        str = str.substring(1, str.length());
+
+      }
+
+      msg.append(str);
+
+      msg.append(&quot;\r\n&quot;);
+
+    }
+
+    if (domain.deliverMsg(msg.toString(), recipients))
+
+      out.println(&quot;250 OK&quot;);
+
+    else
+
+      out.println(&quot;450 failure&quot;);
+
+    }
+
+  }
+
+</PRE>
+
+
+<P>
+
+
+
+<B>
+
+Indicating SMTP Command-Processing Errors
+
+</B>
+
+</P>
+
+
+
+<P>Define the following new exception to indicate an error in SMTP command processing:
+
+</P>
+
+
+<PRE>
+
+  class BadCmdSequence extends IOException {
+
+    public BadCmdSequence() {
+
+    super(&quot;Bad command sequence&quot;);
+
+    }
+
+
+
+    public BadCmdSequence(String what) {
+
+    super(&quot;Bad command sequence: &quot; + what);
+
+    }
+
+  }
+
+</PRE>
+
+
+
+
+<H3><A NAME="ch11_ 33">
+
+Receiving Mail Using POP
+
+</A></H3>
+
+
+
+<P>POP, or the Post Office Protocol, provides a means for a client to retrieve mail held on
+
+a server. POP is designed for personal computers that, unlike large servers, only
+
+periodically connect to the Internet. With SMTP, the sender controls delivery of a message. When
+
+a message is sent through SMTP, the server usually tries to connect to the
+
+destination immediately. If the destination is not available, the server periodically retries until
+
+it returns the message as undeliverable; the sender defines the timing of the retries.
+
+With POP, the message remains on a server until the client connects to retrieve it. POP makes
+
+it practical to send e-mail to a subscriber attached to the Internet via a dial-up connection.
+
+</P>
+
+
+
+<P>The POP command/response procedures are similar to but simpler than SMTP
+
+procedures. A &quot;+OK&quot; indicates positive responses, whereas an &quot;-ERR&quot; indicates negative
+
+responses.
+
+</P>
+
+<P><CENTER>
+
+<a href="0420-0425.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0431-0436.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

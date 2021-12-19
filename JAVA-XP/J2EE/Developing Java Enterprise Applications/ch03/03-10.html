@@ -1,0 +1,165 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Basic JDBC Programming</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The example uses a java.io.BufferedReader to read values from the console, then loops while the variable notDone is true. This variable is set to false when the user types &#147;exit&#148; at the prompt. Assuming the user types a valid SELECT statement, we call executeQuery() because we expect a result set back.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>The Statement method executeQuery() always returns a result set, even if there are no values returned. In that case, ResultSet would have no rows, but it would contain metadata related to the query.</FONT><HR>
+</BLOCKQUOTE>
+<P>To find out what columns are returned, first access ResultSetMetaData, then use that to find the column count. Now iterate through the columns and print each column name. After that, iterate through each row of data, printing the values. As an added example of using metadata, check the data source column type and print a $ if the type of the column is CURRENCY, a Microsoft Access&#150;specific data type. You could also have used the ResultSetMetaData method isCurrency(). This would have been more database independent. getColumnType was used for example purposes only, as shown in Figure 3.12. If the name of a column, but not its index, is known, the method findColumn() can be used to find the column number.
+</P>
+<PRE>
+import java.sql.*;
+import java.io.*;
+public class ResultSetMetaDataExample
+{
+    public static void main (String args[])
+    {
+        try
+        {
+            Class.forName(&#147;sun.jdbc.odbc.JdbcOdbcDriver&#148;);
+        } catch (Exception e)
+        {
+            System.out.println(&#147;JDBC&#150;ODBC driver failed to load.&#148;);
+            return;
+        }
+  
+        try
+        {  
+            Connection con =
+              DriverManager.getConnection(&#147;jdbc:odbc:Inventory&#148;,
+                                          &#147;&#148;,&#147;&#148;);
+          
+            Statement stmt = con.createStatement();
+  
+            boolean notDone = true;
+            String sqlStr = null;
+<B>            /* In this example we use a buffered reader to read in an
+               SQL statement from the command line. This allows the
+               user to type in any arbritrary SQL statement.
+               Try SELECT * FROM INVENTORY
+            */
+             BufferedReader br = new BufferedReader(
+                new InputStreamReader(System.in));
+            // We iterate until the user types &#147;exit&#148;
+            while(notDone)</B>
+            {
+                System.out.print(&#147;Enter SELECT Statement:&#148;);
+                sqlStr = br.readLine();
+          
+                if(sqlStr.startsWith(&#147;SELECT&#148;) ||
+                    sqlStr.startsWith(&#147;select&#148;))
+                {
+<B>                    // If this is a SELECT statment, then process
+                    ResultSet rs = stmt.executeQuery(sqlStr);
+                    ResultSetMetaData rsmd = rs.getMetaData();
+              
+                    /* Since we don&#146;t know how many columns will come
+                       back from an abritrary query, we need to check
+                       the metadata of ResultSet.
+                    */
+                    int columnCount = rsmd.getColumnCount();
+
+                    // Print all the column names.
+                    for(int x =1;x&lt=columnCount;x&#43;&#43;)</B>
+                     {
+                        String columnName = rsmd.getColumnName(x);
+                        System.out.print(columnName &#43;&#147;\t&#148;);
+                    }
+                    System.out.println(&#147;&#148;);
+              
+<B>                    // Now print each row of data.
+                    while(rs.next())
+</B>                    {
+                        for(int x =1;x&lt=columnCount;x&#43;&#43;)
+                        {
+                            if(
+<B>                               /*
+                                  The metadata returns the data type
+                                  so we can adjust our display for  
+                                  certain types such as currency.
+                               */
+                               rsmd.getColumnTypeName(x).
+                                 compareTo(&#147;CURRENCY&#148;) == 0
+</B>                              )
+                            System.out.print(&#147;$&#148;);
+                            String resultStr = rs.getString(x);
+                            System.out.print(resultStr &#43;&#147;\t&#148;);
+                        }
+                        System.out.println(&#147;&#148;);
+                    }
+                }
+                else if(sqlStr.startsWith(&#147;exit&#148;))
+                    notDone = false;
+            }
+            stmt.close();
+            con.close();
+        } catch (Exception e)
+        {
+            System.out.println(e);
+        }
+    }
+}
+</PRE>
+<P>As this example shows, there is more to fetching data than just retrieving values. You may also need to query the results themselves for metadata. Use this information to determine the validity of your data and its format.
+</P>
+<P>The next section looks at the process of modifying values and sending data to the data source.</P>
+<H3><A NAME="Heading14"></A><FONT COLOR="#000077">Handling Data</FONT></H3>
+<P>Besides fetching information from a data source, you will want to insert, update, delete, and modify the structure of a data source. All these activities can be accomplished using the executeUpdate() method of a Statement object. This method returns the number of rows affected by the call. For example, the following code creates a table and inserts values into it, updates the values, and then deletes the rows and drops the table.
+</P>
+<P><A NAME="Fig12"></A><A HREF="images\03-12.jpg"><IMG SRC="images\03-12t.jpg"></A>
+<BR><A HREF="images\03-12.jpg"><FONT COLOR="#000077"><B>Figure 3.12</B></FONT></A>&nbsp;&nbsp;ResultSetMetaDataExample output</P>
+<PRE>
+....
+ Statement stmt = con.createStatement();
+stmt.executeUpdate(&#147;CREATE TABLE Temp&#148; &#43;
+                   &#147;(id int, name varchar(25), value float)&#148;);
+int insCount = stmt.executeUpdate(&#147;INSERT INTO Temp&#148; &#43;
+                                  &#147;VALUES (1,&#148;test1&#147;, 5.0)&#148;);
+System.out.println(&#147;Inserted &#148; &#43; insCount &#43; &#147;rows&#148;);
+insCount = stmt.executeUpdate(&#147;INSERT INTO Temp &#148; &#43;
+                              &#147;VALUES (2,&#148;test2&#147;, 10.0)&#148;);
+System.out.println(&#147;Inserted &#148; &#43; insCount &#43; &#147;rows&#148;);
+int updateCount = stmt.executeUpdate(&#147;UPDATE Temp SET value=1.0&#148;);
+System.out.println(&#147;Updated &#148; &#43; insCount &#43; &#147;rows&#148;);
+int deleteCount = stmt.executeUpdate(&#147;DELETE FROM Temp&#148;);
+System.out.println(&#147;Deleted &#148; &#43; insCount &#43; &#147;rows&#148;);
+Stmt.executeUpdate(&#147;DROP TABLE Temp&#148;);
+Stmt.close();
+...
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="03-09.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="03-11.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,268 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Accessing Java Arrays</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="string.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="method.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=bottom border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Interacting with Java from the Native Side</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Accessing Java Arrays
+</h2>
+<p>
+<blockquote>
+
+The JNI uses the <code>jarray</code> type to represent references to Java arrays. Similar to <code>jstring</code>, you cannot directly access <code>jarray</code> types in your native method C code. Instead, you use functions provided by the JNI that allow you to obtain
+pointers to elements of integer arrays. 
+<p>
+Our
+second example, <code>IntArray.java</code>, contains a native method
+that totals up the contents of an integer array passed to it from a Java application. You cannot implement the
+native method by directly addressing the array elements. The following code snippet incorrectly tries to access the array elements directly:
+
+<pre>
+/* <strong> This program is illegal!</strong> */
+JNIEXPORT jint JNICALL
+Java_IntArray_sumArray(JNIEnv *env, jobject obj, jintArray arr)
+{
+    int i, sum = 0;
+    for (i=0; i&lt;10; i++) {
+        sum += arr[i];
+    }
+    ...
+</pre>
+
+<p> The C program
+<a href=http://docs.rinet.ru/Jtuta/native1.1/implementing/example-1dot1/IntArray.c><code>IntArray.c</code></a> shows the correct way to implement
+the above function <code>Java_IntArray_sumArray</code>. In this example, you use one JNI function to get the length of the array. Use another JNI function to obtain a pointer to the individual elements of the array. Then, you can retrieve the elements. Lastly, use a third JNI function to release the array memory.    
+
+<h4>Accessing Arrays of Primitive Elements</h4>
+
+<p> First, obtain the length of the array by calling the JNI function
+<code>GetArrayLength</code>.
+<blockquote>
+<hr>
+<strong>Note:</strong> Unlike C language arrays, Java arrays carry length information.
+<hr>
+</blockquote>
+
+<blockquote>
+<pre>
+JNIEXPORT jint JNICALL
+Java_IntArray_sumArray(JNIEnv *env, jobject obj, jintArray arr)
+{
+    int i, sum = 0;
+    jsize len = (*env)->GetArrayLength(env, arr);
+    ...
+</pre>
+</blockquote>
+
+<p> Next, obtain a pointer to the elements of the array. Our example contains an integer array so we use the JNI function <code>GetIntArrayElements</code> to obtain this pointer. Once you obtain the pointer, you
+can use normal C language operations on the resulting integer array.
+
+<blockquote>
+<pre>
+{
+    ...
+    jint *body = (*env)->GetIntArrayElements(env, arr, 0);
+    for (i=0; i&lt;len; i++) {
+        sum += body[i];
+    }
+    ...
+</pre>
+</blockquote>
+
+<p>The JNI provides a set of functions to obtain array element pointers; use the function that corresponds to the primitive type of the array. Had our example contained a float array <code>arr</code>, for example, we would have used the JNI function <code>GetFloatArrayElements</code> to obtain a pointer to its elements, as follows:
+
+<blockquote>
+<pre>
+    ...
+    int i;
+    float sum = 0;
+    ...
+    jfloat *body = (*env)->GetFloatArrayElements(env, arr, 0);
+    for (i=0; i&lt;len; i++) {
+        sum += body[i];
+    }
+    ...
+</pre>
+</blockquote
+
+<p>In general, the garbage collector may move Java arrays. However, the Java Virtual Machine guarantees that the result of
+<code>GetIntArrayElements</code> points to a nonmovable array of integers. The JNI
+will either "pin" down the array or it will make a copy of the array into
+nonmovable memory.  Because of this, the native code must call <code>ReleaseIntArrayElements</code> when it has finished using the array, as follows:
+
+<blockquote>
+<pre>
+    ...
+    (*env)->ReleaseIntArrayElements(env, arr, body, 0);
+    return sum;
+}
+</pre>
+</blockquote
+
+<code>ReleaseIntArrayElements</code> enables the JNI to copy back and free the memory referenced by the <code>body</code> parameter if it is a
+copy of the original Java array.  The "copy back" action enables the calling program to obtain the new values of array elements that the native method may have modified.   <code>ReleaseIntArrayElements</code> will "unpin" the Java array if it has
+been pinned in memory. 
+<p>
+Similar to the <code>Get&lt;type&gt;ArrayElements</code> functions, the JNI provides a set of <code>Release&lt;type&gt;ArrayElements</code> functions. Do not forget to call the appropriate <code>Release&lt;type&gt;ArrayElements</code> function, such as <code>ReleaseIntArrayElements</code>. If you forget to make this call, the
+ array stays pinned for an extended period of time. Or, the Java Virtual Machine
+is unable to reclaim the memory used to store the nonmovable
+copy of the array.  
+
+<p>
+The JNI provides a set of functions to access arrays of every
+primitive type, including <code>boolean</code>, <code>byte</code>, <code>char</code>, <code>short</code>, <code>int</code>, <code>long</code>,
+<code>float</code>, and <code>double</code>.  Each function in the following table accesses elements in the specified Java type of array:
+
+<blockquote>
+<h5>JNI Functions for Accessing Arrays</h5>
+<table border=1>
+<tr>
+	<td>Function<td> Array Type</td>
+</tr>
+	<td><code>GetBooleanArrayElements</code><td> <code>boolean</code></td>
+</tr>
+	<td><code>GetByteArrayElements</code><td> <code>byte</code></td>
+</tr>
+	<td><code>GetCharArrayElements</code><td> <code>char</code></td>
+</tr> 
+	<td><code>GetShortArrayElements</code><td> <code>short</code></td>
+</tr> 
+	<td><code>GetIntArrayElements</code><td> <code>int</code></td>
+</tr>
+	<td><code>GetLongArrayElements</code><td> <code>long</code></td>
+</tr>
+	<td><code>GetFloatArrayElements</code><td> <code>float</code></td>
+</tr>
+	<td><code>GetDoubleArrayElements</code><td> <code>double</code></td>
+</tr>
+</table>
+</blockquote>
+
+<p>
+The JNI also provides a set of functions to release arrays of different primitive types.  The following table summarizes these functions.
+
+<blockquote>
+<h5>JNI Functions for Releasing Arrays</h5>
+<table border=1>
+<tr>
+	<td>Function<td> Array Type</td>
+</tr>
+	<td><code>ReleaseBooleanArrayElements</code><td> <code>boolean</code></td>
+</tr>
+	<td><code>ReleaseByteArrayElements</code><td> <code>byte</code></td>
+</tr>
+	<td><code>ReleaseCharArrayElements</code><td> <code>char</code></td>
+</tr> 
+	<td><code>ReleaseShortArrayElements</code><td> <code>short</code></td>
+</tr> 
+	<td><code>ReleaseIntArrayElements</code><td> <code>int</code></td>
+</tr>
+	<td><code>ReleaseLongArrayElements</code><td> <code>long</code></td>
+</tr>
+	<td><code>ReleaseFloatArrayElements</code><td> <code>float</code></td>
+</tr>
+	<td><code>ReleaseDoubleArrayElements</code><td> <code>double</code></td>
+</tr>
+</table>
+</blockquote>
+
+
+<h4>Accessing a Small Number of Elements</h4>
+
+<p> Note that the <code>Get&lt;type&gt;ArrayElements</code> function might potentially copy the entire array.  You may want to limit the number of elements that are copied, especially if your array is large. If you are only interested in a small
+number of elements in a (potentially) large array, you should instead
+use the <code>Get/Set&lt;type&gt;ArrayRegion</code> functions.  These functions allow you to
+access, via copying, a small set of elements in an array.
+
+<h4>Accessing Arrays of Objects</h4>
+
+The JNI provides a separate set of functions to access elements of
+object arrays. You can use these functions to get and set individual object array
+elements. 
+<blockquote>
+<hr>
+<strong>Note:</strong> You cannot get all the object array elements at once.
+<hr>
+</blockquote>
+
+<ul> <li> <code>GetObjectArrayElement</code> returns the object
+element at a given index.
+
+<li> <code>SetObjectArrayElement</code> updates the object
+element at a given index.
+</ul>
+
+</blockquote>
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="string.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="method.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=top border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Interacting with Java from the Native Side</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>
+

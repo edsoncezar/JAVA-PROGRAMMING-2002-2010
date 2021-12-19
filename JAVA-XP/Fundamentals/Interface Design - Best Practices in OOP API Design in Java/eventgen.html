@@ -1,0 +1,837 @@
+<HTML>
+<HEAD>
+<TITLE>The Event Generator Object Idiom</TITLE>
+<META name="description" content="An object-oriented design idiom from Interface Design: Best Practices in Object-Oriented API Design in Java by Bill Venners.">
+<META name="keywords" content="Java Design, Java Book, Object Oriented Design, Thread Safe Design">
+<LINK rel="stylesheet" type="text/css" href="http://www.artima.com/artima.css">
+</HEAD>
+<BODY text="#000000" alink="#006666">
+<TABLE width="100%" cellspacing="0">
+<TR>
+<TD align="left" valign="bottom">
+<A href="http://www.artima.com/index.jsp"><IMG src="..\images\ac.gif" alt="artima.com" border="0" width="150" height="31"></A>
+</TD>
+<TD align="right">
+<a href="http://www.artima.com/cgi-bin/redirect.cgi/729565fe?REGION=Cyan&CAMPAIGN=Default&ACCOUNT=Artima&BANNER=ArtimaTraining" ><img src="..\cgi-bin\getimage.cgi\729565fe\region=cyan&campaign=default&account=artima&banner" border=0 width=468 height=60 alt="ad" ></a>
+</TD>
+</TR>
+</TABLE>
+<TABLE width="100%" bgcolor="#006666">
+<TR>
+<TD align="center">
+<DIV class="ml">
+<A href="http://www.artima.com/search.html" class="hl">Search</A>&nbsp;|
+<A href="http://www.artima.com/java/index.html" class="hl">Java</A>&nbsp;|
+<A href="http://www.artima.com/javadesign/index.html" class="hl">Design</A>&nbsp;|
+<A href="http://www.artima.com/jvm/index.html" class="hl">JVM</A>&nbsp;|
+<A href="http://www.artima.com/jini/index.html" class="hl">Jini</A>&nbsp;|
+<A href="http://www.artima.com/forums/index.jsp" class="hl">Forums</A>&nbsp;|
+<A href="http://www.artima.com/javaseminars/index.html" class="hl">Seminars</A>&nbsp;|
+<A href="http://lists.artima.com/mailman/listinfo/artima-newsletter/" class="hl">Subscribe</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+<BR>
+<DIV class="vegies">
+<DIV class="tc">
+<SPAN class="sts">Interface Design by Bill Venners</SPAN><BR>
+<SPAN class="sts">(Part of) Chapter 10</SPAN><BR>
+<SPAN class="ts">The Event Generator</SPAN><BR>
+</DIV>
+
+<!--BEGIN_PRECISE_OBJECT_LINKS-->
+<CENTER>
+<FONT size="1" face="geneva, arial, sans-serif">
+<STRONG>
+<A href="index.html">Interface&nbsp;Design</A>&nbsp;|
+<A href="contents.html">Contents</A>&nbsp;|
+<A href="immutable.html">Previous</A>&nbsp;|
+<A href="canonical.html">Next</A>
+</STRONG>
+</FONT>
+</CENTER>
+<!--END_PRECISE_OBJECT_LINKS-->
+
+<P>
+<STRONG>Intent</STRONG><BR>
+Enable interested objects (listeners) to be notified of a state change or
+other events experienced by an "event generator."
+
+<P>
+<STRONG>Also known as</STRONG><BR>
+Observer, Dependents, Publisher-Subscriber
+
+<P>
+<STRONG>Example</STRONG><BR>
+One recent afternoon, I was sitting in my makeshift office at home,
+trying to think of a good example for explaining Java's event model in
+a Java class I was teaching. I was having trouble thinking of a decent
+example, when the phone rang. I got up, walked over to the phone,
+answered it, and had a short conversation. After I hung up, I realized
+I had my example.
+
+<P>
+What if, I asked myself, I had to design a software system that modeled
+a phone and all the objects that might be interested in knowing it
+was ringing? Certainly people in vicinity of the phone (i.e.,in the same room or house)
+might be interested in knowing it was ringing. In addition, an answering machine
+might want to know, as would a fax machine and a computer. Even
+a secret listening device may want to know, so it could surreptitiously
+monitor conversations.
+
+<P>
+I realized the interested parties might change as my program executed.
+For example, people might enter and leave the room containing the
+phone. Answering machines, computers, or top-secret listening devices
+might be attached to and detached from the phone as the program executed.
+In addition, new devices might be invented and added to future versions
+of the program.
+
+<P>
+So what's a good approach to designing this system? Answer: Make the
+telephone an event generator.
+
+<P>
+<STRONG>Context</STRONG><BR>
+One or more objects (<EM>recipients</em>) need to use information or be
+notified of state changes or events provided by another object (the
+<EM>information provider</em>).
+
+<P>
+<STRONG>The problem</STRONG><BR>
+In Java, one object (the information provider) customarily sends information to
+another object (the recipient) by invoking a method on the recipient.
+But to invoke a method on the recipient, the information provider must have a
+reference to the recipient object. Furthermore, the type of that
+reference must be some class or interface that declares or inherits the
+method to invoke. In a very basic approach, the provider holds a
+reference to the recipient in a variable whose type is the recipient's
+class.
+
+<P>
+In the design context covered by this idiom, however, the basic
+approach of holding a reference to the recipient doesn't work so well.
+The requirements of this design context are:
+
+<P>
+<UL>
+<LI>One or more recipient objects must be notified of state changes or
+events provided by an information provider object
+
+<P>
+<LI>The number and type of recipient objects may be unknown at
+compile-time, and can vary throughout the course of execution
+
+<P>
+<LI>The recipient and information provider objects should be loosely
+coupled
+</UL>
+
+<P>
+The trouble with the basic approach is that the programmer has to know
+exactly what objects will be recipients when the information provider
+class is written. In this design context, however, the actual
+recipients may not be known until runtime.
+
+<P>
+<STRONG>The solution</STRONG><BR>
+The solution is to implement an event delegation mechanism between the
+information provider (the <EM>event generator</em>) and the
+recipients (the <EM>listeners</em>).
+
+<P>
+Here's a step-by-step outline of Java's idiomatic solution to this
+problem:
+
+<P>
+<STRONG>Step 1. Define event category classes</STRONG>
+
+<P>
+<UL>
+<LI>Define a separate event category class for each major category of
+events that may be experienced and propagated by the event generator.
+
+<P>
+<LI>Make each event category class extend
+<CODE>java.util.EventObject</CODE>.
+
+<P>
+<LI>Design each event category class so that it encapsulates the
+information that needs to be propagated from the observable to the
+listeners for that category of events.
+
+<P>
+<LI>Give the event category class a name that ends in <CODE>Event</CODE>, such as
+<CODE>TelephoneEvent</CODE>.
+</UL>
+
+<P>
+<STRONG>Step 2. Define listener interfaces</STRONG>
+
+<P>
+<UL>
+<LI>For each event category, define a listener interface that extends
+<CODE>java.util.EventListener</CODE> and contains a method declaration
+for each event (of that category) that will trigger an information
+propagation from the event generator to its listeners.
+
+<P>
+<LI>Name the listener interface by substituting <CODE>Listener</CODE> for <CODE>Event</CODE>
+in the event category class name. For example, the listener interface
+for <CODE>TelephoneEvent</CODE> would be <CODE>TelephoneListener</CODE>.
+
+<P>
+<LI>Give the methods of the listener interface verb-based names describing
+in past tense the situation that triggered the event propagation. For
+example, a listener method for receiving a <CODE>TelephoneEvent</CODE>
+that was triggered by the phone ringing would be named <CODE>telephoneRang()</CODE>.
+
+<P>
+<LI>Each method should return <CODE>void</CODE> and take one parameter,
+a reference to an instance of the appropriate event category class. For
+example, the full signature of the <CODE>telephoneRang()</CODE> method
+would be:
+
+<P>
+<PRE>
+void telephoneRang(TelephoneEvent e);
+</pre>
+</UL>
+
+<P>
+<STRONG>Step 3. Define adapter classes (optional)</STRONG>
+
+<P>
+<UL>
+<LI>For each listener interface that contains more than one method,
+define an adapter class that implements the interface fully with
+methods that do nothing.
+
+<P>
+<LI>Name the adapter class by replacing <CODE>Listener</CODE> in the listener
+interface name with <CODE>Adapter</CODE>. For example, the adapter class
+for <CODE>TelephoneListener</CODE> would be <CODE>TelephoneAdapter</CODE>.
+</UL>
+
+<P>
+<STRONG>Step 4. Define one or more observable interfaces (optional)</STRONG>
+
+<P>
+<UL>
+<LI>For each category of events that will be propagated by instances of
+this class, define a pair of listener add/remove methods. You may wish to define some or all of
+these add/remove pairs in interfaces implemented by the observable class, as described in this
+optional step 4. Or you may wish
+to declare some or all simply in the observable class itself, as described in step 5.
+
+<P>
+<LI>Name the add method <CODE>add&lt;listener-interface-name&gt;()</CODE> and the remove method <CODE>remove&lt;listener-interface-name&gt; ()</CODE>. For example, the listener add and remove
+methods for a <CODE>TelephoneEvent</CODE> would be named <CODE>addTelephoneListener()</CODE> and
+<CODE>removeTelephoneListener()</CODE>.
+
+<P>
+<LI>Each add and remove method should return <CODE>void</CODE> and take one parameter of the appropriate listener
+type. For example,
+the <CODE>addTelephoneListener()</CODE> and <CODE>removeTelephoneListener()</CODE> methods would take
+one parameter of type <CODE>TelephoneListener</CODE>.
+</UL>
+
+<P>
+<STRONG>Step 5. Define the observable class</STRONG>
+
+<P>
+<UL>
+<LI>If implementing any observable interfaces defined in step 4, you'll have to provide implementations
+of those add and remove methods. Any add and remove methods not inherited from interfaces must be
+defined anyway in the observable class in the same manner that they are defined in step 4 in the
+interfaces.
+
+<P>
+<LI>For each method of each event listener interface, define a private
+event propagator method that takes no parameters and returns
+<CODE>void</CODE> in the event generator's class that fires
+(propagates) the event.
+
+<P>
+<LI>Name the event propagator method <CODE>fire&lt;listener-method-name&gt;</CODE>. For example, the name of the event propagator method for the event propagated via the <CODE>telephoneRang()</CODE> method of <CODE>TelephoneListener</CODE> would be <CODE>fireTelephoneRang()</CODE>.
+
+<P>
+<LI>Update the code of the event generator's class so that it invokes the appropriate event propagator methods at the appropriate times.
+</UL>
+
+<P>
+<STRONG>Step 6. Define listener objects</STRONG>
+
+<P>
+<UL>
+<LI>To be a listener for a certain category of events, an object's class
+must simply implement the listener interface for that category of
+events.
+</UL>
+
+<P>
+<STRONG>Structure</STRONG><BR>
+These UML diagrams depict the structure of the telephone example, which
+is shown in Java code in the next section. For information about UML,
+see the <A href="#resources">Resources</A> section.
+
+<P>
+<CENTER>
+<TABLE CELLPADDING="5" BORDER="0"><TR><TD>
+<CENTER>
+<IMG VSPACE="3" WIDTH="440" HEIGHT="259" SRC="images\structure.gif">
+<BR><FONT SIZE="-1"><STRONG>
+</STRONG></FONT></CENTER>
+</TD></TR></TABLE>
+</CENTER>
+<CENTER>
+<TABLE CELLPADDING="5" BORDER="0"><TR><TD>
+<CENTER>
+<IMG VSPACE="3" WIDTH="341" HEIGHT="224" SRC="images\telephone.gif">
+<BR><FONT SIZE="-1"><STRONG>
+</STRONG></FONT></CENTER>
+</TD></TR></TABLE>
+</CENTER>
+<STRONG>Example code</STRONG><BR>
+Here's some Java code that illustrates using the event generator
+idiom to pass information from a <CODE>Telephone</CODE> object to interested
+listeners. The first class to define is the event category class, which
+will be called <CODE>TelephoneEvent</CODE>:
+
+<P>
+<PRE>
+// In file eventgui/ex1/TelephoneEvent.java
+public class TelephoneEvent
+    extends java.util.EventObject {
+
+    public TelephoneEvent(Telephone source) {
+        super(source);
+    }
+}
+</pre>
+
+<P>
+Note that <CODE>TelephoneEvent</CODE> extends
+<CODE>java.util.EventObject</CODE> and takes as the only parameter to
+its only constructor a reference to the <CODE>Telephone</CODE> object
+that generated this event. The constructor passes this reference to the
+superclass (<CODE>java.util.EventObject</CODE>) constructor.  Event
+handler methods can then invoke <CODE>getSource()</CODE> (a method
+defined in <CODE>java.util.EventObject</CODE>) on the event object to
+find out which telephone generated this event.
+
+<P>
+Requiring an event source reference to be supplied every time an event
+object is created enables a single listener to register with multiple
+sources of the same event category. For example, a secret listening
+device object could register as a listener for multiple telephones.
+Upon being notified of a telephone event, it could then query the event
+object to find out which telephone generated the event.
+
+<P>
+In addition, allowing the handler method to get a reference to the
+event source object enables the handler to ask the source for more
+information by invoking methods on the source. This is called the
+<EM>pull</em> model in the observer-design-pattern literature, because the
+listener is pulling information out of the event generator after
+being notified of an event. It contrasts with the <EM>push</em> model, in
+which all the information needed by the listener is encapsulated in the
+event object itself.
+
+<P>
+On the subject of encapsulating data, note that this event category
+class does not encapsulate any data of its own. It is conceivable,
+however, that a class like this one could be enhanced to contain
+data such as the telephone number of the caller, if it is available,
+the time of day the event occurred, or other relevant information. Such
+information would need to be supplied to or produced by the constructor
+(or constructors) of the event category class and made available to
+handlers via <CODE>get</CODE> methods.
+
+<P>
+Given the event category class, the next thing to define is the
+listener interface:
+
+<P>
+<PRE>
+// In file eventgui/ex1/TelephoneListener.java
+public interface TelephoneListener
+    extends java.util.EventListener {
+
+    void telephoneRang(TelephoneEvent e);
+
+    void telephoneAnswered(TelephoneEvent e);
+}
+</pre>
+
+<P>
+Note that this interface extends <CODE>java.util.EventListener</CODE>,
+a tagging interface that doesn't contain any members. This interface
+defines handler methods for the two kinds of events that fall into the
+<CODE>TelephoneEvent</CODE> category:  <CODE>telephoneRang()</CODE> and
+<CODE>telephoneEvent()</CODE>.  Note that both methods accept one
+parameter, a reference to a <CODE>TelephoneEvent</CODE> object, and
+return <CODE>void</CODE>.
+
+<P>
+Because <CODE>TelephoneListener</CODE> declares more than one
+event handler method, it is a good idea to define an adapter class:
+
+<P>
+<PRE>
+// In file eventgui/ex1/TelephoneAdapter.java
+public class TelephoneAdapter implements TelephoneListener {
+
+    public void telephoneRang(TelephoneEvent e) {
+    }
+
+    public void telephoneAnswered(TelephoneEvent e) {
+    }
+}
+</pre>
+
+<P>
+As described earlier in the article, an adapter class should fully
+implement the interface with methods that do nothing but return. This
+enables listeners that are not interested in all the events to subclass
+the adapter and just override the handler methods of interest.
+
+<P>
+At long last, it is time to make the <CODE>Telephone</CODE> object itself into an
+event generator:
+
+<P>
+<PRE>
+// In file eventgui/ex1/Telephone.java
+import java.util.Vector;
+
+public class Telephone {
+
+    private Vector telephoneListeners = new Vector();
+
+    public void ringPhone() {
+
+        fireTelephoneRang();
+    }
+
+    public void answerPhone() {
+
+        fireTelephoneAnswered();
+    }
+
+    public synchronized void addTelephoneListener(TelephoneListener
+l) {
+
+        if (telephoneListeners.contains(l)) {
+            return;
+        }
+
+        telephoneListeners.addElement(l);
+    }
+
+    public synchronized void
+removeTelephoneListener(TelephoneListener l) {
+
+        telephoneListeners.removeElement(l);
+    }
+
+    private void fireTelephoneRang() {
+
+        Vector tl;
+        synchronized (this) {
+            tl = (Vector) telephoneListeners.clone();
+        }
+
+        int size = tl.size();
+
+        if (size == 0) {
+            return;
+        }
+
+        TelephoneEvent event = new TelephoneEvent(this);
+
+        for (int i = 0; i < size; ++i) {
+
+            TelephoneListener listener = (TelephoneListener)
+tl.elementAt(i);
+            listener.telephoneRang(event);
+        }
+    }
+
+    private void fireTelephoneAnswered() {
+
+        Vector tl;
+        synchronized (this) {
+            tl = (Vector) telephoneListeners.clone();
+        }
+
+        int size = tl.size();
+
+        if (size == 0) {
+            return;
+        }
+
+        TelephoneEvent event = new TelephoneEvent(this);
+
+        for (int i = 0; i < size; ++i) {
+
+            TelephoneListener listener = (TelephoneListener)
+tl.elementAt(i);
+            listener.telephoneAnswered(event);
+        }
+    }
+}
+</pre>
+
+<P>
+This class has <CODE>addTelephoneListener()</CODE> and
+<CODE>removeTelephoneListener()</CODE> methods that enable listeners to
+register and unregister themselves with the <CODE>Telephone</CODE> object. These
+methods make sure the internal list of listeners (stored in a
+<CODE>Vector</CODE>) contains no duplicates -- so that each event is
+reported to each listener only once. If a listener attempts to register
+twice with the same <CODE>Telephone</CODE> object, it won't be added to the list the
+second time. Such an overly enthusiastic listener will still be notified
+of each event only once.
+
+<P>
+The <CODE>fire</CODE> methods of class <CODE>telephone</CODE> clone the
+<CODE>Vector</CODE> of listeners before propagating the event. In this
+implementation, when an event is "fired," a snapshot is taken of the
+current registered listeners, and all those listeners are notified
+of the event. This means that a listener may be notified of an event
+even after it has unregistered itself from a telephone; that's because
+the event would have been fired before the listener unregistered
+itself.
+
+<P>
+The four classes defined above -- <CODE>TelephoneEvent</CODE>,
+<CODE>TelephoneListener</CODE>, <CODE>TelephoneAdapter</CODE>, and
+<CODE>Telephone</CODE> -- fully comprise one implementation of the
+event generator idiom. To see the idiom in action, however, you must
+define a few more classes. Here are two simple listeners for this
+event generator:
+
+<P>
+<PRE>
+// In file eventgui/ex1/AnsweringMachine.java
+public class AnsweringMachine
+    implements TelephoneListener {
+
+    public void telephoneRang(TelephoneEvent e) {
+        System.out.println("The answering machine hears the phone ringing.");
+    }
+
+    public void telephoneAnswered(TelephoneEvent e) {
+        System.out.println("The answering machine sees that the phone was answered.");
+    }
+}
+
+// In file eventgui/ex1/Person.java
+public class Person {
+
+    public void listenToPhone(Telephone t) {
+
+        t.addTelephoneListener(
+            new TelephoneAdapter() {
+                public void telephoneRang(TelephoneEvent e) {
+                    System.out.println("I'll get it!");
+                }
+            }
+        );
+    }
+}
+</pre>
+
+<P>
+Note that <CODE>AnsweringMachine</CODE> implements the
+<CODE>TelephoneListener</CODE> interface directly. By contrast, the
+<CODE>Person</CODE> object instantiates an anonymous inner class that
+subclasses the <CODE>TelephoneAdapter</CODE> class. This anonymous
+inner class overrides the only method of interest to the
+<CODE>Person</CODE> object: <CODE>telephoneRang()</CODE>.
+
+<P>
+The last class we need to define is an example application that will
+exercise all these classes and interfaces:
+
+<P>
+<PRE>
+// In file eventgui/ex1/Example1.java
+public class Example1 {
+
+    public static void main(String[] args) {
+
+        Telephone ph = new Telephone();
+        Person bob = new Person();
+        AnsweringMachine am = new AnsweringMachine();
+
+        ph.addTelephoneListener(am);
+        bob.listenToPhone(ph);
+
+        ph.ringPhone();
+        ph.answerPhone();
+    }
+}
+</pre>
+
+<P>
+When executed, the <CODE>Example1</CODE> application prints out:
+
+<P>
+<PRE>
+The answering machine hears the phone ringing.
+I'll get it!
+The answering machine sees that the phone was answered.
+</pre>
+
+<P>
+<STRONG>Implementation guidelines</STRONG><BR>
+With the guidelines I list in this section, I am trying to define a
+default way to implement this idiom. I say default because, unless
+you have a specific reason to take a different implementation approach,
+you should automatically use the approach recommended in these
+guidelines. My theory is that if you adhere closely to the default
+implementation approach, it will be easier for your fellow programmers to
+recognize the idiom in your work. More importantly, I feel that such
+idiom recognition will make it easier for your fellow programmers to
+understand, use, and change your code.
+
+<P>
+On the other hand, you should feel free to depart from the default
+approach to implementing the idiom when you feel it makes sense. In
+fact, I myself describe two potential "variants" to the default
+approach in the next section.
+
+<P>
+Now, on to the guidelines:
+
+<P>
+<OL>
+<LI>Create just one event object for each "firing" and pass it to all
+listeners.
+
+<P>
+<LI>Make the event object immutable, so there is no possibility that a
+listener will change the event object as it propagates.
+
+<P>
+<LI>Use a single thread to notify all listeners. In other words, the
+<CODE>fire</CODE> method should go through the list of listeners and
+invoke the appropriate handler method upon one listener after the
+other.
+
+<P>
+<LI>Take a snapshot (clone the list) of registered listeners at the
+beginning of the firing process, then send the event to each listener
+registered at the time the snapshot was taken.
+
+<P>
+<LI>Keep event handlers (listener methods) short. These methods should
+execute quickly because (in the default approach) listeners are
+notified one at a time. In other words, listeners must wait until all
+listeners before them in the queue have been notified, so it is good
+citizenship for listeners to be quick about handling events. If an
+event handler method really needs to do considerable work as a
+result of an event notification, consider designing the handler such
+that it fires off or notifies another thread that does the actual
+time-consuming work.
+
+<P>
+<LI>Don't write listeners such that they depend on an order of
+notification.
+
+<P>
+<LI>If a listener is not interested in all events that compose a
+particular event category, consider subclassing an adapter class and
+just overriding the methods of interest.
+</OL>
+
+<P>
+<STRONG>Variants</STRONG><BR>
+The following are variants to the default approach to implementing
+idioms:
+
+<P>
+<OL>
+<LI>If there are vast differences in the frequency of events in a
+particular event category, consider defining separate listeners for
+high frequency and low frequency events. An example of this approach is
+illustrated by the <CODE>MouseListener</CODE> and
+<CODE>MouseMotionListener</CODE> interfaces of
+<CODE>java.awt.event</CODE>. Both of these listener interfaces define
+handler methods for <CODE>MouseEvent</CODE>s. But because
+<CODE>MouseEvent</CODE>s like "mouse moved" are generated so much more
+often than <CODE>MouseEvent</CODE>s like "mouse pressed," the high
+frequency events like "mouse moved" get their own listener,
+<CODE>MouseMotionListener</CODE>. Lower frequency events like "mouse
+pressed" are handled by methods declared in plain old
+<CODE>MouseListener</CODE>.
+
+<P>
+<LI>If your listeners need to cooperate with each other, consider
+making the event object mutable so that listeners can communicate to
+each other through the event object. An example of this variant is seen
+in the mutable <CODE>AWTEvent</CODE> class of <CODE>java.awt</CODE>,
+which is the superclass of all the AWT event classes defined in
+<CODE>java.awt.event</CODE>. Class <CODE>AWTEvent</CODE> includes two
+methods named <CODE>consume()</CODE> and <CODE>isConsumed()</CODE>,
+which enable listeners of AWT events to cooperate with one another. A
+listener can "consume" an event by invoking <CODE>consume()</CODE> on the
+event object. Subsequent listeners can determine that the event has
+already been consumed by invoking <CODE>isConsumed()</CODE> on the event
+object. If <CODE>isConsumed()</CODE> returns <CODE>true</CODE> (in
+other words, if another listener has already invoked
+<CODE>consume()</CODE> on the same event object), the listener can
+ignore the event.
+</OL>
+
+<P>
+<STRONG>Known uses</STRONG><BR>
+This idiom is based on the delegation-event model used by JavaBeans,
+the post-1.1 AWT, and Swing.
+
+<P>
+<FONT SIZE="+1"><STRONG>On Observer/Observable</STRONG></FONT><BR>
+As mentioned earlier in this article, the observer pattern shows up
+twice in the design of the Java API: once as the idiom described in
+this article (for JavaBeans, post-1.1 AWT, and Swing) and once in the
+<CODE>Observer</CODE> and <CODE>Observable</CODE> types of
+<CODE>java.util</CODE>. So, why don't I think the
+<CODE>Observer</CODE>/<CODE>Observable</CODE> types set a good example
+for a Java observer idiom?
+
+<P>
+It turns out that <CODE>Observer</CODE>/<CODE>Observable</CODE> classes
+more closely resemble the example code given in the <EM>Design
+Patterns</em> book than they do the event generator idiom
+described in this article. In my opinion, however, these classes don't
+make the grade for the following reasons:
+
+<P>
+<OL>
+<LI><CODE>Observable</CODE> is a class you need to subclass to
+make an object observable. Thus, you have to find a way to fit
+<CODE>Observable</CODE> as a superclass in your observable class's
+single-inheritance hierarchy. This is often difficult.
+
+<P>
+<LI>To turn a class into an observer (called a <EM>listener</em> elsewhere in
+this article), you need only implement a single interface,
+<CODE>Observer</CODE>. The single method declared in the
+<CODE>Observer</CODE> interface, <CODE>update(Observable, Object)</CODE>, is used to notify the observers. The
+<CODE>Observer</CODE> interface and <CODE>update()</CODE> method are
+generic so they can be used in just about any situation.
+Unfortunately, this generic design means that a programmer won't be
+able to easily understand code that uses
+<CODE>Observer</CODE>/<CODE>Observable</CODE> without digging into the
+nuts and bolts of the <CODE>update</CODE> handler methods.  Contrast
+this with a listener that subclasses a <CODE>MouseAdapter</CODE> and
+overrides the <CODE>mouseReleased()</CODE> method. You already know a
+lot about the nature and source of the event just by looking at the
+names of the superclasses and methods, because they are more specific.
+
+<P>
+<LI>One final reason I turned away from
+<CODE>Observer</CODE>/<CODE>Observable</CODE> is simply that using the
+event delegation model used in JavaBeans in non-bean classes eases any
+future transformation of a given class into a JavaBean.  (Note that the AWT
+and Swing components, which use this event delegation model, are
+themselves JavaBeans.)
+</OL>
+
+<P>
+<FONT SIZE="+1"><STRONG>About JavaBeans</STRONG></FONT><BR>
+If you are at all familiar with JavaBeans, as you read this article you
+may have exclaimed, "Hey, this is all just JavaBeans stuff!" If you're thinking
+it would be better to just make every class a JavaBean, you would by definition
+use the "idiomatic" style in implementing the observer pattern to propagate
+JavaBeans events.
+
+<P>
+For those of you unfamiliar with JavaBeans, the minimum requirements
+for making a class a bean are simply that the class have a no-arg
+constructor and implement <CODE>java.io.Serializable</CODE>.  Although
+a lengthy treatment of the question of whether or not to make a class a
+bean is beyond the scope of this article, I include a link to a
+transcript of an e-mail debate on just this topic in the <A
+href="#resources">Resources</A> section. (The resource is titled "To
+Bean or Not To Bean.") Very briefly, my own opinion on this matter,
+quoted from the e-mail debate:
+
+<P>
+<BLOCKQUOTE><EM>
+If someone is going to use a class in a bean builder, that class had
+better be a bean. Otherwise, you needn't force it into a bean, though
+it may be bean-ready by its very nature. I do, however, think you
+should use the bean/Java naming conventions and JDK1.1 event model
+scheme regardless of whether your class has a no-arg constructor or
+implements <CODE>Serializable</CODE>.
+</EM></BLOCKQUOTE>
+
+<P>
+For the full discussion of the proper time and place to make classes
+into beans (and a broader array of opinions) check out the "To Bean or
+Not To Bean" e-mail debate.
+
+<P>
+In the telephone example above, class <CODE>Telephone</CODE> is
+<EM>not</em> a JavaBean, because it doesn't implement
+<CODE>java.io.Serializable</CODE>. I would venture to say that
+you probably should have <CODE>Telephone</CODE> implement
+<CODE>Serializable</CODE>, unless you have a specific reason for not
+doing so.  That way, if client programmers
+ever want to serialize an instance of the class, their lives will be
+made easier. In this case, while <CODE>Telephone</CODE> isn't a
+JavaBean, its design benefits from the JavaBeans event delegation model.
+
+<P>
+<FONT SIZE="+1"><STRONG>Conclusion</STRONG></FONT><BR>
+In my world view, the two main benefits of idioms, such as the event
+generator idiom described in this article, are:
+
+<P>
+<OL>
+<LI>Idioms, like patterns, establish a vocabulary for discussing
+design and serve as an effective way for less experienced
+programmers to benefit from the hard knocks of more experienced
+programmers.
+
+<P>
+<LI>Code that uses idioms is easier to understand, use, and change
+(for those programmers familiar with the idioms).
+</OL>
+
+<P>
+The event generator idiom allows one or more listener objects to be
+notified of state changes or events provided by an event generator.
+The number and type of listeners may be unknown at compile-time, and
+can vary throughout the course of execution. The loose coupling of
+listeners and event generators make the code easier to change or
+reuse in changing situations.
+
+
+</TD>
+</TR>
+
+</DIV>
+<HR width="100%">
+<TABLE width="100%">
+<TR>
+<TD align="left">
+<DIV class="sp">
+Last Updated: Sunday, March 3, 2002<BR>
+<A href="http://www.artima.com/copyright.html">Copyright</A> &copy; 1996-2002 Artima Software, Inc. All Rights Reserved.
+</DIV>
+</TD>
+<TD align="right">
+<DIV class="sp">
+URL: http://www.artima.com/interfacedesign/EventGen.html<BR>
+Artima.com is created by <A href="http://www.artima.com/consulting.html">Bill Venners</A>
+</DIV>
+</TD>
+</TR>
+</TABLE>
+</BODY>
+</HTML>

@@ -1,0 +1,2174 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 4.0">
+<link REL="stylesheet" TYPE="text/css" HREF="../cursos.css" />
+<title>EJB: Entity Bean com Container-Managed Persistence</title>
+</head>
+
+<body>
+
+<h1 align="center">EJB: Entity Beans com Container-Managed Persistence</h1>
+
+<h2>Um Pouco de Teoria para Entender o Exemplo</h2>
+
+<h3>Lembrando o que é um Entity Bean</h3>
+
+<ul>
+  <li>Um Entity Bean representa um &quot;business object&quot; armazenado de forma persistente<ul>
+      <li>Um &quot;Business Object&quot; nada mais é do que uma entidade do domínio do problema</li>
+      <li>Exemplos: clientes, pedidos, produtos, ...</li>
+    </ul>
+  </li>
+  <li>O mecanismo de persistência é tipicamente um banco de dados relacional</li>
+  <li>Tipicamente:<ul>
+      <li>Cada Entity Bean corresponde a uma tabela do BD</li>
+      <li>Cada instância do Bean corresponde a uma linha (um registro) da tabela</li>
+      <li>Os atributos do Bean são as colunas da tabela</li>
+    </ul>
+  </li>
+  <li>Apresentamos a seguir 4 grandes diferenças entre Entity Beans e Session Beans</li>
+</ul>
+
+<h4>Persistência</h4>
+
+<ul>
+  <li>O estado de um entity bean é salvo num mecanismo de armazenamento permanente,
+    tipicamente um banco de dados</li>
+</ul>
+
+<h4>Acesso Compartilhado</h4>
+
+<ul>
+  <li>Entity beans podem ser compartilhados por múltiplos clientes</li>
+  <li>Devido a este compartilhamento, precisamos do conceito de transação e de tratamento
+    adequado de concorrência</li>
+</ul>
+
+<h4>Chave Primária</h4>
+
+<ul>
+  <li>Cada entity bean tem um Object Identifier (OID) único (a chave primária)</li>
+  <li>Útil para localizar uma instância particular</li>
+</ul>
+
+<h4>Relacionamentos</h4>
+
+<ul>
+  <li>Entity beans podem estar relacionados com outros entity beans, como tabelas num banco de
+    dados<ul>
+      <li>O bean AlunoEJB pode estar relacionado com o bean DisciplinaEJB porque alunos se
+        matriculam em disciplinas</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Sobre Container-Managed Persistence</h3>
+
+<ul>
+  <li>Há duas formas de implementar a persistência:<ul>
+      <li>Codificada pelo programador (Bean-Managed Persistence - BMP)</li>
+      <li>Tratada automaticamente pelo Container (Container-Managed Persistence - CMP)</li>
+    </ul>
+  </li>
+  <li>Parece melhor deixar o Container tratar da persistência<ul>
+      <li>Todas as chamadas de acesso ao BD são tratadas pelo container</li>
+      <li>Relacionamentos também são tratados pelo container
+        <ul>
+          <li>Container-Managed Relationships - CMR</li>
+        </ul>
+      </li>
+      <li>BMP existe porque, no início, J2EE não tratava bem relacionamentos em CMP</li>
+      <li>Mesmo hoje, há situações especiais em que é melhor controlar melhor o código SQL
+        usado para acessar o Banco de Dados</li>
+    </ul>
+  </li>
+  <li>Com CMP, especificamos o mapeamento entre os atributos do bean e o BD através de
+    Deployment Descriptor<ul>
+      <li>Isso poupa muito trabalho</li>
+      <li>Também tem a vantagem de deixar a aplicação independente do gerenciador de BD</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Esquema Abstrato</h4>
+
+<ul>
+  <li>O esquema abstrato deve ser especificado no Deployment Descriptor para que o container
+    possa gerar as chamadas para acessar o BD</li>
+  <li>O esquema é &quot;abstrato&quot; para diferenciá-lo do esquema lógico implementado no
+    BD (as tabelas e colunas particulares existentes no BD)</li>
+  <li>Usando CMP, poderemos definir vários métodos para localizar uma ou mais instâncias de
+    beans<ul>
+      <li>Fazemos isso com &quot;finder methods&quot; ou &quot;select methods&quot;
+        <ul>
+          <li>Finder methods são expostos a clientes na Home interface</li>
+          <li>Select methods não são expostos a clientes. São usados na
+            classe de implementação
+            <ul>
+              <li>São usados para localizar EJBs relacionados com um <font color="#0080FF">outro</font>
+                EJB</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>Exemplos de finder methods:<ul>
+          <li>findByPrimaryKey(&quot;836&quot;)<ul>
+              <li>Todo bean tem que ter isso</li>
+            </ul>
+          </li>
+          <li>findByLastName(&quot;Silva&quot;)</li>
+          <li>findInRange(20.0, 99.0)</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Para cada finder method, exceto findByPrimaryKey, o programador deve especificar no
+    Deployment Descriptor apenas um statement na linguagem EJB QL (semelhante a SQL)<ul>
+      <li>O container vai executar esta query quando se chama o finder method</li>
+    </ul>
+  </li>
+  <li>É útil manter um diagrama do esquema abstrato<ul>
+      <li>Um exemplo segue</li>
+      <li>Falaremos mais de relacionamentos adiante</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="cmp.ht3.jpg" width="484" height="353"
+alt="wpe3.jpg (13842 bytes)"></p>
+
+<h4>Campos Persistentes</h4>
+
+<ul>
+  <li>Os campos persistentes de um entity bean são armazenados num BD</li>
+  <li>Esses atributos são o estado do bean<ul>
+      <li>Esse estado é sincronizado automaticamente com o BD pelo container</li>
+      <li>Tipicamente, o bean corresponde a uma tabela e cada atributo a uma coluna da tabela</li>
+    </ul>
+  </li>
+  <li>Esses atributos são virtuais no sentido de que não são declarados no bean<ul>
+      <li>Basta haver métodos &quot;getter&quot; e &quot;setter&quot; para que o container
+        automaticamente tome conta dos atributos e de seu mapeamento para o BD</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Campos de Relacionamentos</h4>
+
+<ul>
+  <li>Um campo de relacionamento é como uma chave estrangeira num BD<ul>
+      <li>Identifica um bean relacionado</li>
+    </ul>
+  </li>
+  <li>Tais campos também são virtuais e são definidos através de métodos de acesso<ul>
+      <li>Porém, campos de relacionamento não representam o estado do bean</li>
+    </ul>
+  </li>
+  <li>Falamos mais sobre relacionamentos adiante (direção/navegabilidade)</li>
+</ul>
+
+<h4>Multiplicidade em Relacionamentos Container-Managed</h4>
+
+<ul>
+  <li>Há 4 tipos de multiplicidades:<ul>
+      <li><strong>Um-para-um</strong>: Cada instância de um bean está relacionada a exatamente
+        uma instância de outro bean<ul>
+          <li>Numa biblioteca, haveria um relacionamento um-para-um entre uma cópia de um
+            livro (ExemplarLivroEJB) e o usuário ao qual este exemplar está emprestado
+            (UsuarioEJB)</li>
+        </ul>
+      </li>
+      <li><b>Um-para-muitos</b><strong>: </strong>Cada instância de um bean está relacionada a várias
+        instâncias de outro bean<ul>
+          <li>Um pedido de compra (PedidoEJB) pode conter vários itens (ItemEJB)</li>
+        </ul>
+      </li>
+      <li><strong>Muitos-para-um</strong>: Várias instâncias de um bean estão relacionadas a
+        exatamente uma instância de outro bean<ul>
+          <li>No exemplo anterior, do ponto de vista de ItemEJB, o relacionamento com PedidoEJB é
+            Muitos-para-um</li>
+        </ul>
+      </li>
+      <li><strong>Muitos-para-muitos</strong>: Várias instâncias de um bean estão relacionadas
+        a várias instâncias de outro bean<ul>
+          <li>Num sistema de matrícula de uma universidade, o bean AlunoEJB teria uma relação
+            muitos-para-muitos com o bean DisciplinaEJB, já que um aluno se matricula em várias
+            disciplinas e cada disciplina tem vários alunos</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Direção/Navegabilidade em Relacionamentos Container-Managed</h4>
+
+<ul>
+  <li>Num relacionamento bidirecional, cada entity bean tem um campo de relacionamento que
+    referencia o outro bean</li>
+  <li>Através de um relacionamento, o código de um bean pode acessar o bean relacionado</li>
+  <li>Relacionamentos também podem ser unidirecionais, quando apenas um dos beans
+    &quot;conhece&quot; o outro</li>
+  <li>Queries especificadas em EJB QL podem navegar nos relacionamentos<ul>
+      <li>A navegabilidade depende da direção do relacionamento</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>O Ciclo de Vida de um Entity Bean</h3>
+
+<ul>
+  <li>No pool, a instância de um bean não está associada a uma entidade com identidade
+    específica<ul>
+      <li>Isto é, todas as instâncias são iguais e não há estado mantido</li>
+    </ul>
+  </li>
+  <li>&quot;ejbCreate&quot; significa que o objeto tem identidade nova e deverá ser criado no
+    banco de dados</li>
+  <li>&quot;ejbRemove&quot; significa que o objeto com esta identidade deve ser removido do BD</li>
+  <li>&quot;ejbActivate&quot; e &quot;ejbPassivate&quot; significam que o container está
+    tentando recuperar recursos escassos</li>
+</ul>
+
+<p align="center"><img src="Ciclo-Entity-Beans.gif" width="611" height="519"
+alt="Ciclo-Entity-Beans.gif (12489 bytes)"></p>
+
+<h2>Resumo da Applicação RosterApp</h2>
+
+<ul>
+  <li>A aplicação RosterApp mantém a lista de jogadores (roster) para vários esportes em várias
+    &quot;ligas&quot; (divisões)</li>
+  <li>Há 5 componentes na aplicação<ul>
+      <li><strong>RosterAppClient</strong>: Um &quot;application client&quot; que acessa o bean de
+        sessão RosterEJB através da interface remota</li>
+      <li><strong>RosterEJB</strong>: bean de sessão que serve de &quot;façade&quot; para a
+        aplicação<ul>
+          <li>Uma &quot;façade&quot; é um ponto de acesso único para um sistema</li>
+        </ul>
+      </li>
+      <li><strong>PlayerEJB</strong>, <strong>TeamEJB</strong>, e <strong>LeagueEJB</strong>: O
+        bean RosterEJB acessa esses entity beans através de suas interfaces locais<ul>
+          <li>Cada bean pode ter interfaces remotas e locais</li>
+          <li>Usar uma <font color="#0080FF">interface local</font> significa que esses 3 beans
+            <i> não </i> são acessados remotamente</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Os 3 beans de entidade usam CMP para campos e relacionamentos</li>
+  <li>Os beans TeamEJB e PlayerEJB têm relacionamento bidirecional, muitos-para-muitos<ul>
+      <li>Certos jogadores participam de mais de um esporte</li>
+    </ul>
+  </li>
+  <li>Os beans LeagueEJB e TeamEJB têm relacionamento bidirecionais com multiplicidade
+    um-para-muitos<ul>
+      <li>Uma liga tem muitos times mas um time pertence a uma única liga</li>
+    </ul>
+  </li>
+  <li>A figura abaixo mostra os componentes e relacionamentos<ul>
+      <li>As linhas tracejadas indicam que JNDI será usado para localizar o alvo</li>
+      <li>As linhas sólidas representam os relacionamentos mantidos pelo container</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="cmp.ht2.jpg" width="479" height="274"
+alt="wpe2.jpg (12083 bytes)"></p>
+
+<h2>O Código do Entity Bean PlayerEJB</h2>
+
+<ul>
+  <li>Representa um jogador</li>
+  <li>Precisamos de 3 coisas:<ul>
+      <li>Uma Interface Local (LocalPlayer)</li>
+      <li>Uma Interface Home Local (LocalPlayerHome)</li>
+      <li>Uma Classe de Implementação (PlayerBean)</li>
+    </ul>
+  </li>
+  <li>O código está no diretório src/cmproster</li>
+</ul>
+
+<h3>A Interface Local</h3>
+
+<ul>
+  <li>A interface define os <font color="#0080FF">business methods</font> e os <font
+    color="#0080FF">métodos de acesso</font> que um cliente local pode chamar</li>
+  <li>Os métodos de acessos para campos persistentes são:
+    <ul>
+      <li>getPlayerID()</li>
+      <li>getName()</li>
+      <li>getPosition()</li>
+      <li>getSalary()</li>
+    </ul>
+  </li>
+  <li>O método de acesso para relacionamentos é:
+    <ul>
+      <li>getTeams()</li>
+    </ul>
+  </li>
+  <li>Os métodos seguintes são business methods
+    <ul>
+      <li>getleagues()</li>
+      <li>getSports()</li>
+    </ul>
+  </li>
+  <li>Observe que o cliente não poderá chamar os métodos &quot;set&quot;
+    correspondendo aos &quot;get&quot; acima, já que
+    não aparecem na interface em LocalPlayer
+    <ul>
+      <li>Porém, os métodos &quot;set&quot; serão criados no EJB</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">package team;
+
+import java.util.*;
+import javax.ejb.*;
+
+public interface LocalPlayer extends EJBLocalObject {
+  public String getPlayerId();
+  public String getName();
+  public String getPosition();
+  public double getSalary();
+  public Collection getTeams();
+  public Collection getLeagues() throws FinderException;
+  public Collection getSports() throws FinderException;
+}</pre>
+
+<h3>A Interface Home Local</h3>
+
+<ul>
+  <li>A interface local home define os métodos de criação (create), de localização
+    (finder) e home que podem ser chamados por clientes locais</li>
+  <li>Um <font color="#0080FF">método home </font>é semelhante a um método estático: é um
+    método que se aplica a todos os entity beans de uma certa classe<ul>
+      <li>Isso é diferente de um <font color="#0080FF">business method</font> que se aplica a uma
+        instância com identidade particular</li>
+      <li>Durante a execução de um método home, não há estado a ser acessado</li>
+      <li>Tipicamente, um home method localiza uma coleção de instâncias de beans e chama
+        business methods à medida que itera na coleção</li>
+    </ul>
+  </li>
+  <li>Finder methods localizam instâncias de beans e iniciam com &quot;find&quot;<ul>
+      <li>O Deployment Descriptor vai conter statements em EJB QL para acessar o BD</li>
+    </ul>
+  </li>
+  <li>Aqui está LocalPlayerHome.java:</li>
+</ul>
+
+<pre class="clsCode">package team;
+
+import java.util.*;
+import javax.ejb.*;
+
+public interface LocalPlayerHome extends EJBLocalHome {
+    
+  public LocalPlayer create (String id, String name, String position,
+                             double salary)
+                     throws CreateException;
+  
+  public LocalPlayer findByPrimaryKey (String id)
+                     throws FinderException;
+  
+  public Collection findByPosition(String position) 
+                    throws FinderException;
+
+  public Collection findByHigherSalary(String name) 
+                    throws FinderException;
+
+  public Collection findBySalaryRange(double low, double high) 
+                    throws FinderException;
+
+  public Collection findByLeague(LocalLeague league) 
+                    throws FinderException;
+
+  public Collection findBySport(String sport) 
+                    throws FinderException;
+
+  public Collection findByCity(String city) 
+                    throws FinderException;
+
+  public Collection findAll() 
+                    throws FinderException;
+
+  public Collection findNotOnTeam() 
+                    throws FinderException;
+
+  public Collection findByPositionAndName(String position, 
+                    String name)
+                    throws FinderException;
+
+  public Collection findByTest (String parm1, String parm2, String parm3)
+                    throws FinderException;
+
+}</pre>
+
+<h3>A Classe de Implementação</h3>
+
+<ul>
+  <li>A classe é public e abstract</li>
+  <li>Os métodos que devem ser declarados são:<ul>
+      <li>Os métodos abstratos de acesso (get e set) para os <font color="#0080FF"> campos persistentes</font></li>
+      <li>Os métodos abstratos de acesso (get e set) para os <font color="#0080FF">
+        relacionamentos</font></li>
+      <li>Métodos abstratos de seleção (&quot;<font color="#0080FF">select
+        methods</font>&quot; - ver adiante)</li>
+      <li>Os <font color="#0080FF"> métodos home</font></li>
+      <li>Os <font color="#0080FF"> business methods</font></li>
+    </ul>
+  </li>
+  <li>Pouco código deve ser escrito num entity bean com CMP<ul>
+      <li>Chamadas de acesso ao BD não são escritos :-)</li>
+      <li>O estado persistente é representado por campos virtuais persistentes definidos através
+        de métodos abstratos (get, set), mas nenhum código de acesso é necessário</li>
+      <li>Os relacionamentos são representados por campos virtuais de relacionamento definidos
+        através de métodos abstratos (get, set), mas nenhum código de acesso é necessário</li>
+      <li>O método findByPrimaryKey() para localizar instâncias particulares é implementado
+        pelo container</li>
+      <li>Métodos especiais de descoberta de instâncias (Finder Methods) são implementados pelo
+        container e o desenvolvedor deve apenas fornecer os statements em EJB QL<ul>
+          <li>Fazem parte da interface home</li>
+        </ul>
+      </li>
+      <li>Métodos especiais de seleção (Select Methods) são implementados pelo container
+        <ul>
+          <li>São métodos como os &quot;finders&quot; mas são acessados &quot;internamente&quot;
+            pelo próprio bean e não participam de interfaces (nem home, nem local, nem remota)</li>
+        </ul>
+      </li>
+      <li>ejbCreate deve retornar null
+      </li>
+    </ul>
+  </li>
+  <li>Por exemplo, aqui está PlayerBean.java</li>
+</ul>
+
+<pre class="clsCode">package team;
+
+import java.util.*;
+import javax.ejb.*;
+import javax.naming.*;
+import util.Debug;
+
+public abstract class PlayerBean implements EntityBean {
+
+  private EntityContext context;
+
+  // Access methods for persistent fields
+
+  public abstract String getPlayerId();
+  public abstract void setPlayerId(String id);
+  
+  public abstract String getName();
+  public abstract void setName(String name);
+
+  public abstract String getPosition();
+  public abstract void setPosition(String position);
+
+  public abstract double getSalary();
+  public abstract void setSalary(double salary);
+
+  // Access methods for relationship fields
+
+  public abstract Collection getTeams();
+  public abstract void setTeams(Collection teams);
+
+  // Select methods
+
+  public abstract Collection ejbSelectLeagues(LocalPlayer player)
+                  throws FinderException;
+
+  public abstract Collection ejbSelectSports(LocalPlayer player)
+                  throws FinderException;
+
+  // Business methods
+
+  public Collection getLeagues() throws FinderException {
+
+    LocalPlayer player = 
+        (team.LocalPlayer)context.getEJBLocalObject();
+    return ejbSelectLeagues(player);
+  }
+
+  public Collection getSports() throws FinderException {
+
+    LocalPlayer player = 
+        (team.LocalPlayer)context.getEJBLocalObject();
+    return ejbSelectSports(player);
+  }
+
+  // EntityBean  methods
+
+  public String ejbCreate (String id, String name, String position,
+    double salary) throws CreateException {
+
+    Debug.print(&quot;PlayerBean ejbCreate&quot;);
+    setPlayerId(id);
+    setName(name);
+    setPosition(position);
+    setSalary(salary);
+    return id;
+  }
+       
+  public void ejbPostCreate (String id, String name, String position,
+    double salary) throws CreateException { }
+
+  public void setEntityContext(EntityContext ctx) {
+    context = ctx;
+  }
+  
+  public void unsetEntityContext() {
+    context = null;
+  }
+  
+  public void ejbRemove() {
+    Debug.print(&quot;PlayerBean ejbRemove&quot;);
+  }
+  
+  public void ejbLoad() {
+    Debug.print(&quot;PlayerBean ejbLoad&quot;);
+  }
+  
+  public void ejbStore() {
+    Debug.print(&quot;PlayerBean ejbStore&quot;);
+  }
+  
+  public void ejbPassivate() { }
+  
+  public void ejbActivate() { }
+
+} // PlayerBean class</pre>
+
+<h4>Métodos de acesso</h4>
+
+<ul>
+  <li>Um entity bean com CMP tem campos virtuais para atributos persistentes e relacionamentos</li>
+  <li>Como se pode ver acima, basta definir os métodos abstratos get e set<ul>
+      <li>O resto é feito no Deployment Descriptor e pelo Container</li>
+    </ul>
+  </li>
+  <li>Os métodos de acesso para campos persistentes seguem:</li>
+</ul>
+
+<pre class="clsCode">public abstract class PlayerBean implements EntityBean {
+
+  // ...
+
+  // Access methods for persistent fields
+
+  public abstract String getPlayerId();
+  public abstract void setPlayerId(String id);
+  
+  public abstract String getName();
+  public abstract void setName(String name);
+
+  public abstract String getPosition();
+  public abstract void setPosition(String position);
+
+  public abstract double getSalary();
+  public abstract void setSalary(double salary);
+  // ...
+}</pre>
+
+<ul>
+  <li>Métodos de acesso para relacionamento<ul>
+      <li>Um jogador pode pertencer a vários times</li>
+      <li>Em PlayerEJB, temos um campo virtual de relacionamento chamado &quot;teams&quot; que
+        será definido no Deployment Descriptor</li>
+      <li>Na classe PlayerBean class, os Métodos de acesso para relacionamento são:</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  // Access methods for relationship fields
+
+  public abstract Collection getTeams();
+  public abstract void setTeams(Collection teams);</pre>
+
+<h4>Métodos de Seleção</h4>
+
+<ul>
+  <li>Um método de seleção acessa um banco de dados e retorna vários objetos</li>
+  <li>Precisamos especificar a forma de acessar o BD usando a linguagem de query EJB QL,
+    semelhante a SQL<ul>
+      <li>Este statement está no Deployment Descriptor</li>
+    </ul>
+  </li>
+  <li>Nossa classe PlayerBean não precisa implementar métodos de seleção
+    <ul>
+      <li>São implementados automaticamente pelo container</li>
+    </ul>
+  </li>
+  <li>Os métodos de seleção não são expostas em interfaces local ou remota<ul>
+      <li>Só podem ser usadas pelos business methods do entity bean</li>
+    </ul>
+  </li>
+  <li>Temos os seguintes Select Methods:</li>
+</ul>
+
+<pre class="clsCode">  // Select methods
+
+  public abstract Collection ejbSelectLeagues(LocalPlayer player)
+                  throws FinderException;
+
+  public abstract Collection ejbSelectSports(LocalPlayer player)
+                  throws FinderException;</pre>
+
+<h4>Business Methods</h4>
+
+<ul>
+  <li>Os dois business methods usados aqui existem apenas para encapsular os Select Methods<ul>
+      <li>Por motivos técnicos (para facilitar a vida do container), os Select Methods não são
+        acessados pelo cliente</li>
+      <li>No código abaixo, getEJBLocalObject() retorna o objeto que implementa a &quot;interface
+        local&quot;, isto é, a instância do EJB<ul>
+          <li>É como se fosse &quot;this&quot; no mundo EJB</li>
+          <li>Lembre que o bean não implementa as interfaces local ou remota</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  // Business methods
+
+  public Collection getLeagues() throws FinderException {
+
+    LocalPlayer player = 
+        (team.LocalPlayer)context.getEJBLocalObject();
+    return ejbSelectLeagues(player);
+  }
+
+  public Collection getSports() throws FinderException {
+
+    LocalPlayer player = 
+        (team.LocalPlayer)context.getEJBLocalObject();
+    return ejbSelectSports(player);
+  }</pre>
+
+<h4>Callback methods</h4>
+
+<ul>
+  <li>Estão quase todos vazios, porque o container já faz tudo</li>
+  <li>O ejbCreate inicializa o estado da instância do bean:</li>
+</ul>
+
+<pre class="clsCode">  public String ejbCreate (String id, String name, String position,
+    double salary) throws CreateException {
+
+    Debug.print(&quot;PlayerBean ejbCreate&quot;);
+    setPlayerId(id);
+    setName(name);
+    setPosition(position);
+    setSalary(salary);
+    return id;
+  }</pre>
+
+<ul>
+  <li>ejbRemove é chamado imediatamente antes de remover a linha do BD</li>
+  <li>ejbPostCreate deve ter os mesmos parâmetros que ejbCreate<ul>
+      <li>O que esse método faz é estranho e você não deve se preocupar com ele aqui</li>
+      <li>Veja a especificação EJB para detalhes</li>
+      <li>Tem a ver com o uso de &quot;this&quot; no meio do método ejbCreate</li>
+      <li>Este método é usado para acertar um campo de relacionamento na inicialização<ul>
+          <li>Relacionamentos não podem ser inicializados em ejbCreate</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>ejbLoad é chamado logo depois que o estado do bean é lido do BD</li>
+  <li>ejbStore é chamado logo antes de salvar o estado do bean no BD</li>
+</ul>
+
+<ul>
+  <li>O leitor pode examinar os outros dois entity beans TeamEJB e LeagueEJB<ul>
+      <li>São muito semelhantes: não há muito código</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Os Deployment Descriptors para RosterApp</h2>
+
+<ul>
+  <li>Use deploytool para examinar o arquivo RosterApp.ear</li>
+  <li>Queremos focar em coisas novas do deployment descriptor, principalmente o tratamento de
+    persistência e relacionamentos</li>
+</ul>
+
+<h3>RosterApp</h3>
+
+<ul>
+  <li>Selecione o nodo RosterApp (a aplicação inteira)</li>
+</ul>
+
+<h4>Orelha General:</h4>
+<ul>
+      <li>Temos 2 arquivos EJB JAR: team-ejb.jar e roster-ejb.jar</li>
+      <li>Temos um Application Client: roster-ac.jar</li>
+      <li>Para ver isso no deployment descriptor, examine o DD da aplicação
+        inteira, <a href="../src/cmproster/earpronto/xml/META-INF/application.xml">application.xml</a></li>
+    </ul>
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE application PUBLIC '-//Sun Microsystems, Inc.//DTD J2EE Application 1.3//EN' 'http://java.sun.com/dtd/application_1_3.dtd'&gt;
+
+&lt;application&gt;
+  &lt;display-name&gt;RosterApp&lt;/display-name&gt;
+  &lt;description&gt;Application description&lt;/description&gt;
+  &lt;module&gt;
+    &lt;ejb&gt;<font color="#0080FF">roster-ejb.jar</font>&lt;/ejb&gt;
+  &lt;/module&gt;
+  &lt;module&gt;
+    &lt;java&gt;<font color="#0080FF">roster-ac.jar</font>&lt;/java&gt;
+  &lt;/module&gt;
+  &lt;module&gt;
+    &lt;ejb&gt;<font color="#0080FF">team-ejb.jar</font>&lt;/ejb&gt;
+  &lt;/module&gt;
+&lt;/application&gt;</pre>
+<h4>Orelha JNDI Names:</h4>
+<ul>
+      <li>Temos a lista de nomes JNDI para os EJBs
+        <ul>
+          <li>No DD, isso fica na parte dependente de servidor J2EE, no arquivo <a href="../src/cmproster/earpronto/xml/META-INF/sun-j2ee-ri.xml">sun-j2ee-ri.xml</a>
+            da aplicação</li>
+        </ul>
+      </li>
+    </ul>
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE j2ee-ri-specific-information PUBLIC '-//Sun Microsystems Inc.//DTD J2EE Reference Implementation 1.3//EN' 'http://localhost:8000/sun-j2ee-ri_1_3.dtd'&gt;
+<font color="#0080FF">&lt;j2ee-ri-specific-information&gt;</font>
+...
+  <font color="#0080FF">&lt;enterprise-beans&gt;</font>
+    <font color="#0080FF">&lt;module-name&gt;</font>team-ejb.jar&lt;/module-name&gt;
+    &lt;unique-id&gt;0&lt;/unique-id&gt;
+    <font color="#0080FF">&lt;ejb&gt;</font>
+      <font color="#0080FF">&lt;ejb-name&gt;</font>LeagueEJB&lt;/ejb-name&gt;
+      <font color="#0080FF">&lt;jndi-name&gt;</font>MyLeague&lt;/jndi-name&gt;
+...
+    &lt;/ejb&gt;</pre>
+<ul>
+      <li>A tabela de References contém 2 entradas:<ul>
+          <li>RosterClient faz referência ao &quot;coded name&quot; ejb/SimpleRoster
+            que correponde a MyRoster
+            <ul>
+              <li>MyRoster já foi definido acima</li>
+              <li>RosterClient aparece no DD <a href="../src/cmproster/earpronto/xml/roster-ac/META-INF/sun-j2ee-ri.xml">sun-j2ee-ri.xml</a>
+                de roster-ac.jar (veja abaixo)</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE j2ee-ri-specific-information PUBLIC '-//Sun Microsystems Inc.//DTD J2EE Reference Implementation 1.3//EN' 'http://localhost:8000/sun-j2ee-ri_1_3.dtd'&gt;
+
+&lt;j2ee-ri-specific-information&gt;
+<font color="#0080FF">  &lt;app-client&gt;</font>
+    <font color="#0080FF">&lt;ejb-ref&gt;</font>
+      <font color="#0080FF">&lt;ejb-ref-name&gt;</font>ejb/SimpleRoster&lt;/ejb-ref-name&gt;
+      <font color="#0080FF">&lt;jndi-name&gt;</font>MyRoster&lt;/jndi-name&gt;
+    &lt;/ejb-ref&gt;
+  &lt;/app-client&gt;
+&lt;/j2ee-ri-specific-information&gt;</pre>
+<ul>
+      <li>A segunda referência é do tipo &quot;Resource&quot; e especifica o nome JNDI do banco de dados acessado pelos
+        Entity beans
+        contidas no módulo TeamJAR (jdbc/cloudscape)<ul>
+          <li>Isso acessa um banco de dados (CloudscapeDB) já criado no produto Cloudscape e já
+            registrado no servidor J2EE</li>
+          <li>Isso já vem pronto quando você instala o J2EE SDK</li>
+          <li>Veja como aparece no DD <a href="../src/cmproster/earpronto/xml/META-INF/sun-j2ee-ri.xml">sun-j2ee-ri.xml</a>
+            da aplicação</li>
+        </ul>
+      </li>
+    </ul>
+<pre class="clsCode">&lt;j2ee-ri-specific-information&gt;
+...
+  &lt;enterprise-beans&gt;
+    &lt;module-name&gt;<font color="#0080FF">team-ejb.jar</font>&lt;/module-name&gt;
+    &lt;unique-id&gt;0&lt;/unique-id&gt;
+    &lt;ejb&gt;
+      &lt;ejb-name&gt;<font color="#0080FF">LeagueEJB</font>&lt;/ejb-name&gt;
+...
+    &lt;/ejb&gt;
+    &lt;ejb&gt;
+      &lt;ejb-name&gt;<font color="#0080FF">TeamEJB</font>&lt;/ejb-name&gt;
+...
+    &lt;/ejb&gt;
+    &lt;ejb&gt;
+      &lt;ejb-name&gt;<font color="#0080FF">PlayerEJB</font>&lt;/ejb-name&gt;
+...
+    &lt;/ejb&gt;
+...
+<font color="#0080FF">    &lt;cmpresource&gt;
+      &lt;ds-jndi-name&gt;jdbc/Cloudscape&lt;/ds-jndi-name&gt;
+      &lt;default-resource-principal&gt;
+        &lt;name&gt;&lt;/name&gt;
+        &lt;password&gt;&lt;/password&gt;
+      &lt;/default-resource-principal&gt;
+    &lt;/cmpresource&gt;
+</font>  &lt;/enterprise-beans&gt;
+&lt;/j2ee-ri-specific-information&gt;</pre>
+
+<h3>RosterClient</h3>
+
+<ul>
+  <li>Selecione o nodo RosterClient</li>
+  <li>Orelha JAR FILE:<ul>
+      <li>Pode-se ver que há 2 DDs e uma classe (RosterClient.class)</li>
+      <li>Os DDs são <a href="../src/cmproster/earpronto/xml/roster-ac/META-INF/application-client.xml">application-client.xml</a>
+        e <a href="../src/cmproster/earpronto/xml/roster-ac/META-INF/sun-j2ee-ri.xml">sun-j2ee-ri.xml</a></li>
+    </ul>
+  </li>
+</ul>
+
+<ul>
+  <li>Orelha EJB Refs:<ul>
+      <li>O cliente acessa apenas o EJB de sessão com as referência ejb/SimpleRoster</li>
+      <li>Observe também que o acesso é remoto</li>
+    </ul>
+  </li>
+  <li>Isso tudo pode ser verificado no DD <a href="../src/cmproster/earpronto/xml/roster-ac/META-INF/application-client.xml">application-client.xml</a>
+    abaixo</li>
+</ul>
+
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE application-client PUBLIC '-//Sun Microsystems, Inc.//DTD J2EE Application Client 1.3//EN' 'http://java.sun.com/dtd/application-client_1_3.dtd'&gt;
+
+&lt;application-client&gt;
+  &lt;display-name&gt;RosterClient&lt;/display-name&gt;
+  &lt;ejb-ref&gt;
+<font color="#0080FF">    &lt;ejb-ref-name&gt;ejb/SimpleRoster&lt;/ejb-ref-name&gt;
+    &lt;ejb-ref-type&gt;Session&lt;/ejb-ref-type&gt;
+</font>    &lt;home&gt;roster.RosterHome&lt;/home&gt;
+    <font color="#0080FF">&lt;remote&gt;</font>roster.Roster&lt;/remote&gt;
+  &lt;/ejb-ref&gt;
+&lt;/application-client&gt;</pre>
+
+<h3>RosterJAR</h3>
+
+<ul>
+  <li>Selecione o nodo RosterJAR, contendo o bean de sessão RosterEJB<ul>
+      <li>Orelha &quot;General&quot;:<ul>
+          <li>Package roster: Os arquivos necessários para o RosterEJB são a classe de
+            implementação, a interface remota e a interface home</li>
+          <li>Package team: inclui as interfaces locais para as entity beans acessados pelo bean de
+            sessão RosterEJB</li>
+          <li>Package util: contém as classes de apoio para a aplicação</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Selecione o nodo RosterEJB
+  </li>
+  <li>Orelha &quot;General&quot;:<ul>
+          <li>Veja que RosterEJB é um bean de sessão com estado e com acesso remoto (acessado por um
+            cliente remoto)</li>
+          <li>Já que não há acesso local, os campos &quot;Local Interfaces&quot; estão vazios</li>
+          <li>Veja isso no DD <a href="../src/cmproster/earpronto/xml/roster-ejb/META-INF/ejb-jar.xml">ejb-jar.xml</a>
+            de roster-ejb.jar</li>
+        </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE ejb-jar PUBLIC '-//Sun Microsystems, Inc.//DTD Enterprise JavaBeans 2.0//EN' 'http://java.sun.com/dtd/ejb-jar_2_0.dtd'&gt;
+
+<font color="#0080FF">&lt;ejb-jar&gt;</font>
+  <font color="#0080FF">&lt;display-name&gt;</font>RosterJAR&lt;/display-name&gt;
+  <font color="#0080FF">&lt;enterprise-beans&gt;</font>
+    <font color="#0080FF">&lt;session&gt;</font>
+      &lt;display-name&gt;RosterEJB&lt;/display-name&gt;
+      &lt;ejb-name&gt;<font color="#0080FF">RosterEJB</font>&lt;/ejb-name&gt;
+      <font color="#0080FF">&lt;home&gt;</font>roster.RosterHome&lt;/home&gt;
+      <font color="#0080FF">&lt;remote&gt;</font>roster.Roster&lt;/remote&gt;
+      &lt;ejb-class&gt;roster.RosterBean&lt;/ejb-class&gt;
+      &lt;session-type&gt;<font color="#0080FF">Stateful</font>&lt;/session-type&gt;
+      &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+      <font color="#0080FF">&lt;ejb-local-ref&gt;</font>
+        &lt;ejb-ref-name&gt;<font color="#0080FF">ejb/SimpleLeague</font>&lt;/ejb-ref-name&gt;
+        &lt;ejb-ref-type&gt;<font color="#0080FF">Entity</font>&lt;/ejb-ref-type&gt;
+        <font color="#0080FF">&lt;local-home&gt;</font>team.LocalLeagueHome&lt;/local-home&gt;
+        <font color="#0080FF">&lt;local&gt;</font>team.LocalLeague&lt;/local&gt;
+        &lt;ejb-link&gt;<font color="#0080FF">LeagueEJB</font>&lt;/ejb-link&gt;
+      &lt;/ejb-local-ref&gt;
+      &lt;ejb-local-ref&gt;
+        &lt;ejb-ref-name&gt;ejb/SimpleTeam&lt;/ejb-ref-name&gt;
+        &lt;ejb-ref-type&gt;Entity&lt;/ejb-ref-type&gt;
+        &lt;local-home&gt;team.LocalTeamHome&lt;/local-home&gt;
+        &lt;local&gt;team.LocalTeam&lt;/local&gt;
+        &lt;ejb-link&gt;TeamEJB&lt;/ejb-link&gt;
+      &lt;/ejb-local-ref&gt;
+      &lt;ejb-local-ref&gt;
+        &lt;ejb-ref-name&gt;ejb/SimplePlayer&lt;/ejb-ref-name&gt;
+        &lt;ejb-ref-type&gt;Entity&lt;/ejb-ref-type&gt;
+        &lt;local-home&gt;team.LocalPlayerHome&lt;/local-home&gt;
+        &lt;local&gt;team.LocalPlayer&lt;/local&gt;
+        &lt;ejb-link&gt;PlayerEJB&lt;/ejb-link&gt;
+      &lt;/ejb-local-ref&gt;
+      &lt;security-identity&gt;
+        &lt;description&gt;&lt;/description&gt;
+        &lt;use-caller-identity&gt;&lt;/use-caller-identity&gt;
+      &lt;/security-identity&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+&lt;/ejb-jar&gt;</pre>
+
+<ul>
+  <li>Orelha &quot;EJB Refs&quot;<ul>
+          <li>O bean RosterEJB acessa 3 entity beans: PlayerEJB, TeamEJB, e LeagueEJB</li>
+          <li>Observe que o acesso é local</li>
+          <li>Selecione uma linha (digamos ejb/SimpleLeague) e observe que o nome LeagueEJB aparece no
+            campo &quot;Enterprise Bean Name&quot;<ul>
+              <li>Isto é usado se um componente fizer acesso local a um entity bean</li>
+            </ul>
+          </li>
+          <li>Tudo isso é mostrado no DD acima</li>
+        </ul>
+  </li>
+</ul>
+
+<h3>TeamJAR</h3>
+
+<ul>
+  <li>Selecione o nodo TeamJAR, contendo 3 entity beans
+  </li>
+  <li>Orelha &quot;General&quot;:<ul>
+          <li>Há 2 packages: team com os EJBs e util com classes de apoio</li>
+        </ul>
+  </li>
+  <li>Orelha &quot;Relationships&quot;:<ul>
+          <li>Aqui você define os relacionamentos entre entity beans com CMP</li>
+          <li>Dois relacionamentos são definidos aqui: TeamEJB-PlayerEJB e LeagueEJB-TeamEJB<ul>
+              <li>No relacionamento TeamEJB-PlayerEJB o bean TeamEJB bean é chamado EJB A e o bean
+                PlayerEJB é EJB B (poderia ser o contrário sem problemas)</li>
+              <li>Selecione o relacionamento TeamEJB-PlayerEJB e clique em Edit<ul>
+                  <li>Vê como o relacionamento pode ser definido</li>
+                  <li>Collection é usado quando pode haver duplicação</li>
+                  <li>Set é usado quando não pode haver duplicação</li>
+                </ul>
+              </li>
+              <li>Para o outro relacionamento (LeagueEJB-TeamEJB), o &quot;cascading delete&quot; está
+                ligado (ao deletar a liga, os teams somem)</li>
+            </ul>
+          </li>
+        </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="cmp.ht1.jpg" width="458" height="311"
+alt="wpe1.jpg (24896 bytes)"></p>
+
+<ul>
+  <li>Veja isso no DD <a href="../src/cmproster/earpronto/xml/team-ejb/META-INF/ejb-jar.xml">ejb-jar.xml</a>
+    de team-ejb.jar
+    <ul>
+  <li><a href="../../recursos/Container-managed%20relations%20for%20the%2021st%20century.htm">Ver
+    também este artigo interessante</a></li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;!DOCTYPE ejb-jar PUBLIC '-//Sun Microsystems, Inc.//DTD Enterprise JavaBeans 2.0//EN' 'http://java.sun.com/dtd/ejb-jar_2_0.dtd'&gt;
+
+&lt;ejb-jar&gt;
+  &lt;display-name&gt;TeamJAR&lt;/display-name&gt;
+  &lt;enterprise-beans&gt;
+    <font color="#0080FF">&lt;entity&gt;</font>
+      &lt;display-name&gt;LeagueEJB&lt;/display-name&gt;
+      &lt;ejb-name&gt;<font color="#0080FF">LeagueEJB</font>&lt;/ejb-name&gt;
+      &lt;local-home&gt;team.LocalLeagueHome&lt;/local-home&gt;
+      &lt;local&gt;team.LocalLeague&lt;/local&gt;
+      &lt;ejb-class&gt;team.LeagueBean&lt;/ejb-class&gt;
+      &lt;persistence-type&gt;<font color="#0080FF">Container</font>&lt;/persistence-type&gt;
+<font color="#0080FF">      &lt;prim-key-class&gt;java.lang.String&lt;/prim-key-class&gt;
+</font>      &lt;reentrant&gt;False&lt;/reentrant&gt;
+      &lt;cmp-version&gt;2.x&lt;/cmp-version&gt;
+      &lt;abstract-schema-name&gt;League&lt;/abstract-schema-name&gt;
+      <font color="#0080FF">&lt;cmp-field&gt;</font>
+        &lt;description&gt;no description&lt;/description&gt;
+        &lt;field-name&gt;<font color="#0080FF">leagueId</font>&lt;/field-name&gt;
+      &lt;/cmp-field&gt;
+      &lt;cmp-field&gt;
+        &lt;description&gt;no description&lt;/description&gt;
+        &lt;field-name&gt;<font color="#0080FF">name</font>&lt;/field-name&gt;
+      &lt;/cmp-field&gt;
+      &lt;cmp-field&gt;
+        &lt;description&gt;no description&lt;/description&gt;
+        &lt;field-name&gt;<font color="#0080FF">sport</font>&lt;/field-name&gt;
+      &lt;/cmp-field&gt;
+<font color="#0080FF">      &lt;primkey-field&gt;leagueId&lt;/primkey-field&gt;
+</font>      &lt;security-identity&gt;
+        &lt;description&gt;&lt;/description&gt;
+        &lt;use-caller-identity&gt;&lt;/use-caller-identity&gt;
+      &lt;/security-identity&gt;
+    &lt;/entity&gt;
+    &lt;entity&gt;
+      &lt;display-name&gt;TeamEJB&lt;/display-name&gt;
+      &lt;ejb-name&gt;<font color="#0080FF">TeamEJB</font>&lt;/ejb-name&gt;
+...
+    &lt;/entity&gt;
+    &lt;entity&gt;
+      &lt;display-name&gt;PlayerEJB&lt;/display-name&gt;
+      &lt;ejb-name&gt;<font color="#0080FF">PlayerEJB</font>&lt;/ejb-name&gt;
+      &lt;local-home&gt;team.LocalPlayerHome&lt;/local-home&gt;
+      &lt;local&gt;team.LocalPlayer&lt;/local&gt;
+      &lt;ejb-class&gt;team.PlayerBean&lt;/ejb-class&gt;
+      &lt;persistence-type&gt;Container&lt;/persistence-type&gt;
+      &lt;prim-key-class&gt;java.lang.String&lt;/prim-key-class&gt;
+      &lt;reentrant&gt;False&lt;/reentrant&gt;
+      &lt;cmp-version&gt;2.x&lt;/cmp-version&gt;
+      &lt;abstract-schema-name&gt;Player&lt;/abstract-schema-name&gt;
+<font color="#0080FF">      &lt;query&gt;</font>
+        &lt;description&gt;&lt;/description&gt;
+<font color="#0080FF">        &lt;query-method&gt;</font>
+          &lt;method-name&gt;<font color="#0080FF">findNotOnTeam</font>&lt;/method-name&gt;
+          &lt;method-params /&gt;
+        &lt;/query-method&gt;
+<font color="#0080FF">        &lt;ejb-ql&gt;select object(p) from Player p 
+where p.teams is empty&lt;/ejb-ql&gt;</font>
+      &lt;/query&gt;
+...
+    &lt;/entity&gt;
+  &lt;/enterprise-beans&gt;
+<font color="#0080FF">  &lt;relationships&gt;</font>
+<font color="#0080FF">    &lt;ejb-relation&gt;</font>
+      &lt;description&gt;<font color="#0080FF">Team To Player</font>&lt;/description&gt;
+      &lt;ejb-relation-name&gt;&lt;/ejb-relation-name&gt;
+      <font color="#0080FF">&lt;ejb-relationship-role&gt;</font>
+        &lt;ejb-relationship-role-name&gt;<font color="#0080FF">TeamEJB</font>&lt;/ejb-relationship-role-name&gt;
+        &lt;multiplicity&gt;<font color="#0080FF">many</font>&lt;/multiplicity&gt;
+<font color="#0080FF">        &lt;relationship-role-source&gt;</font>
+          &lt;ejb-name&gt;<font color="#0080FF">TeamEJB</font>&lt;/ejb-name&gt;
+        &lt;/relationship-role-source&gt;
+        <font color="#0080FF">&lt;cmr-field&gt;</font>
+          &lt;cmr-field-name&gt;<font color="#0080FF">players</font>&lt;/cmr-field-name&gt;
+          &lt;cmr-field-type&gt;<font color="#0080FF">java.util.Collection</font>&lt;/cmr-field-type&gt;
+        &lt;/cmr-field&gt;
+      &lt;/ejb-relationship-role&gt;
+      &lt;ejb-relationship-role&gt;
+        &lt;ejb-relationship-role-name&gt;<font color="#0080FF">PlayerEJB</font>&lt;/ejb-relationship-role-name&gt;
+        &lt;multiplicity&gt;<font color="#0080FF">many</font>&lt;/multiplicity&gt;
+<font color="#0080FF">        &lt;relationship-role-source&gt;</font>
+          &lt;ejb-name&gt;<font color="#0080FF">PlayerEJB</font>&lt;/ejb-name&gt;
+        &lt;/relationship-role-source&gt;
+        &lt;cmr-field&gt;
+          &lt;cmr-field-name&gt;<font color="#0080FF">teams</font>&lt;/cmr-field-name&gt;
+          &lt;cmr-field-type&gt;<font color="#0080FF">java.util.Collection</font>&lt;/cmr-field-type&gt;
+        &lt;/cmr-field&gt;
+      &lt;/ejb-relationship-role&gt;
+    &lt;/ejb-relation&gt;
+    <font color="#0080FF">&lt;ejb-relation&gt;</font>
+      &lt;description&gt;<font color="#0080FF">League-Team</font>&lt;/description&gt;
+      &lt;ejb-relation-name&gt;&lt;/ejb-relation-name&gt;
+      &lt;ejb-relationship-role&gt;
+        &lt;ejb-relationship-role-name&gt;LeagueEJB&lt;/ejb-relationship-role-name&gt;
+        &lt;multiplicity&gt;<font color="#0080FF">one</font>&lt;/multiplicity&gt;
+        &lt;relationship-role-source&gt;
+          &lt;ejb-name&gt;<font color="#0080FF">LeagueEJB</font>&lt;/ejb-name&gt;
+        &lt;/relationship-role-source&gt;
+        &lt;cmr-field&gt;
+          &lt;cmr-field-name&gt;<font color="#0080FF">teams</font>&lt;/cmr-field-name&gt;
+          &lt;cmr-field-type&gt;<font color="#0080FF">java.util.Collection</font>&lt;/cmr-field-type&gt;
+        &lt;/cmr-field&gt;
+      &lt;/ejb-relationship-role&gt;
+      &lt;ejb-relationship-role&gt;
+        &lt;ejb-relationship-role-name&gt;<font color="#0080FF">TeamEJB</font>&lt;/ejb-relationship-role-name&gt;
+        &lt;multiplicity&gt;<font color="#0080FF">many</font>&lt;/multiplicity&gt;
+<font color="#0080FF">        &lt;cascade-delete /&gt;</font>
+        &lt;relationship-role-source&gt;
+          &lt;ejb-name&gt;<font color="#0080FF">TeamEJB</font>&lt;/ejb-name&gt;
+        &lt;/relationship-role-source&gt;
+        &lt;cmr-field&gt;
+          &lt;cmr-field-name&gt;<font color="#0080FF">league</font>&lt;/cmr-field-name&gt;
+        &lt;/cmr-field&gt;
+      &lt;/ejb-relationship-role&gt;
+    &lt;/ejb-relation&gt;
+  &lt;/relationships&gt;
+...
+ &lt;/ejb-jar&gt;</pre>
+
+<ul>
+  <li>Selecione o nodo PlayerEJB para examinar um entity bean<ul>
+      <li>Orelha &quot;General&quot;:<ul>
+          <li>Vemos as classes de implementação e as interfaces</li>
+          <li>Já que o entity bean PlayerEJB usa CMP, possui interfaces locais e não permite acesso
+            remoto</li>
+        </ul>
+      </li>
+      <li>Orelha &quot;Entity&quot;:<ul>
+          <li>Os radio buttons do topo definem o tipo de persistência<ul>
+              <li>Versão 1.0 não suporta relacionamentos</li>
+            </ul>
+          </li>
+          <li>Indicam-se os campos que devem persistir<ul>
+              <li>Não escolha campos de relacionamentos (como teams)</li>
+            </ul>
+          </li>
+          <li>O &quot;Abstract Schema Name&quot; é Player e será usado quando montarmos os queries
+            em EJB QL</li>
+          <li>Podemos ver essas coisas no DD mostrado acima</li>
+        </ul>
+      </li>
+      <li>Dialog Box Finder/Select Methods:<ul>
+          <li>Clique em &quot;Finder/Select Methods&quot;</li>
+          <li>Você pode editar os queries em EJB QL (ver capítulo adiante)</li>
+          <li>Tanto finder methods quanto select methods têm query em EJB QL</li>
+          <li>Podemos ver essas coisas também no DD mostrado acima</li>
+        </ul>
+      </li>
+      <li>Dialog Box &quot;Entity Deployment Settings&quot;:<ul>
+          <li>Clique em &quot;Deployment Settings&quot;</li>
+          <li>Você vê como o CMP será tratado</li>
+          <li>O que vemos aqui é particular para o J2EE SDK e poderá ser diferente em outro servidor</li>
+          <li>Aqui, você vê que um BD relacional é usado para armazenar a informação</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="cmp.ht5.jpg" width="650" height="400"
+alt="wpe5.jpg (37117 bytes)"></p>
+
+<ul>
+  <li>O servidor J2EE acessa o BD usando SQL<ul>
+      <li>Os statements SQL são configurados aqui também</li>
+      <li>Você pode gerar o SQL automaticamente (clique em &quot;Generate Default SQL&quot;)</li>
+      <li>Pode editar o SQL depois se desejado</li>
+      <li>Clique em &quot;Container Methods&quot; para ver o que mais pode ser configurado:</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="cmp.ht6.jpg" width="650" height="400"
+alt="wpe6.jpg (33015 bytes)"></p>
+
+<ul>
+  <li>Dialog Box &quot;Database Deployment Settings&quot;:<ul>
+      <li>Clique em &quot;Deployment Settings&quot; e em &quot;Database Settings&quot;</li>
+      <li>Informe o nome JNDI do banco de dados (jdbc/Cloudscape)</li>
+      <li>Não precisa preencher o &quot;User Name&quot; e &quot;Password&quot; com cloudscape</li>
+    </ul>
+  </li>
+</ul>
+
+<p align="center"><img src="cmp.ht7.jpg" width="380" height="180"
+alt="wpe8.jpg (13624 bytes)"></p>
+
+<h2>Chamadas de Métodos em RosterApp</h2>
+
+<ul>
+  <li>Queremos mostrar interações entre componentes quando a aplicação está executando</li>
+  <li>Para tanto, discutiremos a seqüência de chamadas de métodos para funcionalidade
+    particular</li>
+  <li>Acompanhe com o código fonte no diretório src/cmproster</li>
+</ul>
+
+<h3>Criação de um Jogador</h3>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>RosterClient chama o business method createPlayer do session bean RosterEJB</li>
+</ul>
+
+<pre class="clsCode">      Context initial = new InitialContext();
+      Object objref = initial.lookup(&quot;java:comp/env/ejb/SimpleRoster&quot;);
+
+      RosterHome home = 
+          (RosterHome)PortableRemoteObject.narrow(objref, 
+                                       RosterHome.class);
+      Roster myRoster = home.create();
+      // ...
+      myRoster.createPlayer(
+                 new PlayerDetails(
+                   &quot;P1&quot;, &quot;Phil Jones&quot;, &quot;goalkeeper&quot;, 100.00));</pre>
+
+<ul>
+  <li>No código acima, Roster é a interface remota do bean RosterEJB</li>
+  <li>PlayerDetails encapsula informação sobre um jogador particular</li>
+</ul>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>O método createPlayer do bean de sessão RosterEJB cria uma nova instância do bean de
+    entidade PlayerEJB</li>
+  <li>O acesso a PlayerEJB é local e o método create está definido na interface local
+    LocalPlayerHome</li>
+</ul>
+
+<pre class="clsCode">  public void createPlayer(PlayerDetails details) { 
+
+    Debug.print(&quot;RosterBean createPlayer&quot;);
+    try {
+      LocalPlayer player = playerHome.create(details.getId(), 
+          details.getName(), details.getPosition(), details.getSalary());
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+  }</pre>
+
+<ul>
+  <li>De onde veio a referência playerHome?<ul>
+      <li>Aqui está o ejbCreate de RosterBean</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  public void ejbCreate() throws CreateException {
+
+    Debug.print(&quot;RosterBean ejbCreate&quot;);
+    try {
+      playerHome = lookupPlayer();
+      teamHome = lookupTeam();
+      leagueHome = lookupLeague();
+    } catch (NamingException ex) {
+      throw new CreateException(ex.getMessage());
+    }
+  }
+
+  private LocalPlayerHome lookupPlayer() throws NamingException {
+     
+    Context initial = new InitialContext();
+    Object objref = initial.lookup(&quot;java:comp/env/ejb/SimplePlayer&quot;);
+    return (LocalPlayerHome) objref;
+  }</pre>
+
+<h4>PlayerEJB</h4>
+
+<ul>
+  <li>Para criar o jogador, o método ejbCreate atribui os parâmetros aos campos persistentes
+    do bean<ul>
+      <li>Depois que ejbCreate termina, o container vai usar um statement SQL SELECT para inserir
+        a informação no banco de dados</li>
+    </ul>
+  </li>
+  <li>Aqui está o código do ejbCreate</li>
+</ul>
+
+<pre class="clsCode">  public String ejbCreate (String id, String name, String position,
+    double salary) throws CreateException {
+
+    Debug.print(&quot;PlayerBean ejbCreate&quot;);
+    setPlayerId(id);
+    setName(name);
+    setPosition(position);
+    setSalary(salary);
+    return id;
+  }</pre>
+
+<h3>Adição de um Jogador a um Time</h3>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>RosterClient chama o business method addPlayer de RosterEJB</li>
+  <li>Os parâmetros P1 e T1 são as chaves primárias das instâncias de PlayerEJB e TeamEJB
+    respectivamente</li>
+</ul>
+
+<pre class="clsCode">      myRoster.addPlayer(&quot;P1&quot;, &quot;T1&quot;);</pre>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>O método addPlayer faz 2 coisas:<ul>
+      <li>Localiza as instâncias desejadas de PlayerEJB e TeamEJB usando findByPrimaryKey</li>
+      <li>Depois, chama o método addPlayer do bean TeamEJB</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  public void addPlayer(String playerId, String teamId) { 
+
+    Debug.print(&quot;RosterBean addPlayer&quot;);
+    try {
+      LocalTeam team = teamHome.findByPrimaryKey(teamId);
+      LocalPlayer player = playerHome.findByPrimaryKey(playerId);
+      team.addPlayer(player);
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+  }</pre>
+
+<h4>TeamEJB</h4>
+
+<ul>
+  <li>O bean TeamEJB tem um campo de relacionamento chamado &quot;players&quot;</li>
+  <li>Os métodos de acesso deste campo virtual são:</li>
+</ul>
+
+<pre class="clsCode">  public abstract Collection getPlayers();
+  public abstract void setPlayers(Collection players);</pre>
+
+<ul>
+  <li>O método addPlayer obtém a coleção de objetos LocalPlayer</li>
+  <li>Depois, o jogador é adicionado à coleção:<ul>
+      <li>No banco de dados, isso vai adicionar um registro à tabela que mantém o relacionamento</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  public void addPlayer(LocalPlayer player) {
+
+    Debug.print(&quot;TeamBean addPlayer&quot;);
+    try {
+      Collection players = getPlayers();
+      players.add(player);
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+  }</pre>
+
+<h3>Remoção de um Jogador</h3>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>Para remover o jogador P4, o cliente chama removePlayer do bean de sessão RosterEJB:<ul>
+      <li>Isso não está no código de RosterClient.java porque este cliente não remove
+        jogadores</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  myRoster.removePlayer(“P4”);</pre>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>O método removePlayer usa findByPrimaryKey para localizar a instância de PlayerEJB</li>
+  <li>Depois, o método remove dessa instância é chamado</li>
+  <li>Isso fará com que o container remova a linha da tabela do BD correspondendo a esta
+    instância</li>
+  <li>O container também remove essa instância do campo de relacionamento
+    &quot;players&quot; do entity bean TeamEJB</li>
+</ul>
+
+<pre class="clsCode">  public void removePlayer(String playerId) { 
+
+    Debug.print(&quot;RosterBean removePlayer&quot;);
+    try {
+      LocalPlayer player = playerHome.findByPrimaryKey(playerId);
+      player.remove();
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+  }</pre>
+
+<h3>Remoção de um Jogador de um Time</h3>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>Para remover jogador P2 do time T1, o cliente chamaria o método dropPlayer do bean de
+    sessão RosterEJB:</li>
+</ul>
+
+<pre class="clsCode">  myRoster.dropPlayer(“P2”, “T1”);</pre>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>O método dropPlayer usa findByPrimaryKey para localizar as instâncias de PlayerEJB e
+    TeamEJB</li>
+  <li>Depois, o business method dropPlayer do entity bean TeamEJB é chamado</li>
+</ul>
+
+<pre class="clsCode">  public void dropPlayer(String playerId, String teamId) {
+
+    Debug.print(&quot;RosterBean dropPlayer&quot;);
+    try {
+        LocalPlayer player = playerHome.findByPrimaryKey(playerId);
+        LocalTeam team = teamHome.findByPrimaryKey(teamId);
+        team.dropPlayer(player);
+    } catch (Exception ex) {
+        throw new EJBException(ex.getMessage());
+    }
+  }</pre>
+
+<h4>TeamEJB</h4>
+
+<ul>
+  <li>O método dropPlayer atualiza o relacionamento TeamEJB-PlayerEJB</li>
+  <li>Primeiro a coleção de objetos de tipo LocalPlayer é acessada e o método remove é
+    chamado:</li>
+</ul>
+
+<pre class="clsCode">  public void dropPlayer(LocalPlayer player) {
+
+    Debug.print(&quot;TeamBean dropPlayer&quot;);
+    try {
+      Collection players = getPlayers();
+      players.remove(player);
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+  }</pre>
+
+<h3>Obtenção dos Jogadores de um Time</h3>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>O cliente pode obter os jogadores de um time através do método getPlayersOfTeam do
+    bean de sessão RosterEJB</li>
+  <li>Este método retorna um ArrayList de objetos de tipo PlayerDetails</li>
+  <li>Este objeto contém 4 atributos que são cópia dos campos persistentes</li>
+  <li>Aqui está a chamada do cliente:</li>
+</ul>
+
+<pre class="clsCode">      playerList = myRoster.getPlayersOfTeam(&quot;T2&quot;);</pre>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>O método getPlayersOfTeam do bean RosterEJB localiza o objeto de tipo LocalTeam do time
+    alvo usando findByPrimaryKey</li>
+  <li>Em seguida, o método getPlayers do entity bean TeamEJB é chamado:</li>
+</ul>
+
+<pre class="clsCode">  public ArrayList getPlayersOfTeam(String teamId) { 
+
+    Debug.print(&quot;RosterBean getPlayersOfTeam&quot;);
+    Collection players = null;
+
+    try {
+      LocalTeam team = teamHome.findByPrimaryKey(teamId);
+      players = team.getPlayers();
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+
+    return copyPlayersToDetails(players);
+  } // getPlayersOfTeam
+
+  private ArrayList copyPlayersToDetails(Collection players) {
+
+    ArrayList detailsList = new ArrayList();
+    Iterator i = players.iterator();
+
+    while (i.hasNext()) {
+      LocalPlayer player = (LocalPlayer) i.next();
+      PlayerDetails details = new PlayerDetails(player.getPlayerId(),
+          player.getName(), player.getPosition(), player.getSalary());
+      detailsList.add(details);
+    }
+
+    return detailsList;
+  } // copyPlayersToDetails</pre>
+
+<h4>TeamEJB</h4>
+
+<ul>
+  <li>O método getPlayers do entity bean TeamEJB é um método de acesso do campo de
+    relacionamento &quot;players&quot;:</li>
+</ul>
+
+<pre class="clsCode">  public abstract Collection getPlayers();</pre>
+
+<ul>
+  <li>Este método está exposto a clientes locais, já que está definido na interface local
+    LocalTeam:</li>
+</ul>
+
+<pre class="clsCode">  public Collection getPlayers();</pre>
+
+<ul>
+  <li>Com uma referência ao campo de relacionamento, o cliente pode manipular este
+    relacionamento</li>
+  <li>Por exemplo, um cliente local do entity bean TeamEJB poderia remover um jogador de um
+    time assim:</li>
+</ul>
+
+<pre class="clsCode">  LocalTeam team = teamHome.findByPrimaryKey(teamId);
+  Collection players = team.getPlayers();
+  players.remove(player);</pre>
+
+<ul>
+  <li>Se você quiser evitar que um cliente possa alterar um relacionamento, use a técnica
+    da próxima seção</li>
+</ul>
+
+<h3>Obtenção de uma Cópia dos Jogadores de um Time</h3>
+
+<ul>
+  <li>Queremos mostrar:<ul>
+      <li>Como filtrar a informação passada ao cliente remoto</li>
+      <li>Como inibir a modificação de um relacionamento por um cliente local</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>Se quiser esconder o salário de um jogador de um cliente remoto, você obrigaria o
+    cliente a chamar o método getPlayersOfTeamCopy do bean RosterEJB</li>
+  <li>Este método também retorna um ArrayList de objetos de tipo PlayerDetails</li>
+  <li>Porém, tais objetos são diferentes: o salário foi zerado</li>
+  <li>Aqui está a chamada feita pelo cliente:</li>
+</ul>
+
+<pre class="clsCode">  playerList = myRoster.getPlayersOfTeamCopy(&quot;T5&quot;);</pre>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>Ao contrário do método getPlayersOfTeam, o método getPlayersOfTeamCopy não chama o
+    método de acesso getPlayers<ul>
+      <li>Ele chama o business method getCopyOfPlayers</li>
+    </ul>
+  </li>
+  <li>Como resultado, getPlayersOfTeamCopy não pode modificar o relacionamento<ul>
+      <li>Não está manipulando um campo de relacionamento</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  public ArrayList getPlayersOfTeamCopy(String teamId) { 
+
+    Debug.print(&quot;RosterBean getPlayersOfTeamCopy&quot;);
+    ArrayList playersList = null;
+
+    try {
+      LocalTeam team = teamHome.findByPrimaryKey(teamId);
+      playersList = team.getCopyOfPlayers();
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+
+    return playersList;
+
+  } // getPlayersOfTeamCopy</pre>
+
+<h4>TeamEJB</h4>
+
+<ul>
+  <li>O método getCopyOfPlayers é mostrado abaixo<ul>
+      <li>Observe como o salário é zerado</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  public ArrayList getCopyOfPlayers() {
+
+    Debug.print(&quot;TeamBean getCopyOfPlayers&quot;);
+    ArrayList playerList = new ArrayList();
+    Collection players = getPlayers();
+
+    Iterator i = players.iterator();
+    while (i.hasNext()) {
+      LocalPlayer player = (LocalPlayer) i.next();
+      PlayerDetails details = new PlayerDetails(player.getPlayerId(),
+                              player.getName(), player.getPosition(), 0.00);
+      playerList.add(details);
+    }
+
+    return playerList;
+  }</pre>
+
+<h3>Localização de Jogadores por Posição</h3>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>O cliente chama o método getPlayersByPosition do bean RosterEJB</li>
+</ul>
+
+<pre class="clsCode">  playerList = myRoster.getPlayersByPosition(&quot;defender&quot;);</pre>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>O &quot;finder method&quot; findByPosition do entity bean PlayerEJB é usado:</li>
+</ul>
+
+<pre class="clsCode">  public ArrayList getPlayersByPosition(String position) {
+
+    Debug.print(&quot;RosterBean getPlayersByPosition&quot;);
+    Collection players = null;
+
+    try {
+      players = playerHome.findByPosition(position);
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+
+    return copyPlayersToDetails(players);
+  } // getPlayersByPosition</pre>
+
+<h4>PlayerEJB</h4>
+
+<ul>
+  <li>O método findByPosition está definido na interface LocalPlayerHome:</li>
+</ul>
+
+<pre class="clsCode">  public Collection findByPosition(String position) 
+                    throws FinderException;</pre>
+
+<ul>
+  <li>Este método não é implementado pelo desenvolvedor, mas pelo container</li>
+  <li>Basta que o desenvolvedor forneça o EJB QL apropriado no Deployment Descriptor:</li>
+</ul>
+
+<pre class="clsCode">  SELECT DISTINCT OBJECT(p) FROM Player p WHERE p.position = ?1</pre>
+
+<ul>
+  <li>A ferramenta deploytool traduz isso para SQL</li>
+</ul>
+
+<h3>Obtenção dos Esportes de um Jogador</h3>
+
+<h4>RosterClient</h4>
+
+<ul>
+  <li>Aqui está o cliente:</li>
+</ul>
+
+<pre class="clsCode">  sportList = myRoster.getSportsOfPlayer(&quot;P28&quot;);</pre>
+
+<h4>RosterEJB</h4>
+
+<ul>
+  <li>Aqui está getSportsOfPlayer:<ul>
+      <li>Já que um outro ArrayList é construído, não poderá haver alterações feitas pelo
+        cliente</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  public ArrayList getSportsOfPlayer(String playerId) { 
+
+    Debug.print(&quot;RosterBean getSportsOfPlayer&quot;);
+    ArrayList sportsList = new ArrayList();
+    Collection sports = null;
+
+    try {
+      LocalPlayer player = playerHome.findByPrimaryKey(playerId);
+      sports = player.getSports();
+    } catch (Exception ex) {
+      throw new EJBException(ex.getMessage());
+    }
+  
+    Iterator i = sports.iterator();
+    while (i.hasNext()) {
+      String sport = (String) i.next();
+      sportsList.add(sport);
+    }
+    return sportsList;
+  } // getSportsOfPlayer</pre>
+
+<h4>PlayerEJB</h4>
+
+<ul>
+  <li>O método getSports é um wrapper para o método ejbSelectSports<ul>
+      <li>Métodos &quot;select&quot; só podem ser chamados pelo próprio bean</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">  public Collection getSports() throws FinderException {
+
+    LocalPlayer player = 
+        (team.LocalPlayer)context.getEJBLocalObject();
+    return ejbSelectSports(player);
+  }</pre>
+
+<ul>
+  <li>Este método select é declarado no próprio bean:</li>
+</ul>
+
+<pre class="clsCode">  public abstract Collection ejbSelectSports(LocalPlayer player)
+                  throws FinderException;</pre>
+
+<ul>
+  <li>O desenvolvedor precisa fornecer o EJB QL:</li>
+</ul>
+
+<pre class="clsCode">  SELECT DISTINCT t.league.sport FROM Player p, IN (p.teams) AS t WHERE p = ?1</pre>
+
+<ul>
+  <li>Isso será traduzido para SQL pelo deploytool</li>
+</ul>
+
+<h2>Compilação, Deployment e Execução de RosterApp</h2>
+
+<h3>Compilação</h3>
+
+<ul>
+  <li>ant cmproster</li>
+</ul>
+
+<h3>Deployment</h3>
+
+<ul>
+  <li>Com cloudscape e J2EE no ar, use deploytool</li>
+  <li>Abra o arquivo <a href="../src/cmproster/earpronto/RosterApp.ear">RosterApp.ear</a> (já
+    pronto)</li>
+  <li>Faça deployment com Tools-&gt;Deploy<ul>
+      <li>Peça para retornar o &quot;Client JAR&quot; no arquivo
+        src/cmproster/earpronto/RosterAppClient.jar</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Execução do Cliente</h3>
+
+<ul>
+  <li>Numa janela de comando, vá para o diretório src/cmproster/earpronto</li>
+  <li>set APPCPATH=RosterAppClient.jar (Windows)</li>
+  <li>APPCPATH=RosterAppClient.jar export APPCPATH(Unix)</li>
+  <li>Execute o cliente:</li>
+</ul>
+
+<pre class="clsCode">C:\..\src\cmproster\earpronto&gt;runclient -client RosterApp.ear -name RosterClient -textauth
+Initiating login ...
+Username = null
+Enter Username:<strong>guest</strong>
+Enter Password:<strong>guest123</strong>
+Binding name:`java:comp/env/ejb/SimpleRoster`
+<font
+color="#0080FF">P6 Ian Carlyle goalkeeper 555.0
+P7 Rebecca Struthers midfielder 777.0
+P10 Terry Smithson midfielder 100.0
+P8 Anne Anderson forward 65.0
+P9 Jan Wesley defender 100.0
+
+T5 Crows Orland
+T2 Gophers Manteca
+T1 Honey Bees Visalia
+
+P2 Alice Smith defender 505.0
+P5 Barney Bold defender 100.0
+P9 Jan Wesley defender 100.0
+P22 Janice Walker defender 857.0
+P25 Frank Fletcher defender 399.0
+
+L2 Valley Basketball
+L1 Mountain Soccer</font>
+
+Unbinding name:`java:comp/env/ejb/SimpleRoster`</pre>
+
+<ul>
+  <li>Para entender o resultado, aqui está o código do cliente:</li>
+</ul>
+
+<pre class="clsCode">/*
+ *
+ * Copyright 2001 Sun Microsystems, Inc. All Rights Reserved.
+ * 
+ * This software is the proprietary information of Sun Microsystems, Inc.  
+ * Use is subject to license terms.
+ * 
+ */
+
+package client;
+
+import java.util.*;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.rmi.PortableRemoteObject;
+import util.*;
+import roster.*;
+
+public class RosterClient {
+
+  public static void main(String[] args) {
+    try {
+      Context initial = new InitialContext();
+      Object objref = initial.lookup(&quot;java:comp/env/ejb/SimpleRoster&quot;);
+
+      RosterHome home = 
+          (RosterHome)PortableRemoteObject.narrow(objref, 
+                                       RosterHome.class);
+
+      Roster myRoster = home.create();
+
+      insertInfo(myRoster);
+      getSomeInfo(myRoster);
+
+      // getMoreInfo(myRoster);
+
+      System.exit(0);
+
+    } catch (Exception ex) {
+      System.err.println(&quot;Caught an exception:&quot;);
+      ex.printStackTrace();
+    }
+  } // main
+
+
+  private static void getSomeInfo(Roster myRoster) {
+
+    try {
+
+      ArrayList playerList;
+      ArrayList teamList;
+      ArrayList leagueList;
+
+      playerList = myRoster.getPlayersOfTeam(&quot;T2&quot;);
+      printDetailsList(playerList);
+
+      teamList = myRoster.getTeamsOfLeague(&quot;L1&quot;);
+      printDetailsList(teamList);
+
+      playerList = myRoster.getPlayersByPosition(&quot;defender&quot;);
+      printDetailsList(playerList);
+
+
+      leagueList = myRoster.getLeaguesOfPlayer(&quot;P28&quot;);
+      printDetailsList(leagueList);
+
+    } catch (Exception ex) {
+      System.err.println(&quot;Caught an exception:&quot;);
+      ex.printStackTrace();
+    }
+
+  } // getSomeInfo
+
+  private static void getMoreInfo(Roster myRoster) {
+
+    try {
+
+      LeagueDetails leagueDetails;
+      TeamDetails teamDetails;
+      PlayerDetails playerDetails;
+      ArrayList playerList;
+      ArrayList teamList;
+      ArrayList leagueList;
+      ArrayList sportList;
+
+      leagueDetails = myRoster.getLeague(&quot;L1&quot;);
+      System.out.println(leagueDetails.toString());
+      System.out.println();
+
+      teamDetails = myRoster.getTeam(&quot;T3&quot;);
+      System.out.println(teamDetails.toString());
+      System.out.println();
+
+      playerDetails = myRoster.getPlayer(&quot;P20&quot;);
+      System.out.println(playerDetails.toString());
+      System.out.println();
+
+      playerList = myRoster.getPlayersOfTeam(&quot;T2&quot;);
+      printDetailsList(playerList);
+
+      teamList = myRoster.getTeamsOfLeague(&quot;L1&quot;);
+      printDetailsList(teamList);
+
+      playerList = myRoster.getPlayersByPosition(&quot;defender&quot;);
+      playerList = myRoster.getAllPlayers();
+      playerList = myRoster.getPlayersNotOnTeam();
+      playerList = myRoster.getPlayersByPositionAndName(&quot;power forward&quot;, 
+          &quot;Jack Patterson&quot;);
+      playerList = myRoster.getPlayersByCity(&quot;Truckee&quot;);
+      playerList = myRoster.getPlayersBySport(&quot;Soccer&quot;);
+      playerList = myRoster.getPlayersByLeagueId(&quot;L1&quot;);
+      playerList = myRoster.getPlayersByHigherSalary(&quot;Ian Carlyle&quot;);
+      playerList = myRoster.getPlayersBySalaryRange(500.00, 800.00);
+      playerList = myRoster.getPlayersOfTeamCopy(&quot;T5&quot;);
+
+      leagueList = myRoster.getLeaguesOfPlayer(&quot;P28&quot;);
+      printDetailsList(leagueList);
+
+      sportList = myRoster.getSportsOfPlayer(&quot;P28&quot;);
+      printDetailsList(sportList);
+
+    } catch (Exception ex) {
+      System.err.println(&quot;Caught an exception:&quot;);
+      ex.printStackTrace();
+    }
+
+  } // getMoreInfo
+
+  private static void printDetailsList(ArrayList list) {
+
+    Iterator i = list.iterator();
+    while (i.hasNext()) {
+      Object details = (Object)i.next();
+      System.out.println(details.toString());
+    }
+    System.out.println();
+  } // printDetailsList
+
+
+  private static void insertInfo(Roster myRoster) {
+
+    try {
+      // Leagues
+
+      myRoster.createLeague(new LeagueDetails(
+         &quot;L1&quot;, &quot;Mountain&quot;, &quot;Soccer&quot;));
+
+      myRoster.createLeague(new LeagueDetails(
+         &quot;L2&quot;, &quot;Valley&quot;, &quot;Basketball&quot;));
+
+      // Teams
+
+      myRoster.createTeamInLeague(new TeamDetails(
+         &quot;T1&quot;, &quot;Honey Bees&quot;, &quot;Visalia&quot;), &quot;L1&quot;);
+
+      myRoster.createTeamInLeague(new TeamDetails(
+         &quot;T2&quot;, &quot;Gophers&quot;, &quot;Manteca&quot;), &quot;L1&quot;);
+      
+      myRoster.createTeamInLeague(new TeamDetails(
+         &quot;T3&quot;, &quot;Deer&quot;, &quot;Bodie&quot;), &quot;L2&quot;);
+
+      myRoster.createTeamInLeague(new TeamDetails(
+         &quot;T4&quot;, &quot;Trout&quot;, &quot;Truckee&quot;), &quot;L2&quot;);
+
+      myRoster.createTeamInLeague(new TeamDetails(
+         &quot;T5&quot;, &quot;Crows&quot;, &quot;Orland&quot;), &quot;L1&quot;);
+
+      // Players, Team T1
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P1&quot;, &quot;Phil Jones&quot;, &quot;goalkeeper&quot;, 100.00));
+      myRoster.addPlayer(&quot;P1&quot;, &quot;T1&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P2&quot;, &quot;Alice Smith&quot;, &quot;defender&quot;, 505.00));
+      myRoster.addPlayer(&quot;P2&quot;, &quot;T1&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P3&quot;, &quot;Bob Roberts&quot;, &quot;midfielder&quot;, 65.00));
+      myRoster.addPlayer(&quot;P3&quot;, &quot;T1&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P4&quot;, &quot;Grace Phillips&quot;, &quot;forward&quot;, 100.00));
+      myRoster.addPlayer(&quot;P4&quot;, &quot;T1&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P5&quot;, &quot;Barney Bold&quot;, &quot;defender&quot;, 100.00));
+      myRoster.addPlayer(&quot;P5&quot;, &quot;T1&quot;);
+
+      // Players, Team T2
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P6&quot;, &quot;Ian Carlyle&quot;, &quot;goalkeeper&quot;, 555.00));
+      myRoster.addPlayer(&quot;P6&quot;, &quot;T2&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P7&quot;, &quot;Rebecca Struthers&quot;, &quot;midfielder&quot;, 777.00));
+      myRoster.addPlayer(&quot;P7&quot;, &quot;T2&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P8&quot;, &quot;Anne Anderson&quot;, &quot;forward&quot;, 65.00));
+      myRoster.addPlayer(&quot;P8&quot;, &quot;T2&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P9&quot;, &quot;Jan Wesley&quot;, &quot;defender&quot;, 100.00));
+      myRoster.addPlayer(&quot;P9&quot;, &quot;T2&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P10&quot;, &quot;Terry Smithson&quot;, &quot;midfielder&quot;, 100.00));
+      myRoster.addPlayer(&quot;P10&quot;, &quot;T2&quot;);
+
+      // Players, Team T3
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P11&quot;, &quot;Ben Shore&quot;, &quot;point guard&quot;, 188.00));
+      myRoster.addPlayer(&quot;P11&quot;, &quot;T3&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P12&quot;, &quot;Chris Farley&quot;, &quot;shooting guard&quot;, 577.00));
+      myRoster.addPlayer(&quot;P12&quot;, &quot;T3&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P13&quot;, &quot;Audrey Brown&quot;, &quot;small forward&quot;, 995.00));
+      myRoster.addPlayer(&quot;P13&quot;, &quot;T3&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P14&quot;, &quot;Jack Patterson&quot;, &quot;power forward&quot;, 100.00));
+      myRoster.addPlayer(&quot;P14&quot;, &quot;T3&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P15&quot;, &quot;Candace Lewis&quot;, &quot;point guard&quot;, 100.00));
+      myRoster.addPlayer(&quot;P15&quot;, &quot;T3&quot;);
+
+      // Players, Team T4
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P16&quot;, &quot;Linda Berringer&quot;, &quot;point guard&quot;, 844.00));
+      myRoster.addPlayer(&quot;P16&quot;, &quot;T4&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P17&quot;, &quot;Bertrand Morris&quot;, &quot;shooting guard&quot;, 452.00));
+      myRoster.addPlayer(&quot;P17&quot;, &quot;T4&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P18&quot;, &quot;Nancy White&quot;, &quot;small forward&quot;, 833.00));
+      myRoster.addPlayer(&quot;P18&quot;, &quot;T4&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P19&quot;, &quot;Billy Black&quot;, &quot;power forward&quot;, 444.00));
+      myRoster.addPlayer(&quot;P19&quot;, &quot;T4&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P20&quot;, &quot;Jodie James&quot;, &quot;point guard&quot;, 100.00));
+      myRoster.addPlayer(&quot;P20&quot;, &quot;T4&quot;);
+
+      // Players, Team T5
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P21&quot;, &quot;Henry Shute&quot;, &quot;goalkeeper&quot;, 205.00));
+      myRoster.addPlayer(&quot;P21&quot;, &quot;T5&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P22&quot;, &quot;Janice Walker&quot;, &quot;defender&quot;, 857.00));
+      myRoster.addPlayer(&quot;P22&quot;, &quot;T5&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P23&quot;, &quot;Wally Hendricks&quot;, &quot;midfielder&quot;, 748.00));
+      myRoster.addPlayer(&quot;P23&quot;, &quot;T5&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P24&quot;, &quot;Gloria Garber&quot;, &quot;forward&quot;, 777.00));
+      myRoster.addPlayer(&quot;P24&quot;, &quot;T5&quot;);
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P25&quot;, &quot;Frank Fletcher&quot;, &quot;defender&quot;, 399.00));
+      myRoster.addPlayer(&quot;P25&quot;, &quot;T5&quot;);
+
+      // Players, no team
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P26&quot;, &quot;Hobie Jackson&quot;, &quot;pitcher&quot;, 582.00));
+     
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P27&quot;, &quot;Melinda Kendall&quot;, &quot;catcher&quot;, 677.00));
+
+      // Players, multiple teams
+
+      myRoster.createPlayer(new PlayerDetails(
+         &quot;P28&quot;, &quot;Constance Adams&quot;, &quot;substitue&quot;, 966.00));
+      myRoster.addPlayer(&quot;P28&quot;, &quot;T1&quot;);
+      myRoster.addPlayer(&quot;P28&quot;, &quot;T3&quot;);
+
+    } catch (Exception ex) {
+        System.err.println(&quot;Caught an exception:&quot;);
+        ex.printStackTrace();
+    }
+
+  } // insertInfo
+
+
+} // class</pre>
+
+<ul>
+  <li>Exercício: desenvolva um cliente Web para RosterApp</li>
+</ul>
+
+<h2>Chaves Primárias para Container-Managed Persistence</h2>
+
+<ul>
+  <li>Se sua chave primária não for uma das classes disponíveis na biblioteca Java (String,
+    ...), você deve fornecer uma &quot;classe de chave primária&quot;<ul>
+      <li>Isso seria necessário, por exemplo, se sua chave consistir de vários campos (chave
+        primária composta)</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>A Classe de Chave Primária</h3>
+
+<ul>
+  <li>No exemplo a seguir, a classe the PurchaseOrderKey representa uma chave composta para o
+    entity bean PurchaseOrderEJB<ul>
+      <li>A chave têm dois campos: productModel e vendorId</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public class PurchaseOrderKey implements java.io.Serializable {
+  public String productModel;
+  public String vendorId;
+
+  public PurchaseOrderKey() { };
+
+  public String getProductModel() {
+    return productModel;
+  }
+
+  public String getVendorId() {
+    return vendorId;
+  }
+
+  public boolean equals(Object other) {
+    if (other instanceof PurchaseOrderKey) {
+      return (productModel.equals(
+               ((PurchaseOrderKey)other).productModel) &amp;&amp;
+               vendorId.equals(
+               ((PurchaseOrderKey)other).vendorId));
+    }
+    return false;
+  }
+
+  public int hashCode() {
+    return productModel.concat(vendorId).hashCode();
+  }
+}</pre>
+
+<ul>
+  <li>Ao usar CMP, uma classe de chave primária deve obedecer as regras seguintes:<ul>
+      <li>A classe é public</li>
+      <li>Todos os campos são public</li>
+      <li>Os campos são um subconjunto dos campos persistentes</li>
+      <li>A classe tem um construtor default público</li>
+      <li>A classe implementa os métodos hashCode() e equals(Object)</li>
+      <li>A classe é serializável</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Chaves Primárias na Classe de Implementação (Entity Bean class)</h3>
+
+<ul>
+  <li>Métodos ejbCreate devem retornar como um objeto da classe da chave primária<ul>
+      <li>Já que o valor em si não importa (com CMP), retorne null</li>
+    </ul>
+  </li>
+</ul>
+
+<pre class="clsCode">public PurchaseOrderKey ejbCreate (String vendorId,
+                                   String productModel,
+                                   String productName)
+                        throws CreateException {
+
+  setVendorId(vendorId);
+  setProductModel(productModel);
+  setProductName(productName);
+  return null;
+}</pre>
+
+<h3>Geração de Valores de Chaves Primárias</h3>
+
+<ul>
+  <li>Opta-se frequentemente por usar números únicos como chaves primárias que não são
+    campos &quot;de business&quot; da aplicação<ul>
+      <li>Chama-se isso &quot;Identidade baseada na existência&quot;</li>
+      <li>Usar campos &quot;de business&quot; se chama &quot;Identidade baseada em valor&quot;</li>
+    </ul>
+  </li>
+  <li>Neste caso, o container pode gerar os números automaticamente:<ul>
+      <li>No Deployment Descriptor, a classe de chave primária é declarada como java.lang.Object</li>
+      <li>O campo de chave primária não é especificado</li>
+      <li>Na interface home, o argumento do método findByPrimaryKey deve ser java.lang.Object</li>
+      <li>O tipo de retorno do método ejbCreate deve ser java.lang.Object</li>
+    </ul>
+  </li>
+</ul>
+
+<p class="botref">cmp <a href="../j2ee-2.htm">programa</a> </p>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A JMS-Based Alarm System</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="http://library.cs.tuiasi.ro/programming/java/developing_java_enterprise_app/ch21/21-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="21-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Either due to a specific request or because an alarm was added or deleted, all calls to handleGet perform the same action. First, a vector containing the current alarms is created. This vector is inserted into an ObjectMessage, and the ObjectMessage is published to the ALARM_TOPIC.
+</P>
+<PRE>
+    protected void handleGet(MapMessage msg)
+        throws Exception
+    {
+        Enumeration cursor;
+        Vector toReturn = new Vector();
+        ObjectMessage reply =
+            (ObjectMessage) tsession.createObjectMessage();
+       
+        synchronized(timers)
+        {  
+            cursor = alarm2timer.keys();
+       
+            while(cursor.hasMoreElements())
+            {
+                toReturn.addElement(cursor.nextElement());
+            }
+        }
+       
+        reply.setObject(toReturn);
+       
+        alarmPublisher.publish(reply);
+    }
+</PRE>
+<P>When the server is told to shut down, it saves its alarms to disk, closes the JMS resources, and exits.
+</P>
+<PRE>
+    protected void handleShutdown(MapMessage msg)
+        throws Exception
+    {
+        saveAlarms();
+        close();
+        System.exit(0);
+    }
+</PRE>
+<P>When the PTimer sees that a PTimerSpec should fire, it sends the listeners for that timer the timerWentOff message. The server receives this message for all of its PTimerSpecs. When a timer fires, the server creates an ObjectMessage containing the associated alarm, removes the alarm and spec from its hash tables, and publishes the new message containing the alarm to the ALARM_TOPIC.
+</P>
+<PRE>
+    public void timerWentOff(PTimerWentOffEvent e)
+    {
+        try
+        {
+            <B>PTimerSpec spec = e.getTimerSpec();</B>
+            Alarm alarm;
+            <B>ObjectMessage msg
+              = tsession.createObjectMessage();</B>
+             
+            synchronized(timers)
+            {
+                <B>alarm = (Alarm) timers.get(spec);</B>
+       
+                timers.remove(spec);
+                alarm2timer.remove(alarm);
+            }
+           
+            <B>msg.setObject(alarm);</B>
+           
+            <B>alarmPublisher.publish(msg);</B>
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+        }
+    }
+</PRE>
+<P>For convenience, the server defines the close method to close all of its JMS resources inside a try-catch block. This method is called when the server is told to shut down.
+</P>
+<PRE>
+    public void close()
+    {
+        try
+        {
+            adminReceiver.close();
+            qsender.close();
+            session.close();
+            conn.close();
+           
+            alarmPublisher.close();
+            tsession.close();
+            tconn.close();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+        }
+    }
+</PRE>
+<P>The AlarmServer&#146;s main method creates an AlarmServer object and starts a thread that uses the server as its Runnable. This is a simple main method that relies on the server object to implement the real server code.
+</P>
+<PRE>
+    public static void main(String s[])
+    {
+        AlarmServer watcher;
+        String user=&#147;AlarmServer&#147;;
+        Thread kicker;
+       
+        //So we can catch errors in a log file
+        System.setErr(System.out);
+
+       <B>watcher = new AlarmServer(user);
+       
+        kicker = new Thread(watcher);
+        kicker.start();</B>
+    }
+}
+</PRE>
+<P>The implementation for the AlarmServer is heavily dependent on the ptimer package to implement the real timing for alarms. The ptimer package is based on the PTimer class from the PersonalJava class. The complete code for this package is provided on the CD-ROM and is not discussed here. However, the PTimer class itself does demonstrate an interesting technique in threads programming that is worth discussing in detail.
+</P>
+<H3><A NAME="Heading4"></A><FONT COLOR="#000077">PTimer</FONT></H3>
+<P>PTimer maintains a list of PTimerSpec objects. These objects have a time associated with them. Specs can be absolute or regular. The alarm example uses only absolute time. However, there can be regular alarms, which occur <I>in</I> a specified amount of time rather than <I>at</I> a specified time. Regular timer specs can also repeat. For example, you could create a spec that repeats every 10 seconds or even every 10 days.</P>
+<P>PTimer uses a background thread to check whether a timer spec should fire and, if so, tells the timer spec to notify its listeners. The interesting code in this class is in the run method. There are several trade-offs when creating a class like this. First, you would like to support very fine-grain timing for games and simulations. On the other hand, you want to support alarm-style timer specs that might be days or even months away. Second, you don&#146;t want to have the timer thread take up a lot of unnecessary processor time.</P>
+<P>The solution used by this implementation of PTimer is to define three special times. The first, called RESOLUTION, defines the smallest time that the timer will try to distinguish; the default is 10 milliseconds. The second special time is called CUTOFF. Use this time to make sure that the medium-size timer specs are fairly accurate without taking too many resources and defaults to 500 milliseconds. Use the SAFETY time to keep long timer specs accurate and save resources. This value defaults to 100 milliseconds. All three special times are used in the run method discussed in a moment.</P>
+<P>Normally, programs will use a shared copy of PTimer that is provided as the return value of the static method getTimer. By using one PTimer object, only one thread is used for all timer specs.</P>
+<P>The following code begins the definition of the PTimer class and includes the instance variable, static variables, and constructor definitions:</P>
+<PRE>
+package ptimer;
+import ptimer.*;
+import java.util.*;
+
+public class PTimer implements Runnable
+{
+    private static PTimer shared;
+   
+    private boolean running;
+    private Vector specs;
+    private Thread kicker;
+   
+    //For debugging, keeps the number of
+     //times the timer checked specs
+    //to fire.
+    public int count;
+   
+    private static int RESOLUTION=10;
+    private static int CUTOFF=50*10;
+    private static int SAFETY=10*10;
+   
+    public PTimer()
+    {
+        specs = new Vector(5);
+        running = false;
+    }
+   
+    public static PTimer getTimer()
+    {
+        if(shared == null) shared = new PTimer();
+       
+        return shared;
+    }
+</PRE>
+<P>When PTimer is running, it always synchronizes on itself to make sure that the list of PTimerSpecs is safe from thread conflicts. The first thing that the run method does is start a loop. At the top of this loop, PTimer checks whether there are any PTimerSpecs. If not, the timer calls wait, with no time-out. The timer thread will be notified by another method when timers are scheduled.
+</P>
+<PRE>
+    public void run()
+    {
+        long curTime;
+        int i, max;
+        PTimerSpec curItem;
+        long testTime;
+        long minWaitTime;
+       
+        synchronized(this)
+        {
+            running = true;
+        }
+           
+        while(kicker != null)
+        {
+            synchronized(this)
+            {
+                max = specs.size();
+               
+                if(max == 0)
+                {
+                    try
+                    {
+                        wait();
+                        max= specs.size();
+                    }
+                    catch(InterruptedException exp)
+                    {
+                        max=0;   
+                    }
+                }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="http://library.cs.tuiasi.ro/programming/java/developing_java_enterprise_app/ch21/21-03.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="21-05.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

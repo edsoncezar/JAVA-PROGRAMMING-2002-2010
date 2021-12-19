@@ -1,0 +1,262 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming Servlets</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-16.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-18.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The setData method reads a file of key-value pairs to create the input for a servlet. This file can be used to define the parameters that a user would normally type into a form.
+</P>
+<PRE>
+    public void setData(String fileName)
+    throws Exception
+    {
+        FileReader fileIn;
+        BufferedReader bufIn;
+        String curLine;
+        String key,value;
+        StringBuffer dataBuf = new StringBuffer();
+        boolean firstLine = true;
+        int index;
+
+        fileIn = new FileReader(fileName);
+        bufIn = new BufferedReader(fileIn);
+
+        while((curLine=bufIn.readLine()) != null)
+        {
+            index = curLine.indexOf(&#147; &#148;);
+
+            if(index&lt0) break;
+
+            key = curLine.substring(0,index);
+            value = curLine.substring(index&#43;1).trim();
+
+            if(!firstLine) dataBuf.append(&#145;&amp&#146;);
+
+            dataBuf.append(URLEncoder.encode(key));
+            dataBuf.append(&#145;=&#146;);
+            dataBuf.append(URLEncoder.encode(value));
+
+            firstLine = false;
+        }
+
+        data = dataBuf.toString();
+        bufIn.close();
+
+    }
+</PRE>
+<P>When started, the load tester creates a special thread subclass to do the actual work and starts the thread running.
+</P>
+<PRE>
+    public void start()
+    {
+        LoadTesterThread thread;
+        URL tmpURL;
+        int i;
+
+        try
+        {
+            for(i=0;i&ltnumThreads;i&#43;&#43;)
+            {
+                tmpURL = new URL(url.toExternalForm());
+                thread = new
+                     LoadTesterThread(numTests,tmpURL,pause,data);
+                thread.start();
+            }
+        }
+        catch(Exception ex)
+        {
+            System.out.println(&#147;Tester failed...&#148;);
+        }
+    }
+
+}
+</PRE>
+<P>A LoadTesterThread stores information about each test. The run method runs the specified number of tests and prints the results to the console.
+</P>
+<PRE>
+class LoadTesterThread extends Thread
+{
+    private URL url;
+    private String data;
+    private int pause;
+    private int numTests;
+    private int curTests;
+    private int curTotal;
+    private int curTotalFinal;
+
+    public LoadTesterThread(int ntsts,URL u,int p,String s)
+    {
+        numTests = ntsts;
+        url = u;
+        pause = p;
+        data = s;
+    }
+
+    public void run()
+    {
+        if(numTests &gt 0)
+        {
+            int i;
+            long testStart,testEnd;
+            double totalTime;
+            double average;
+
+            testStart = System.currentTimeMillis();
+
+            for(i=0;i&ltnumTests;i&#43;&#43;)
+            {
+                runTest();
+                try
+                {
+                    if(pause != 0)
+                    {
+                        sleep(pause);
+                    }
+                }
+                catch(Exception ex)
+                {
+                }
+            }
+
+            testEnd = System.currentTimeMillis();
+
+            totalTime = ((double)((testEnd-testStart)-
+                         (numTests*pause))/1000);//in seconds
+
+            synchronized(System.out)
+            {
+                System.out.print(numTests&#43;&#147; performed in &#148;);
+                System.out.print(totalTime);
+                System.out.print(&#147; seconds &#148;);
+                System.out.print(totalTime/numTests);
+                System.out.println(&#147; avg.&#148;);
+            }
+        }
+        else
+        {
+            while(true)
+            {
+                runTest();
+            }
+        }
+
+    }
+</PRE>
+<P>Each test is executed by connecting to the specified URL, making the request with the provided data, and reading the response. Two times are tracked for reading&#151;the time to start reading and the time to actually read the data&#151;because long responses obviously take longer than short ones.
+</P>
+<PRE>
+    public void runTest()
+    {
+        long start,end,realEnd;
+        URLConnection connection;
+        PrintWriter writer;
+        InputStream in;
+        int cur;
+
+        try
+        {
+            connection = url.openConnection();
+            connection.setDoOutput(true);
+
+            if(data != null)
+            {
+                connection.setDoInput(true);
+                writer = new
+                PrintWriter(connection.getOutputStream(),true);
+
+                start = System.currentTimeMillis();
+
+                writer.print(data);
+
+                writer.close();
+            }
+            else
+            {
+                start = System.currentTimeMillis();
+            }
+
+
+            in = connection.getInputStream();
+
+            cur=in.read();
+            end = System.currentTimeMillis();
+
+            while(cur != -1)
+            {
+                cur=in.read();
+            }
+
+            in.close();
+
+            realEnd = System.currentTimeMillis();
+
+            curTotal &#43;= end-start;
+            curTotalFinal &#43;= realEnd-start;
+            curTests&#43;&#43;;
+
+            synchronized(System.out)
+            {
+                System.out.print(&#147;Initial &#148;);
+                System.out.print(end-start);
+                System.out.print(&#147; (&#148;);
+                System.out.print((double)(curTotal/curTests));
+                System.out.print(&#147;) ms : Final &#148;);
+                System.out.print(realEnd-start);
+                System.out.print(&#147; (&#148;);
+                System.out.print((double)(curTotalFinal/curTests));
+                System.out.println(&#147;) ms.&#148;);
+            }
+        }
+        catch(Exception exp)
+        {
+            System.out.println(&#147;Test Failed.&#148;);
+        }
+    }
+
+}
+</PRE>
+<P>Of course, the other method for testing performance is just to use the servlet. In this case, you are testing perceived performance. In reality, perceived performance is more important than actual performance in servlets that respond to user requests. The user will not notice a five-millisecond difference that the computer might. However, when multiple users access the servlet, it will have a different perceived performance than when one programmer tests it. As a result, you may want to combine the load tester with personal testing. Have the load tester imitate a reasonable number of users, then test the servlet by hand, to check perceived performance.
+</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>Often you can improve perceived performance via user feedback. It is easier to wait 30 seconds watching a moving progress bar than waiting 20 seconds with no feedback. For users, the most important thing to perceive is that work is being done on their behalf.</FONT><HR>
+</BLOCKQUOTE>
+<P>In case the total response time of a servlet is considered too long, the first step is to figure out why. Unfortunately, there is no easy way to profile a running servlet, unless the server provides a profiling tool. Live Software also provides a tool for load-testing servlets. You might also find a tools provider for this type of profiling in journals, magazines, or on the Web. Without a tool to discover specific choke points, the next best thing is to evaluate standard performance bottlenecks. In general, this includes items such as:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;Opening network connections&#151;for example, database connections
+<DD><B>&#149;</B>&nbsp;&nbsp;Opening and closing files, general I/O
+<DD><B>&#149;</B>&nbsp;&nbsp;Allocating memory
+<DD><B>&#149;</B>&nbsp;&nbsp;Poorly written algorithms
+</DL>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="07-16.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="07-18.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

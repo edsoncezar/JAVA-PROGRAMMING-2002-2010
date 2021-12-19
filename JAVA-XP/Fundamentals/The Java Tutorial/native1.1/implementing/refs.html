@@ -1,0 +1,216 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Local and Global References</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="error.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="sync.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=bottom border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Interacting with Java from the Native Side</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Local and Global References
+</h2>
+<p>
+<blockquote>
+
+<p> So far, we have used data types such as <code>jobject</code>,
+<code>jclass</code>, and <code>jstring</code> to denote references to
+Java objects. However, the JNI creates references for all object arguments
+passed to native methods, as well as all objects returned from JNI
+functions.
+
+<p> References serve to keep the Java objects from being garbage
+collected.  By default, the JNI creates <em>local references</em> because local references ensure that the Java Virtual Machine can eventually free the Java objects. Local references
+ become invalid when program execution returns from the native method
+in which the local reference is created. Therefore, a native method
+must not store away a local reference and expect to reuse it in
+subsequent invocations.  
+
+<p>For example, the following program, which is a
+variation of the native method in  <a href=http://docs.rinet.ru/Jtuta/native1.1/implementing/example-1dot1/FieldAccess.java><code>FieldAccess.c</code></a>, mistakenly caches the
+Java class for the member variable ID so that it does not have to repeatedly search
+for the member variable ID based on the member variable name and signature at each invocation:
+
+<blockquote>
+<pre>
+/* <strong>This code is illegal</strong> */
+static jclass cls = 0;
+static jfieldID fld;
+
+JNIEXPORT void JNICALL
+Java_FieldAccess_accessFields(JNIEnv *env, jobject obj)
+{
+    ...
+    if (cls == 0) {
+        cls = (*env)->GetObjectClass(env, obj);
+        if (cls == 0) {
+            ... /* error */
+        }
+        fid = (*env)->GetStaticFieldID(env, cls, "si", "I");
+    }
+    /* access the member variable using cls and fid */
+    ...
+}
+</pre>
+</blockquote>
+
+This program is illegal because the local reference returned from
+<code>GetObjectClass</code> is valid only until the native method returns. When the Java application calls the native method 
+<code>Java_FieldAccess_accessFields</code> a second time, the native method tries to use an invalid
+local reference.  This leads to either the wrong results or to a VM
+crash.
+
+<p>You can overcome this problem by creating a <em>global
+reference</em>.  A global reference remains valid until it is explicitly freed.  The following code rewrites the previous program and correctly uses a global reference to cache the class for the member variable ID:
+
+<blockquote>
+<pre>
+/* <strong>This code is correct.</strong> */
+static jclass cls = 0;
+static jfieldID fld;
+
+JNIEXPORT void JNICALL
+Java_FieldAccess_accessFields(JNIEnv *env, jobject obj)
+{
+    ...
+    if (cls == 0) {
+        jclass cls1 = (*env)->GetObjectClass(env, obj);
+        if (cls1 == 0) {
+            ... /* error */
+        }
+        cls = (*env)->NewGlobalRef(env, cls1);
+        if (cls == 0) {
+            ... /* error */      
+        }
+        fid = (*env)->GetStaticFieldID(env, cls, "si", "I");
+    }
+    /* access the member variable using cls and fid */
+    ...
+}
+</pre>
+</blockquote>
+
+<p>A global reference keeps the Java Virtual Machine from unloading the Java class,
+and therefore also ensures that the member variable ID remains valid, as discussed in <a href=field.html>Accessing Java Member Variables</a>.  However, the native code must call 
+<code>DeleteGlobalRef</code> when it no
+longer needs access to the global reference.  Otherwise, the Java Virtual Machine will never unload the
+corresponding Java object, the Java class referenced by
+<code>cls</code> above.
+
+<p>In most cases, the native programmer should rely on the Java Virtual Machine to free
+all local references after the native method returns. In certain
+situations, however, the native code may need to call the
+<code>DeleteLocalRef</code> function to explicitly delete a local reference.  These situations are:
+
+<ul> <li> You may know that you are holding the
+only reference to a large Java object and you do not want to wait until
+the current native method returns before the garbage collector can reclaim the object. For example, in the following
+program segment, the garbage collector may be able to free the Java
+object referred to by <code>lref</code> when it is running inside
+<code>lengthyComputation</code>:
+
+<blockquote>
+<pre>
+    ...
+    lref = ...            /* a large Java object */
+    ...                   /* last use of lref */
+    (*env)->DeleteLocalRef(env, lref);
+    lengthyComputation(); /* may take some time */
+    return;               /* all local refs will now be freed */
+}
+</pre>
+</blockquote>
+
+<li>You may need to create a large number of local
+references in a single native method invocation. This may result in an
+overflow of the internal JNI local reference table. It is a good idea
+to delete those local references that will not be needed. For example,
+in the following program segment, the native code iterates through a
+potentially large array <code>arr</code> consisting of Java 
+strings. After each iteration, the program can free the local reference to the string
+element:
+
+<blockquote>
+<pre>
+    ...
+    for(i = 0; i < len; i++) {
+        jstring jstr = (*env)->GetObjectArrayElement(env, arr, i);
+        ...                                /* processes jstr */ 
+        (*env)->DeleteLocalRef(env, jstr); /* no longer needs jstr */
+    }
+    ...
+</pre>
+
+</ul>
+
+
+</blockquote>
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="error.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="sync.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/nativeHeader.gif" width=26 height=26 align=top border=0 alt="Java Native Interface | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Interacting with Java from the Native Side</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>
+

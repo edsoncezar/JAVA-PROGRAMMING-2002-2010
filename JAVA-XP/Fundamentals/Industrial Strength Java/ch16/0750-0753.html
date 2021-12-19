@@ -1,0 +1,272 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Jeeves and Java Servlets:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0746-0749.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0754-0756.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-750"><P>Page 750</P></A>
+
+
+<P>The following code retrieves the query information:
+</P>
+
+<PRE>
+String formdata;
+String method = req.getMethod();
+if (&quot;GET&quot;.equals(method))
+  formdata = req.getQueryString();
+else if (&quot;POST&quot;.equals(method)) {
+  if (!&quot;application/x-www-form-
+urlencoded&quot;.equalsIgnoreCase(req.getContentType()))
+    throw new IOException(&quot;illegal content type&quot;);
+  formdata = getContents(req);
+}
+else
+  throw new IOException(&quot;invalid method&quot;);
+</PRE>
+
+<P>After you have the query information, call parseQueryString() to construct a Hashtable
+of name/value pairs. It decodes the special URL encoding where &quot; &quot; (the space character)
+is represented as &quot;+,&quot; and non-printing characters are represented as a number preceded by
+a percent sign (%). Finally, call the servlet using the newly defined service() method
+as shown in the following:
+</P>
+
+<PRE>
+Hashtable fd = HttpUtils.parseQueryString(formdata);
+sendResponse(req, res, fd);
+}
+</PRE>
+
+<P>The NewFormServlet class defines a variant of the sendResponse() method that
+accepts information about the query in addition to information from the form. This new method
+is defined as follows:
+</P>
+
+<PRE>
+public abstract void sendResponse(HttpServletRequest req,
+ &Acirc;HttpServletResponse res,
+  Hashtable formdata);
+</PRE>
+
+<P>The getContents() method reads the request content and returns it as a string. Note
+the loop structure around the read() call; this loop guarantees that the read() fully
+completes with all request information. The code to read the
+request content is as follows:
+</P>
+
+<PRE>
+  public String getContents(ServletRequest req) throws IOException {
+  InputStream in = req.getInputStream();
+  int count;
+  byte buf] = new bytereq.getContentLength()];
+  for (int index = 0; index &lt; buf.length; index += count) {
+    count = in.read(buf, index, buf.length - index);
+    if (count == -1)
+</PRE>
+
+
+<A NAME="PAGENUM-751"><P>Page 751</P></A>
+
+
+<PRE>
+      throw new IOException();
+  }
+  return new String(buf, 0);
+  }
+}
+</PRE>
+
+<P>This completes the definition of the NewFormServlet class.
+</P>
+
+<H4><A NAME="ch16_ 25">
+Building Server-Side Includes Servlets
+</A></H4>
+
+<P>Jeeves provides support for a form of server-side includes that uses the newly
+defined &lt;servlet&gt; tags. Files whose MIME type is &quot;java-internal/parsed-html&quot; are further
+processed by the SSIncludeServlet to resolve any references to servlets embedded in
+the document. By default, files with the .shtml suffix are scanned.
+</P>
+
+<P>As the document is written to the client, the SSIncludeServlet scans for the newly
+defined &lt;servlet&gt; HTML tag. When this tag is encountered, the servlet identified in the
+attributes of the tag is invoked and its output is sent to the client in place of the &lt;servlet&gt;
+&lt;/servlet&gt; HTML element.
+</P>
+
+<P>The server-side includes supported by SSIncludeServlet are not the same as those
+supported by many other HTTP servers, such as NCSA and Netscape; these embed
+server-side includes commands inside HTML comments.
+</P>
+
+<P>The syntax for invoking servlets is as follows:
+</P>
+
+<PRE>
+&lt;servlet name=Name code=Code.class codebase=CodeBase
+initParam1=initArg1 initParam2=initArg2 ...&gt;
+&lt;param name=param1 value=val1&gt;
+&lt;param name=param2 value=val2&gt;
+.
+.
+.
+&lt;/servlet&gt;
+</PRE>
+
+<P>The server first tries to invoke the servlet with the name provided in the name field. If
+this fails or if no name is provided, the server then attempts to load the servlet based on
+the code and codebase fields. Any remaining attribute fields within the &lt;servlet&gt; tag
+are passed as initialization parameters to the servlet. If the
+server loads the servlet and a name was specified, the server keeps the servlet loaded so that the next time the servlet
+is accessed, it is not reloaded. If no name is specified, the server reloads the servlet
+each time it is accessed.
+</P>
+
+
+<A NAME="PAGENUM-752"><P>Page 752</P></A>
+
+
+<P>After the servlet is ready to execute, the server calls the service() method of the
+servlet. The name/value pairs specified in the HTML file with the &lt;param&gt; tag are accessible
+to the servlet by using the standard getParameter() and
+getParameters() methods on the ServletRequest object that is passed to the servlet in the service() method. Everything
+the servlet writes to ServletResponse.getOutputStream() is also written to the client as part
+of the document that the client requested.
+</P>
+
+<P>The following section contains an example server-side include servlet that inserts
+the current time (at the server) into a document.
+</P>
+
+<P><B>
+DateSSIServlet
+</B></P>
+
+<P>The DateSSIServlet is a servlet designed to work as a server-side include. This outputs
+the current date and time into the document that referenced this server-side include
+servlet. Servlets that can function as server-side include the
+GenericServlet subclass rather than the more common HttpServlet because HTTP information is not available. The
+class definition for DateSSIServlet and its service() method is as follows:
+</P>
+
+<PRE>
+public class DateSSIServlet extends GenericServlet {
+  public void service(ServletRequest req, ServletResponse res)
+    throws ServletException, IOException {
+  Date today = new Date();
+  res.setContentType(&quot;text/plain&quot;);
+
+  ServletOutputStream out = res.getOutputStream();
+</PRE>
+
+<P>To enable the user to control whether to display the time in the local time-zone or in
+GMT, use an initialization parameter. For HttpServlets, the initialization parameters are
+obtained from the configuration file servlet.properties. For server-side includes, the user
+specifies initialization parameters as additional name/value pairs within the servlet tag.
+The following code determines the time format (local or GMT) and performs the
+indicated operation:
+</P>
+
+<PRE>
+String zone = getInitParameter(&quot;date&quot;);
+  if (&quot;local&quot;.equalsIgnoreCase(zone))
+    out.println(today.toString());
+  else
+    out.println(today.toGMTString());
+  }
+
+}
+</PRE>
+
+<P>This completes the definition of the DateSSIServlet class. The HTML code to invoke
+this
+</P>
+
+
+<A NAME="PAGENUM-753"><P>Page 753</P></A>
+
+
+<P>servlet to output local time to a document is as follows:
+</P>
+
+<PRE>
+&lt;servlet name=dateSSIServlet date=local&gt;&lt;/servlet&gt;
+</PRE>
+
+<P>The ending &lt;/servlet&gt; tag is required even though this servlet does not take
+parameters. Note that this servlet can be invoked directly rather than just as a server-side include.
+</P>
+
+<H4><A NAME="ch16_ 26">
+Subclassing ErrorServlet
+</A></H4>
+
+<P>When calling HttpServletResponse's sendError() method with only a status code to
+return an error to the requester, the ErrorServlet is actually called to create and send the
+error reply. The built-in ErrorServlet returns either a simple error reply message generated
+by translating the status number into a standard error text string, or it returns the contents of
+a file from the preconfigured error page directory. Calling sendError() with a status
+code and message string bypasses the ErrorServlet and returns a simple page that contains
+the error text message.
+</P>
+
+<P>Assume that you have a busy site that is the target of many hypertext links. When files
+are moved to new directories, you will have many old links that will cause &quot;not found&quot;
+errors. By changing the entry in the servlet.properties file that specifies the class to be loaded
+for the &quot;error&quot; servlet, you can have your subclass of
+ErrorServlet invoked rather than the standard built-in version. By overriding the service() method, you can dynamically
+create custom error reply pages containing links to possible alternates to the requested
+URL.
+</P>
+
+<P>In the following example, the service() method is overridden, but not init(), so that
+the original ErrorServlet will be properly initialized.
+</P>
+
+<PRE>
+public class NewErrorServlet extends ErrorServlet {
+  public NewErrorServlet() {
+  }
+</PRE>
+
+<P>Your service() method is called with the original request's HttpServletRequest
+object which has information about the requester; obtain the status code from
+the HttpServletResponse object. First determine whether the error is &quot;not found,&quot; code 404.
+If not, just call super.service() to get the standard error reply page. The service() method
+is defined as follows:
+</P>
+
+<PRE>
+public void service(HttpServletRequest req, HttpServletResponse res)
+  throws IOException {
+if (((HttpServletResponse)res).getStatusCode() != 404) {
+  super.service(req, res);
+  return;
+}
+</PRE>
+
+
+<P><CENTER>
+<a href="0746-0749.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0754-0756.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

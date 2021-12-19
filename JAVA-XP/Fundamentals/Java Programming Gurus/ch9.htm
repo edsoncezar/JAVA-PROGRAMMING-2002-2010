@@ -1,0 +1,1177 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 9 -- Extending AWT Components</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 9</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Extending AWT Components</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#ComponentsanOverview" >Components-an Overview</A>
+<LI><A HREF="#NewComponentsfromOld" >New Components from Old</A>
+<LI><A HREF="#ASelfValidatingTextField" >A Self-Validating TextField</A>
+<LI><A HREF="#AMultiStateToggleButton" >A Multi-State Toggle Button</A>
+<LI><A HREF="#Overview" >Overview</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+The Java Abstract Window Toolkit (AWT) consists of classes that
+encapsulate basic GUI controls. Java is a multi-platform solution
+so the AWT provides a lowest common denominator interface. Any
+interface you develop should appear about the same on any platform.
+Often the AWT is called Another Window Toolkit or affectionately,
+Awful Window Toolkit.
+<P>
+Now don't be misled; the AWT provides many useful controls and
+your applications or applets may not require anything more. Of
+course, you are reading this chapter because you want to learn
+how to extend the functionality of the AWT controls. To do this,
+you learn a technique called subclassing.
+<P>
+Subclassing is just a fancy object-oriented term for changing
+the way a class works. The actual method is to create a new class
+from the old one and add new features along the way. Other ways
+exist to extend the AWT (see Chapter 10, &quot;Combining AWT Components&quot;)
+but this chapter focuses on extending by subclassing.
+<P>
+In this chapter, you will learn how to extend <TT>TextField</TT>
+to create a self-validating <TT>TextField</TT>.
+The new class will be a <TT>TextField</TT>
+that keeps track of user input and only allows entry of valid
+data. You could use such a control to enable the user to enter
+color choices for some graphic object. This control would force
+the user to enter only valid colors and reject any other entries.
+<P>
+The text also looks at extending the <TT>Button</TT>
+class to create a multi-state toggle button. This toggle button
+will display a different label each time it is pressed. You could
+use it in place of separate on and off buttons.
+<H2><A NAME="ComponentsanOverview"><FONT SIZE=5 COLOR=#FF0000>Components-an
+Overview</FONT></A></H2>
+<P>
+In discussions of Java, people often use the word component to
+mean two different things. Sometimes, people use the generic meaning
+and refer to any GUI object as a component. However in Java, <TT>Component</TT>
+has a very specific meaning. <TT>Component</TT>
+is a class derived from <TT>Object</TT>.
+The major GUI widgets derive from <TT>Component</TT>
+as illustrated in Figure 9.1.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-1.gif" ><B>Figure 9.1 : </B><I>The Java AWT class hierarchy.</I></A>
+<P>
+The <TT>Component</TT> class is the
+base GUI class. This class provides functions to handle events
+and set or query attributes.
+<H3>What Is a Peer?</H3>
+<P>
+If you have looked at the Java API documentation, you have probably
+seen a class called <TT>ComponentPeer</TT>.
+Derived from it are peer classes associated with each of the component
+classes.
+<P>
+The purpose of the peer classes is to bridge the gap between the
+AWT classes and the underlying platform-specific UI widgets. By
+using a peer, the AWT provides a uniform programming interface
+across all platforms. The peer classes are rarely used directly
+in Java programming, except when porting the AWT to other platforms.
+<H3>Why Are Image Buttons Hard?</H3>
+<P>
+If you were to compile a list of language features that Java users
+would like to see in a 1.5 or 2.0 release, image buttons would
+appear near the top. An image button is a button that has an image
+on its face instead of text. Most modern GUIs include image buttons,
+so why doesn't the AWT?
+<P>
+The reason the AWT doesn't have image buttons has to do with the
+nature of Java itself. Because the Java AWT is a multi-platform
+GUI finding, a universal solution becomes difficult. The problem
+is that the implementation of an AWT button gets tied up between
+the classes <TT>Button</TT> and <TT>ButtonPeer</TT>.
+You can change the behavior of the <TT>Button</TT>
+class, but not its associated peer.
+<P>
+One possible solution would be to create an image button by extending
+some class other than <TT>Button</TT>.
+You could derive such a class from <TT>Canvas</TT>.
+You would need to create multiple images to represent the up and
+down states of the button and switch them and repaint when the
+user clicked in the <TT>Canvas</TT>.
+The problem is that such a button would look exactly the same
+on every platform rather than looking like a native implementation
+of an image button.
+<H2><A NAME="NewComponentsfromOld"><FONT SIZE=5 COLOR=#FF0000>New
+Components from Old</FONT></A></H2>
+<P>
+When you design a user interface, you use the widgets provided
+in the Toolkit as the basic building blocks. Sometimes the design
+calls for a control that is just slightly different from the AWT
+version. Rather than try to develop new controls, you modify the
+existing controls in the AWT. To accomplish this, you use a method
+called <I>subclassing</I>. In object oriented terminology, this
+technique is often called class derivation or inheritance.
+<H2><A NAME="ASelfValidatingTextField"><FONT SIZE=5 COLOR=#FF0000>A
+Self-Validating TextField</FONT></A></H2>
+<P>
+In this example, you create a self-validating version of a <TT>TextField</TT>.
+You will derive a class from <TT>TextField</TT>
+called <TT>SelfValidatingTextField</TT>.
+The class will have a list of acceptable entries and users will
+only be allowed to enter values from this list.
+<P>
+This control allows you to limit the possible inputs from the
+user and to anticipate the user's input. When the user enters
+a character, you try to determine which string they are typing
+and fill in the blank for them.
+<H3>Overview</H3>
+<P>
+You create the <TT>SelfValidatingTextField</TT>
+class by subclassing the <TT>TextField</TT>
+class. Start with a list of valid strings. When the user enters
+a character, you catch the <TT>key down</TT>
+<TT>Event</TT>. At this point, the
+bulk of the work begins. You must look at the text already in
+the control and determine whether the new keystroke is valid.
+If it so, add it to the control and find the best match for the
+entered text.
+<P>
+When you add the string to the control, you <I>select</I> the
+portion that the user did not type. So if the user types <B>s</B>
+and the matching string is <I>spray</I>, the last three letters
+<I>(ray)</I> are selected.
+<H4>An Example with Valid Strings</H4>
+<P>
+Now create a <TT>SelfValidatingTextField</TT>
+in an <TT>Applet</TT> with the following
+valid strings; Janice, Jedidiah, Jonathan, Joy, Joshua, Jennifer,
+Jason.
+<P>
+If the user types a character other than <B>J</B> nothing happens
+because all the valid strings begin with <B>J</B>. When the user
+types a <B>J</B>, the control displays the <B>J</B> and the remainder
+of the first matching string in alphabetical order-in this case
+<I>Janice</I>. Figures 9.2 to 9.6 illustrate a typical user session.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-2.gif" ><B>Figure 9.2 : </B><I>Type</I> a J<I>. Janice is displayed and the anice is selected.</I></A>
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-3.gif" ><B>Figure 9.3 : </B><I>Type an </I>a.<I> Janice is still displayed, but now the nice is selected.</I></A>
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-4.gif" ><B>Figure 9.4 : </B><I>Type a </I>d.<I> Nothing happens since none of the valid strings begin with Jad.</I></A>
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-5.gif" ><B>Figure 9.5 : </B><I>Now type an </I>s.<I> The control displays Jason with the on selected.</I></A>
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-6.gif" ><B>Figure 9.6 : </B><I>Pressing the delete key causes the selected portion of the text to be deleted.</I></A>
+<P>
+As Figures 9.2 through 9.6 illustrate, you have created a new
+control that retains much of the functionality of the original
+<TT>TextField</TT> while providing
+significant enhancements. The new control still takes input from
+the user, but it now anticipates the user's input. This function
+means that less typing is necessary to enter the desired string.
+<P>
+You have retained the functionality of delete, backspace, and
+other special keystrokes. These keys operate in the control just
+like they do in the AWT version. The <TT>SelfValidatingTextField</TT>
+can be used as a drop in replacement for the <TT>TextField</TT>
+control.
+<H3>What the Class Needs to Know</H3>
+<P>
+The AWT <TT>TextField</TT> needs to
+know very little. To use one, you simply create it and add it
+to your layout. When you want to get the data that the user has
+entered, simply call the <TT>getText()</TT>
+method.
+<P>
+Because the <TT>SelfValidatingTextField</TT>
+enhances the functionality of <TT>TextField</TT>,
+it needs more information. The control must know what strings
+to accept and how to interpret keystrokes. Our enhanced <TT>TextField</TT>
+should also be able to anticipate what the user is entering and
+display the <I>best match</I> string.
+<P>
+Text-matching algorithms must deal with the issue of <I>case-sensitivity</I>.
+In other words, does the string <TT>&quot;Jennifer&quot;</TT>
+match <TT>&quot;jennifer&quot;</TT>?
+Your control enables you to be either case-sensitive or case-insensitive,
+which makes the control more versatile, but requires some extra
+processing.
+<P>
+You let the class store the information it needs by adding the
+following instance variables:
+<BLOCKQUOTE>
+<TT>String[] strings ;<BR>
+boolean&nbsp;&nbsp;caseSensitive ;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pos ;</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>strings</TT> variable is used
+to store all the acceptable string values. Eventually, you will
+sort this array so your matches display in alphabetical order.
+<P>
+The <TT>caseSensitive</TT> variable
+is a flag that indicates whether the string matching you do will
+be case-sensitive. You need to set this variable whenever you
+create an instance of the <TT>SelfValidatingTextField</TT>
+class. During the data validation, you use the variable to determine
+whether to accept a given keystroke.
+<P>
+The <TT>pos</TT> variable is used
+by the class to keep track of the position of the last character
+entered by the user. This information becomes important when you
+display the best match string for a given input. You will need
+to update <TT>pos</TT> whenever you
+get input from the user.
+<P>
+Use this constructor to pass the information needed to the class:
+<BLOCKQUOTE>
+<TT>public SelfValidatingTextField( String[]
+a,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boolean
+cs,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+chars ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;super( chars );<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;strings&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= a;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;caseSensitive = cs;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pos&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= 0 ;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sortStrings() ;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The constructor takes three parameters: the array of valid strings,
+the case-sensitivity flag, and an integer parameter <TT>chars</TT>.
+The <TT>chars</TT> parameter is used
+to call the <TT>overloaded</TT> <TT>TextField</TT>
+constructor. The specific constructor you call is <TT>TextField(int
+n)</TT>, which creates a <TT>TextField</TT>
+big enough to hold <TT>n</TT> characters.
+<P>
+The call to the <TT>parent class</TT>
+constructor looks like
+<BLOCKQUOTE>
+<TT>super( chars );</TT>
+</BLOCKQUOTE>
+<P>
+This statement invokes a super class constructor. Because the
+super class is <TT>TextField</TT>,
+the <TT>TextField(int n) </TT>constructor
+is called.
+<P>
+The next three statements in the constructor initialize the class
+instance variables. You pass the values for <TT>strings</TT>
+and <TT>caseSensitive</TT> into the
+constructor. The function initializes <TT>pos</TT>
+to zero because at the time you create the control, no keystrokes
+have yet been entered.
+<H4>Sorting the Strings</H4>
+<P>
+The last thing the constructor does is call <TT>sortStrings()</TT>.
+This function uses a bubble sort algorithm to sort the array of
+strings in ascending order. The implementation is
+<BLOCKQUOTE>
+<TT>void sortStrings() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (int i = 0; i &lt; strings.length
+- 1; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boolean swaps
+= false ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int j = strings.length
+- 2; j &gt;= i; j--) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(strings[j].compareTo(strings[j+1]) &gt; 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+temp&nbsp;&nbsp;= strings[j];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings[j]&nbsp;&nbsp;&nbsp;=
+strings[j+1];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings[j+1]
+= temp;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;swaps
+= true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( swaps ==
+false ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break
+;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+This is the traditional bubble sort. It has been modified slightly
+to use the <TT>swaps</TT> variable
+to terminate the sort if any iteration fails to produce a single
+swap.
+<H3>Capturing Keystrokes</H3>
+<P>
+One of the most important things this class needs to do is respond
+to individual keystrokes. In Java, a keystroke is an event. You
+use the event-handling mechanism of Java to capture keystrokes.
+<P>
+In event-driven programming, you often have to decide which object
+in the system captures which events. In many Java applets, it
+is the container class that captures the events generated by its
+embedded controls. Your control is designed to be self-contained
+so that you capture the keystroke events in the control itself.
+<P>
+To capture the keystrokes, you override the <TT>keyDown()</TT>
+function from the <TT>Component</TT>
+class (Remember: <TT>Component</TT>
+is the parent class of <TT>TextComponent,</TT>
+which is the parent class of <TT>TextField</TT>):
+<BLOCKQUOTE>
+<TT>public boolean keyDown( Event e, int
+key ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( key &gt; 31 &amp;&amp; key &lt; 127
+) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return validateText(
+key );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return false;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The function receives two parameters: an <TT>Event</TT>
+object and the value of the keystroke. The first parameter is
+an <TT>Event</TT> object. <TT>Events</TT>
+in Java are class objects (see Chapter 11, &quot;Advanced Event
+Handling&quot;); they contain both data and functions. In this
+case, you only need the value of the keystroke, not the specific
+combination of keys that produced it.
+<P>
+In the overridden method, you handle some keystrokes yourself,
+while passing others on to the <TT>superclass</TT>
+method. In the implementation of the class constructor, you made
+an explicit call to the <TT>superclass</TT>
+constructor. Notice that you make no such call here.
+<P>
+<TT>Component.keyDown()</TT> is a
+<I>special</I> function. Instead of calling the <TT>superclass</TT>
+function directly, you call it by specifying the function return
+value. If the return value is <TT>true,</TT>
+it means that the function handled the event internally and the
+<TT>superclass</TT> method does not
+need to be called. If the return value is <TT>false,</TT>
+the function has not fully handled the event and the <TT>superclass</TT>
+method will be called. When overriding <TT>Component.keyDown()</TT>,
+you should not call the <TT>superclass</TT>
+method explicitly.
+<P>
+In the <TT>if</TT> statement, you
+compare the key to two values: <TT>31</TT>
+and <TT>127</TT>. These values represent
+the minimum and maximum values for printable characters. If the
+character is printable, then you call the <TT>validateText()
+method</TT> and return its value. In this case, <TT>validateText()</TT>
+always returns <TT>true</TT>.
+<P>
+For non-printing characters, the expression is <TT>false</TT>
+and the function returns false. This causes the superclass version
+of <TT>keyDown()</TT> to be called.
+Thus, all non-printing characters are simply <I>passed on</I>
+to the superclass.
+<H3>Validating Text</H3>
+<P>
+Most of the work in your control gets done in the <TT>validateText()</TT>
+method. This method must handle all of these different tasks:
+<UL>
+<LI>Update the <TT>pos</TT> variable.
+<LI>Get the current text.
+<LI>Handle case sensitivity.
+<LI>Check for string matches.
+<LI>Display the new string.
+<LI><FONT COLOR=#000000>Select the control supplied portion.</FONT>
+</UL>
+<P>
+Given all that it does, <TT>validateText()</TT>
+is a small function. It uses the Java <TT>String</TT>
+class to do as much work as possible.
+<P>
+The <TT>validateText()</TT> method
+starts by updating the <TT>pos</TT>
+variable:
+<BLOCKQUOTE>
+<TT>boolean validateText( int key ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pos = Math.min( pos, getText().length()
+) ;</TT>
+</BLOCKQUOTE>
+<P>
+Start by setting <TT>pos</TT> to the
+index of the last character the user entered. If characters have
+been deleted, you update <TT>pos</TT>
+to reflect the current contents of the control.
+<P>
+Next, you get the text from the control:
+<BLOCKQUOTE>
+<TT>String editField = getText().substring(
+0, pos )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+
+(char)key;</TT>
+</BLOCKQUOTE>
+<P>
+You need to instantiate a local <TT>String</TT>
+object. The <TT>editField</TT> variable
+holds all of the characters the user has entered until this point.
+That is, the first <TT>pos</TT> characters
+and the value the user just entered. This is accomplished by calling
+the <TT>getText()</TT> method that
+is inherited from the superclass.
+<P>
+Now that you have gotten the text, you must determine whether
+the control is case-sensitive:
+<BLOCKQUOTE>
+<TT>if ( !caseSensitive ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;editField = editField.toLowerCase();<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+You handle case insensitivity by calling the <TT>toLowerCase()</TT>
+method from the <TT>string</TT> class.
+By converting both the text from the control and the array of
+valid strings to lowercase, you can now make a case-insensitive
+comparison.<p>
+<CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The <TT>String.toLowerCase()</TT> method returns a lowercase version of the <TT>String</TT>. It does not actually modify the <TT>String</TT>. Therefore, it is necessary to assign the result to another string if you want the change to persist.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+For case-sensitive comparisons, you will work with the unconverted
+strings.
+<P>
+The issue of case sensitivity has been settled for the string.
+You must now check to see whether the characters entered thus
+far match any of the valid strings. The <TT>for</TT>
+loop below performs the appropriate comparisons:
+<BLOCKQUOTE>
+<TT>for ( int i = 0; i &lt; strings.length;
+i++ ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( caseSensitive
+) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(
+strings[i].lastIndexOf(editField,0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+p;&nbsp;!=
+-1 ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setText(
+strings[i] ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;select(
+++pos, strings[i].length() ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(
+strings[i].toLowerCase().lastIndexOf(<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;editField,0)
+!= -1 ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setText(
+editField +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings[i].substring(
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;editField.length()
+) ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;select(
+++pos, strings[i].length() ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;} catch ( Exception e ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// ignore any
+exceptions here<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>for</TT> loop iterates through
+the array of valid strings. During each iteration, you need to
+check for case sensitivity. You will call <TT>toLowerCase()</TT>
+if necessary.
+<P>
+To make the actual comparison, you call the <TT>String.lastIndexOf()</TT>
+method. Notice that you pass two parameters to <TT>lastIndexOf()</TT>;
+<TT>editField</TT> and <TT>0</TT>.
+The function searches the <TT>String</TT>
+for the subscript you pass in. The <TT>String</TT>
+is searched backwards starting at the index-in this case <TT>0</TT>.
+Because you are searching backwards from <TT>0,</TT>
+you are in effect searching from the beginning.
+<P>
+If a match exists in the array of valid <TT>String,</TT>
+you need to update the control. In a case-sensitive instance of
+the control, you simply put the matching valid <TT>String</TT>
+in the control. If the control is not case-sensitive, you replace
+characters that the user has entered so far and append the remainder
+of the matching <TT>String</TT>.
+<P>
+Next, you select or highlight the portion of the string that you
+supplied from the <TT>out</TT> array
+of valid <TT>Strings</TT> so that
+the next character typed by the user replaces the selected portion
+of the <TT>String</TT>.
+<P>
+Finally, you return <TT>true</TT>.
+In every case, this control returns <TT>true</TT>.
+This value is returned by the <TT>calling</TT>
+function as well. In the <TT>calling</TT>
+function, <TT>keyDown()</TT>, this
+return value indicates that the superclass implementation will
+not be invoked.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The <TT>try</TT>/<TT>catch</TT> block is included because <TT>String.substring()</TT> throws a <TT>StringIndexOutOfBoundsException</TT>. This particular exception is non-critical here, so you catch it in an empty <TT>catch</TT> block.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>Putting it Together</H3>
+<P>
+To use the <TT>SelfValidatingTextField</TT>
+class in your own applets or applications, you must pass it: An
+array of valid <TT>Strings</TT>, a
+<TT>boolean</TT> value for case sensitivity,
+and the number of characters you wish to display.
+<P>
+The control is self-contained and takes care of all of its own
+validation. To get the text from the control, you call <TT>SelfValidatingTextField.getText()</TT>
+just as you would if you were using the AWT <TT>TextField</TT>.
+<P>
+The entire <TT>SelfValidatingTextField</TT>
+class is shown in Listing 9.1.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.1. The SelfValidatingTextField class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>package COM.MCP.Samsnet.tjg ;<BR>
+import java.awt.*;<BR>
+<BR>
+public class SelfValidatingTextField extends TextField {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String[] strings ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;boolean&nbsp;&nbsp;caseSensitive ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pos
+;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public SelfValidatingTextField( String[]
+a,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boolean
+cs,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+chars ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super( chars );
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= a;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;caseSensitive
+= cs;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pos&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= 0 ;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sortStrings()
+;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;void sortStrings() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int i =
+0 ; i &lt; strings.length - 1 ; i++ ) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boolean
+swaps = false ;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int j = strings.length - 2; j &gt;= i; j--) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(strings[j].compareTo(strings[j+1]) &gt; 0) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+temp&nbsp;&nbsp;= strings[j];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings[j]&nbsp;&nbsp;&nbsp;=
+strings[j+1];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings[j+1]
+= temp;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;swaps
+= true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( swaps == false ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break
+;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean keyDown( Event e, int key
+) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( key &gt;
+31 &amp;&amp; key &lt; 127) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+validateText( key ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; boolean validateText( int key ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pos = Math.min(
+pos, getText().length() ) ;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String editField
+= getText().substring( 0, pos )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+p;&nbsp;&nbsp;&nbsp;+
+(char)key;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( !caseSensitive
+) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;editField
+= editField.toLowerCase();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for ( int i =
+0; i &lt; strings.length; i++ ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+( caseSensitive ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(strings[i].lastIndexOf(editField,0)!=-1)
+{<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setText(
+strings[i] ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;select(
+++pos, strings[i].length() ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+else {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(
+strings[i].toLowerCase().lastIndexOf(<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;edit
+Field,0)
+!= -1 ) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setText(
+editField +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings[i].substring(
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;editField.length
+()
+) ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;select(
+++pos, strings[i].length() ) ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+catch ( Exception e ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+ignore any exception here<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H2><A NAME="AMultiStateToggleButton"><FONT SIZE=5 COLOR=#FF0000>A
+Multi-State Toggle Button</FONT></A></H2>
+<P>
+For our second example, you create a multi-state <TT>ToggleButton</TT>.
+You derive a class from the <TT>Button</TT>
+called <TT>ToggleButton</TT>. You
+also create an array of button values and pass them to your class.
+When a user presses the button, the text on the face changes.
+You can use this <TT>ToggleButton</TT>
+to replace multiple <TT>Buttons</TT>.
+<P>
+An application that might normally have on and off <TT>Buttons</TT>
+could now have a <TT>ToggleButton </TT>that
+switched between on and off. It could also replace show and hide
+buttons.
+<H2><A NAME="Overview"><FONT SIZE=5 COLOR=#FF0000>Overview</FONT></A>
+</H2>
+<P>
+The <TT>ToggleButton</TT> is derived
+from <TT>Button</TT>. This new class
+enables a button to display a different <TT>String</TT>
+each time it is pressed. Actually it displays all the <TT>Strings</TT>
+in the array and then starts over. The class provides public methods
+to return the index or the string associated with each press.
+<H3>A Self-Destructive Example</H3>
+<P>
+Imagine that you want a Java applet that causes your computer
+to self-destruct. Don't be too worried, because applet security
+won't let us really self-destruct (see Chapter 20, &quot;A User's
+View of Security&quot;). Now give your applet a self-destruct
+button and an enable/disable button. You also create a <TT>ToggleButton</TT>
+for enable/disable and a <TT>Button</TT>
+for self-destruct.
+<P>
+When you start the applet, the self-destruct button is enabled
+and the <TT>ToggleButton</TT> displays
+&quot;Disable.&quot; Figures 9.7 through 9.9 illustrate the self-destruct
+sequence.
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-7.gif" ><B>Figure 9.7 : </B><I>The fully armed Self Destruct button.</I></A>
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-8.gif" ><B>Figure 9.8 : </B><I>Press Disable. The Self Destruct button is disabled. The ToggleButton now displays Enable.</I></A>
+<P>
+<A HREF="http://docs.rinet.ru/JaTricks/f9-9.gif" ><B>Figure 9.9 : </B><I>Press Enable. The Self Destruct button is now armed. The ToggleButton now displays Disable</I></A><I>.</I>
+<P>
+You are now ready to self-destruct!
+<H3>State Information</H3>
+<P>
+When you create a <TT>Button,</TT>
+you pass it a <TT>String</TT> that
+will be displayed on its face. The <TT>ToggleButton</TT>
+class needs to know what <TT>Strings</TT>
+to display. The class must also know how to order the strings.
+<P>
+The class must be able to respond to <I>button</I> <I>presses</I>
+and modify itself accordingly. You will also give the class a
+means of responding to queries about its previous state.
+<P>
+The previous state information is actually more important than
+it seems. For example, the container that <I>owns</I> your control
+may not respond immediately to button presses. It may need to
+query the control in response to some other event. If the <TT>ToggleButton</TT>
+is currently displaying &quot;Off&quot; it means that the current
+state is &quot;On&quot; because the <TT>ToggleButton</TT>
+now displays the <I>next state </I>of the control. Of course,
+in a two-state button (like an on/off button) it is a simple matter
+to determine what the previous state was, but your button is not
+limited to only two states. You may pass it an array of any size.
+<P>
+The class defines two constants:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static
+final int BUTTON_BORDER = 12 ;<BR>
+public static final int NO_Prev&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+-1 ;<BR>
+</TT>
+</BLOCKQUOTE>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Java provides a mechanism for declaring constants. The Java implementation is superior to C or C++ <I>manifest</I> <I>constants</I>. Manifest constants (or <TT>#define</TT>s) are a way of getting the C or C++ preprocessor to substitute a value for a 
+symbol.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Java constants are class members. Use the <TT>static</TT> and <TT>final</TT> modifiers when declaring them. They must be initialized and have two definite advantages over manifest constants: They are strongly typed, and as class members, they have globally 
+unique names, thus eliminating namespace collisions.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+<TT>BUTTON_BORDER</TT> is the number
+of pixels between the button text and the edge of the button.
+The actual border on each side is <TT>BUTTON_BORDER/2</TT>.
+<P>
+<TT>NO_Prev</TT> is a flag value.
+You use it when you first create an object to indicate that no
+previous value exists. <TT>NO_Prev</TT>
+is declared to be public because it may be returned from the <TT>getPrevN()</TT>
+method.
+<P>
+The <TT>ToggleButton</TT> class uses
+the following instance variables to keep track of the current
+object state:
+<BLOCKQUOTE>
+<TT>String[] strings ;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n ;<BR>
+int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;prevN ;</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>strings</TT> variable is an
+array that stores the states that will be displayed on the button.
+The ordering of the strings in this array is the order in which
+they will be displayed. Because Java arrays are objects, you can
+determine the number of states directly from the array.
+<P>
+The two integer variables <TT>n</TT>
+and <TT>prevN</TT> keep track of the
+current and previous states. Strictly speaking, only one of these
+variables is necessary. You could calculate the previous state
+from the current state. Your class does this calculation every
+time the state changes and stores the results.
+<P>
+The class constructor gets the initial values from the user:
+<BLOCKQUOTE>
+<TT>public ToggleButton( String[] a ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super( a[0] );<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings = a;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;prevN&nbsp;&nbsp;&nbsp;=
+NO_Prev;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+The constructor takes only one parameter. You pass the array of
+states into the class through the constructor. The array encapsulates
+the information about its size so you do not need another parameter.
+<P>
+First, call the superclass constructor:
+<BLOCKQUOTE>
+<TT>super( a[0] );</TT>
+</BLOCKQUOTE>
+<P>
+You pass the first state value to the superclass so that it gets
+displayed in the control when it starts up.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Calls to a superclass constructor should only be made from a derived class constructor. They must be the first line of code in the derived class constructor.</BLOCKQUOTE>
+<BLOCKQUOTE>
+Other superclass methods may be called from <I>any</I> derived class method. The syntax is <TT>super.superclassMethod()</TT>.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Next you initialize the class's instance variables. You assign
+the array parameter to the member array. You need to set <TT>n</TT>
+to <TT>0</TT> to indicate the index
+of the currently displayed string. Then set <TT>prevN</TT>
+to <TT>NO_Prev</TT> to indicate that
+no previous value exists.
+<H3>Updating the Button</H3>
+<P>
+Every time the button is pressed you need to update its text.
+To do this, you need to capture the button press <TT>Event</TT>.
+In the <TT>SelfValidatingTextField </TT>class,
+you overrode the <TT>Component.keyDown()</TT>
+method to capture keystrokes. Here, you override <TT>Component.action()</TT>
+to capture <TT>Events</TT>.
+<P>
+The <TT>action()</TT> method takes
+two parameters: an <TT>Event</TT>
+and an <TT>Object</TT>. The event
+contains information about the specific UI action that has occurred.
+The second parameter is an arbitrary <TT>Object</TT>
+that varies depending on the type of control that initiates the
+action. In the case of a <TT>Button,</TT>
+it is the text on its face.
+<P>
+The beginning of the overridden <TT>action()</TT>
+method appears in the following string of code:
+<BLOCKQUOTE>
+<TT>public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;prevN = n ;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( n &lt; strings.length - 1 ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n++ ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;} else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n = 0 ;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+First, the method sets the <TT>prevN</TT>
+variable to the current index value. The compound <TT>if</TT>
+that follows takes care of updating the index value. The index
+value gets increased until it reaches the number of <TT>Strings</TT>
+in the array. Once it has reached this maximum, the index is set
+to <TT>0</TT>.
+<P>
+The following text contains the rest of the <TT>action()</TT>
+method:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;FontMetrics fm
+= getFontMetrics( getFont() );<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int width = fm.stringWidth( strings[ n
+] );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int height = bounds().height;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;resize( width + BUTTON_BORDER, height
+);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;setLabel( strings[ n ] );<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return false ;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Here you resize the button to fit the text if necessary. Start
+by creating a <TT>FontMetrics</TT>
+object. The FontMetrics constructor takes a reference to a <TT>Font</TT>.
+This class is the Java mechanism for providing detailed information
+about a <TT>Font</TT> on the current
+platform. You then call the <TT>stringWidth()</TT>
+method to get the width of the new label in pixels using the current
+<TT>Font</TT>.
+<P>
+The height of the button will not change unless you use a different
+<TT>Font</TT>. Now that you have the
+<TT>width</TT> and <TT>height</TT>,
+you call <TT>resize()</TT> to adjust
+the button to fit the <TT>String</TT>.
+<P>
+Finally, the function returns <TT>false</TT>.
+The function must return <TT>false</TT>
+so that the <TT>Container</TT> in
+which it is embedded can also capture the button presses. Returning
+<TT>false</TT> means that this object
+has not fully processed the <TT>Event</TT>
+so other objects may need to do further processing.
+<H3>Accessing the Data</H3>
+<P>
+The <TT>ToggleButton</TT> class provides
+methods that enable a <TT>Container</TT>
+to ignore button press events when they occur. These methods are
+used to query the control about its state when last pressed. The
+two methods return either the index of the previously displayed
+label or the label itself.
+<P>
+Here is the first method:
+<BLOCKQUOTE>
+<TT>public int getPrevN() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return prevN ;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>getPrevN()</TT> method may
+return <TT>NO_Prev</TT>, which would
+mean that the button has <I>never</I> been pressed.
+<P>
+Here is the second method:
+<BLOCKQUOTE>
+<TT>public String getPrevString() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if ( prevN == NO_Prev ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return &quot;&quot;
+;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return strings[ prevN ] ;<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>getPrevString()</TT> method
+indicates that the button has <I>never</I> been pressed by returning
+an empty <TT>>String</TT>.
+<H3>Putting it Together</H3>
+<P>
+To put a ToggleButton object in your applet or application, you
+need to pass it an array of states(<TT>Strings</TT>).
+The order of the states is important because the states will be
+cycled in this order.
+<P>
+The complete ToggleButton class is shown in Listing 9.2.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 9.2. The ToggleButton class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>package COM.MCP.Samsnet.tjg ;<BR>
+import java.awt.*;<BR>
+<BR>
+public class ToggleButton extends Button {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; static
+final int BUTTON_BORDER = 12 ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static final int NO_Prev&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= -1 ;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String[] strings ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n
+;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;prevN
+;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public ToggleButton( String[] a ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super( a[0] );
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;strings = a;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;prevN&nbsp;&nbsp;&nbsp;=
+NO_Prev;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean action(Event evt, Object
+what) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;prevN = n ;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( n &lt; strings.length
+- 1 ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n++
+;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} else {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+n = 0 ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FontMetrics fm
+= getFontMetrics( getFont() );<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int width = fm.stringWidth(
+strings[ n ] );<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int height = bounds().height;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resize( width
++ BUTTON_BORDER, height );<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setLabel( strings[
+n ] );<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false ;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int getPrevN() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return prevN ;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public String getPrevString() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if ( prevN ==
+NO_Prev ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+&quot;&quot; ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return strings[
+prevN ] ;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<H3>Usage</H3>
+<P>
+When you embed a <TT>ToggleButton</TT>
+in a <TT>Container,</TT> you may catch
+button presses by overriding the <TT>Container</TT>'s
+<TT>handleEvent()</TT> method. Normally,
+you would use the label displayed on the <TT>Button</TT>
+to identify it. In your class, you need to modify this slightly
+because your button displays many different labels.
+<P>
+A possible implementation of <TT>handleEvent()
+</TT>is:
+<BLOCKQUOTE>
+<TT>public boolean handleEvent(Event evt)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int i;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for( i = 0; i
+&lt; validLabels.length; i++ ) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if(
+validLabels[i].equals(evt.arg) )<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handleButton(i);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return false;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+In this method, you iterate through the array of button states
+that was passed to the <TT>ToggleButton</TT>
+constructor. If you find a match, you call the <TT>handleButton()</TT>
+method. You provide this method to respond to button presses for
+specific button states.
+<P>
+<TT>HandleEvent()</TT> returns <TT>true</TT>
+if it actually handles the <TT>Event</TT>
+or <TT>false</TT> if it does not.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+Sometimes your applets or applications require UI functionality
+beyond that provided by the AWT. You can use subclassing to extend
+the AWT and create new classes from the basic AWT classes. By
+subclassing you can take the best features of an existing control
+class and add new functionality. You can also modify existing
+functionality.
+<P>
+When you subclass, you can create self-contained controls that
+respond to their own <TT>Events</TT>.
+Your subclassed controls can often be used as drop-in replacements
+for the associated AWT control.
+<P>
+Other ways exist to customize the AWT. In Chapter 10, &quot;Combining
+AWT Components,&quot; you look at another method of extending
+or enhancing AWT functionality-combining controls.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch8.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch10.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

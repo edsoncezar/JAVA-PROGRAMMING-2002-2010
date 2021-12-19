@@ -1,0 +1,231 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Notice that no mechanism is provided in this example for the customer to pay the bill, thus decreasing the credit used. Implementing this feature is very similar to the other features discussed, so it was not included. However, in a deployed online store, be sure to include that feature or the customers may get ornery.
+</P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 25.1</B> INVENTORY Table Description
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP">COLUMN
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>ITEM_DESC</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The name of the item, used by clients to identify the item.
+<TD ALIGN="LEFT" VALIGN="TOP">
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>PRICE</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The price per unit.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>QUANTITY </SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The number of available units.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>SALES</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The total number of units sold.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P><BR></P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 25.2</B> CUSTOMERS Table Description
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP">COLUMN
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>CUST_NAME</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The customer&#146;s name/ID.
+<TD ALIGN="LEFT" VALIGN="TOP">
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>CREDIT_LIMIT</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The total credit available to the customer.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>CREDIT_USED</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The amount of credit used by this customer.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<H4 ALIGN="LEFT"><A NAME="Heading4"></A><FONT COLOR="#000077">ShoppingCart</FONT></H4>
+<P>The shopping cart bean is a stateful session bean. This means that when the servlet is talking to it, the servlet always uses the same bean until it disconnects. By using a stateful bean, the servlet is able to add items serially, make a purchase, and request the confirmed items, without the bean changing.
+</P>
+<P>The bean itself stores a list of the items added and manipulates this list based on the contents of the database. All of the methods for adding items and retrieving them are defined in the ShoppingCart interface, as shown here:</P>
+<PRE>
+package shopcart.ejbs;
+ 
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import java.rmi.Remote;
+import java.util.*;
+
+import shopcart.ejbs.*;
+
+public interface ShoppingCart extends EJBObject, Remote
+{
+    public ShoppingCartItem addItem(ShoppingCartItem item)
+     throws RemoteException;
+    
+    public boolean deleteItem(ShoppingCartItem item)
+     throws RemoteException;
+    
+    public boolean purchaseCart(String user)
+         throws BadCreditException,RemoteException;
+    
+    public ShoppingCartItem[] getItems() throws RemoteException;
+
+    public Object[] getInventory() throws RemoteException;
+}
+</PRE>
+<P>Both the bean and its clients use ShoppingCartItem objects to represent items in the cart. These objects store a description, quantity, and price and can calculate their total value as quantity*price. The implementation for this data object is as follows:
+</P>
+<PRE>
+package shopcart.ejbs;
+ 
+import java.io.*;
+
+public class ShoppingCartItem 
+implements Serializable
+{
+    public String desc;
+    public double price;
+    public int quantity;
+    public int sales;
+     public ShoppingCartItem(String s,double p,int q)
+    {
+        desc = s;
+        price = p;
+        quantity = q;
+    }
+    
+    public double getTotal()
+    {
+        return quantity*price;
+    }
+}
+
+</PRE>
+<P>ShoppingCartItems are marked Serializable so that they can be passed by value into the RMI calls made by the servlet to communicate with the enterprise bean.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading5"></A><FONT COLOR="#000077">ShoppingCartHome</FONT></H4>
+<P>The home interface for the ShoppingCartBean contains a single method, which follows. This method creates a cart bean, given a name. For this example, the name is used only for testing purposes. In a commercial application, you might use a name and password to identify the user or define database access.
+</P>
+<PRE>
+package shopcart.ejbs;
+ 
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import containercart.*;
+
+public interface ShoppingCartHome extends EJBHome
+{
+    ShoppingCart create(String name)
+     throws CreateException, RemoteException;
+}
+</PRE>
+<P>Like all EJB home interfaces, ShoppingCartHome extends EJBHome, and the create methods throw RemoteExceptions and CreateExceptions.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading6"></A><FONT COLOR="#000077">ShoppingCartBean</FONT></H4>
+<P>The ShoppingCart interface is implemented in this example by the class ShoppingCartBean. This bean provides access to the database via a JDBC connection. The JDBC connection is configured using properties defined during deployment. These properties are listed in Table 25.3. The bean uses instance variables to store the values of these properties for use in any method.
+</P>
+<P>For testing purposes, the shopping cart bean uses the DebugLog class discussed in Chapter 7, &#147;Programming Servlets,&#148; to keep a log of errors and important changes in state. (Refer back to Chapter 7 for more information on this powerful debugging tool.)</P>
+<TABLE WIDTH="100%"><TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 25.3</B> ShoppingCartBean Configuration Properties
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH ALIGN="LEFT" VALIGN="TOP" WIDTH="20%">PROPERTY
+<TH ALIGN="LEFT" VALIGN="TOP">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>User</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The database user&#146;s name (optional).
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>Password</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The database password (optional).
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>url</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The URL for the database.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>Driver</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The JDBC Driver class used by the bean to contact the database.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD ALIGN="LEFT" VALIGN="TOP"><SMALL>Logserver</SMALL>
+<TD ALIGN="LEFT" VALIGN="TOP">The IP address for the computer running the DebugLog&#146;s server. If this value is not set, debug messages are ignored.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P>Items currently in a cart are stored in a hash table. The key for the table is the item&#146;s description and the value is a ShoppingCartItem object. The following code begins the implementation for the ShoppingCartBean class. This code is continued until its completion. Comments and discussion have been added as regular text throughout to describe the major blocks of code.
+</P>
+<PRE>
+package shopcart.ejbs;
+ 
+//Imports removed to save space
+
+public class ShoppingCartBean implements SessionBean
+{
+    protected DebugLog logger;
+    
+    public Hashtable items;
+    public String cartName;
+    public String url = null;
+    public String user=null;
+    public String password=null;
+    public String driver=null;
+    public String logServer=null;
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

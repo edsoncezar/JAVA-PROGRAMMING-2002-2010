@@ -1,0 +1,253 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Threads Changes</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="performance.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="..\end.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="To 1.1 -- And Beyond! | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>A Preview of Things to Come</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Threads Changes
+</h2>
+<p>
+<blockquote>
+
+The <code>Thread.stop</code>, <code>Thread.suspend</code>, and
+<code>Thread.resume</code> methods will be deprecated in the next
+major release of the JDK.
+
+<p>
+<code>Thread.stop</code> is being deprecated because
+it is inherently unsafe. Stopping a thread causes it to unlock all
+the monitors that it has locked. (The monitors are unlocked as the
+<code>ThreadDeath</code> exception propagates up the stack.)  If any of the
+objects previously protected by these monitors were in an inconsistent state,
+other threads may now view these objects in an inconsistent state.
+Such objects are said to be <i>damaged</i>.
+When threads operate on damaged objects, arbitrary behavior can result.
+This behavior may be subtle and difficult to detect, or it may be
+pronounced.  Unlike other unchecked exceptions,
+<code>ThreadDeath</code> kills threads silently; thus, the user has no
+warning that the program may be corrupted.  The corruption can manifest
+itself at any time after the actual damage occurs, even hours or days in the
+future.
+
+<p>
+This tutorial has always recommended against using <code>Thread.stop</code>.
+So, hopefully, this change will not affect your programs.
+<p>
+If however, you 've been using <code>Thread.stop</code> in your programs,
+you should substitute that use with code that provides for a gentler termination.
+Most uses of <code>stop</code> can and should be replaced by code that simply
+modifies some variable to indicate that the target thread should stop
+running.  The target thread should check this variable regularly, and return
+from its run method in an orderly fashion if the variable indicates that it is
+to stop running.
+<P>
+For example, suppose your applet contains the following 
+<code>start</code>, <code>stop</code> and <code>run</code> methods:
+<blockquote>
+<pre>
+public void start() {
+    blinker = new Thread(this);
+    blinker.start();
+}
+
+public void stop() {
+    blinker.stop();  // UNSAFE!
+}
+
+public void run() {
+    Thread thisThread = Thread.currentThread();
+    while (true) {
+        try {
+	    Thread.sleep(interval);
+        } catch (InterruptedException e){
+        }
+        repaint();
+    }
+}
+</pre>
+</blockquote>
+You can avoid the use of <code>Thread.stop</code> by replacing
+the applet's <code>stop</code> and <code>run</code> methods with:
+<blockquote>
+<pre>
+public void stop() {
+    blinker = null;
+}
+
+public void run() {
+    Thread thisThread = Thread.currentThread();
+    while (blinker == thisThread) {
+        try {
+	    Thread.sleep(interval);
+        } catch (InterruptedException e){
+        }
+        repaint();
+    }
+}
+</pre>
+</blockquote>
+
+<code>Thread.suspend</code> is inherently deadlock-prone so it is also
+being deprecated, thereby necessitating the deprecation of <code>Thread.resume</code>.
+If the target thread holds a lock on the monitor protecting a critical system resource when
+it is suspended, no thread can access this resource until the target thread
+is resumed. If the thread that would resume the target thread attempts to
+lock this monitor prior to calling <code>resume</code>, deadlock results.
+Such deadlocks typically manifest themselves as "frozen" processes.
+<P>
+As with <code>Thread.stop</code>, the prudent approach is to have the
+"target thread" poll a variable indicating the desired state of the 
+thread (active or suspended).  When the desired state is suspended,
+the thread waits using <code>Object.wait</code>.  When the thread is
+resumed, the target thread is notified using <code>Object.notify</code>.
+<P>
+For example, suppose your applet contains the following mousePressed event
+handler, which toggles the state of a thread called <code>blinker</code>:
+<blockquote>
+<pre>
+Public void mousePressed(MouseEvent e) {
+    e.consume();
+
+    if (threadSuspended)
+        blinker.resume();
+    else
+        blinker.suspend();  // DEADLOCK-PRONE!
+
+    threadSuspended = !threadSuspended;
+}
+</pre>
+</blockquote>
+You can avoid the use of <code>Thread.suspend</code> and
+<code>Thread.resume</code> by replacing the event handler above with:
+<blockquote>
+<pre>
+public synchronized void mousePressed(MouseEvent e) {
+    e.consume();
+
+    threadSuspended = !threadSuspended;
+
+    if (!threadSuspended)
+        notify();
+}
+</pre>
+</blockquote>
+and adding the following code to the "run loop":
+<blockquote>
+<pre>
+synchronized(this) {
+    while (threadSuspended)
+	wait();
+}
+</pre>
+</blockquote>
+The <code>wait</code> method throws the <code>InterruptedException</code>, so
+it must be inside a <code>try ... catch</code> clause.  It's fine
+to put it in the same clause as the <code>sleep</code>.  The check should
+follow (rather than precede) the <code>sleep</code> so the window is
+immediately repainted when the the thread is "resumed."  The resulting
+<code>run</code> method follows:
+<blockquote>
+<pre>
+public void run() {
+    while (true) {
+        try {
+            Thread.sleep(interval);
+
+            synchronized(this) {
+                while (threadSuspended)
+                    wait();
+            }
+        } catch (InterruptedException e){
+        }
+        repaint();
+    }
+}
+</pre>
+</blockquote>
+Note that the <code>notify</code> in the <code>mousePressed</code> method and
+the <code>wait</code> in the <code>run</code> method are inside
+<code>synchronized</code> blocks.  This is required by the language, and
+ensures that <code>wait</code> and <code>notify</code> are properly
+serialized.  In practical terms, this eliminates race conditions that could
+cause the "suspended" thread to miss a <code>notify</code> and remain
+suspended.
+
+<p>
+<hr>
+<strong>Note:</strong>
+Don't wait for the next major release of the JDK.
+These are changes that you can make to improve your programs NOW!
+<hr>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="performance.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="..\end.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="To 1.1 -- And Beyond! | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>A Preview of Things to Come</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

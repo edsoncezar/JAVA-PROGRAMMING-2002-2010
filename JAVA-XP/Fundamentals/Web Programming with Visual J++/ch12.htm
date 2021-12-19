@@ -1,0 +1,1218 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter -- 12 Moving Up to Multithreading</TITLE>
+
+<META NAME="GENERATOR" CONTENT="Internet Assistant for Microsoft Word 2.0z">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter&nbsp;12</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Moving Up to Multithreading</FONT>
+</H1>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#Threads">
+Threads</A>
+<UL>
+<LI><A HREF="#RunnableandThreads">
+Runnable and Threads</A>
+<LI><A HREF="#Synchronization">
+Synchronization</A>
+<LI><A HREF="#WaitandNotify">
+Wait and Notify</A>
+</UL>
+<LI><A HREF="#ThreadGroups">
+ThreadGroups</A>
+<UL>
+<LI><A HREF="#UsingThreadGroups">
+Using ThreadGroups</A>
+<LI><A HREF="#Priority">
+Priority</A>
+<LI><A HREF="#ThreadGroupsExample">
+ThreadGroups Example</A>
+</UL>
+<LI><A HREF="#Summary">
+Summary</A>
+</UL>
+</UL>
+<HR>
+<P>
+Multithreading means that a program is divided into separate processes,
+each of which is then executed individually, but simultaneously.
+Operating systems use multiprocessing, wherein each program being
+executed can be thought of as an individual process. When a program
+is divided, each process is commonly referred to as a thread.
+The difference between multiprocessing on an operating system
+level and multiprocessing on a program level is that threads of
+a program are executed in the same program space. Thus, all threads
+of a program have access to the same variables and memory space.
+<P>
+This chapter covers how to use the <TT>Thread</TT> class to execute
+tasks simultaneously by declaring threads that perform specific
+tasks. The task executed by the thread can either be part of the
+applet, with the implementation of the run method, or by declaring
+a <TT>Thread</TT>-derived class. This chapter shows how these
+tasks can communicate effectively with each other. In addition,
+threads can be grouped and prioritized using the <TT>ThreadGroup</TT>
+class.
+<H2><A NAME="Threads"><FONT SIZE=5 COLOR=#FF0000>
+Threads</FONT></A></H2>
+<P>
+Threads are very useful in doing a number of tasks simultaneously.
+Long or involved processing is typically off-loaded to a thread
+so that the normal processing can occur with the user. This off-loaded
+processing can include loading an image into memory to be displayed
+immediately, queuing up potentially displayable images, playing
+audio, or any other task that can happen asynchronously to the
+user's actions. In fact, among other system threads is the garbage
+collecting thread that takes care of freeing unused memory.
+<P>
+Threads are implemented in Java using the <TT>Runnable</TT> interface.
+One of the most difficult concepts to handle when working with
+threaded applications is to control access to critical sections
+of code. With Java, this support is built directly into the language
+with synchronization. Since synchronization is a blocking process,
+additional functionality is provided to control the locks implemented
+by the synchronization.
+<H3><A NAME="RunnableandThreads">
+Runnable and Threads</A></H3>
+<P>
+The basis for threads in Java is the <TT>Runnable</TT> interface,
+which simply consists of a single method:
+<BLOCKQUOTE>
+<PRE>
+public interface Runnable
+{
+    public abstract void run();
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+There are two ways to create user-defined threads in an applet:
+implementing the <TT>Runnable</TT> interface in a class and passing
+an instance of the <TT>Runnable</TT> object to an instance of
+the <TT>Thread</TT> class, or deriving from the <TT>Thread</TT>
+class. Deriving from the <TT>Thread</TT> class is a viable option
+because the <TT>Thread</TT> class is itself a <TT>Runnable</TT>
+object.
+<P>
+Implementing the <TT>Runnable</TT> interface requires the addition
+of a single function to a class. Consider the following class
+implementing the <TT>Runnable</TT> interface:
+<BLOCKQUOTE>
+<PRE>
+class MyApplet extends Applet implements Runnable
+{
+    protected Thread myOtherPersonality;
+
+    public void init()
+    {
+        myOtherPersonality = new Thread(this);
+    }
+
+    public void run()
+    {
+        // this is where my other personality takes over
+        ...
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+This <TT>Applet</TT>-derived class creates a new thread in the
+<TT>init</TT> method, passing the instance of the applet to the
+thread. Therefore, the thread will use the <TT>run</TT> method
+of the applet.
+<P>
+Alternately, deriving from the <TT>Thread</TT> class involves
+overriding the <TT>run</TT> method. Here is the same example implemented
+with a class derived from <TT>Thread</TT>:
+<BLOCKQUOTE>
+<PRE>
+class MyApplet extends Applet
+{
+    protected MyThread myOtherPersonality;
+
+    public void init()
+    {
+        myOtherPersonality = new MyThread();
+    }
+}
+
+class MyThread extends Thread
+{
+    public void run()
+    {
+        // this is where my other personality takes over
+        ...
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+The <TT>run</TT> method was moved from the <TT>Applet</TT> class
+to the <TT>MyThread</TT> class.
+<P>
+These classes show only the basic differences between the two
+implementations. However, this example does use the <TT>Thread
+</TT>constructor that takes a <TT>Runnable</TT> object as a parameter.
+Table 12.1 shows all of the <TT>Thread</TT> constructors that
+do not take a <TT>ThreadGroup</TT> instance in the constructor.
+Constructors involving ThreadGroups will be covered in a later
+section.<BR>
+<P>
+<CENTER><B>Table 12.1. Public constructors of the Thread class
+callable without a ThreadGroup.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=192><I>Member</I></TD><TD WIDTH=384><I>Purpose</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Thread()</TT></TD><TD WIDTH=384>Creates a thread with a default name.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Thread(Runnable)</TT></TD><TD WIDTH=384>Creates a thread, with a default name, that will call the <TT>Runnable</TT> object's <TT>run</TT> method.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Thread(Runnable, String)</TT></TD><TD WIDTH=384>Creates a named thread that will call the <TT>Runnable</TT> object's <TT>run</TT> method.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Thread(String)</TT></TD><TD WIDTH=384>Creates a named thread.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The execution of a thread consists of three distinct parts: <TT>start</TT>,
+<TT>run</TT>, and <TT>stop</TT>. Every thread must be started
+using the <TT>Thread.start</TT> method. Once this method is called,
+the Java Virtual Machine calls the appropriate <TT>run</TT> method.
+The intent of the <TT>run</TT> method is that it will run until
+either the thread is interrupted, or the thread runs to completion.
+<TT>Thread.stop</TT> is used to stop a thread. Table 12.2 shows
+the methods used to control the execution of a thread.<BR>
+<P>
+<CENTER><B>Table 12.2. Thread methods used to control execution.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=163><I>Member</I></TD><TD WIDTH=413><I>Purpose</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=163><TT>resume()</TT></TD><TD WIDTH=413>Resumes execution of a thread after it has been suspended.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=163><TT>Run()</TT></TD><TD WIDTH=413>Contains the code to be executed while the thread is running.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=163><TT>Start()</TT></TD><TD WIDTH=413>Starts execution of a thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=163><TT>Stop()</TT></TD><TD WIDTH=413>Stops execution of a thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=163><TT>Stop(Throwable)</TT></TD><TD WIDTH=413>Uses the throwable object to stop the execution of a thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=163><TT>Suspend()</TT></TD><TD WIDTH=413>Momentarily stops the execution of a thread. To restart the thread, call the <TT>resume</TT> method.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+The typical methods in which threads are started and stopped are
+<TT>Applet.start</TT> and <TT>Applet.stop</TT>. Threads should
+be started and stopped in these locations so that when a page
+is exited, the threads associated with the applet are also stopped.
+<P>
+Additional functionality can also be found in the <TT>Thread</TT>
+class. Table 12.3 shows the remainder of the public methods of
+the <TT>Thread</TT> class.<BR>
+<P>
+<CENTER><B>Table 12.3. Additional public methods of the Thread
+class.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=192><I>Member</I></TD><TD WIDTH=384><I>Purpose</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>activeCount()</TT></TD><TD WIDTH=384>Returns the number of active threads in the current thread's <TT>ThreadGroup</TT> instance.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>checkAccess()</TT></TD><TD WIDTH=384>Checks that permissions are granted for the current thread to modify this thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>countStackFrames()</TT></TD><TD WIDTH=384>Returns the number of stack frames associated with this thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>currentThread()</TT></TD><TD WIDTH=384>Returns the currently active thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>destroy()</TT></TD><TD WIDTH=384>A destructive way to destroy the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>dumpStack()</TT></TD><TD WIDTH=384>Dumps the stack trace for the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>enumerate(Thread [])</TT></TD><TD WIDTH=384>Copies the currently active threads of the group the thread is part of to the array.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>getName()</TT></TD><TD WIDTH=384>Returns the name of the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>getPriority()</TT></TD><TD WIDTH=384>Returns the current priority of the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>getThreadGroup()</TT></TD><TD WIDTH=384>Returns the <TT>ThreadGroup</TT> instance associated with the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>interrupt()</TT></TD><TD WIDTH=384>Sends an interrupt to the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>interrupted()</TT></TD><TD WIDTH=384>Returns if the thread has been interrupted.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>isAlive()</TT></TD><TD WIDTH=384>Returns if the thread is active (that is, has not been stopped).
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>isDaemon()</TT></TD><TD WIDTH=384>Returns if the thread has the <TT>Daemon</TT> flag set.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>isInterrupted()</TT></TD><TD WIDTH=384>Returns if the thread has been interrupted.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>join()</TT></TD><TD WIDTH=384>Waits for the termination of the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>join(long)</TT></TD><TD WIDTH=384>Waits for the termination of the thread, but waits only for the specified number of milliseconds.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>join(long, int)</TT> </TD><TD WIDTH=384>Waits for the termination of the thread, but waits only for the specified number of milliseconds plus an additional number of nanoseconds.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>setDaemon(boolean)</TT></TD><TD WIDTH=384>Marks the thread as a <TT>Daemon</TT> thread. When there are only <TT>Daemon</TT> threads running, Java will exit.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>setName(String)</TT></TD><TD WIDTH=384>Sets the name of the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>setPriority(int)</TT></TD><TD WIDTH=384>Attempts to set the priority of the thread, making sure permissions are correct and that the <TT>ThreadGroup</TT> allows it.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>sleep(long)</TT></TD><TD WIDTH=384>Causes the current thread to sleep for the specified number of milliseconds.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>sleep(long, int)</TT></TD><TD WIDTH=384>Causes the current thread to sleep for the specified number of milliseconds plus an additional number of nanoseconds.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>toString()</TT></TD><TD WIDTH=384>Returns a string representation of the thread.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>yield()</TT></TD><TD WIDTH=384>Yields execution to other waiting threads.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H4>A Runnable Object Example</H4>
+<P>
+Figure 12.1 shows <TT>EX12A</TT>, an example of using the <TT>Runnable</TT>
+implementation.
+<P>
+
+</I></A><P><BR>
+<P>
+This example uses a thread to count from 10 down to 0 at one-second
+increments, resets the count, and repeats this cycle. Listing
+12.1 shows the code for <TT>EX12A</TT>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.1. Listing of EX12A.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+
+public class EX12A extends Applet implements Runnable
+{
+    protected Thread CounterThread;
+    protected Label CountLabel;
+    protected int count = 10;
+
+    public void init()
+    {
+        // provide something to look at
+        add(new Label(&quot;Count:&quot;));
+        CountLabel = new Label(Integer.toString(count));
+        add(CountLabel);
+    }
+
+    public void start()
+    {
+        if (CounterThread == null) {
+            // allocate the thread, using the local run method
+            CounterThread = new Thread(this);
+            CounterThread.start();
+        }
+    }
+
+    public void stop()
+    {
+        if (CounterThread != null) {
+            // stop the thread
+            CounterThread.stop();
+            CounterThread = null;
+        }
+    }
+
+    public void run()
+    {
+        while (true) {
+           try {
+               Thread.sleep(1000);
+           }
+           catch (InterruptedException e) {}
+
+           CountDown();
+        }
+    }
+
+    protected void CountDown()
+    {
+        count--;
+
+        CountLabel.setText(Integer.toString(count));
+
+        if (count == 0)
+            // reset to 11 since the first call will move it back
+            //   down to 10 and then display
+            count = 11;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+In this example, the <TT>init</TT> method adds a label that acts
+as a prompt and a label that will hold the decrementing count.
+<P>
+The <TT>Applet.start</TT> method, which is called by the browser
+to tell the applet to start executing, checks to see if a thread
+has been allocated. If it hasn't, the thread is allocated, passing
+the applet instance in the constructor so that the local <TT>run</TT>
+method will be called and started.
+<P>
+Once the thread is started, the <TT>run</TT> method will be called.
+The <TT>run</TT> method consists of an infinite loop. The first
+step inside the loop is a little nap. The <TT>Thread.sleep</TT>
+method stops execution of the thread for the specified number
+of milliseconds. Passing a value of <TT>1000</TT> thus produces
+a delay of one second. During this time, the thread is simply
+stopped. Note that because the <TT>sleep</TT> method has the potential
+of causing a deadlock situation, because no locks are released
+for the thread while sleeping, this function has the potential
+of throwing <TT>InterruptedException</TT>. The next step inside
+the <TT>run</TT> method is to call <TT>CountDown()</TT>.
+<P>
+<TT>CountDown()</TT> decrements the applet's count variable, displays
+the count in the label, and resets the count if necessary.
+<P>
+Lastly, the <TT>stop</TT> method takes care of stopping the thread.
+A check is done to make sure that the thread was allocated. If
+successful, the thread is stopped and the thread set back to <TT>null</TT>.
+Setting of the thread to <TT>null</TT> accomplishes two things:
+It allows the garbage collector to free the unused memory and
+it allows the <TT>start</TT> method to start another thread the
+next time the page is activated.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>NOTE</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Java actually guarantees that the <TT>start</TT> and <TT>stop</TT> methods of <TT>Applet</TT> will be called in the proper order. Therefore the checking of the existence of the thread in <TT>EX12A</TT> is unnecessary, but is included to show code 
+completeness
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H4>Suspend and Resume</H4>
+<P>
+Another option, instead of having the <TT>Thread</TT> instances
+come and go, is to use the <TT>suspend</TT> and <TT>resume</TT>
+methods of the <TT>Thread</TT> class:
+<BLOCKQUOTE>
+<PRE>
+public final void suspend()
+public final void resume()
+</PRE>
+</BLOCKQUOTE>
+<P>
+These methods provide the same effect as starting and stopping
+the thread, but do not incur the overhead of creating and destroying
+the <TT>Thread</TT> instance. Example <TT>EX12B</TT> extends the
+<TT>EX12A</TT> example by placing two buttons on the applet that
+gives the user the ability to suspend the countdown and then resume
+it. Figure 12.2 shows the new example.
+<P>
+<A HREF="http://docs.rinet.ru/WebJPP/f12-1.gif"><B> Figure 12.1 : </B><I>EX12A.
+</I></A><P>
+<P>
+Only two methods were modified to create <TT>EX12B</TT>. Listing
+12.2 shows the <TT>init</TT> method of the applet.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.2. init method of EX12B.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public void init()
+{
+    // gives us some control over where the controls are
+    //   to be placed
+    setLayout(new BorderLayout());
+
+    // provide some control over the count
+    Panel p = new Panel();
+    p.add(SuspendButton);
+    p.add(ResumeButton);
+    add(&quot;North&quot;, p);
+
+    // provide a visual of the count
+    p = new Panel();
+    p.add(new Label(&quot;Count:&quot;));
+    CountLabel = new Label(Integer.toString(count));
+    p.add(CountLabel);
+    add(&quot;Center&quot;, p);
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+This method now uses a <TT>BorderLayout</TT> instance so that
+the buttons and labels will be located next to each other. To
+support this, the buttons and labels were each added to a panel,
+which is then added to the applet. For more information about
+layout managers, see <A HREF="ch5.htm" >Chapter 5</A> &quot;Java's User Interface Components.&quot;
+<P>
+Listing 12.3 shows the <TT>action</TT> method of <TT>EX12B</TT>,
+which shows what occurs when the buttons are pressed.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.3. action method of EX12B.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public boolean action(Event evt, Object arg)
+{
+    boolean retval = false;             // assume event not processed
+
+    if (evt.target == SuspendButton) {
+        if (CounterThread != null)
+            CounterThread.suspend();
+
+        retval = true;
+    }
+    else if (evt.target == ResumeButton) {
+        if (CounterThread != null)
+            CounterThread.resume();
+
+        retval = true;
+    }
+
+    return retval;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+If the suspend button is pressed and the thread exists, the <TT>suspend</TT>
+method is called. This stops the execution of the <TT>run</TT>
+method and thus the countdown. If the resume button is then pressed,
+<TT>resume</TT> is called for the thread and execution will continue.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>CAUTION</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Be careful and courteous when using the <TT>suspend</TT> and <TT>resume</TT> methods of the <TT>Thread</TT> class instead of allocating and destroying a <TT>Thread</TT> instance. If you only suspend a thread when leaving a Web page, the thread is still in 
+existence, just not being used. And, in fact, you may never get back to the page with the suspended thread. This is essentially a memory leak that takes processing capabilities away from subsequent operations
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="Synchronization">
+Synchronization</A></H3>
+<P>
+So far, problems with accessing the data in the various threads
+have not been discussed. And, in fact, the examples have not been
+thread-safe. Every function that has been called has made the
+modifications to the variables as needed, without regard to the
+possibility that another thread may be in the process of changing
+the values too. To solve this problem, Java has built into the
+language synchronization support.
+<H4>Java's Synchronization</H4>
+<P>
+Synchronization is the capability of a thread to provide a locking
+mechanism on an object so that a critical section of code can
+be executed without the fear of being interrupted, or interleaved
+with another thread making modifications to the same data. Every
+object in Java has a built-in lock. This is used by the <TT>synchronized</TT>
+keyword to provide access to code by only a single thread.
+<P>
+<TT>synchronized</TT> can be used in two different ways. The first
+is around a block of code. The syntax of a <TT>synchronized</TT>
+block takes the form
+<BLOCKQUOTE>
+<PRE>
+synchronized(object_reference) {
+    code_block
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+With this, you can use the locking mechanism for the object referenced
+to monitor when the code block is executed. For example, consider
+the <TT>CountDown()</TT> method of <TT>EX12A</TT> discussed earlier
+in this chapter. To make this thread-safe, a synchronized block
+could be added, as in Listing 12.4.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.4. The CountDown() method from EX12A with a synchronized
+block.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+protected void CountDown()
+{
+    // use the lock in the EX12A class to control access
+    synchronized(this) {
+        count--;
+
+        CountLabel.setText(Integer.toString(count));
+
+        if (count == 0)
+            // reset to 11 since the first call will move it back
+            //   down to 10 and then display
+            count = 11;
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The second form of synchronization is applied to entire methods.
+This is accomplished by placing the <TT>synchronized</TT> modifier
+in the method declaration. Listing 12.5 shows the same method
+as a <TT>synchronized</TT> method.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.5. A synchronized CountDown() method from EX12A.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+protected synchronized void CountDown()
+{
+    count--;
+z
+    CountLabel.setText(Integer.toString(count));
+
+    if (count == 0)
+        // reset to 11 since the first call will move it back
+        //   down to 10 and then display
+        count = 11;
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+This method of synchronization is probably more common due to
+its ease of readability.
+<H4>Synchronization Example</H4>
+<P>
+To make use of the synchronization method, the working example
+will be extended so that the maximum value of the countdown can
+be modified by the user. Figure 12.3 shows the interface to example
+<TT>EX12C</TT>.
+<P>
+<A HREF="http://docs.rinet.ru/WebJPP/f12-2.gif"><B> Figure 12.2 : </B><I>EX12B.
+</I></A><P>
+<P>
+To accomplish the transition to a thread-safe applet, only a couple
+of modifications had to be made to the code of <TT>EX12B</TT>
+to produce <TT>EX12C</TT>.
+<P>
+A new control, <TT>MaxCountTextField</TT>, was added to the applet
+to collect the new starting point for the count. This field was
+added, along with the prompt for the field in the <TT>init</TT>
+method:
+<BLOCKQUOTE>
+<PRE>
+protected TextField MaxCountTextField;
+protected int maxCount = 10;
+protected int count = maxCount;
+
+public void init()
+{
+
+    ...
+
+    // let the user set the max count
+    p = new Panel();
+    p.add(new Label(&quot;Enter the starting point:&quot;));
+    MaxCountTextField = new TextField(Integer.toString(maxCount), 3);
+    p.add(MaxCountTextField);
+    add(&quot;South&quot;, p);
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+A new <TT>else</TT> clause was added to the <TT>action</TT> method
+to handle when the user pressed Return after entering a new maximum
+value. This handler calls <TT>SetMaxCount</TT> to read that information
+and reset the count. These methods are shown in Listing 12.6.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.6. action and SetMaxCount methods of EX12C.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+public boolean action(Event evt, Object arg)
+    {
+        boolean retval = false;         // assume event not processed
+
+        if (evt.target == SuspendButton) {
+            if (CounterThread != null)
+                CounterThread.suspend();
+
+             retval = true;
+        }
+        else if (evt.target == ResumeButton) {
+            if (CounterThread != null)
+                CounterThread.resume();
+
+            retval = true;
+        }
+        else if (evt.target == MaxCountTextField) {
+            SetMaxCount();
+
+            retval = true;
+        }
+
+        return retval;
+    }
+
+    protected synchronized void SetMaxCount()
+    {
+        try {
+            maxCount = Integer.parseInt(MaxCountTextField.getText());
+
+            count = maxCount + 1;
+        }
+        catch (NumberFormatException e)
+        {
+            // reset the contents back to the current max
+            MaxCountTextField.setText(Integer.toString(maxCount));
+        }
+    }
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+Because both the countdown thread of the applet and the user portion
+of the applet modify the contents of the <TT>count</TT> variable,
+it is very important that the program blocks simultaneous modifications
+of <TT>count</TT>. Therefore <TT>CountDown</TT> is now a synchronized
+method:
+<BLOCKQUOTE>
+<PRE>
+protected synchronized void CountDown()
+    {
+        count--;
+
+        CountLabel.setText(Integer.toString(count));
+
+        if (count == 0)
+            // reset to maxCount + 1 since the first call will 
+            //   move it back down to maxCount and then display
+            count = maxCount + 1;
+    }
+</PRE>
+</BLOCKQUOTE>
+<P>
+In addition, since the <TT>SetMaxCount</TT> resets the current
+count, it is also a synchronized method, as shown in Listing 12.6.
+<H3><A NAME="WaitandNotify">
+Wait and Notify</A></H3>
+<P>
+Synchronization provides a mechanism to lock execution of a single
+thread through a critical section. However, there are times when
+a thread is in a critical section but control needs to be given
+up for other threads to process, even though the critical section
+has not been completed. This can be accomplished with the <TT>wait</TT>
+and <TT>notify</TT> methods. These methods are not in the <TT>Thread</TT>
+class, as you might suspect. Instead, they are in the <TT>Object</TT>
+class. This is because they deal directly with the locking mechanism,
+which also happens to be in the <TT>Object</TT> class.
+<P>
+There are three versions of the <TT>wait</TT> method:
+<BLOCKQUOTE>
+<PRE>
+public final void wait()
+public final void wait(long)
+public final void wait(long, int)
+</PRE>
+</BLOCKQUOTE>
+<P>
+The first version waits until the thread is interrupted or until
+a <TT>notify</TT> method is called for the object. The next version
+is similar to the first in that it waits, but will be automatically
+notified if the specified time-out elapses before the thread is
+notified. The last version is very similar to the second, except
+that the time-out period can be specified in finer increments.
+These functions must be called in a synchronized block or method
+that has previously obtained a lock on the object. If that is
+not the case, an exception of the type <TT>IllegalMonitorStateException</TT>
+will be thrown. Note that all three of these functions release
+the lock on the object before going to sleep. Therefore, if the
+thread is notified, the lock must be re-obtained on the object
+before the thread continues.
+<P>
+To wake a waiting object, one of the two <TT>notify</TT> methods
+should be called:
+<BLOCKQUOTE>
+<PRE>
+public final void notify()
+public final void notifyAll()
+</PRE>
+</BLOCKQUOTE>
+<P>
+<TT>notify</TT> wakes up a single thread that is waiting on an
+object. However, if there is more than a single thread waiting
+on an object, there is no guarantee that the first object that
+called <TT>wait</TT> will be the first object notified. In cases
+where there are more than a single thread waiting on an object,
+<TT>notifyAll</TT> can be used to wake up all of the threads waiting.
+Once a thread is awakened, processing resumes at the point immediately
+after the point where the <TT>wait</TT> method was called.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>CAUTION</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+When using the <TT>wait</TT> and <TT>notify</TT> methods, make sure to take into account that the object locks are released while the thread is waiting. Therefore, another thread can easily modify class variables before the thread is notified. Consider the 
+following simple example
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>class BadAssumption<BR>
+{<BR>
+    int n;<BR>
+    public synchronized void DoSomething()<BR>
+    {<BR>
+        n = 5;<BR>
+        // do other processing here <BR>
+        wait();<BR>
+        // do other processing here <BR>
+        // allocate 5 strings<BR>
+        Strings [] myStrings = new Strings[n];<BR>
+    }<BR>
+}</TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Even though the <TT>DoSomething</TT> is a synchronized method, there is no guarantee that <TT>n</TT> will still contain a value of <TT>5</TT> when <TT>myStrings</TT> is allocated.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H2><A NAME="ThreadGroups"><FONT SIZE=5 COLOR=#FF0000>
+ThreadGroups</FONT></A></H2>
+<P>
+Threads allow programs to be separated into processes. To add
+a little control to the creation of processes, Java provides the
+ability to group threads. This functionality is contained in the
+<TT>ThreadGroup</TT> class. In addition to the basic grouping
+ability, the <TT>ThreadGroup</TT> class provides functionality
+to set priorities and is the basis for the security concepts of
+Java programming.
+<H3><A NAME="UsingThreadGroups">
+Using ThreadGroups</A></H3>
+<P>
+ThreadGroups are used to group related threads together. They
+also have the ability to group threads with other ThreadGroups.
+The net result is that hierarchical trees can be generated with
+ThreadGroups.
+<P>
+There are two constructors for the <TT>ThreadGroup</TT> class:
+<BLOCKQUOTE>
+<PRE>
+public ThreadGroup(String)
+public ThreadGroup(ThreadGroup, String)
+</PRE>
+</BLOCKQUOTE>
+<P>
+Because an instance of the ThreadGroup is a node of a tree, every
+node has a parent ThreadGroup. The first constructor creates a
+named ThreadGroup, whose parent is the ThreadGroup of the currently
+executing thread. The second constructor creates a named ThreadGroup,
+setting the parent to be the passed-in ThreadGroup.
+<P>
+To create a thread in a ThreadGroup, one of the <TT>Thread</TT>
+constructors shown in Table 12.4 must be used.<BR>
+<P>
+<CENTER><B>Table 12.4. Public constructors of the Thread class
+used to place a thread into a ThreadGroup</B>.</CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=240><I>Member</I></TD><TD WIDTH=336><I>Purpose</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>Thread(ThreadGroup, Runnable)</TT></TD>
+<TD WIDTH=336>Creates a thread in the ThreadGroup, with a default name, that will call the <TT>Runnable</TT> object's <TT>run</TT> method.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>Thread(ThreadGroup, Runnable, String)</TT>
+</TD><TD WIDTH=336>Creates a named thread in the ThreadGroup that <TT> </TT>will call the <TT>Runnable</TT> object's <TT>run</TT> method.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=240><TT>Thread(ThreadGroup, String)</TT></TD><TD WIDTH=336>Creates a named thread in the ThreadGroup.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+One advantage of using a ThreadGroup is that there are several
+functions that can be called for the ThreadGroup that are recursively
+applied to all threads contained within the ThreadGroup. Table
+12.5 contains a summary of these methods.<BR>
+<P>
+<CENTER><B>Table 12.5. Public methods of ThreadGroup that are
+applied recursively to contained threads.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=60%>
+<TR VALIGN=TOP><TD WIDTH=144><I>Member</I></TD><TD WIDTH=336><I>Purpose</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=144><TT>resume()</TT></TD><TD WIDTH=336>Resumes all processes in the ThreadGroup.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=144><TT>Stop()</TT></TD><TD WIDTH=336>Stops all processes in the ThreadGroup.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=144><TT>Suspend()</TT></TD><TD WIDTH=336>Suspends all processes in the ThreadGroup.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Table 12.6 contains other public methods of the <TT>ThreadGroup</TT>
+class.
+<P>
+<CENTER><B>Table 12.6. Additional public methods of the ThreadGroup
+class.</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=192><I>Member</I></TD><TD WIDTH=384><I>Purpose</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>activeCount()</TT></TD><TD WIDTH=384>Returns the number of active threads in the current ThreadGroup and all offspring.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>ActiveGroupCount()</TT></TD><TD WIDTH=384>Returns the number of active ThreadGroups in the current ThreadGroup and all offspring.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>CheckAccess()</TT></TD><TD WIDTH=384>Determines whether the current thread has permissions to modify this ThreadGroup.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Enumerate(Thread [])</TT></TD><TD WIDTH=384>Returns a list of the active threads in the ThreadGroup.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Enumerate(Thread [], boolean)</TT></TD>
+<TD WIDTH=384>Returns a list of the active threads in the ThreadGroup; optionally traverses ThreadGroup tree recursively.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Enumerate(ThreadGroup [])</TT></TD><TD WIDTH=384>Returns a list of active groups.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>Enumerate(ThreadGroup [], </TT></TD><TD WIDTH=384>Returns a list of active groups; optionally traverses
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>boolean)</TT></TD><TD WIDTH=384>ThreadGroup tree recursively.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>GetMaxPriority()</TT></TD><TD WIDTH=384>Returns the highest priority in group.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>GetName()</TT></TD><TD WIDTH=384>Returns the name.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>GetParent()</TT></TD><TD WIDTH=384>Returns parent ThreadGroup.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>IsDaemon()</TT></TD><TD WIDTH=384>Returns <TT>Daemon</TT> flag.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>ParentOf(ThreadGroup)</TT></TD><TD WIDTH=384>Returns if the current ThreadGroup is an ancestor of the argument.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>SetDaemon(boolean)</TT></TD><TD WIDTH=384>Sets the <TT>Daemon</TT> flag.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>SetMaxPriority()</TT></TD><TD WIDTH=384>Sets the highest possible priority this ThreadGroup can have.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>ToString()</TT></TD><TD WIDTH=384>Returns a string representation of this ThreadGroup.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=192><TT>UncaughtException(Thread, Throwable)</TT>
+</TD><TD WIDTH=384>Called by Java Virtual Machine when an exception does not get caught by a contained thread.
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="Priority">
+Priority</A></H3>
+<P>
+Every thread can have an associated priority. This priority determines
+how often the thread gets serviced. To set the priority, the following
+method in <TT>Thread</TT> is used:
+<BLOCKQUOTE>
+<PRE>
+public void setPriority(int)
+</PRE>
+</BLOCKQUOTE>
+<P>
+The parameter of this function can be one of the following three
+values defined in <TT>Thread</TT>:
+<BLOCKQUOTE>
+<TT>MAX_PRIORITY<BR>
+NORM_PRIORITY<BR>
+MIN_PRIORITY</TT>
+</BLOCKQUOTE>
+<P>
+In general, threads within ThreadGroups will all have the same
+priority, since similar tasks will normally have the same priority.
+The following methods in <TT>ThreadGroup</TT> support this functionality:
+<BLOCKQUOTE>
+<PRE>
+public int getMaxPriority()
+public void setMaxPriority(int)
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="ThreadGroupsExample">
+ThreadGroups Example</A></H3>
+<P>
+Figure 12.4 shows a sample program using ThreadGroups.
+<P>
+<A HREF="http://docs.rinet.ru/WebJPP/f12-3.gif"><B> Figure 12.3 : </B><I>EX12C.
+</I></A><P>
+<P>
+This example uses two ThreadGroups; each of them has a number
+of threads drawing a polygon on the applet. Additional support
+is provided to start and stop the drawing via buttons on the applet.
+Listing 12.6 shows the <TT>DrawThread</TT> class used in example
+<TT>EX12D</TT>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.6. DrawThread class of EX12D.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+class DrawThread extends Thread
+{
+    protected static Graphics g;
+    protected static Random r = new Random();
+    protected int totalWidth, totalHeight;
+    protected int count;
+
+    public static void SetGraphics(Graphics _g)
+    {
+        g = _g;
+    }
+
+    public DrawThread(ThreadGroup group, int totalWidth, 
+            int totalHeight, int count)
+    {
+        super(group, Integer.toString(count));
+
+        this.totalWidth = totalWidth;
+        this.totalHeight = totalHeight;
+        this.count = count;
+    }
+
+    public void run()
+    {
+        while (true) {
+            try {
+                sleep(GetNextRandom(4, 1) * 1000);
+            }
+            catch (InterruptedException e) {}
+
+            if (g != null)
+                Draw(g, GetNextRandom(totalWidth, 0), 
+                        GetNextRandom(totalHeight, 0));
+        }
+    }
+
+    protected synchronized int GetNextRandom(int range, int offset)
+    {
+        return (int)(r.nextDouble() * (double)range) + offset;
+    }
+
+    protected void Draw(Graphics g, int x, int y)
+    {
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<TT>DrawThread</TT> is the superclass for two classes: <TT>DrawCircleThread</TT>
+and <TT>DrawSquareThread</TT>. The classes do what their names
+imply.
+<P>
+The base class takes a ThreadGroup in the constructor. This ThreadGroup
+is used to hold common threads drawing similar polygons. In addition,
+the constructor takes some configuration parameters for where
+the polygon can be drawn. <TT>run</TT> is overridden in the <TT>Thread</TT>
+class and contains an infinite loop. Inside the loop, the thread
+first goes to sleep for 1 to 5 seconds. Notice that all threads
+use the same random number generator. Therefore, <TT>GetNextRandom</TT>
+is a synchronized method. The last step in the <TT>run</TT> method
+is to call <TT>Draw</TT> to draw a polygon at a random location
+on the applet.
+<P>
+The <TT>DrawCircleThread</TT> and <TT>DrawSquareThread</TT> classes
+exist only to draw their respective polygons. Notice again that
+since the <TT>Graphics</TT> instance is being changed by the <TT>Draw</TT>
+methods, these methods must be synchronized:
+<BLOCKQUOTE>
+<PRE>
+class DrawCircleThread extends DrawThread
+{
+    protected final static int graphicsSize = 30;
+
+    public DrawCircleThread(ThreadGroup group, int totalWidth, 
+            int totalHeight, int count)
+    {
+        super(group, totalWidth - graphicsSize, 
+                totalHeight - graphicsSize, count);
+    }
+
+    protected synchronized void Draw(Graphics g, int x, int y)
+    {
+        g.setColor(Color.red);
+        g.fillOval(x, y, graphicsSize / count, graphicsSize / count);
+    }
+}
+
+class DrawSquareThread extends DrawThread
+{
+    protected final static int graphicsSize = 5;
+
+    public DrawSquareThread(ThreadGroup group, int totalWidth, 
+            int totalHeight, int count)
+    {
+        super(group, totalWidth - graphicsSize, 
+                totalHeight - graphicsSize, count);
+    }
+
+    protected synchronized void Draw(Graphics g, int x, int y)
+    {
+        g.setColor(Color.green);
+        g.fillRect(x, y, graphicsSize * count, graphicsSize * count);
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<P>
+Listing 12.7 shows the applet using the above threads.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 12.7. Applet class of EX12D.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.applet.*;
+import java.awt.*;
+import java.util.*;
+
+public class EX12D extends Applet
+{
+    protected Panel p = new Panel();
+    protected Button CircleButton = new Button(&quot;Stop Circles&quot;);
+    protected Button SquareButton = new Button(&quot;Stop Squares&quot;);
+    protected ThreadGroup Circles = new ThreadGroup(&quot;Circles&quot;);
+    protected ThreadGroup Squares = new ThreadGroup(&quot;Squares&quot;);
+
+    public void init()
+    {
+        setLayout(new BorderLayout());
+
+        p.add(CircleButton);
+        p.add(SquareButton);
+        add(&quot;South&quot;, p);
+    }
+
+    public boolean action(Event evt, Object obj) 
+    {
+        boolean result = false;         // asume no action
+
+        if (&quot;Start Circles&quot;.equals(obj)) {
+            Circles.resume();
+            CircleButton.setLabel(&quot;Stop Circles&quot;);
+
+            result = true;
+        }
+        else if (&quot;Stop Circles&quot;.equals(obj)) {
+            Circles.suspend();
+            CircleButton.setLabel(&quot;Start Circles&quot;);
+
+            result = true;
+        }
+        else if (&quot;Start Squares&quot;.equals(obj)) {
+            Squares.resume();
+            SquareButton.setLabel(&quot;Stop Squares&quot;);
+
+            result = true;
+        }
+        else if (&quot;Stop Squares&quot;.equals(obj)) {
+            Squares.suspend();
+            SquareButton.setLabel(&quot;Start Squares&quot;);
+
+            result = true;
+        }
+
+        return result;
+    }
+
+    public void start()
+    {
+        DrawThread.SetGraphics(getGraphics());
+
+        // add two circle threads
+        for (int count = 1; count &lt;= 2; count++)
+            (new DrawCircleThread(Circles, size().width, 
+                    size().height - p.size().height, 
+                    count)).start();
+
+        // add three square threads
+        for (int count = 1; count &lt;= 3; count++)
+            (new DrawSquareThread(Squares, size().width, 
+                    size().height - p.size().height, 
+                    count)).start();
+    }
+
+    public void stop()
+    {
+        Circles.stop();
+        Squares.stop();
+    }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>init</TT> method of the applet places the components needed
+onto the applet. <TT>action</TT> takes care of processing the
+button clicks. <TT>ThreadGroup.suspend</TT> and <TT>ThreadGroup.resume</TT>
+are used to start and stop the display of all of the same types
+of polygons at once.
+<P>
+<TT>start</TT> allocates all of the threads being used in the
+applet, adding them to the appropriate ThreadGroups. <TT>stop</TT>
+simply calls the <TT>ThreadGroup</TT> function to stop all threads.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>
+Summary</FONT></A></H2>
+<P>
+In this chapter, threads were explored. Threads can be created
+by either implementing the <TT>Runnable</TT> interface or by deriving
+a class from the <TT>Thread</TT> class. Once the threads are created,
+synchronization issues need to be addressed. This is accomplished
+by using synchronized blocks or synchronized methods around critical
+sections that modify class variables. ThreadGroups can then be
+used to logically group threads together to form logical groupings
+and later will be used to create hierarchical trees that help
+with Java security.
+<HR>
+
+<CENTER><P><A HREF="ch11.htm"><IMG SRC="http://docs.rinet.ru/WebJPP/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/WebJPP/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="contents.htm"><IMG SRC="http://docs.rinet.ru/WebJPP/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch13.htm"><IMG SRC="http://docs.rinet.ru/WebJPP/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

@@ -1,0 +1,299 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Advanced Networking:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0437-0441.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="..\ch12\0447-0449.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-442"><P>Page 442</P></A>
+
+
+
+<P>when dealing with an operating server. Writing to a file can result in delays in
+servicing clients as the log message writes to disk. To avoid this added delay, perform the actual
+file output in a thread separate from those handling clients. Client handlers communicate
+with the logging thread using a PipedOutputStream / PipedInputStream pair, which provides
+an in-memory buffer that appears to the client handler as a PrintSteam and to the
+logging thread as an InputStream. To mimic the System class, define a static variable out in
+the ServerLog class that can always output messages. This variable is initialized
+as System.out; output is not redirected to a file until a ServerLog instance is
+created. ServerLog is a subclass of Thread:
+</P>
+
+<PRE>
+  public class ServerLog extends Thread {
+    PrintStream logFile;
+    PipedInputStream inputPipe;
+    LogPrintStream logStream;
+    static PrintStream out = System.out;
+
+    public ServerLog(String filename) throws IOException {
+    this(new PrintStream(new FileOutputStream(filename)));
+    }
+
+    public ServerLog(PrintStream logFile) throws IOException {
+    this.logFile = logFile;
+    inputPipe = new PipedInputStream();
+    logStream = new LogPrintStream(inputPipe);
+    setDaemon(true);
+    start();
+    if (out == System.out)
+      out = logStream;
+    }
+
+    PrintStream getOutputStream() {
+    return logStream;
+    }
+</PRE>
+
+<P>
+<B>
+Writing to the Log File
+</B>
+</P>
+
+<P>Because you handle the conversion from Unicode to ASCII in the LogPrintStream
+object, the ServerLog thread must only read from the PipedInputStream and write to
+the FileOutputStream without performing any
+conversions. The run() method is a simple loop:
+</P>
+
+
+<A NAME="PAGENUM-443"><P>Page 443</P></A>
+
+
+<PRE>
+    public void run() {
+    try {
+      DataInputStream in = new DataInputStream(inputPipe);
+      String line;
+      while ((line = in.readLine()) != null) {
+        logFile.println(line);
+      }
+    }
+    catch (Exception e) {
+    }
+    }
+  }
+</PRE>
+
+<P>
+<B>
+Logging Server Information
+</B>
+</P>
+
+<P>The LogPrintStream class is a subclass of PrintStream designed for logging
+server information. You create a new LogPrintStream with a reference to a PipedInputStream:
+</P>
+
+<PRE>
+  class LogPrintStream extends PrintStream {
+    Date timestamp;
+
+    public LogPrintStream(PipedInputStream in) throws IOException {
+    super(new PipedOutputStream(in));
+    timestamp = new Date();
+    }
+</PRE>
+<P>
+
+<B>
+Naming and TimeStamping Log Messages
+</B>
+</P>
+
+<P>You override the regular println(String) method to prepend a date/time stamp and
+the name of the current thread to any messages you write to the log. Because you
+name threads after the connection they handle, each log message is tagged with the identity
+of the remote client:
+</P>
+
+<PRE>
+    synchronized public void println(String s) {
+    timestamp.setTime(System.currentTimeMillis());
+    super.println(timestamp.toString() + &quot; &quot; +
+          &Acirc;Thread.currentThread().getName() + &quot;: &quot; + s);
+    }
+  }
+</PRE>
+
+<A NAME="PAGENUM-444"><P>Page 444</P></A>
+
+
+
+<H4><A NAME="ch11_ 42">
+Putting It All Together
+</A></H4>
+
+<P>With all the protocol and server support classes defined, you are ready to put together
+the complete application. In the main() method of your server, you create:
+</P>
+
+<UL>
+<LI>          A LogServer
+<LI>          A StreamMonitor
+<LI>          A ThreadedServer-based SMTP server
+<LI>          A ThreadedServer-based POP server
+<LI>          A SimpleServer-based NameQuery server.
+<LI>          A SimpleServer-based ServerStatus server
+</UL>
+
+<P>Almost every server requires some amount of configuration information. For this
+server, you must specify the name of the log file, the file name of the domain properties file,
+and the maximum number of threads for each type of ThreadedServer. Pass the name of
+the properties file that holds this configuration information as the first argument to main():
+</P>
+
+<PRE>
+  class EmailServer {
+
+    public static void main(String[] args) {
+    try {
+      Properties params = new Properties();
+      params.load(new FileInputStream(args[0]));
+      int maxThreads;
+</PRE>
+
+<P>
+<B>
+Creating the ThreadGroup
+</B>
+</P>
+
+<P>Create a ThreadGroup for all Server threads, the ServerLog, the StreamMonitor, and
+the MailDomain object:
+</P>
+
+<PRE>
+      ThreadGroup allServers = new ThreadGroup(&quot;servers&quot;);
+      ServerLog ld = new ServerLog(params.getProperty(&quot;log.filename&quot;));
+      new StreamMonitor();
+      MailDomain domain = new
+             &Acirc;MailDomain(params.getProperty(&quot;mail.domain&quot;));
+</PRE>
+
+<P>
+<B>
+Creating SMTP Server
+</B>
+</P>
+
+<P>Next, create each working server that directly supports the e-mail clients. To handle
+multiple concurrent clients, use a ThreadedServer for SMTP and POP, and create a Thread to
+run each instance of ThreadedServer. Select 5 as the default number of SMTP connections:
+</P>
+<A NAME="PAGENUM-445"><P>Page 445</P></A>
+
+
+<PRE>
+      maxThreads =Integer.parseInt(params.getProperty(&quot;smtp.maxthreads&quot;,
+             &Acirc;&quot;5&quot;));
+      Server smtpServer = new ThreadedServer(new SMTPFactory(domain),
+             &Acirc;maxThreads);
+      new Thread(allServers, smtpServer, &quot;SMTP&quot;).start();
+</PRE>
+
+<P>
+<B>
+Creating POP Server
+</B>
+</P>
+
+<P>Then create the POP server. Because the average POP client session lasts much
+longer than SMTP, set the default maximum number of connections to 20:
+</P>
+
+<PRE>
+      maxThreads = Integer.parseInt(params.getProperty(&quot;pop.maxthreads&quot;,
+           &Acirc;&quot;20&quot;));
+      Server popServer = new ThreadedServer(new
+         &Acirc;POP3HandlerFactory(domain) 20);
+      new Thread(allServers, popServer, &quot;POP&quot;).start();
+</PRE>
+
+<P>
+<B>
+Creating the NameQueryServer
+</B>
+</P>
+
+<P>Create the last client service server, the NameQueryServer. Because HTTP operates
+under quick turnaround, and because the corporate database might exist as a single-user
+system, create a SimpleServer and a thread to run the server:
+</P>
+
+<PRE>
+      Server lookupServer = new SimpleServer(new NameQueryFactory());
+      new Thread(allServers, lookupServer, &quot;NameQuery&quot;).start();
+</PRE>
+
+<P>
+<B>
+Creating the Status Server
+</B>
+</P>
+
+<P>Next, create the status server. It is unlikely that multiple clients access this server, so
+you can use only the SimpleServer and a server thread:
+</P>
+
+<PRE>
+      Server status = new SimpleServer(new ServerStatusFactory());
+      new Thread(allServers, status, &quot;ServerStatus&quot;).start();
+    }
+    catch (Exception e) {
+      ServerLog.out.println(e);
+    }
+    }
+
+  }
+</PRE>
+
+<A NAME="PAGENUM-446"><P>Page 446</P></A>
+
+
+
+<H3><A NAME="ch11_ 43">
+Summary
+</A></H3>
+
+<P>You have now completed the e-mail server application and have a set of classes to
+help you build other network servers. You can use the framework classes of
+Server, InetOutputStream, InetDate, CommandInputStream and LogPrintStream to
+implement servers for various other protocols and services.
+</P>
+
+<P>You can adapt the SMTP, POP and HTTP classes to solve a variety of problems.
+For example, add code to the SMTP server to perform automatic mail responder
+functions when command messages are sent to specific mail addresses. You can use this function
+to automate mailing list maintenance, return requested documents, and other automated
+reply functions.
+</P>
+
+<P>Examples of how to customize an HTTP server are provided by the name query and
+status monitoring servers. As an alternative to completely customizing the HTTP server,
+Chapter 17 describes how to create servlets that tailor the behavior of the Jeeves HTTP server.
+</P>
+<BR>
+<P><CENTER>
+<a href="0437-0441.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="..\ch12\0447-0449.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

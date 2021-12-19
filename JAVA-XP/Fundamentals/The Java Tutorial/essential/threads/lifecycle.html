@@ -1,0 +1,367 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>The Life Cycle of a Thread</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="clock.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="priority.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=bottom border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    The Life Cycle of a Thread
+</h2>
+<p>
+<blockquote>
+
+Now that you've seen how to give a thread something to do, we'll review
+some details that were glossed over in the previous section. In
+particular, we look at the life cycle of a thread: how to create and
+start a thread, some of the special things it can do while it's
+running, and how to stop it.
+<p>
+The following diagram shows the states that a Java thread can be in during its
+life. It also illustrates which method calls cause a transition to
+another state. This figure is not a complete finite state diagram, but
+rather an overview of the more interesting and common facets of a
+thread's life. The remainder of this section uses the <code>Clock</code>
+applet previously introduced to discuss a thread's life cycle in terms of its
+state.
+
+<blockquote><IMG SRC="http://docs.rinet.ru/Jtuta/figures/essential/14run.gif" WIDTH="405" HEIGHT="145" ALIGN="BOTTOM" NATURALSIZEFLAG="3" ALT=""></blockquote>
+<h4>Creating a Thread</h4>
+<blockquote>
+The application in which an applet is running calls the applet's
+<code>start</code> method when the user visits the applet's page.
+The <code>Clock</code> applet
+creates a <code>Thread</code>, <code>clockThread</code>,
+in its <code>start</code>
+with the bold code shown here: 
+<blockquote>
+<pre>
+public void start() {
+    if (clockThread == null) {
+        <strong>clockThread = new Thread(this, "Clock");</strong>
+        clockThread.start();
+    }
+}    
+</pre>
+</blockquote>
+After the bold statement has been executed, <code>clockThread</code>
+is in the New Thread state. When a thread is a New Thread,
+it is merely an empty <code>Thread</code> object;
+no system resources have been allocated for it yet. When
+a thread is in this state, you can only start the thread. Calling any
+method besides start when a thread is in this state makes no sense and
+causes an <code>IllegalThreadStateException</code>.
+(In fact, the runtime system throws an <code>IllegalThreadStateException</code>
+any time a method is called on a
+thread and that thread's state does not allow for that method call.)
+<p>
+Notice that this--the <code>Clock</code> instance--
+is the first argument to the thread
+constructor. The first argument to this thread constructor must
+implement the <code>Runnable</code> interface
+and becomes the thread's target.
+The clock thread gets its <code>run</code>
+method from its target <code>Runnable</code> object--in
+this case, the <code>Clock</code> instance.
+The second argument is just a name for the thread.
+</blockquote>
+
+<h4>Starting a Thread</h4>
+<blockquote>
+Now consider the next line of code
+in <code>Clock</code>'s <code>start</code> method shown here
+in bold:
+<blockquote>
+<pre>
+public void start() {
+    if (clockThread == null) {
+        clockThread = new Thread(this, "Clock");
+        <strong>clockThread.start();</strong>
+    }
+}  
+</pre>
+</blockquote>
+The <code>start</code> method creates the system resources
+ necessary to run the thread,
+schedules the thread to run,
+and calls the thread's <code>run</code> method.
+<code>ClockThread'</code>s <code>run</code> method is the one defined
+in the <code>Clock</code> class.
+<p>
+After the <code>start</code> method has returned,
+the thread is "running".
+Yet, it's somewhat more complex than that.
+As the previous figure shows,
+a thread that has been started is actually in the Runnable state.
+Many computers have a single processor,
+thus making it impossible to run all "running" threads at the same time.
+The Java runtime system must implement a scheduling scheme
+that shares the processor between all "running" threads.
+(See
+<a href="priority.html">Understanding Thread Priority</a>
+for more information about scheduling.)
+So at any given time,
+a "running" thread actually may be waiting for its turn in the CPU.
+<p>
+Here's another look at <code>Clock</code>'s <code>run</code> method: 
+<blockquote>
+<pre>
+public void run() {
+   Thread myThread = Thread.currentThread();
+   while (clockThread == myThread) {
+        repaint();
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e){
+            // the VM doesn't want us to sleep anymore,
+            // so get back to work
+        }
+    }
+}
+</pre>
+</blockquote>
+<code>Clock</code>'s <code>run</code> method loops while the condition
+<code>clockThread == myThread</code> is <code>true</code>. This exit
+condition is explained in more detail in
+<a href="#stopping">Stopping a Thread</a>.
+However, for now, know that it allows the thread, and thus the applet,
+to exit gracefully.
+<p>
+Within the loop, the applet repaints itself and then tells the thread
+to sleep for one second (1000 milliseconds). An applet's <code>repaint</code>
+method ultimately calls the applet's <code>paint</code> method,
+which does the actual
+update of the applet's display area.
+The <code>Clock</code> <code>paint</code> method gets the
+current time, formats, and displays it:
+<blockquote>
+<pre>
+public void paint(Graphics g) {
+    // get the time and convert it to a date
+    Calendar cal = Calendar.getInstance();
+    Date date = cal.getTime();
+    // format it and display it
+    DateFormat dateFormatter = DateFormat.getTimeInstance();
+    g.drawString(dateFormatter.format(date), 5, 10);
+}
+</blockquote>
+</pre>
+</blockquote>
+
+<h4>Making a Thread Not Runnable</h4>
+<blockquote>
+A thread becomes Not Runnable when one of these events occurs: 
+<ul>
+<li>
+Its <code>sleep</code> method is invoked. 
+<li>
+The thread calls the <code>wait</code>
+method to wait for a specific condition to be satisifed.
+<li>
+The thread is blocking on I/O.
+</ul>
+The <code>clockThread</code> in the <code>Clock</code> applet becomes
+Not Runnable when the run method calls <code>sleep</code> on the
+current thread:
+<blockquote>
+<pre>
+public void run() {
+    Thread myThread = Thread.currentThread();
+    while (clockThread == myThread) {
+        repaint();
+        try {
+            <strong>Thread.sleep(1000);</strong>
+        } catch (InterruptedException e){
+            // the VM doesn't want us to sleep anymore,
+            // so get back to work
+        }
+    }
+}
+</pre>
+</blockquote>
+During the second that the <code>clockThread</code> is asleep,
+the thread does not run, even if the processor becomes available.
+After the second has elapsed, the thread becomes Runnable again and,
+if the processor becomes available, the thread begins running again.
+<p>
+For each entrance into the Not Runnable state, there is a specific and
+distinct escape route that returns the thread to the Runnable state. An
+escape route works only for its corresponding entrance. For example, if
+a thread has been put to sleep, then the specified number of
+milliseconds must elapse before the thread becomes Runnable again. The
+following list describes the escape route for every entrance into the
+Not Runnable state:
+<ul>
+<li>
+If a thread has been put to sleep,
+then the specified number of milliseconds must elapse. 
+<li>
+If a thread is waiting for a condition, then another object must notify
+the waiting thread of a change in condition by calling <code>notify</code>
+or <code>notifyAll</code>. More information is available in
+<a href="multithreaded.html">Synchronizing Threads</a>.
+<li>
+If a thread is blocked on I/O, then the I/O must complete. 
+</ul>
+
+</blockquote>
+
+<a name="stopping">
+<h4>Stopping a Thread</h4>
+</a>
+<blockquote>
+A program doesn't stop a thread like it stops an applet (by calling a
+method). Rather, a thread arranges for its own death
+by having a <code>run</code>
+method that terminates naturally. For example, the <code>while</code>
+loop in this
+<code>run</code> method is a finite loop--
+it will iterate 100 times and then exit:
+<blockquote>
+<pre>
+public void run() {
+    int i = 0;
+    while (i &lt; 100) {
+        i++;
+        System.out.println("i = " + i);
+    }
+}
+</pre>
+</blockquote>
+A thread with this <code>run</code> method dies naturally
+when the loop completes and the <code>run</code> method exits.
+<p>
+Let's look at how the <code>Clock</code> applet thread
+arranges for its own death.
+You might want to use this technique with your applets.
+Recall <code>Clock</code>'s <code>run</code> method:
+<blockquote>
+<pre>
+public void run() {
+    Thread myThread = Thread.currentThread();
+    while (clockThread == myThread) {
+        repaint();
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e){
+            // the VM doesn't want us to sleep anymore,
+            // so get back to work
+        }
+    }
+}
+</pre>
+</blockquote>
+The exit condition for this <code>run</code> method is the exit
+condition for the <code>while</code> loop because there is no code
+after the <code>while</code> loop:
+<blockquote>
+<pre>
+while (clockThread == myThread) {
+</pre>
+</blockquote>
+This condition indicates that the loop will exit when the currently
+exiting thread is not equal to <code>clockThread</code>.
+When would this ever be the case?
+<p>
+When you leave the page, the application in which the applet is running
+calls the applet's <code>stop</code> method. This method then sets the
+<code>clockThread</code> to <code>null</code>, thereby telling the main
+loop in the <code>run</code> method to terminate:
+<blockquote>
+<pre>
+public void stop() {    // applets' stop method
+    clockThread = null;
+}
+</pre>
+</blockquote>
+If you revisit the page, the <code>start</code> method is called again
+and the clock starts up again with a new thread. Even if you stop and
+start the applet faster than one iteration of the loop,
+<code>clockThread</code> will be a different thread than
+<code>myThread</code> and the loop will still terminate.
+</blockquote>
+
+<h4>The isAlive Method</h4>
+<blockquote>
+A final word about thread state:
+The API for the <code>Thread</code> class includes a method called
+<code>isAlive</code>. The <code>isAlive</code> method returns true if
+the thread has been started and not stopped. If the
+<code>isAlive</code> method returns false, you know that the thread
+either is a New Thread or is Dead. If the <code>isAlive</code> method
+returns true, you know that the thread is either Runnable or Not
+Runnable. You cannot differentiate between a New Thread or a Dead
+thread. Nor can you differentiate between a Runnable thread and a Not
+Runnable thread.
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="clock.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="priority.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/coreHeader.gif" width=26 height=26 align=top border=0 alt="Essential Java Classes | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>Doing Two or More Tasks At Once: Threads</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

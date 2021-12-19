@@ -1,0 +1,231 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Container</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch12.html" title="Chapter 12. Container architecture - design notes"><link rel="previous" href="ch12s21.html" title="ContainerInvoker - Container entry point"><link rel="next" href="ch12s63.html" title=" Transaction support "></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s21.html"><img src="images\prev.gif" border="0"></a><a href="ch12s63.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="d0e8233"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="d0e8233"></a>Container</h2></div></div><div class="section"><a name="d0e8236"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8236"></a>Concepts</h3></div></div><p>A <tt>Container</tt> is the component that runs a
+particular EJB. When an
+  EJB-jar is deployed, typically a number of containers are created
+  which are connected internally into Applications. The
+  Application lets Containers handle references between beans, for
+  example for JNDI EJB-references as specified in the EJB 1.1
+  specification.</p><p>But let's not dive into the nuts and bolts of the container
+  component without first looking into the container's creation process.
+  The component responsible for creating the container is the container
+factory.</p></div><div class="section"><a name="d0e8246"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8246"></a>Container Factory</h3></div></div><p>The container factory, as its name implies, simply creates containers.
+   Simple, right? Wrong !!! Lets investigate this process in more
+detail.</p><div class="section"><a name="d0e8251"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8251"></a>Introduction</h4></div></div><p>Given an EJB-jar that is ready for deployment, the container factory
+   will create and initialize the necessary EJB-containers - one for each
+   deployed EJB. The factory contains two central methods:<tt>deploy</tt> and
+   <tt>undeploy</tt>. The <tt>deploy</tt> method takes
+a URL, which either points to an
+   EJB-jar, or to a directory whose structure is the same as a valid
+   EJB-jar(convenient for development purposes). Once a deployment has
+   been made, it can be undeployed by calling <tt>undeploy</tt> on
+the same URL.
+   A call to <tt>deploy</tt> with an already deployed URL will
+cause an <tt>undeploy</tt>   followed by deployment of the URL, i.e. a re-deploy. JBoss has support
+   for full re-deployment of both implementation and interface classes,
+   and will reload any changed classes. This will allow you to develop
+   and update EJBs without ever stopping a running server.</p></div><div class="section"><a name="d0e8274"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8274"></a>What the container factory needs to know</h4></div></div><p>In order to properly deploy the bean into a container, the container
+factory
+   has to have "intimate" knowledge about the bean being deployed to the
+   finest level of granularity. This is where the notion of bean metadata
+   comes into the picture.  The metadata package, which in turn utilizes a
+   standard DOM document model, creates an "object-tree" in-memory replica of
+   ejb-jar.xml file.  Having an object tree structure of bean metadata,
+   the container factory can easily access it and then succesfully deploy
+   a bean into a container. Bean metadata is actually a super set of
+   other finer-grained metadata components like method, ejb-ref, environment
+   entries, resource entries metadata.</p></div><div class="section"><a name="d0e8279"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8279"></a>Container configuration</h4></div></div><p>Besides standard EJB 1.1 ejb-jar.xml file that contains metadata
+   about beans being deployed, JBoss defines its own container
+   configuration file - standardjboss.xml. Standardjboss.xml specifies
+   default container configurations for each EJB bean type.  Each configuration
+   specifies which components to use, such as container invoker type, instance
+   caches/pools and their sizes, persistence manager etc.</p></div><div class="section"><a name="d0e8284"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8284"></a>Configuration flexibility</h4></div></div><p>A quick look at standardjboss.xml gives us a hint about all default
+   container configurations. EJB adminstrator/developer is also given an
+   opportunity to override these default container settings in jboss.xml
+   file.  The advantage of this approach is that it gives great flexibility
+   in the configuration of containers. As we have seen, all container
+   configuration attributes have been externalized and as such are easily
+   modifiable.  Knowledgeable developers can even implement specialized
+   container components such as instance pools or caches and easily integrate
+   them with the container.</p></div><div class="section"><a name="d0e8289"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8289"></a>Bean Verifier</h4></div></div><p>As an option, Jboss also attempts to verify EJB 1.1 specification
+compliance of
+   the beans. For more details, the curious reader should look into the
+verifier
+   package.</p></div><div class="section"><a name="d0e8294"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8294"></a>Deployment semantics</h4></div></div><p>Having a bean and container metadata, the container factory iterates
+over
+   all beans it has to deploy and:</p><p>- creates specific container subclass
+   - sets all container attributes from container metadata*
+   - adds all container interceptors*
+   - adds container to application
+   - after all beans have been succesfully deployed, starts application</p><p>*Note the difference between container interceptors in specific
+container
+  subclasses</p><p>*The metadata specifies the type of TM (transaction manager)
+  to use but, in fact, we need look it up from the naming tree.  In fact, 
+there is (and should be) only
+  one TM per VM since transactions have to be coordinated across containers.
+  Also note that <tt>EJBSecurityManager</tt> and<tt>RealmMapping</tt> are shared between
+  containers (for more details refer to the security section of this
+paper).</p></div></div><div class="section"><a name="d0e8311"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8311"></a>Automatic deployment</h3></div></div><div class="section"><a name="d0e8314"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8314"></a>Introduction</h4></div></div><p>The container factory can be invoked manually from a management
+   console or automatically by using the <tt>AutoDeployer</tt>.
+AutoDeployer
+   (which is an MBean) is a component that periodically checks EJB-jars
+   for modification timestamps. If an update has been made the EJB-jar
+   is re-deployed. When the server is started and an EJB-jar is found
+   it will be deployed automatically.</p><p>The deployer is given a URL to watch. The URL can point to one of
+  three things:</p><p>- EJB-jar</p><p>- directory whose contents are structured like an EJB-jar. Timestamp
+         checks will be done on the META-INF/ejb-jar.xml file.</p><p>- directory into which EJB-jar files or directories containing
+         valid EJB-jar contents is placed. This may only be a file URL,
+         since it is not possible to do file listing checks on HTTP
+URL's.</p></div><div class="section"><a name="d0e8330"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8330"></a>Advantage of automatic deployment</h4></div></div><p>The last variant is very powerful. The default configuration of
+   JBoss starts an <tt>AutoDeployer</tt> that checks the /deploy
+directory. Here
+   you can place any EJB-jars that you want to be deployed on startup.
+   If you want to add deployments at runtime you simply drop them in
+   that directory.</p></div></div><div class="section"><a name="d0e8338"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8338"></a>EnterpriseContext</h3></div></div><p>
+				<tt>EnterpriseContext</tt> and its subclasses,
+        <tt>StatefulSessionEnterpriseContext</tt>,<tt>StatelessSessionEntepriseContext</tt>,
+        and <tt>EntityEntepriseContext</tt> implement<tt>EJBContext</tt> part of EJB 1.1 spec.</p><div class="section"><a name="d0e8358"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8358"></a>Client view</h4></div></div><p>From a bean's perspective <tt>EJBContext</tt> is a
+gateway to container;
+        it represents a way for a bean to perform callbacks to the
+container.</p></div><div class="section"><a name="d0e8366"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8366"></a>Container view</h4></div></div><p>From a container's perspective, the container uses<tt>EntepriseContext</tt> to
+        associate a bean instance with all information that the container
+needs about
+        that instance to properly manage it. This infomation includes
+        a callback reference to the container hosting the instance,
+synchronization associated with
+        that instance, instance's transaction,<tt>Principal</tt> and object Id.
+        Simply put, <tt>EntepriseContext</tt> associates a
+bean's instance with its metadata.
+        It is the container's responsibilty to manage bean's context, which
+        changes over the lifecycle of a bean.</p></div></div><div class="section"><a name="d0e8380"></a><div class="titlepage"><div><h3 class="title"><a name="d0e8380"></a>Container's nuts and bolts</h3></div></div><div class="section"><a name="d0e8383"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8383"></a>Container class itself</h4></div></div><p>JBoss container is mainly a framework into which one can plug in
+          implementations of various parts. The<tt>Container</tt> itself does not perform
+          any significant work other than connecting the various plugins.
+          There are three subclasses of <tt>Container</tt>, each
+one implementing a
+          particular bean-type:</p><p>
+					<tt>EntityContainer</tt> handles EntityBeans,
+         <tt>StatelessSessionContainer</tt> handles Stateless
+SessionBeans, and
+         <tt>StatefulSessionContainer</tt> handles Stateful
+SessionBeans.</p><p>They are very similar, but are different in some respects. The
+         stateless session container does not have an instance cache (since
+         no instances have identity), and the entity container has an
+         <tt>EntityPersistenceManager</tt> to help it with
+persisting entity beans in
+         various storages.</p></div><div class="section"><a name="d0e8410"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8410"></a>Container plugin framework</h4></div></div><p>The plugins can be added by implementing various interfaces, and
+         by selecting them in the JBoss-specific deployment XML file (which
+         can be edited in a GUI-tool). The interfaces are:</p><p>
+					<tt>InstanceCache</tt>,<tt>InstancePool</tt>,<tt>Interceptor</tt>,<tt>EntityPersistenceManager</tt>,<tt>StatefulSessionPersistenceManager</tt>
+				</p><p>
+					<tt>InstancePool</tt> and<tt>Interceptors</tt> are used in all three different types of
+         containers. <tt>InstanceCache</tt> is only used for
+entity beans and stateful
+         session beans. <tt>EntityPersistenceManager</tt> is
+only used for entity beans.
+         <tt>StatefulSessionPersistenceManager</tt> is only used
+for stateful session
+         beans.</p><p>These interfaces are described in detail below. All plugins have
+         a callback to the container through which they can access all other
+         plugins or configuration information. The container's main
+responsibility
+         is therefore to manage the plugins, and to see to it that the plugins
+have all
+         the information they need in order to implement some
+functionality.</p><div class="section"><a name="d0e8451"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8451"></a>Interceptor</h5></div></div><div class="section"><a name="d0e8454"></a><div class="titlepage"><div><h6 class="title"><a name="d0e8454"></a>Creation and ordering</h6></div></div><p>All interceptors are created and added to the interceptor
+linked-list by
+        the container factory. The last interceptor is not added by the
+container
+        factory but rather by the container itself.</p><p>The order of the interceptor in the chain is not accidental. The
+idea
+        behind ordering is that intereceptors that are not tied to a particular
+        EnterpriseContext instance are positioned before interceptors that
+        interact with caches and pools.</p></div></div><div class="section"><a name="d0e8461"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8461"></a>Structure, complexity, cardinality</h5></div></div><p>Implementors of the <tt>Interceptor</tt> interface 
+form
+        a linked-list like
+        structure through which the <tt>MethodInvocation</tt> 
+object
+is passed. The first
+        interceptor in the chain is invoked when<tt>ContainerInvoker</tt> hands off
+        <tt>MethodInvocation</tt> to the container.  The last
+interceptor invokes the business
+        method on the bean. There are usually between 3 and 6 interceptors in
+        a chain depending on the bean type and container configuration.
+Interceptor
+        semantic complexity ranges from simple to complex ones, but under the
+        cover they all present the same simple interface. An example of a
+        simple interceptor would be <tt>LoggingInterceptor</tt>,
+while a complex example is
+        <tt>EntitySynchronizationInterceptor</tt>.</p></div><div class="section"><a name="d0e8484"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8484"></a>Advantages</h5></div></div><p>One of the main advantages of <tt>Interceptor</tt>pattern is flexibility
+        in the arrangement of interceptors, as well as a clear semantic
+distinction
+        between different interceptors. For example, logic for transaction and
+        security is in <tt>TXInterceptor</tt> and<tt>SecurityInterceptor</tt> correspondingly.</p><p>If any of the interceptors fail, we don't have to continue the call
+further
+        through, which is very useful if the interceptor that failed is before
+complex
+        structures like caches.</p></div></div><div class="section"><a name="d0e8500"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8500"></a>Instance Pool</h4></div></div><div class="section"><a name="d0e8503"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8503"></a>Recycling pool for bean instances</h5></div></div><p>
+						<tt>InstancePool</tt> is used to manage the EJB-bean
+instances that are
+         not associated with any identity. In fact, to be exact,
+         <tt>EnterpriseContext</tt> objects that wrap
+non-associated bean instances
+         are pooled in this data structure.</p></div><div class="section"><a name="d0e8514"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8514"></a>Pool types and cardinality</h5></div></div><p>Depending on the underlying bean type hosted in a container, there
+         are three different instance pool types.  However, it is important
+         to notice that each container has only one pool of either type.</p></div><div class="section"><a name="d0e8519"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8519"></a>Size and roles</h5></div></div><p>Depending on the configuration, a container may choose to have a
+certain
+         size of the pool containing recycled instances, or it may choose to
+         instantiate and initialize an instance on demand.</p><p>The pool is used by the <tt>InstanceCache</tt> to
+acquire free instances
+         for activation, and it is used by Interceptors to acquire instances
+to be
+         used for Home interface methods (create and finder calls).</p></div></div><div class="section"><a name="d0e8529"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8529"></a>Instance Cache</h4></div></div><div class="section"><a name="d0e8532"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8532"></a>Container's cache structure</h5></div></div><p>
+						<tt>InstanceCache</tt> handles all EJB-instances that are
+in a active
+        state, i.e. bean instances that have an identity attached to
+them.</p></div><div class="section"><a name="d0e8540"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8540"></a>Entity and stateful session bean cache</h5></div></div><p>Only entity and stateful session beans are cached. The cache key
+        of an entity bean is the primary key.  It is the session id for 
+stateful
+        session beans.</p></div><div class="section"><a name="d0e8545"></a><div class="titlepage"><div><h5 class="title"><a name="d0e8545"></a>Roles</h5></div></div><p>
+						<tt>InstanceCache</tt> handles the list of active
+instances, and is also
+        responsible for activating and passivating these instances. If
+        an instance with a given identity is requested, and it is not
+        currently active, the <tt>InstanceCache</tt> must use
+the <tt>InstancePool</tt>        to acquire a free instance, and the persistence manager to
+        activate the instance. Similarly, if it decides to passivate
+        a certain active instance, it must call the persistence manager
+        to passivate it and release the instance to the<tt>InstancePool</tt>.</p></div></div><div class="section"><a name="d0e8562"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8562"></a>EntityPersistenceManager</h4></div></div><p>The <tt>EntityPersistenceManager</tt> is responsible
+for the persistence
+         of EntityBeans. This includes:</p><p>- Creating EntityBeans in a storage
+          - Loading the state of a given primary key into an EJB-instance
+          - Storing the state of a given EJB-instance
+          - Removing the state from storage
+          - Activating an EJB-instance
+          - Passivating an EJB-instance</p><p>As per EJB 1.1 specification, JBoss supports two entity bean
+         persistance semantics: CMP (Container Managed Persistence) and
+         BMP (Bean Managed Persistence).</p><p>The CMP plugin, <tt>CMPPersistanceManager</tt> uses
+the default implementor of
+         <tt>EntityPersistanceManager</tt>,<tt>JAWSPersistanceManager</tt> (JAWS-Just Another Web Store).
+         JAWS performs performs basic O/R functionality against a
+JDBC-store.</p><p>The BMP implementor of the <tt>EntityPersistenceManager</tt>interface is
+         <tt>BMPPersistanceManager</tt>. BMP persistance manager
+is fairly simple
+         since all persistence logic is in the entity bean itself. The only
+duty of the
+         persistence manager is to perform container callbacks.</p></div><div class="section"><a name="d0e8593"></a><div class="titlepage"><div><h4 class="title"><a name="d0e8593"></a>StatefulSessionPersistenceManager</h4></div></div><p>The <tt>StatefulSessionPersistenceManager</tt> is
+responsible for
+        the persistence of Stateful SessionBeans. This includes:</p><p>- Creating stateful sessions in a storage
+        - Activating stateful sessions from a storage
+        - Passivating stateful sessions to a storage
+        - Removing stateful sessions from a storage</p><p>The default implementation of the<tt>StatefulSessionPersistenceManager</tt>        is <tt>StatefulSessionFilePersistenceManager</tt>. As
+its name implies,
+        <tt>StatefulSessionFilePersistenceManager</tt> utilizes
+the underlying file system
+        to persist stateful SessionBeans. More specifically, persistence
+manager
+        serializes beans in flat file under bean name + bean Id .ser files.
+        Having a .ser file per bean instance, the Persistance Manager is able 
+to
+restore a
+        bean's state for activation and respectively store its state during
+        passivation.</p></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch12.html"><img src="images\toc.gif" border="0"></a><a href="ch12s21.html"><img src="images\prev.gif" border="0"></a><a href="ch12s63.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

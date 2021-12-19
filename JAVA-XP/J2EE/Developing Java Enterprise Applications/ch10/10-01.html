@@ -1,0 +1,130 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Creating JavaServer Pages</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch09\09-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="10-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 10<BR>Creating JavaServer Pages
+</FONT></H2>
+<P>Chapter 9 discussed the purpose of server-side scripting techniques and the benefit of JavaServer Pages. This chapter discusses the syntax for creating JavaServer Pages. Chapter 11, &#147;A JavaServer Page Online Store,&#148; explores a larger example of how JavaServer Pages can be used.
+</P>
+<P>Currently, JavaServer Pages are implemented using a technology called <I>page compilation</I> in the Java Web Server. These pages are marked with a .jhtml extension to indicate that they combine Java and HTML. Sun is currently in the process of creating a more standard version of JavaServer Pages that uses a .jsp extension. At the time of this writing, the JHTML version of JavaServer Pages is available for commercial use; the JSP version is still being developed. Therefore, the discussions here are focused on JHTML.</P>
+<BLOCKQUOTE>
+<P><FONT SIZE="-1"><HR><B>NOTE:&nbsp;&nbsp;</B>JHTML and JSP are very similar, and you should have no trouble updating to the new JSP standard when it is finalized.</FONT><HR>
+</BLOCKQUOTE>
+<P>All of the examples in this chapter were written and tested using the Java Web Server. To try a copy of this server, access the Sun Web site at java.sun.com/products. You should also check the documentation for your existing Web server or contact the provider to see if it offers support for JavaServer Pages.
+</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">How JavaServer Pages Work</FONT></H3>
+<P>The Web server handles a request for JavaServer Pages (JSP) by forwarding the request to a special servlet. This servlet, called the PageCompileServlet, takes requests for JSP and converts them into the appropriate action. If the page is requested for the first time, the appropriate action is to compile the JSP into a servlet and ask the servlet to service the request. Subsequent requests for the page results in a direct request to the servlet generated from the JSP. The PageCompileServlet generates a servlet for each JSP, and that servlet handles all further requests.
+</P>
+<P>To get a handle on what the servlets generated from JavaServer Pages look like, let&#146;s take the example of a JSP that doesn&#146;t have any Java&#151;in other words, a plain HTML file that has been labeled with the .jhtml extension, indicating to the server that it is a JavaServer Page and should be handled by the PageCompileServlet. Like all of the examples in this book, the following Hello World page is available on the CD-ROM.</P>
+<PRE>
+&ltHTML&gt
+&ltHEAD&gt
+&ltTITLE&gt
+Hello World
+&lt/TITLE&gt
+&lt/HEAD&gt
+&ltBODY&gt
+&ltH1&gtHello World!&lt/H1&gt
+&lt/BODY&gt
+&lt/HTML&gt
+</PRE>
+<P>When the PageCompileServlet receives the request for this page, it generates the code for a servlet, then compiles the code. The servlet returns an HTML page like the one pictured in Figure 10.1.
+</P>
+<P>In this example, the servlet code looks like this:</P>
+<PRE>
+package pagecompile;
+
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import com.sun.server.webserver.pagecompile.filecache.*;
+import com.sun.server.webserver.pagecompile.ParamsHttpServletRequest;
+import com.sun.server.webserver.pagecompile.*;
+
+<B>public class _HelloWorldNoCode extends HttpServlet</B>
+{
+
+//-------------------------------
+  static { }
+  
+  //-------------- The service method
+
+  public void service (HttpServletRequest request,
+
+                         HttpServletResponse response)
+      throws ServletException, IOException
+  {
+    ServletOutputStream out = response.getOutputStream ();
+    ByteFileData __fileData = null;
+    
+    try
+    {
+      __fileData = (ByteFileData) ServletUtil.getJHtmlSource(this, 
+   &#147;D:\\JAVA\\JWS1.1\\BIN\\..\\public_html\\HelloWorldNoCode.jhtml&#148;
+    , null, 902608452000L);
+      
+      if (__fileData == null)
+        throw new ServletException(&#147;FileChanged&#148;);
+
+      /*** lines: 1-10 */
+      __fileData.writeBytes (0, 96, out);
+    }
+    finally
+    {
+      if (__fileData != null) __fileData.close();
+    }
+  }
+
+}
+</PRE>
+<P><A NAME="Fig1"></A><A HREF="images\10-01.jpg"><IMG SRC="images\10-01t.jpg"></A>
+<BR><A HREF="images\10-01.jpg"><FONT COLOR="#000077"><B>Figure 10.1</B></FONT></A>&nbsp;&nbsp;A simple JavaServer Page.</P>
+<P>The servlet for this page simply opens the .jhtml file and outputs the data from the file to the client. In this case, because all of the data is HTML, the output process is a simple one. As the examples in the rest of this chapter show, this output process may be broken into several sections, depending on the Java code inserted into the page.
+</P>
+<P>The boldface type in the previous code shows that the Hello World example servlet extends the HttpServlet class and is defined in the pagecompile package. Both the package and the superclass of the servlet can be modified. These values are discussed in more detail later in this chapter. The code generated for a JavaServer Page is stored in a directory named for the package. By default, on the Java Web Server, this will be in the server directory under pagecompile.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading3"></A><FONT COLOR="#000077">PageCompileServlet</FONT></H4>
+<P>The PageCompile servlet has a simple job. It converts JSP into Java, compiles it, and executes it. The only real decision making that goes on is when the servlet decides to recompile the JavaServer Page. This decision is affected by a number of values, as diagrammed in Figure 10.2. First, the servlet checks if the page has ever been compiled. If not, it is compiled. If the page has been compiled but the compiled version is out of date, the page is recompiled.
+</P>
+<P>The page is recompiled when it changes, based on the constraint that the administrator can configure the servlet to wait for a minimum amount of time before checking whether the recompile needs to occur. In situations in which the page doesn&#146;t change often, increasing this minimum time may improve performance slightly because the check will be done less frequently. Recall that the page compiler has to compile the Java code the first time a JSP is accessed. This means that the very first user to access the page may experience a delay that others, accessing the page later, will not encounter. If an error occurs during the compilation process, the PageCompileServlet formats it and returns the error information to the client. This allows the developer to see errors during testing.</P>
+<P><A NAME="Fig2"></A><A HREF="images\10-02.jpg"><IMG SRC="images\10-02t.jpg"></A>
+<BR><A HREF="images\10-02.jpg"><FONT COLOR="#000077"><B>Figure 10.2</B></FONT></A>&nbsp;&nbsp;A page compiler decision tree.</P>
+<P>In addition to allowing the administrator to configure the minimum time to check whether a page changed, the Web server can provide other parameters for configuring the way that JavaServer Pages are treated. The parameters for the PageCompileServlet as implemented for the Java Web Server are listed in Table 10.1. Other Web servers may provide the same or different parameters than the ones listed here.
+</P>
+<P>Refer to the documentation for your Web server to determine what configuration parameters it provides for JavaServer Pages.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading4"></A><FONT COLOR="#000077">When to Use JavaServer Pages</FONT></H4>
+<P>One obvious question is, when should we use JSP in place of servlets? The answer, as usual in this type of decision, is a resounding, &#147;It depends.&#148; JSP is a great way to include dynamic information in the context of an HTML page. Unlike a servlet, the JSP doesn&#146;t require any changes to code in order to change the HTML output. This means that HTML designers can use well-defined Java code inside their HTML pages without necessarily knowing how to write a servlet from scratch. Also, because the PageCompileServlet does the compilation automatically, the development process is easier.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch09\09-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="10-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

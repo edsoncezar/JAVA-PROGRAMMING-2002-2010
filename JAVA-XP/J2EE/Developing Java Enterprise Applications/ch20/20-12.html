@@ -1,0 +1,281 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming with the Java Messaging Service</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The TransactedQueueSenderTest&#146;s actionPerformed method supports the new buttons.
+</P>
+<PRE>
+public void actionPerformed(ActionEvent evt)
+{
+    String cmd = evt.getActionCommand();
+
+    if(send_action.equals(cmd))
+    {
+        sendMessage(sendField.getText());
+    }
+    else if(queue_action.equals(cmd))
+    {
+        setQueue(queueField.getText());
+    }
+    else if(commit_action.equals(cmd))
+    {
+        try
+        {
+            <B>session.commit();</B>
+        }
+        catch(Exception exp)
+        {
+            System.out.println(exp);
+        }
+    }
+    else if(rollback_action.equals(cmd))
+    {
+        try
+        {
+            <B>session.rollback();</B>
+        }
+        catch(Exception exp)
+        {
+            System.out.println(exp);
+        }
+    }
+}
+</PRE>
+<P><A NAME="Fig3"></A><A HREF="images\20-03.jpg"><IMG SRC="images\20-03t.jpg"></A>
+<BR><A HREF="images\20-03.jpg"><FONT COLOR="#000077"><B>Figure 20.3</B></FONT></A>&nbsp;&nbsp;Transacted queue sender.</P>
+<P>Again, this is not the entire code for this example. If you want to see all of the code, refer to the CD-ROM. If you run this example, you will see that the messages sent by the user are not actually placed in the queue until the Commit button is pressed. If Rollback is pressed, any messages that were sent and not committed are removed from the system.
+</P>
+<P>Of course, to test these examples and see any results, you need a program that receives the messages. This requires the creation of a QueueReceiver.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading20"></A><FONT COLOR="#000077">The Queue Receiver</FONT></H4>
+<P>A QueueReceiver is a MessageConsumer with the added method getQueue for returning its associated queue. Otherwise, programmers interact with a QueueReceiver the same way that they would any other MessageConsumer, using receive messages or a MessageListener.
+</P>
+<P>The following example shows how a QueueReceiver is used with a MessageListener. This example uses Swing/JFC to create a list of received messages. The user is also able to set the queue to which the application is listening. This interface is pictured in Figure 20.4.</P>
+<P>The code for this example is similar to the QueueSender examples but contains sufficient differences to warrant inclusion of the majority of its methods. The import statements and the definition of WindowCloser have been left out of the text but are available on the CD-ROM with the complete example.</P>
+<P>As with the QueueSender example, the QueueReceiverTest defines instance variables for the relevant JMS entities, including the QueueReceiver object.</P>
+<P><A NAME="Fig4"></A><A HREF="images\20-04.jpg"><IMG SRC="images\20-04t.jpg"></A>
+<BR><A HREF="images\20-04.jpg"><FONT COLOR="#000077"><B>Figure 20.4</B></FONT></A>&nbsp;&nbsp;QueueReceiverTest.</P>
+<PRE>
+public class QueueReceiverTest extends JPanel
+ implements ActionListener,MessageListener
+{
+    JTextField queueField;
+    JList messageList;
+    DefaultListModel messages;
+
+    javax.jms.QueueSession session;
+    <B>javax.jms.QueueReceiver receiver;</B>
+    javax.jms.QueueConnection conn;
+    javax.jms.QueueConnectionFactory factory;
+    public static final String queue_action=&#147;queue&#148;;
+</PRE>
+<P>The constructor for this object performs the same JMS initialization as the sender. It also creates the text field used to assign the queue and a list for displaying the messages received.
+</P>
+<PRE>
+    public QueueReceiverTest(String user)
+    {
+        JLabel label;
+        JButton button;
+        JPanel tmp;
+        Context context;
+        Font f = new Font(&#147;Serif&#148;,Font.PLAIN,16);
+
+        setFont(f);
+
+        try
+        {
+            MiniJMSUtils.init(&#147;queuereceiver.properties&#148;);
+            context = MiniJMSUtils.context;
+
+            <B>factory
+             = (QueueConnectionFactory)
+                context.lookup(&#147;QueueConnectionFactory&#148;);
+
+            conn
+             = factory.createQueueConnection(user,null);
+
+            session
+            = conn.createQueueSession(false
+              ,Session.AUTO_ACKNOWLEDGE);</B>
+
+            if(session == null) throw new Exception();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+
+        setLayout(new BorderLayout(6,6));
+
+        messages = new DefaultListModel();
+
+        messageList = new JList();
+        messageList.setModel(messages);
+
+        add(new JScrollPane(messageList),&#147;Center&#148;);
+
+        queueField = new JTextField(20);
+        queueField.addActionListener(this);
+        queueField.setActionCommand(queue_action);
+
+        label = new JLabel(&#147;Queue:&#148;);
+
+        button = new JButton(&#147;Change&#148;);
+        button.addActionListener(this);
+        button.setActionCommand(queue_action);
+
+        tmp = new JPanel();
+        tmp.setLayout(new FlowLayout(FlowLayout.LEFT,6,0));
+
+        label.setFont(f);
+        queueField.setFont(f);
+        button.setFont(f);
+
+        tmp.add(label);
+        tmp.add(queueField);
+        tmp.add(button);
+
+        add(tmp,&#147;South&#148;);
+    }
+</PRE>
+<P>The setQueue method makes sure that any open receivers are closed. If this step isn&#146;t taken, the application can receive notification for messages in multiple queues. Once the existing receiver is closed, the requested Queue is looked up in the JNDI context. If found, the Queue is used to create a QueueReceiver. The program then registers a MessageListener with the QueueReceiver. This listener receives messages sent to the queue as notifications via the onMessage method.
+</P>
+<PRE>
+    public void setQueue(String name)
+    {
+        Queue queue=null;
+
+        try
+        {
+            messages.removeAllElements();
+
+            <B>if(receiver != null) receiver.close();
+
+            queue
+             = (Queue) MiniJMSUtils.context.lookup(name);
+
+            receiver = session.createReceiver(queue);</B>
+
+            if((queue == null)
+                ||(receiver==null)) throw new Exception();
+
+            <B>receiver.setMessageListener(this);</B>
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+    }
+</PRE>
+<P>The onMessage method is called whenever a message arrives for the receiver&#146;s queue. In this case, the string value of the message is displayed in the list on the user interface.
+</P>
+<PRE>
+    <B>public void onMessage(Message msg)
+     {</B>
+        try
+        {
+            messages.addElement(msg.toString());
+        }
+        catch(Exception exp)
+        {
+            JOptionPane.showMessageDialog(this
+                                     ,exp.toString()
+                                     ,&#147;Receive Error&#148;
+                                     ,JOptionPane.ERROR_MESSAGE);
+        }
+   <B>}</B>
+</PRE>
+<P>The actionPerformed method handles user interaction with the queue text field.
+</P>
+<PRE>
+    public void actionPerformed(ActionEvent evt)
+    {
+        String cmd = evt.getActionCommand();
+
+        if(queue_action.equals(cmd))
+        {
+            setQueue(queueField.getText());
+        }
+    }
+</PRE>
+<P>When the window for this application is closed, the WindowCloser helper object calls the QueueReceiverTest&#146;s close method. This method closes the JMS entities that it created.
+</P>
+<PRE>
+    public void close()
+    {
+        try
+        {
+            receiver.close();
+            session.close();
+            conn.close();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+        }
+    }
+</PRE>
+<P>The main method creates a QueueReceiverTest, using command-line arguments or a default for the user name. The user interface is displayed, and a window listener is assigned to the window to handle the close box. This listener calls the close method discussed previously.
+</P>
+<PRE>
+    public static void main(String s[])
+    {
+        JFrame frame;
+        QueueReceiverTest panel;
+        String user=&#147;QueueReceiverTest&#148;;
+
+        if(s.length&gt;0) user = s[0];
+
+        frame = new JFrame(user);
+
+        panel = new QueueReceiverTest(user);
+
+        //So we can catch errors in a log file
+        System.setErr(System.out);
+
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        frame.setForeground(Color.black);
+        frame.setBackground(Color.lightGray);
+        frame.getContentPane().add(panel,&#147;Center&#148;);
+
+        frame.pack();
+        frame.setVisible(true);
+        frame.addWindowListener(new WindowCloser(panel));
+    }
+}
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-11.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-13.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

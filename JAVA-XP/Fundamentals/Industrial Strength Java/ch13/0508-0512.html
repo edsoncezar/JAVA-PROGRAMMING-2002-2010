@@ -1,0 +1,306 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0503-0507.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0513-0517.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-508"><P>Page 508</P></A>
+
+
+
+<H4><A NAME="ch13_ 8">
+A Candidate Class for Threading
+</A></H4>
+
+<P>Listing 13.3 presents a simple (and rather artificial) example to consider: an object
+that generates a checksum of all the bytes in a file. This might be used as a quick check
+for data file corruption, for instance. The checksum calculated is a number generated
+by adding the values of all the bytes in the file (ignoring overflows).
+</P>
+
+<P>Listing 13.3 The unthreaded FileChecksum Class
+</P>
+<PRE>
+import java.io.*;
+
+//A simple file checksum object
+public class FileChecksum {
+
+//object variables
+private long length;        //of the File
+private long sum;
+
+//constructor
+public FileChecksum(File f)
+        throws FileNotFoundException {
+        //get the length of the file
+        length = f.length();
+
+        //initialize the sum to 0
+        sum = 0;
+
+        //Open a FileInputStream for this file
+        FileInputStream fis = new FileInputStream(f);
+
+        //Loop through all of the bytes in the file
+        //and generate a checksum.
+        try {
+                for(int i=0; i&lt;length; i++)
+                        sum += (long)fis.read();
+        }
+
+        catch(IOException e) { }
+
+        finally {
+                try {
+                        fis.close();
+</PRE>
+
+
+<A NAME="PAGENUM-509"><P>Page 509</P></A>
+
+
+<PRE>
+
+                }
+                catch(IOException e) { }
+        }
+}
+
+//object methods
+public long getChecksum() {
+        return sum;
+}
+}
+</PRE>
+
+<P>In order to calculate the checksum, the constructor must read every byte from the
+file. With a large file, this method could take quite some time to execute. Much of that
+time might be spent waiting for the next block of the file to be read from disk; this time
+could be used to perform other processing. What is required is a way to enable the
+checksum operation to run in parallel with other operations. The section entitled &quot;A
+Threaded FileChecksum&quot; specifies how to extend the FileChecksum class to use a separate thread
+of control.
+</P>
+
+<H3><A NAME="ch13_ 9">
+Threads in Java
+</A></H3>
+
+<P>In some languages that include support for threads, almost any set of statements can
+be run in parallel by simply bracketing them with specific keywords, as in the fragment of
+a sorting algorithm in Concurrent Pascal shown in listing 13.4.
+</P>
+
+<P>Listing 13.4 A Concurrent Pascal Cobegin/end Block
+</P>
+<PRE>
+begin { sort block }
+  cobegin { do the following statements concurrently }
+    sort(1, n);
+    sort(n+1, limit);
+  coend   { end of concurrent stuff }
+  merge(1, n+1, limit);
+end. {the program }
+</PRE>
+
+<P>In Java's object-oriented environment, however, separate threads, like anything else,
+are represented as objects. Parallel processing is accomplished by creating objects that
+use threads to perform their own processing.
+</P>
+
+
+<A NAME="PAGENUM-510"><P>Page 510</P></A>
+
+
+
+<H4><A NAME="ch13_ 10">
+The Thread Object and the Runnable Interface
+</A></H4>
+
+<P>In Java, the creation and control of threads is performed via the java.lang.Thread
+class. Just to be clear, the capitalized term, &quot;Thread,&quot; or &quot;Thread object,&quot; refers only to
+the java.lang.Thread class and its instances; &quot;thread&quot; refers to a thread of control.
+Every thread of control in a Java Virtual Machine (VM) is associated with a Thread
+object. Creating a Thread object is the only way to create a separate thread of control. A
+newly created Thread object can't perform any parallel processing unless the code that is to
+be run in parallel is indicated to the object. This is accomplished by passing the
+Thread constructor an object that implements the java.lang.Runnable interface.
+</P>
+
+<P>An initial Thread object is created when an application starts. This thread then calls
+main() (or in the case of an applet, init()). Additional Thread objects can be created wherever
+an object needs to perform processing in parallel with other threads. Each new thread
+calls the run() method of the associated Runnable object. Listing 13.5 shows the definition
+of the Runnable interface.
+</P>
+
+<P>Listing 13.5 The Java API Definition of java.lang.Runnable
+</P>
+<PRE>
+public abstract interface Runnable {
+        //Any Runnable object provides this
+        //method.  A new thread will call this
+        //method.
+        public abstract void run();
+}
+</PRE>
+
+<P>Understanding which run() method is called by a new thread is complicated because
+the Thread class itself provides a run() method and implements the Runnable interface.
+The two possible situations are
+</P>
+
+<OL>
+<LI>          A new object is created that is of the Thread class (or a subclass). It is not
+passed any Runnable object when it is constructed. The new thread will call the
+run() method of the new Thread object.
+<LI>     A new Thread object is created and passed an existing Runnable object. The
+new thread will call the run() method of that Runnable object.
+</OL>
+
+<P>The run() method contains the code executed by the new thread which can contain calls
+to methods of &quot;this&quot; or any other object. A run() method indicates where a newly
+created Thread enters a Java program in the same way that main() is indicative of where the
+initial thread starts.
+</P>
+
+<A NAME="PAGENUM-511"><P>Page 511</P></A>
+
+<H4><A NAME="ch13_ 11">
+Constructing New Threads
+</A></H4>
+
+<P>The Thread class provides the following constructors:
+</P>
+
+<P>Listing 13.6 The Constructors for java.lang.Thread </P>
+<PRE>
+//Construct a new Thread.
+public Thread()
+
+//Construct a new Thread and pass it an object that
+//implements the Runnable interface.
+public Thread(Runnable target)
+
+//Construct a new Thread as a member of the given
+//ThreadGroup to run the given Runnable object.
+public Thread(ThreadGroup group, Runnable target)
+
+//Construct a new Thread with the given name.
+public Thread(String name)
+
+//Construct a new Thread in the given ThreadGroup
+//with the given name.
+public Thread(ThreadGroup group, String name)
+
+//Construct a new Thread with the given name
+//to run the given Runnable object.
+public Thread(Runnable target, String name)
+
+//Construct a new Thread as a member of the given
+//ThreadGroup, with the given name,
+//to run the given Runnable object.
+public Thread(ThreadGroup group,
+              Runnable target,
+              String name)
+</PRE>
+
+<P>Every Thread object has an associated name; the name may
+be passed when the Thread object is created; it can be changed
+and read with setName() and getName(), defined in listing 13.7.<BR>
+</P>
+<P>
+
+<CENTER>
+<TABLE BGCOLOR="#FFFF99">
+<TR><TD><B>
+NOTE
+</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+ThreadGroups are discussed later, in the section about
+Thread Grouping; a ThreadGroup is an object that
+associates a set of Threads into a group.
+</BLOCKQUOTE></TD></TR>
+</TABLE></CENTER>
+</P>
+
+
+<A NAME="PAGENUM-512"><P>Page 512</P></A>
+
+
+
+<P>Listing 13.7 Methods Operating on a Thread's Name </P>
+<PRE>
+//Set the Thread's name to the given String which
+//may not be null.
+public final void setName(String name);
+
+//Return the Thread's current name.
+public final String getName();
+</PRE>
+
+<P>If a name is not specified, the Thread constructors generate one. Names do not need to
+be unique and are mainly useful in debugging. Thread's toString() method incorporates
+the name in the returned String.
+</P>
+
+<P>Java has no limit to the number of Threads that may be created, although different
+VM implementations might impose their own limits according to the limitations of
+the underlying operating system on which they run. If the Java VM is a single
+operating system process, for example, and each java thread requires an equivalent operating
+system thread, then the maximum number of Java threads is limited to the maximum permitted
+by the operating system. In practice any such limit is not likely to be a problem, except
+in very large applications with hundreds of threads.
+</P>
+
+<H4><A NAME="ch13_ 12">
+A Threaded FileChecksum
+</A></H4>
+
+<P>To demonstrate the use of a thread, the FileChecksum class can be extended as in
+listing 13.8 so that the checksum calculation is run as a separate thread. This enables the
+program to proceed with other work while the checksum is calculated.
+</P>
+
+<P>Listing 13.8 A Threaded FileChecksum Class </P>
+<PRE>
+import java.io.*;
+
+//File checksum object which uses a Thread to calculate the
+//checksum in parallel with other processing.
+public class FileChecksum implements Runnable {
+
+//object variables
+private long                length;        //of the File
+private long                sum;
+
+private boolean             finished;
+public  Thread              thread;
+private FileInputStream     fis;
+</PRE>
+
+
+<P><CENTER>
+<a href="0503-0507.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0513-0517.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

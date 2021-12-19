@@ -1,0 +1,235 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:A Four-Tier Online Store</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>Because the purchase has occurred, the shopping cart is cleaned out so that the client can begin shopping anew.
+</P>
+<PRE>
+    protected void doPurchase(Hashtable items
+                                ,ShoppingCart cart
+                                ,Hashtable oldCartItems
+                                ,String user
+                                ,PrintWriter out
+                                ,String requestURL
+                                ,String referer)
+    {
+        ShoppingCartItem item;
+        ShoppingCartItem curItem;
+        ShoppingCartItem cartItems[]=null;
+        int i,max=0;
+        Enumeration curItems;
+        float total=0;
+        boolean failed=false;
+        boolean badCredit=false;
+        
+        curItems = items.elements();
+        try
+        {
+            while((curItems!=null)&amp&amp(curItems.hasMoreElements()))
+            {
+                curItem = (ShoppingCartItem) curItems.nextElement();
+                cart.addItem(curItem);
+            }
+        }
+        catch(Exception exp)
+        {
+            failed = true;
+        }
+
+        if(!failed)
+        {
+            try
+            {
+                if(!cart.purchaseCart(user)) failed = true;
+            }
+            catch(BadCreditException exp)
+            {
+                failed = true;
+                badCredit = true;
+            }
+            catch(Exception exp)
+            {
+                failed = true;
+            }
+        }
+
+        if(failed)
+        {
+            if(badCredit)
+            {
+                outputErrorMessage(out
+                    ,&#147;You do not have enough credit"
+                          +&#147; to make this purchase."
+                    ,referer);
+            }
+            else
+            {
+                outputErrorMessage(out
+                    ,&#147;Server failure, unable to purchase items."
+                    ,referer);
+            }
+            
+            return;
+        }
+    
+        out.println(&#147;&ltHTML&gt");
+        out.println(&#147;&ltHEAD&gt");
+        out.println(&#147;&ltTITLE&gt");
+        out.println(&#147;Purchase Confirmed");
+        out.println(&#147;&lt/TITLE&gt");
+        out.println(&#147;&lt/HEAD&gt");
+        out.println(&#147;&ltBODY TEXT=\"#000000\&#147; BGCOLOR=\"#FFFFFF\"");
+        out.println(" LINK=\"#FF0000\" VLINK=\"#800080\"&gt");
+        out.println("&ltCENTER&gt");
+        out.println("&ltTABLE WIDTH=500 BORDER=0&gt");
+        out.println("&ltTR&gt");
+        out.println("&ltTD&gt");
+        
+        out.println("&ltCENTER&gt&ltH1&gtPurchase Confirmed&lt/H1&gt&lt/CENTER&gt");
+        out.print("Thank you for your purchase of the ");
+        out.println("following items:&ltBR&gt");
+        out.println("&ltTABLE&gt");
+        out.println("&ltTR&gt");
+        out.println("&ltTH&gtDescription&lt/TH&gt");
+        out.println("&ltTH&gtQuantity&lt/TH&gt");
+        out.println("&ltTH&gtPrice&lt/TH&gt");
+        out.println("&ltTH&gtTotal&lt/TH&gt");
+        out.println("&lt/TR&gt");
+        
+        try
+        {
+            cartItems = cart.getItems();
+        }
+        catch(Exception exp)
+        {
+        }
+        
+        if(cartItems != null) max = cartItems.length;
+        
+        for(i=0;i&ltmax;i++)
+        {
+            curItem = cartItems[i];
+        
+            if(curItem.quantity &gt 0)
+            {
+                out.println("&ltTR&gt");
+                out.print("&ltTD&gt");
+                out.print(curItem.desc);
+                out.println("&lt/TD&gt");
+                out.print("&ltTD&gt");
+                out.print(curItem.quantity);
+                out.println("&lt/TD&gt");
+                out.print("&ltTD&gt");
+                out.print(formatter.format(curItem.price));
+                out.println("&lt/TD&gt");
+                out.print("&ltTD&gt");
+                out.print(formatter.format(curItem.getTotal()));
+                out.println("&lt/TD&gt");
+                out.println("&lt/TR&gt");
+        
+                total += curItem.getTotal();
+            }
+        }
+        
+        out.println("&ltTR&gt");
+        out.println("&ltTD&gt&lt/TD&gt");
+        out.println("&ltTD&gt&lt/TD&gt");
+        out.println("&ltTD&gt&ltB&gtTotal&lt/B&gt&lt/TD&gt");
+        out.print("&ltTD&gt&ltB&gt");
+        out.print(formatter.format(total));
+        out.println("&lt/B&gt&lt/TD&gt");
+        out.println("&lt/TR&gt");
+
+        out.println("&lt/TABLE&gt");
+        
+        if((referer!=null)&amp&amp(referer.length()&gt0))
+        {
+            out.print("&ltCENTER&gt&ltH4&gt&ltA HREF=\"");
+            out.print("/shopcart/home/index.jhtml");
+            out.println("\"&gtBack To Store Front&lt/A&gt&lt/H4&gt&lt/CENTER&gt");
+        }
+        
+        out.println("&lt/TD&gt");
+        out.println("&lt/TR&gt");
+        out.println("&lt/TABLE&gt");
+        out.println("&lt/CENTER&gt");
+        out.println("&lt/BODY&gt");
+        out.println("&lt/HTML&gt");
+        out.close();
+        
+        //reset the cart
+        oldCartItems.clear();
+    }
+}
+</PRE>
+<P>This servlet is rather long because of the HTML it contains. We have kept the code together in this example to make it easier to understand. In a larger commercial version of the same servlet, rather than add any more features, a store requiring more actions might consider breaking the responsibility for managing the cart into several servlets. This would make it easier for the programmer to maintain the site.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading12"></A><FONT COLOR="#000077">Inventory Report</FONT></H4>
+<P>The final servlet in this example is called Inventory Servlet. This servlet uses the ShoppingCart bean to retrieve the current inventory and display it. All of the code from this servlet should look familiar to you after reading the description of the ShoppingCartServlet.
+</P>
+<PRE>
+package shopcart.servlets;
+ 
+//imports removed to save space
+
+public class InventoryServlet extends HttpServlet
+implements SingleThreadModel
+{
+    protected Context ctx;
+    protected ShoppingCartHome home;
+    protected DebugLog logger;
+    protected NumberFormat formatter;
+</PRE>
+<P>The init methods sets up the connection to the debug server and the ShoppingCartHome.
+</P>
+<PRE>
+    public void init(ServletConfig config) throws ServletException
+     {
+        super.init(config);
+        
+        String logServer;
+        
+        logServer = getInitParameter(&#147;logserver&#148;);
+        
+        logger = new DebugLog();
+        logger.logTo(logServer);
+        
+        formatter = NumberFormat.getCurrencyInstance();
+        
+        findHome();
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="25-12.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="25-14.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

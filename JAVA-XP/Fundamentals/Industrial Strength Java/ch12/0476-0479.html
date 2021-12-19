@@ -1,0 +1,540 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Distributed Computing with Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0473-0475.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0480-0482.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-476"><P>Page 476</P></A>
+
+
+
+
+
+
+
+<P>These interfaces are implemented by the two new stream classes:
+
+</P>
+
+
+
+
+<PRE>
+
+public class ObjectOutputStream extends OutputStream
+
+                     implements ObjectOutput,
+
+                          ObjectStreamContents
+
+
+
+public class ObjectInputStream extends InputStream
+
+                     implements ObjectInput,
+
+                          ObjectStreamContents
+
+</PRE>
+
+
+
+
+<P>The classes are complementary. Items written to ObjectOutputStream are
+
+reconstituted from the stream by ObjectInputStream in the order in which they were written.
+
+</P>
+
+
+
+<P>The constructors of both classes take an existing stream as an argument,  which
+
+allows great flexibility in the way the classes are used. The passed stream may be a
+
+TCP/IP connection to a remote VM, allowing the transfer of the streamed object's state to
+
+another host. Alternatively, the stream might be a disk-based file, providing persistence by
+
+storing and retrieving the streamed object's state.
+
+</P>
+
+
+
+<P>The ObjectOutputStream class introduces the writeObject() method to write objects to
+
+the stream, declared as follows:
+
+</P>
+
+
+
+
+<PRE>
+
+public final void writeObject(Object obj) throws IOException
+
+</PRE>
+
+
+
+
+<P>This is complemented by readObject() in the ObjectInputStream class, declared
+
+as follows:
+
+</P>
+
+
+
+
+<PRE>
+
+public final Object readObject() throws OptionalDataException,
+
+                        ClassNotFoundException,
+
+                        IOException
+
+</PRE>
+
+
+
+
+<P>Deserializing an object is equivalent to creating a new object of the same class with
+
+its default (no arguments) constructor. The fields are then set from the values in the
+
+stream, starting with those of any superclasses and finishing with those of the most derived class.
+
+</P>
+
+
+
+<P>Other methods are provided to allow most aspects of the streaming process to be
+
+customized. For most applications, however, such as the following example, the default
+
+behavior is quite sufficient. The JDK 1.1 documentation provides the full definitions of the
+
+classes and interfaces so it is not duplicated here.
+
+</P>
+
+
+
+<B>
+
+An Example of Persistence
+
+</B>
+
+
+
+<P>As was mentioned previously, the Object Serialization Services have been
+
+packaged separately from the RMI services because they are useful in other contexts, such as
+
+the implementation of object persistence. To demonstrate this aspect of the new streams,
+
+this section adds persistence to the address book example so that when the server process
+
+is 
+
+</P>
+
+<A NAME="PAGENUM-477"><P>Page 477</P></A>
+
+
+
+
+
+
+
+<P>stopped and restarted, the address data is still available.
+
+</P>
+
+
+
+<P>Two methods, write() and read(), are added to the
+
+AddressBookImpl class to implement persistence (see listing 12.6). Notice that the names do not appear in the
+
+AddressBook interface. This means they can be called only from methods running in the same Java
+
+VM as the AddressBookImpl object (that is, on the server) and not from your
+
+AddressClient object across the network. They are part of the local interface of AddressBookImpl
+
+only, not its remote interface.
+
+</P>
+
+
+
+<P>Listing 12.6 The AddressBookImpl write() Method
+
+</P>
+
+
+<PRE>
+
+public void write(String filename){
+
+    try {
+
+        FileOutputStream   f = new FileOutputStream(filename);
+
+        ObjectOutputStream s = new ObjectOutputStream(f);
+
+        s.writeObject(addresses);
+
+        s.flush();
+
+    }
+
+
+
+    catch (IOException e){
+
+        System.out.println(&quot;Exception while Writing&quot;);
+
+        return;
+
+    }
+
+}
+
+</PRE>
+
+
+
+
+<P>Individual Address entries are stored in the Hashtable &quot;addresses,&quot; which is a private
+
+field of the AddressBook class (see listing 12.7). The AddressBook.write() method first
+
+creates a FileOutputStream with the passed file name, and then it passes the stream to the
+
+constructor of the ObjectOutputStream. With one call to s.writeObject() the entire contents
+
+of the Hashtable are written to the file, neatly preserving its structure. This is
+
+significantly easier than iterating through an enumeration of the Hashtable and Addresses and
+
+explicitly writing each field.
+
+</P>
+
+
+
+<P>Listing 12.7 The AddressBookImpl read() Method
+
+</P>
+
+
+<PRE>
+
+public void read(String filename)
+
+    {
+
+    try {
+
+        FileInputStream in = new FileInputStream(filename);
+
+        ObjectInputStream s = new ObjectInputStream(in);
+
+        addresses = (Hashtable)s.readObject();
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-478"><P>Page 478</P></A>
+
+
+
+
+
+
+
+<P>Listing 12.7 Continued
+
+</P>
+
+
+<PRE>
+
+    }
+
+
+
+    catch (FileNotFoundException e){
+
+        addresses = new Hashtable();
+
+        System.out.println(&quot;No input file found; Creating a new
+
+                  &Acirc;one...&quot;);
+
+        return;
+
+    }
+
+    catch (IOException e){
+
+        System.out.println(&quot;Exception while Reading&quot;);
+
+        return;
+
+    }
+
+    catch (ClassNotFoundException e){
+
+        System.out.println(&quot;ClassNotFoundException while Reading&quot;);
+
+        return;
+
+    }
+
+}
+
+</PRE>
+
+
+
+
+<P>The AddressBook.read() method is very similar to the write() method, except that
+
+read() uses the ObjectInputStream, and the readObject() method is used to create an instance
+
+of the Hashtable containing the addresses. The FileNotFoundException is thrown when
+
+an existing set of addresses doesn't exist or cannot be found.
+
+</P>
+
+
+
+<P>The corresponding catch clause handles the situation by creating an empty Hashtable.
+
+</P>
+
+
+
+<P>The constructor, previously empty, now contains a call to read(). Thus when
+
+an AddressBookImpl is created, it tries to initialize itself with any previously
+
+entered addresses. Similarly, the calls that may modify the stored addresses now invoke the
+
+write() methods, ensuring that any changes are immediately saved to disk (see listing 12.8).
+
+</P>
+
+
+
+<P>Listing 12.8 The Modified AddressBookImpl Methods
+
+</P>
+
+
+<PRE>
+
+public AddressBookImpl() {
+
+    read(&quot;address.dat&quot;);
+
+}
+
+
+
+public void add(Address iAddress) {
+
+    addresses.put(iAddress.getName(), iAddress);
+
+    write(&quot;address.dat&quot;);
+
+}
+
+
+
+public void delete(String iName) {
+
+    addresses.remove(iName);
+
+    write(&quot;address.dat&quot;);
+
+}
+
+</PRE>
+
+
+
+
+
+
+<A NAME="PAGENUM-479"><P>Page 479</P></A>
+
+
+
+
+
+
+
+<P>Obviously this is a simpleminded approach; the &quot;hard-coded&quot; file name would be out
+
+of place in anything but a pedagogical example, and for higher volumes of data it
+
+would probably be inefficient to write to disk after each modification. Nonetheless, this
+
+example illustrates that persistence has been added to Java by the Object Serialization Services in
+
+a very elegant and natural way.
+
+</P>
+
+
+
+<H4><A NAME="ch12_ 21">
+
+RMI Conclusion
+
+</A></H4>
+
+
+
+<P>The addition of Remote Method Invocation and Object Serialization Services to Java
+
+has seriously strengthened its claim to being the preeminent network programming
+
+language. The original innovation of downloadable, portable byte code has been complemented
+
+by the new capability to seamlessly transfer data in a similar manner (the Object
+
+Serialization Services) and to transparently communicate with the objects once transferred (RMI).
+
+</P>
+
+
+
+<P>Perhaps for the first time, programmers have been given distributed object support as
+
+part of a standard language distribution. How soon it takes them to explore the possibilities
+
+and develop a new generation of applications to take advantage of them remains to be seen.
+
+It is certainly true that the introduction of these services comes at an appropriate time,
+
+given the rapidly growing popularity of the Internet.
+
+</P>
+
+
+
+<P>In the past, distributed computing was of interest to a small number of
+
+programmers, mostly those working on in-house systems for larger corporations with large
+
+networks. With low-cost Internet connections becoming common, even domestic computers
+
+have access to huge networked resources. RMI is likely to fuel the development of the
+
+first generation of &quot;personal&quot; distributed computing software, with a potential market
+
+of millions of copies.
+
+</P>
+
+
+
+<P>By placing RMI in the core component of the JDK from version 1.1 onwards,
+
+JavaSoft obviously intends for all conforming Java implementations to support it, and for
+
+developers to be able to rely on its availability. At the time of this writing, Win32 and
+
+Solaris versions were available, with others such as OS/2 and Linux set to follow.
+
+</P>
+
+
+
+<P>If RMI has an Achilles' heel, it is a lack of interoperability with existing systems and
+
+other languages. To achieve such a clean, easy-to-use set of services, JavaSoft started with
+
+a clean slate and created a very Java-specific solution. For personal software, this is
+
+not much of an issue. Inside corporate enterprises and for large systems, it is likely to
+
+meet with stiff competition from Java/IDL CORBA based solutions, for reasons which
+
+will become clear in the next section.
+
+</P>
+
+
+
+<P><CENTER>
+
+<a href="0473-0475.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0480-0482.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

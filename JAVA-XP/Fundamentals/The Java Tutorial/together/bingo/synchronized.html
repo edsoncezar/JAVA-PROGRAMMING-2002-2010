@@ -1,0 +1,313 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Using Synchronized Code Segments</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="threads.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="playerthreads.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Using Synchronized Code Segments
+</h2>
+<p>
+<blockquote>
+
+Two objects in the Game application can be accessed
+by concurrently running threads: the
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/game/RingMaster.java"><code>RingMaster</code></a>
+and the
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/game/Roster.java"><code>Roster</code></a>.
+The <code>RingMaster</code> is the most central class of the
+whole Game application. Its methods can be called from many
+different threads: the <code>GamesThread</code>, the
+<code>BallAnnouncer</code> thread, and indirectly by
+any number of Player threads running in different VMs.
+Similarly, the <code>Roster</code> object, which contains a list
+of all players registered for the current game, can be modified
+by RMI calls made from any of the Player threads running
+in different VMs.
+
+<p>
+The Game application must take precautions to ensure that
+method calls on <code>RingMaster</code> and <code>Roster</code>
+are "thread-safe". That is, the Game must ensure that one
+thread cannot modify one of these objects while another thread
+is inspecting or modifying it.
+For instance, the Game must ensure that registration
+for one player is completed before the registration for
+another begins, otherwise two players may end up with the
+same ID or worse.
+The Game ensures thread-safety by enclosing accesses
+on the <code>RingMaster</code> and the <code>Roster</code>
+within synchronized code segments.
+
+<p>
+The synchronized code segments in the Game application
+appear in two forms.
+First, the <code>RingMaster</code> contains many
+<code>synchronized</code> methods. Second,
+the <code>RegistrarImpl</code> class contains two
+<code>synchronized</code> blocks: one that synchronizes
+<code>RingMaster</code> and the other synchronizes
+on <code>Roster</code>.
+
+<h4>RingMaster's Synchronized Methods</h4>
+<blockquote>
+Many of <code>RingMaster</code>'s methods are marked with the
+<code>synchronized</code> keyword.
+Among them are the following two methods. The first changes the current
+"game state" and the other returns it:
+<blockquote>
+<pre>
+synchronized boolean gameInProgress() {
+    return (state == PLAYING || state == CHECKINGFORWINNER) ? true : false;
+}
+synchronized void setGameResumed() {
+    if (state == CHECKINGFORWINNER)
+        state = PLAYING;
+}
+</pre>
+</blockquote>
+You can understand why these methods are synchronized by analyzing
+the following scenario assuming that the two methods involved aren't
+synchronized. This scenario involves two threads running concurrently
+one calls <code>gameInProgress</code> while the other simultaneously
+calls code>setGameResumed</code>.
+Assume that <code>state</code>
+is <code>CHECKINGFORWINNER</code> when
+the first thread calls <code>gameInProgress</code>.
+The first half of the <code>if</code>
+statement in the <code>gameInProgress</code> completes and evaluates
+to <code>false</code> because <code>state</code> is not
+<code>PLAYING</code>, it's <code>CHECKINGFORWINNER</code>.
+At this point, the second thread calls <code>setGameResumed</code> which
+completes and sets the <code>state</code> to <code>PLAYING</code>.
+Now the first thread resumes and completes the second half of
+the <code>if</code> statement which also evaluates to <code>false</code>.
+In this scenario, the <code>gameInProgress</code> inaccurately returns
+<code>false</code>. So, as you can see,
+it's possible to create a situation where one thread thinks that the
+game is over and another thread thinks that the game is still in progress.
+This could create a BINGO mess.
+<p>
+By synchronizing these two methods, the Java platform ensures
+that the first method call completes before the second can begin.
+So in the above scenario, <code>gameInProgress</code>
+fully completes (and returns <code>true</code>)
+before <code>setGameResumed</code> is allowed to begin.
+Thus the problem encountered above is prevented.
+
+<p>
+The list of methods in <code>RingMaster</code> that aren't
+<code>synchronized</code> is as interesting as those that are.
+The following methods in <code>RingMaster</code>
+are similar to the two shown previously in that they get
+or set game state. However, these two methods are not <code>synchronized</code>:
+<blockquote>
+<pre>
+boolean isCheckingForWinner() {
+    return (state == CHECKINGFORWINNER) ? true : false;
+}
+void setCheckingForWinner() {
+    state = CHECKINGFORWINNER;
+}
+</pre>
+</blockquote>
+Using <code>synchronized</code> has an impact on performance,
+thus you should only use it when necessary. It's not
+necessary to synchronize these two methods because they access
+<code>state</code> once so even if two threads do
+call these two methods simulataneously the results are
+still valid.
+
+<p>
+<hr>
+<strong>Try This</strong>: Look at the other methods in
+<code>RingMaster</code> and see if you can figure out why each
+method is <code>synchronized</code> or not.
+<hr>
+<p>
+</blockquote>
+
+<h4>RegistrarImpl's Synchronized Blocks</h4>
+<blockquote>
+The 
+<a href="http://docs.rinet.ru/Jtuta/together/bingo/example-swing/bingo/game/RegistrarImpl.java"><code>RegistrarImpl</code></a>
+class contains two <code>synchronized</code> blocks.
+One that synchronizes on <code>RingMaster</code> and one that
+synchronizes on <code>Roster</code>.
+Both of these blocks are within remote methods--methods in the Game that
+are called remotely from the Player application--and ensure that multiple
+Players calling these methods concurrently do not change the
+<code>RingMaster</code> or the <code>Roster</code> in incompatible ways.
+<p>
+The <code>mayIPlay</code> method, shown below, changes the <code>Roster</code> by
+adding a new player to the list. The bold code can modify the
+<code>Roster</code> object so it can only be executing in one
+thread at a time. Thus it is encapsulated within a block of code
+that is synchronized on <code>Roster</code>.
+<blockquote>
+<pre>
+public Ticket mayIPlay(String playerName, int numCards, long seed)
+                               throws RemoteException
+{
+
+    if (!ringMaster.ready())
+        return new Ticket("BINGO server not ready. You can't play.");
+    else if (!ringMaster.isRegistering())
+        return new Ticket("Registration not open. You can't play.");
+
+    if (numCards > gameParameters.getMaxCards())
+        numCards = gameParameters.getMaxCards();
+
+<strong>    synchronized (roster) {
+        if (roster.size() == gameParameters.getMaxPlayers())
+            return new Ticket("Game full. You can't play.");
+
+        Card[] cards = new Card[numCards];
+        Random generator = new Random(seed);
+
+        for (int i = 0; i < numCards; i ++)
+            cards[i] = new Card(generator);
+
+        ringMaster.signTheCards(cards);
+
+        PlayerRecord p = new PlayerRecord(roster.nextPlayerID(), playerName, numCards);
+        String welcomeMessage = "Welcome to game # " + ringMaster.getGameNumber() + ".";
+        Ticket ticket = new Ticket(welcomeMessage, p.ID, cards);
+        roster.addElement(p, ringMaster);
+        return ticket;
+    }</strong>
+}
+</pre>
+</blockquote>
+The Java runtime ensures that only one thread can 
+access the synchronized object at a time. So when one thread
+enters the synchronized block, accesses to that
+object by other threads are blocked until the original thread
+exits the synchronized block.
+[PENDING: verify previous statement, and figure out if synch'ed blocks
+block out all method calls on the object or just synch'ed ones]
+
+<p>
+<code>RegistrarImpl</code> contains another synchronized block
+in its <code>BINGO</code> method which is called by a Player to
+claim a winning card.
+The synchronized block in this method synchronizes on <code>RingMaster</code>.
+The code within this block modifies and checks the game state several
+times within this block and must halt the rest of the game while
+verifying the BINGO claim.
+<blockquote>
+<pre>
+public Answer BINGO(int playerID, Card c) throws RemoteException {
+
+    PlayerRecord p = roster.searchForPlayerWithID(playerID);
+
+    if (p == null)
+        return new Answer(false, "Can't find player with ID: " + playerID + ".");
+
+    if (p.wolfCries >= MAX_WOLF_CRIES)
+        return new Answer(false, "Sorry, wolf cryer, you're out of the game.");
+
+<strong>    synchronized (ringMaster) {
+
+        ringMaster.setCheckingForWinner();
+
+        if (ringMaster.verify(c)) {
+
+            ringMaster.setGameOver();
+            return new Answer(true, "You won! Congratulations!");
+
+        } else {
+
+            p.wolfCries++;
+            ringMaster.setGameResumed();
+            ringMaster.sendPlayerStatusMessage(p);
+            if (p.wolfCries == MAX_WOLF_CRIES) {
+                return new Answer(false, "You've cried wolf 3 times. You're out.");
+            } else {
+                return new Answer(false, "You cried wolf..." +
+                                  (MAX_WOLF_CRIES - p.wolfCries) +
+                                  " more and you're out.");
+            }
+        }
+    } </strong>
+}
+</pre>
+</blockquote>
+</blockquote>
+
+<h4>Synchronized Block or Synchronized Method</h4>
+<blockquote>
+[PENDING: this section is under construction]
+</blockquote>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="threads.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="playerthreads.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="Putting It All Together | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>BINGO!</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

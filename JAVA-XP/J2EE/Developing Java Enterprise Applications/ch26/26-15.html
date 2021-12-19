@@ -1,0 +1,243 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:MiniJMS: A Java Messaging Service Provider</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-14.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-16.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<PRE>
+    //Returns null if no message to get.
+    public Message nextMessageFor(String id)
+        throws JMSException
+    {
+        Vector msgs;
+        Message retVal = null;
+        long now,expires;
+
+        msgs = (Vector) messages.get(id);
+
+        if(msgs != null)
+        {
+            synchronized(msgs)
+            {
+                now = System.currentTimeMillis();
+
+                <B>if(msgs.size()&gt0)
+                {
+                    retVal = (Message) msgs.elementAt(0);
+                    msgs.removeElementAt(0);
+
+                    expires = retVal.getJMSExpiration();
+
+                    if((expires &gt 0)&amp&amp(expires&ltnow))
+                    {
+                        retVal = null;
+                    }
+                }
+                else
+                {</B>
+                    try
+                    {
+                        <B>msgs.wait();</B>
+                    }
+                    catch(Exception ignore)
+                    {
+                    }
+                }
+            }
+        <B>}</B>
+
+        return retVal;
+    }
+</PRE>
+<P>When the store is told to send a message, it does a number of things. The messages destination name is retrieved. Then the destinations hash table is queried for any sessions registered for the destination. The message is assigned a message number. If the message is persistent, it is saved to disk and a record indicating its location is stored in the databases MESSAGES table. Finally, if any sessions are registered listeners for the message&#146;s destination, a copy of the message is added to their vector of waiting messages. For durable subscriptions and queue receivers, these messages may be stored, even if the client is not running.
+</P>
+<P>The session registration is stored in a RegPair object that includes the client id and the name of the registration/subscription. Messages delivered to a sessions queue are tagged with the registered name in case multiple subscriptions are using the same session. The complete code for send is listed here:</P>
+<PRE>
+    public void send(Message message)
+                 throws JMSException
+    {
+        try
+        {
+            <B>String qname
+                = message.getJMSDestination().toString();
+            Vector sessions
+                = (Vector) destinations.get(qname);</B>
+            int i,max;
+            RegPair pair;
+            String msgId=null;
+            long msgNum = nextId();
+            String content;
+            String insert;
+            Message toSend;
+
+            try
+            {
+                msgId = message.getJMSMessageID();
+            }
+            catch(Exception e)
+            {
+                msgId = &#147;&#148;;
+            }
+
+            //Update the message table first.
+            try
+            {
+                <B>message.setLongProperty(MSG_NUM,msgNum);
+
+
+                if(message.getJMSDeliveryMode()
+                    ==DeliveryMode.PERSISTENT)
+                {
+                    content = messageToFile(message,msgNum);
+
+                    if(content == null)
+                        throw new JMSException(&#147;Null Content&#148;);
+
+                    insert = &#147;insert into &#148;
+                                        &#43;&#147;messages &#148;
+                                        &#43;&#147;values(&#148;
+                                        &#43;msgNum
+                                        &#43;&#147;,\&#145;&#148;
+                                        &#43;msgId
+                                        &#43;&#147;\&#145;,\&#146;&#148;
+                                        &#43; qname
+                                        &#43;&#147;\&#145;,\&#146;&#148;
+                                        &#43; content
+                                        &#43;&#147;\&#145;)&#148;;
+
+                    statement.executeUpdate(insert);
+                }</B>
+            }
+            catch(Exception exp)
+            {
+                throw new JMSException(exp.toString());
+            }
+
+            if(sessions == null)
+            {
+                conn.commit();
+                return;
+            }
+
+            synchronized(sessions)
+            {
+                <B>max = sessions.size();
+
+                for(i=0;i&ltmax;i&#43;&#43;)
+                {
+                    pair = (RegPair) sessions.elementAt(i);
+
+                    Vector msgs = (Vector) messages.get(pair.id);
+
+                    if(msgs == null)
+                    {
+                        msgs = new Vector();
+                        messages.put(pair.id,messages);
+                    }
+
+                    synchronized(msgs)
+                    {
+                        toSend = copyMessage(message);
+                        toSend.setStringProperty(REG_NAME
+                                            ,pair.name);
+
+                        msgs.addElement(toSend);
+                        msgs.notifyAll();
+                    }</B>
+                }
+            }
+
+            conn.commit();
+        }
+        catch(Exception exp)
+        {
+            try
+            {
+                conn.rollback();
+            }
+            catch(Exception ignore)
+            {
+            }
+            exp.printStackTrace();
+
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>Sessions acknowledge destinations by name and id using the acknowledge method shown here. This acknowledgment results in an entry in the ack table of the database. The previous entry is deleted before the new one is added.
+</P>
+<PRE>
+    public void acknowledge(Destination d,String id, long msgNum)
+        throws JMSException
+    {
+        //Update the message table first.
+        try
+        {
+            String qname
+                = d.toString();
+
+            <B>statement.executeUpdate(&#147;delete from &#148;
+                                &#43;&#147;ack &#148;
+                                &#43;&#147;where destination=\&#145;&#148;
+                                &#43; qname
+                                &#43;&#147;\&#145; and name=\&#145;&#148;
+                                &#43; id
+                                &#43;&#147;\&#145;&#148;);
+
+            statement.executeUpdate(&#147;insert into &#148;
+                                &#43;&#147;ack &#148;
+                                &#43;&#147;values(\&#145;&#148;
+                                &#43; msgNum
+                                &#43;&#147;\&#145;,\&#146;&#148;
+                                &#43; qname
+                                &#43;&#147;\&#145;,\&#146;&#148;
+                                &#43; id
+                                &#43;&#147;\&#145;)&#148;);
+            conn.commit();&#147;</B>
+        }
+        catch(Exception exp)
+        {
+            try
+            {
+                conn.rollback();
+            }
+            catch(Exception ignore)
+            {
+            }
+            throw new JMSException(exp.toString());
+        }
+    }
+</PRE>
+<P>Sessions rely heavily on the concept of registration to tell the message store that they are running and want to receive messages. Registration is performed by name and client ID on a destination-by-destination basis. When a session makes a registration, it is added to the list of sessions for that destination using the ID and name. A vector is also created for the client ID if one does not already exist. This vector shares all of the pending messages for a session regardless of the name used to register for them.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="26-14.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="26-16.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

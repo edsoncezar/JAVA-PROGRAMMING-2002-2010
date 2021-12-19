@@ -1,0 +1,175 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming with the Java Messaging Service</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H4 ALIGN="LEFT"><A NAME="Heading6"></A><FONT COLOR="#000077">The Connection Factory</FONT></H4>
+<P>In the same way that JDBC provides a DriverManager for hiding the specifics of a JDBC driver author from the programmer, JNDI uses the ConnectionFactory interface to hide the specifics of connecting to a JMS provider from the programmer. ConnectionFactory is an interface without methods. However, two subtypes called QueueConnectionFactory and TopicConnectionFactory, discussed later in this chapter, do provide methods for their respective messaging models. These connection factories are tasked with the job of creating provider-specific connections to the JMS service provider. For example, the MiniJMS connection factories know the RMI URL for the MiniJMS server. This URL is used to create connections to the RMI server as requested by the programmer.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading7"></A><FONT COLOR="#000077">JMS and JNDI: Administered Objects</FONT></H4>
+<P>In order for Destinations and connection factories to maintain their implementation anonymity, their class must be hidden from the user. In JDBC, this class hiding is provided via driver registration and URLs. JMS takes provider hiding a step further using JNDI to create administered objects. An administered object is an object that the program retrieves from a JNDI context. In JMS, both destinations and connection factories are administered objects. The messaging administrator uses tools provided by the JMS provider to create destinations and connection factories before adding them to a JMS context. Programmers simply look these objects up in the context, unaware of their implementation. Although the examples in this chapter use the MiniJMS provider, they can easily be updated to use another provider by simply changing the JNDI initial context information.
+</P>
+<P><FONT SIZE="+1"><B><I>MiniJMSUtils</I></B></FONT></P>
+<P>To consolidate the creation of the initial JNDI context and make it easy to configure, the provided examples do two things. First, they use properties files to define their context information. Second, a class called MiniJMSUtils creates a context from a properties file. MiniJMS also installs the RMI security manager, saving the examples that step in the code.
+</P>
+<P>The code for MiniJMSUtils, which follows, is basically a recipe for loading a properties file, reading it, and using the properties to create an initial context for JNDI lookups. The properties file is specified by a file name. The file must be in the class path to be found.</P>
+<PRE>
+package minijms;
+
+import minijms.*;
+import minijmsserver.*;
+import javax.jms.*;
+import javax.naming.*;
+import java.io.*;
+import java.rmi.*;
+import java.util.*;
+
+public class MiniJMSUtils
+{
+    public static Properties properties;
+    public static Context context;
+
+    public static void init(String propsFile)
+        throws Exception
+    {
+        // Create and install a security manager.
+        SecurityManager mng;
+        InputStream propsIn;
+        Properties sysProps;
+
+        mng = new RMISecurityManager();
+        System.setSecurityManager(mng);
+
+        //Update the system props for class loading.
+        //fails for an applet but that&#146;s okay.
+        try
+        {
+            sysProps = System.getProperties();
+            sysProps.put(&#147;java.rmi.server.codebase&#148;
+                      ,&#147;file:/&#148;
+                      &#43; sysProps.getProperty(&#147;user.dir&#148;)
+                      &#43;&#147;/&#148;);
+            System.setProperties(sysProps);
+        }
+        catch(Exception ignore)
+        {
+        }
+
+        //Load the properties file.
+        propsIn
+         = ClassLoader.getSystemResourceAsStream(propsFile);
+        properties = new Properties();
+
+        properties.load(propsIn);
+
+        Properties p = new Properties();
+
+        String user=properties.getProperty(&#147;java.naming.user&#148;);
+        String password
+               =properties.getProperty(&#147;java.naming.password&#148;);
+        InitialContext retVal = null;
+
+        p.put(Context.INITIAL_CONTEXT_FACTORY
+          ,properties.getProperty(&#147;java.naming.factory.initial&#148;));
+
+        p.put(Context.PROVIDER_URL
+            , properties.getProperty(&#147;java.naming.provider.url&#148;));
+
+        if (user != null)
+        {
+            p.put(Context.SECURITY_PRINCIPAL, user);
+
+            if (password == null) password = &#147;&#148;;
+
+            p.put(Context.SECURITY_CREDENTIALS, password);
+        }
+
+        context = new InitialContext(p);
+    }
+}
+</PRE>
+<P>The properties and context static variables are public and provide easy access to a program. The following examples all initialize the MiniJMSUtils class and use its variables to get to the JNDI context. This context is then used to access destinations by name or connection factories by name. Although this utility is included in the MiniJMS package, it doesn&#146;t rely on any MiniJMS code beyond the import statements and can be used with other JMS providers or JNDI providers.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading8"></A><FONT COLOR="#000077">Connections</FONT></H4>
+<P>Once a program has a connection factory, it can use the connection factory to create a connection. This connection represents a single channel to the JMS provider. In many cases, this channel is a network connection of some sort to the provider&#146;s server daemon. For MiniJMS, the connection forms an RMI relationship between the client and the MiniJMS program.
+</P>
+<P>Depending on the messaging style you choose, you will create connections from the factory differently. In both cases, connections are represented by an object that implements the Connection interface. This interface has two subtypes, QueueConnection and TopicConnection, that represent the two messaging models. Connection itself defines methods that are standard to all JMS connections. These methods are described in Table 20.1.</P>
+<P>The first thing you may notice about these methods is that they all can throw JMSExceptions. This is true of every method in the JMS API. A JMSException represents an exception created during the service provider&#146;s execution of a method. This error may be caused by networking issues, invalid arguments, or many other reasons.</P>
+<TABLE WIDTH="100%"><TR>
+<TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 20.1</B> Connection Methods
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH VALIGN="TOP" WIDTH="50%" ALIGN="LEFT">METHOD
+<TH VALIGN="TOP" ALIGN="LEFT">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public String getClientID() throws JMSException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Returns the identifier for this client. This identifier is provider dependent and will normally be set by the factory when the connection is made.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void setClientID(String clientId) throws JMSException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Sets the client identifier. The argument should be a valid provider-specific string.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public ConnectionMetaData getMetaData() throws JMSException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Returns an object containing information about the connection and its JMS provider.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void setExceptionListener(ExceptionListener listener) throws JMSException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Sets the exception listener for this connection. This listener is notified of major exceptions that occur in the connections, such as a server disconnect.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void start() throws JMSException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Starts message delivery on the connection.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void stop() throws JMSException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Stops all message delivery on the connection.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT"><SMALL>public void close() throws JMSException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT">Closes the connection freeing any resources that it maintained.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-01.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-03.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

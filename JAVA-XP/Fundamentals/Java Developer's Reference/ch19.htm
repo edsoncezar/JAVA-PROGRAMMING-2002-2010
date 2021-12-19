@@ -1,0 +1,1890 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 19 -- Extending Your Programs with Native Methods</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 19</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Extending Your Programs with Native Methods</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+<UL>
+<LI><A HREF="#AnOverviewofNativeMethods" >An Overview of Native Methods</A>
+<LI><A HREF="#WhoAmIAJavaClasstoIdentifytheU" >Who Am I? A Java Class to Identify the User</A>
+<UL>
+<LI><A HREF="#TheClassDefinition" >The Class Definition</A>
+</UL>
+<LI><A HREF="#TheNutsandBoltsofNativeMethods" >The Nuts and Bolts of Native Methods</A>
+<UL>
+<LI><A HREF="#ConfiguringYourEnvironmentforSolaris" >Configuring Your Environment for Solaris</A>
+<LI><A HREF="#BuildingNativeMethodsforSolaris" >Building Native Methods for Solaris</A>
+<LI><A HREF="#ConfiguringYourEnvironmentforWindows" >Configuring Your Environment for Windows 95/NT</A>
+<LI><A HREF="#BuildingNativeMethodsforWindows95N" >Building Native Methods for Windows 95/NT</A>
+<LI><A HREF="#TroubleshootingNativeMethods" >Troubleshooting Native Methods</A>
+</UL>
+<LI><A HREF="#TheMethodandtheFunction" >The Method and the Function</A>
+<LI><A HREF="#ArgumentsandReturnValues" >Arguments and Return Values</A>
+<LI><A HREF="#UsingJavaObjectsfromNativeMethods" >Using Java Objects from Native Methods</A>
+<UL>
+<LI><A HREF="#AcessingInstanceVariablesfromNative" >Accessing Instance Variables from Native Methods</A>
+<LI><A HREF="#AccessingClassVariablesfromNativeMe" >Accessing Class Variables from Native Methods</A>
+<LI><A HREF="#CallingaJavaConstructor" >Calling a Java Constructor</A>
+<LI><A HREF="#CallingaJavaMethod" >Calling a Java Method</A>
+<LI><A HREF="#CallingaStaticJavaMethod" >Calling a Static Java Method</A>
+</UL>
+<LI><A HREF="#MultithreadingandNativeMethods" >Multithreading and Native Methods</A>
+<LI><A HREF="#NativeMethodsandExceptions" >Native Methods and Exceptions</A>
+<LI><A HREF="#UsingJavaStringsfromNativeMethods" >Using Java Strings from Native Methods</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+The Java Virtual Machine provides sophisticated capabilities for
+creating user interfaces, performing Internet and WWW accesses,
+and for general-purpose programming. Unfortunately, the Java Virtual
+Machine has some (deliberate) limitations. First and foremost,
+the JVM only supports functionality that applies to many platforms.
+That means that unaided Java applications cannot take full advantage
+of their host platforms. The Java development team also introduced
+some artificial limitations in the interest of security. For the
+most part, these restrictions are not onerous. In fact, users
+can have a relatively high degree of confidence that Java applications
+and applets are not malicious. Without such assurances, the World
+Wide Web community would surely have revolted at the notion of
+self-downloading, self-executing code in a Web page. Just imagine
+the prospect of a cross-platform virus that attaches itself to
+Web pages! In some cases, however, these benevolent restrictions
+prevent applications from making the most of Java.
+<P>
+Consider these situations:
+<UL>
+<LI><FONT COLOR=#000000>You have a large, specialized library
+of C or C++ functions that you would like to use from Java applications.</FONT>
+<LI><FONT COLOR=#000000>Your application must use a non-standard
+(that is, non-JDBC) database access library.</FONT>
+<LI><FONT COLOR=#000000>An existing application that communicates
+through an operating system-specific channel (such as Windows
+DDE or UNIX shared memory) must be integrated with a new Java
+application.</FONT>
+<LI><FONT COLOR=#000000>Your application needs to automatically
+determine operating system-specific information, such as </FONT>the
+user's Netware ID.
+</UL>
+<P>
+Native methods can solve all of these problems. A Java class can
+declare a native method to indicate that the actual code for the
+method is provided in another language. (At present, native methods
+must be implemented in C. Support for other languages is in the
+works.) That code is compiled to the native machine code of your
+particular platform, hence the name &quot;native method.&quot;
+Before it can be used by the Java Virtual Machine, the compiled
+code must be linked into a dynamically loadable library suitable
+for use on the target platform. Finally, the <TT><FONT FACE="Courier">DLL</FONT></TT>
+or <TT><FONT FACE="Courier">.so</FONT></TT> file must be installed
+on the target computer.
+<P>
+There are two parts to every native method, the Java declaration
+and the &quot;native&quot; implementation. As you do with all
+other methods, you declare a native method inside a Java class.
+Native methods can be final, static, or synchronized. They can
+throw exceptions and be inherited (unless they are final, of course).
+Because the implementation is compiled for the target platform,
+it can take full advantage of the capabilities of that platform.
+Native methods provide a powerful means of extending the Java
+Virtual Machine.
+<P>
+You have probably guessed by now that native methods are not cross-platform
+by nature. Your native methods will be as portable as the C code
+in which you write them and the APIs they call. Because the most
+common reason for creating native methods is to use a platform-specific
+API, native methods tend not to be very portable.
+<P>
+Because the dynamically loadable library must be installed on
+the target machine <I>prior</I> to execution of the Java classes
+that need it, you will have to face all the issues of software
+distribution and configuration management. On the other hand,
+native methods can only be called from Java applications, which
+have to be distributed and installed themselves. So, the added
+difficulty of distributing multiple native-method libraries should
+not pose too great a hurdle.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=590><B>When Not to Use Native Methods</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=590>
+<BLOCKQUOTE>
+Here are some questions to ask yourself before you decide to use native methods:</BLOCKQUOTE>
+<UL>
+<LI>Are you writing a full-blown application instead of an applet? Some Web browsers will prevent applets from calling native methods not distributed in the base classes. In some cases, the browser allows the user to enable native method calls from 
+applets. Bear in mind that many users will be reluctant to deliberately short-circuit security features.
+<LI>Can you manage the platform-specific code? Because the native methods are compiled for each platform, you will encounter significant configuration management hassles. More than likely, you will also have to cope with multiple versions of the native 
+methods, one for each platform. This is particularly true when you are dealing with operating system features. (I know, C is supposed to be a portable language, but isn't that why you are using Java?)
+<LI>Is it acceptable to mix object-oriented and procedural code? Keep in mind that the native methods will be written in an object-oriented style of C. You will be working with regular C structures instead of classes. These structures do not provide full 
+information hiding. (No <TT><FONT FACE="Courier">protected</FONT></TT> or <TT><FONT FACE="Courier">private</FONT></TT> specifiers.) Ultimately, you will be working in C, with no encapsulation, no inheritance, and no polymorphism. It will require great 
+discipline to maintain good object semantics in C. Most native methods are self-contained, so these should not be serious limitations, but you should be aware of the difficulties ahead.
+</UL>
+<BLOCKQUOTE>
+If you answered &quot;yes&quot; to all of these questions, then feel free to proceed. If any of the questions trouble you, then you should probably think twice before implementing that class with native methods. The Java packages contain hundreds of 
+classes, and the method you are looking for just might be there already, buried within an obscure class.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="AnOverviewofNativeMethods"><FONT SIZE=5 COLOR=#FF0000>An
+Overview of Native Methods</FONT></A></H2>
+<P>
+All functions in Java are object methods. Even the declaration
+part of your native methods must be contained within a class.
+Therefore, the first step to creating native methods is to define
+one or more class interfaces. If you are dealing with a large
+number of functions, it will be useful for you to partition them
+into logical, coherent groups. These should form the nucleus of
+each class. There are basically two approaches for defining a
+class interface that will wrap the native methods. Suppose you
+are dealing with native methods to provide file access. Assume
+that your target platform's standard runtime library supports
+multithreading. If it does not, you will have to serialize access
+to all RTL functions.
+<P>
+One approach we could take is to create a <TT><FONT FACE="Courier">File</FONT></TT>
+class that contains a mixture of native and Java methods that
+implement an abstraction of a disk file. (This is the approach
+used most often by the Java development team.) As an alternative
+design, we could create two classes: a <TT><FONT FACE="Courier">File</FONT></TT>
+class that presents an abstract view of files, and a <TT><FONT FACE="Courier">FileImp</FONT></TT>
+class that contains all of the native methods relevant to files.
+The <TT><FONT FACE="Courier">File</FONT></TT> class would then
+contain a reference to a single global instance of <TT><FONT FACE="Courier">FileImp</FONT></TT>.
+See Figure 19.1.
+<P>
+<A HREF="http://docs.rinet.ru/JavDev/f19-1.gif" ><B>Figure 19.1: </B><I>Encapsulating a native interface.</I></A>
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B> </TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+For concrete details on how the Java development team designed this solution, look in the JDK source code. The source code is available from JavaSoft at <TT><A HREF="http://java.sun.com/products/JDK/1.0.2">http://java.sun.com/products/JDK/1.0.2</A></TT>. 
+Check out the file <TT><FONT FACE="Courier">src/java/io/File.java</FONT></TT>. The <TT><FONT FACE="Courier">File</FONT></TT> class is an excellent example of integrating native methods with Java methods.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Ultimately, both techniques result in a <TT><FONT FACE="Courier">File</FONT></TT>
+class that presents a clean abstraction of a file. The first approach
+(the single-class approach) has a significant drawback in terms
+of maintainability, however. Whenever the <TT><FONT FACE="Courier">File</FONT></TT>
+class changes, the dynamically loadable library must be rebuilt.
+In fact, you would need to regenerate the C header and C stub
+files and recompile the library for every interface change in
+<TT><FONT FACE="Courier">File</FONT></TT>.
+<P>
+With the second approach (the split interface), <TT><FONT FACE="Courier">FileImp</FONT></TT>
+is insulated from changes to <TT><FONT FACE="Courier">File</FONT></TT>.
+Likewise, changes to <TT><FONT FACE="Courier">FileImp</FONT></TT>
+do not affect <TT><FONT FACE="Courier">File</FONT></TT>. The methods
+of <TT><FONT FACE="Courier">FileImp</FONT></TT> do not need to
+be a direct mapping from the target API. You can give them abstract
+names and easily define an interface, which will rarely (if ever)
+need to change. For example, the POSIX API defines two sets of
+file-manipulation functions. Roughly, the sets correspond to those
+which use handles returned by <TT><FONT FACE="Courier">open</FONT></TT>,
+and those which use a structure pointer returned by <TT><FONT FACE="Courier">fopen</FONT></TT>.
+The Win32 API defines a group of file-manipulation functions that
+use a <TT><FONT FACE="Courier">Handle</FONT></TT> returned by
+<TT><FONT FACE="Courier">CreateFile</FONT></TT>. Your <TT><FONT FACE="Courier">FileImp</FONT></TT>
+class would define a single method called <TT><FONT FACE="Courier">Open</FONT></TT>
+as illustrated by Listing 19.1. Now any client of <TT><FONT FACE="Courier">File</FONT></TT>
+can call <TT><FONT FACE="Courier">Open</FONT></TT> without regard
+to the underlying system-level API.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.1. Definition of the native </B><TT><B><FONT FACE="Courier">Open</FONT></B></TT><B>
+method.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">class FileImp {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public native boolean Open(String Pathname);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.<BR>
+&nbsp;}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+After you have designed your class interfaces, you will need to
+create the Java classes. These will be identical to any other
+Java class, except for the use of the keyword <TT><FONT FACE="Courier">native</FONT></TT>.
+<TT><FONT FACE="Courier">Native</FONT></TT> signals to javac that
+this method body will be provided by a library loaded at runtime.
+Therefore, you do not provide a method body for a native method.
+The method declaration looks the same as if you were declaring
+an abstract method. This is no coincidence. In both cases, you
+are telling javac that you want to defer the definition of this
+method until later. With an abstract method, you are saying that
+&quot;later&quot; means a subclass. With a native method, &quot;later&quot;
+means runtime loadable C code.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=582><B>When and Where Can I Use &quot;<TT><B><FONT FACE="Courier">nativ</FONT></B></TT>&quot;?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=582>
+<BLOCKQUOTE>
+You can put &quot;<TT><FONT FACE="Courier">native</FONT></TT>&quot; on almost any method declaration. How does javac interpret an abstract, native method? Not very well. You can provide a method body for an abstract native method in C, but it will never be 
+called. A static native method behaves just as you would expect. Its semantics are the same as they would be in a static method defined in Java. A static native method is always passed a <TT><FONT FACE="Courier">NULL</FONT></TT> for its <TT><FONT 
+FACE="Courier">this</FONT></TT> argument.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Native methods that are overridden in a subclass work normally. In fact, you can mix native and Java methods arbitrarily when subclassing.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+After creating and compiling your Java classes, you will use javah
+to create two C files: a header file and a stub file. (<A HREF="ch14.htm" >See Chapter 14</A>,
+&quot;Using javah&quot; for usage information for javah.) The
+header file contains a structure definition and function declarations
+(prototypes) for the native methods. The stub file contains some
+&quot;glue&quot; code, which you should never need to change.
+Because both files created by javah are generated automatically,
+you should never change either of them. javah maps the instance
+variables and methods of the class directly into the C files.
+So, if you ever change the Java class, you must regenerate the
+C files. If you do not, strange and unpredictable behavior will
+result. For example, javah created the header in Listing 19.3
+from the class in Listing 19.2.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.2. This is the original </B><TT><B><FONT FACE="Courier">PortfolioEntry</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">class PortfolioEntry {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String&nbsp;&nbsp;TickerSymbol;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastQuote;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;BoughtAtPrice;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastDividends;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastEPS;<BR>
+&nbsp;}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.3. The structure definition javah created from </B><TT><B><FONT FACE="Courier">PortfolioEntry</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">typedef struct ClassPortfolioEntry {
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; struct Hjava_lang_String *TickerSymbol;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; float LastQuote;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; float BoughtAtPrice;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; float LastDividends;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; float LastEPS;<BR>
+&nbsp;} ClassPortfolioEntry;</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now suppose that you add a new integer member, <TT><FONT FACE="Courier">NumberOfShares</FONT></TT>,
+to the Java class, right after the <TT><FONT FACE="Courier">TickerSymbol</FONT></TT>.
+If you do not recreate the header file, your C code will be using
+the old structure layout. Therefore, your C code would access
+every member from <TT><FONT FACE="Courier">LastQuote</FONT></TT>.
+Your C code would use the offset for <TT><FONT FACE="Courier">NumberOfShares</FONT></TT>
+(an integer) as if it were <TT><FONT FACE="Courier">LastQuote</FONT></TT>
+(a <TT><FONT FACE="Courier">float</FONT></TT>)! This mismatch
+can cause some of the most irreproducible and hard-to-find bugs.
+A similar problem can arise with the methods. In that case, you
+are even more likely to have problems, because any change in a
+method's signature means that you have to regenerate the stub
+and header files.
+<P>
+One good way to avoid this problem is to make sure that you rarely
+need to change your classes after you write them. Good design
+will help there, but changes are inevitable. Creating a makefile
+is the best way to ensure that you always use the most up-to-date
+header and stub files. Some version of &quot;make&quot; is available
+for every platform supported by the JDK. Later in this chapter,
+you will find sample makefiles for Java classes with native methods.
+<P>
+Javah creates two files for you, but it leaves the most important
+file up to you. Along with the header and stub files, you will
+need to write an implementation file. The implementation file
+must contain the definitions of the functions that the header
+file declares. All of the really interesting things happen in
+the implementation file. Figure 19.2 depicts the relationships
+among the four files-the Java source, the C header, the C stubs,
+and the C implementation files.
+<P>
+<A HREF="http://docs.rinet.ru/JavDev/f19-2.gif" ><B>Figure 19.2:</B> <I>The relationship between the Java class file and the three C files.</I></A><I>.</I>
+<P>
+At this point, a simple example will illustrate the interaction
+between the Java class and the three C files.
+<H2><A NAME="WhoAmIAJavaClasstoIdentifytheU"><FONT SIZE=5 COLOR=#FF0000>Who
+Am I? A Java Class to Identify the User</FONT></A></H2>
+<P>
+To demonstrate the entire process, from the Java class all the
+way to the implementation file, we will develop a class that can
+return the current user's name as a string. This example will
+use Windows NT native methods.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B> </TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+There is already a mechanism in Java to do this. (See the documentation for the <TT><FONT FACE="Courier">java.lang.System</FONT></TT> class.) Normally, you should not create a native method to accomplish something already available in the base packages. 
+Because this is a simple demonstration, we will conveniently disregard the <TT><FONT FACE="Courier">System.getProperty</FONT></TT> method.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3><A NAME="TheClassDefinition">The Class Definition</A></H3>
+<P>
+What do we really want to know? For now, we just want to know
+the user's login name. Various platforms have different API calls
+to get this information. Good design dictates that we should have
+a method name that is descriptive of <I>what</I> we want to know,
+not <I>how</I> we learn it. So, let's just call this method <TT><FONT FACE="Courier">Username</FONT></TT>.
+It will return a Java string.
+<P>
+Remember that there are no global functions in Java. Even though
+we really only need one function, we have to put it in a class.
+At first, this might seem like a lot of trouble. After all, who
+wants to define a complete class just to get one method? But think
+about the future. Will this class always have just one method?
+Odds are that, like everything else, the requirements for this
+class will evolve over time. Perhaps there are other details about
+users that would be of interest to your application (or even a
+future application). The extra few minutes spent here in creating
+a class give you a framework in which to build additional functionality
+later.
+<P>
+Listing 19.4 shows the Java source for the <TT><FONT FACE="Courier">UserInformation</FONT></TT>
+class.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.4. The Java class definition of </B><TT><B><FONT FACE="Courier">UserInformation</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;1:&nbsp;&nbsp;class UserInformation
+{<BR>
+&nbsp;2:&nbsp;&nbsp;&nbsp;&nbsp; static {<BR>
+&nbsp;3:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.loadLibrary(&quot;UserInformation&quot;);
+<BR>
+&nbsp;4:&nbsp;&nbsp;&nbsp;&nbsp; }<BR>
+&nbsp;5:&nbsp;&nbsp;&nbsp;&nbsp; public native String Username();
+<BR>
+&nbsp;6:&nbsp;&nbsp;}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Here is a line-by-line description of the code:
+<BLOCKQUOTE>
+<B>Line 1:</B> This line defines the class <TT><FONT FACE="Courier">UserInformation</FONT></TT>.
+There is nothing fancy about this class; it inherits directly
+from <TT><FONT FACE="Courier">java.lang.Object</FONT></TT>. Although
+this class does not show it, it is usually a good idea to make
+native methods-sometimes entire classes-&quot;final.&quot; Otherwise,
+anyone can inherit from your native methods and possibly subvert
+their behavior.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Line 2:</B> This line defines a static block of code. Static
+blocks are executed when the <I>class itself </I>is loaded. You
+can think of a static block as a constructor for the class as
+a whole.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Line 3:</B> When this class is loaded, direct the runtime system
+to load the dynamically loadable library <TT><FONT FACE="Courier">UserInformation</FONT></TT>.
+Exactly how the library is located and loaded varies by target
+platform. See the appropriate &quot;Configuring Your Environment&quot;
+section for your platform later in this chapter.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Line 5:</B> This line defines the method <TT><FONT FACE="Courier">Username</FONT></TT>
+as a native method that returns a Java <TT><FONT FACE="Courier">String</FONT></TT>
+object.
+</BLOCKQUOTE>
+<P>
+Now, compile this class using javac. (For details on javac usage,
+<A HREF="ch9.htm" >see Chapter 9</A>, &quot;javac: The Java Compiler.&quot;)
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&gt; javac UserInformation.java</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This will produce the usual class file <TT><FONT FACE="Courier">UserInformation.class</FONT></TT>.
+The next step is to create the header and stub files using javah.
+(For details on javah usage, <A HREF="ch14.htm" >see Chapter 14</A>.)
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&gt; javah UserInformation</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&gt; javah -stubs UserInformation</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This will produce two files, <TT><FONT FACE="Courier">UserInformation.h</FONT></TT>
+and <TT><FONT FACE="Courier">UserInformation.c</FONT></TT>. These
+are the header and stub files. You can disregard <TT><FONT FACE="Courier">UserInformation.c</FONT></TT>
+(until it is time to compile, of course.) Listing 19.5 contains
+the header file <TT><FONT FACE="Courier">UserInformation.h</FONT></TT>
+as created by javah. Your output file may vary in some details,
+depending on your platform and version of the JDK.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.5. The header file </B><TT><B><FONT FACE="Courier">UserInformation.h</FONT></B></TT><B>
+created from the </B><TT><B><FONT FACE="Courier">UserInformation.class</FONT></B></TT><B>
+class file.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;0&nbsp;&nbsp;&nbsp;/* DO NOT EDIT
+THIS FILE - it is machine generated */<BR>
+&nbsp;1&nbsp;&nbsp;&nbsp;#include &lt;native.h&gt;<BR>
+&nbsp;2&nbsp;&nbsp;&nbsp;/* Header for class UserInformation */
+<BR>
+&nbsp;3<BR>
+&nbsp;4&nbsp;&nbsp;&nbsp;#ifndef _Included_UserInformation<BR>
+&nbsp;5&nbsp;&nbsp;&nbsp;#define _Included_UserInformation<BR>
+&nbsp;6<BR>
+&nbsp;7&nbsp;&nbsp;&nbsp;typedef struct ClassUserInformation {
+<BR>
+&nbsp;8&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; char PAD;&nbsp;&nbsp;&nbsp;/*
+ANSI C requires structures to have at least one member */<BR>
+&nbsp;9&nbsp;&nbsp;&nbsp;} ClassUserInformation;<BR>
+&nbsp;10&nbsp;&nbsp;HandleTo(UserInformation);<BR>
+&nbsp;11<BR>
+&nbsp;12&nbsp;&nbsp;#ifdef __cplusplus<BR>
+&nbsp;13&nbsp;&nbsp;extern &quot;C&quot; {<BR>
+&nbsp;14&nbsp;&nbsp;#endif<BR>
+&nbsp;15&nbsp;&nbsp;struct Hjava_lang_String;<BR>
+&nbsp;16&nbsp;&nbsp;extern struct Hjava_lang_String<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*UserInformation_Username(struct
+HUserInformation *);<BR>
+&nbsp;17&nbsp;&nbsp;#ifdef __cplusplus<BR>
+&nbsp;18&nbsp;&nbsp;}<BR>
+&nbsp;19&nbsp;&nbsp;#endif<BR>
+&nbsp;20&nbsp;&nbsp;#endif</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Notice the structure definition on lines 7 through 9. Because
+we did not define any members of the Java class, javah created
+this dummy structure. This will keep C compilers happy, but you
+should not attempt to use <TT><FONT FACE="Courier">PAD</FONT></TT>
+to store information. The Java specification makes no guarantees
+about the contents of <TT><FONT FACE="Courier">PAD</FONT></TT>.
+For our purposes, the only line of real interest is line 16, where
+the declaration for <TT><FONT FACE="Courier">Username</FONT></TT>
+appears. This is the function that our implementation file must
+define. Notice that instead of taking a pointer to a <TT><FONT FACE="Courier">ClassUserInformation</FONT></TT>
+structure, the C function gets a pointer to an <TT><FONT FACE="Courier">HUserInformation</FONT></TT>
+structure. See the sidebar &quot;Where Did <TT><FONT FACE="Courier">HUserInformation</FONT></TT>
+Come From?&quot; for details on this structure.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=590><B>Where Did  Come From?</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=590>
+<BLOCKQUOTE>
+The structure <TT><FONT FACE="Courier">HUserInformation</FONT></TT>, which is passed to each of the C functions, is declared as a result of the <TT><FONT FACE="Courier">HandleTo()</FONT></TT> macro, which is defined in <TT><FONT 
+FACE="Courier">\java\include\oobj.h</FONT></TT> as this:
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">#define HandleTo(T) typedef struct H##T { Class##T *obj; \</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<CENTER><TT><FONT FACE="Courier">struct methodtable *methods;} H##T</FONT></TT></CENTER>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+So, <TT><FONT FACE="Courier">HandleTo(UserInformation);</FONT></TT> expands to<BR>
+<TT><FONT FACE="Courier">typedef struct HUserInformation {<BR>
+&nbsp;&nbsp;ClassUserInformation *obj;<BR>
+&nbsp;&nbsp;struct methodtable *methods;<BR>
+} HUserInformation;</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+This structure provides the bookkeeping that will allow C functions to behave like class methods. To access an instance variable from your native method, follow the <TT><FONT FACE="Courier">obj</FONT></TT> pointer to the instance variable structure 
+declared by the header file. For example, if the Java class <TT><FONT FACE="Courier">UserInformation</FONT></TT> had a member variable <TT><FONT FACE="Courier">UserID</FONT></TT>, its native methods could reference that member as <TT><FONT 
+FACE="Courier">hUserInformation-&gt;obj-&gt;UserID</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The <TT><FONT FACE="Courier">methods</FONT></TT> pointer also allows your native method to get information about, and even invoke, the other methods of your class.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+This structure is intended to be opaque to native methods. Because it may change in the future, the include file <TT><FONT FACE="Courier">interpreter.h</FONT></TT> provides macros to hide the details of <TT><FONT 
+FACE="Courier">HUserInformation</FONT></TT>. In your native methods, you would use <TT><FONT FACE="Courier">unhand(hUserInformation)</FONT></TT> to get access to the <TT><FONT FACE="Courier">ClassUserInformation</FONT></TT> pointer. By using the macros, 
+you insulate your code from future changes to Java internals. See &quot;Using Java Objects from Native Methods&quot; later in this chapter for details.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Finally, the time has come to write the implementation file. By
+convention, the implementation filename ends in &quot;Imp&quot;.
+For <TT><FONT FACE="Courier">UserInformation</FONT></TT>, our
+implementation file is named <TT><FONT FACE="Courier">UserInformationImp.c</FONT></TT>.
+Listing 19.6 shows the implementation file for <TT><FONT FACE="Courier">UserInformation</FONT></TT>,
+followed by a line-by-line description of the code. (We will not
+explore the target platform's API functions. After all, this is
+a book about Java, not C.)
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.6. The implementation file </B><TT><B><FONT FACE="Courier">UserInformationImp.c</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;1:&nbsp;&nbsp;/* 
+UserInformationImp.c&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/
+<BR>
+&nbsp;2:&nbsp;&nbsp;/* Implementation file for Java class UserInformation&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*/
+<BR>
+&nbsp;3:&nbsp;&nbsp;#include &lt;StubPreamble.h&gt;<BR>
+&nbsp;4:&nbsp;&nbsp;#include &quot;UserInformation.h&quot;<BR>
+&nbsp;5:&nbsp;&nbsp;#include &lt;winnetwk.h&gt;<BR>
+&nbsp;6:<BR>
+&nbsp;7:&nbsp;&nbsp;struct Hjava_lang_String *UserInformation_Username(
+<BR>
+&nbsp;8:&nbsp;&nbsp;&nbsp;&nbsp; struct HUserInformation *hUserInformation
+<BR>
+&nbsp;9:&nbsp;&nbsp;)<BR>
+10:&nbsp;&nbsp;{<BR>
+11:&nbsp;&nbsp;&nbsp;&nbsp;char szUserName[128];<BR>
+12:&nbsp;&nbsp;&nbsp;&nbsp;DWORD cchBuffer = sizeof(szUserName);
+<BR>
+13:&nbsp;&nbsp;&nbsp;&nbsp;if(NO_ERROR == WNetGetUser(NULL,szUserName,&amp;cchBuffer))
+<BR>
+14:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return makeJavaString(szUserName,
+sizeof(szUserName));<BR>
+15:&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+16:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; printf(&quot;UserInformation_Username:
+GetLastError = %x\n&quot;,<BR>
+17:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GetLastError());
+<BR>
+19:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return makeJavaString(&quot;&quot;,
+0);<BR>
+20:&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+21: }</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Here is a line-by-line description of the implementation file:
+<BLOCKQUOTE>
+<B>Line 3</B>: Every native method implementation file must include
+<TT><FONT FACE="Courier">StubPreamble.h</FONT></TT>. Indirectly,
+it provides all of the macros, definitions, and declarations that
+enable C code to interoperate with the Java Virtual Machine.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Line 4:</B> Include the header file created by javah. This
+brings in the structure definitions <TT><FONT FACE="Courier">ClassUserInformation</FONT></TT>
+and <TT><FONT FACE="Courier">HUserInformation</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Line 5:</B> Include the Win32 header file, which defines <TT><FONT FACE="Courier">WNetGetUser</FONT></TT>-the
+function we will use to find the user's name.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Lines 7-9:</B> This function signature must be identical to
+the corresponding function declaration in <TT><FONT FACE="Courier">UserInformation.h.</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Lines 11-12:</B> Declare two local variables-a character array
+that will hold the C string of the user's name, and a double word
+that will indicate the buffers size.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Line 13:</B> Retrieve the user's login name by calling <TT><FONT FACE="Courier">WNetGetUser</FONT></TT>
+and checking the return value for failure. If <TT><FONT FACE="Courier">WNetGetUser</FONT></TT>
+fails because the buffer is too small, <TT><FONT FACE="Courier">cchBuffer</FONT></TT>
+will contain the actual buffer length needed.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Line 14:</B> If the call to <TT><FONT FACE="Courier">WGetNetUser</FONT></TT>
+succeeded, construct a Java string object from the C string. The
+function <TT><FONT FACE="Courier">makeJavaString</FONT></TT> is
+declared in <TT><FONT FACE="Courier">javaString.h</FONT></TT>,
+along with several other functions which C code can use to manipulate
+Java string objects. Not all Java classes have such convenient
+C interfaces. In general, you will use the classes' inherent capabilities
+by calling the Java code from your C code.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<B>Lines 15-19:</B> If the call to <TT><FONT FACE="Courier">WGetNetUser</FONT></TT>
+failed, print an error message on <TT><FONT FACE="Courier">stdout</FONT></TT>
+and construct an empty Java string to return. Returning an empty
+string is more conscientious than returning a <TT><FONT FACE="Courier">NULL</FONT></TT>.
+Java has garbage collection, so you do not need to worry about
+the eventual destruction of these strings.
+</BLOCKQUOTE>
+<P>
+Now we just need to compile and link the two C files. For complete
+details on building the code, see the following sections called
+&quot;Building Native Methods for Solaris&quot; and &quot;Building
+Native Methods for Windows 95/NT,&quot; whichever is appropriate
+for your target platform. For now, the sample makefile in Listing
+19.7 will make things more convenient. (It will also make sure
+that your header and stub files stay current with respect to your
+<TT><FONT FACE="Courier">.java</FONT></TT> file.) Remember to
+put tabs, not spaces, at the beginnings of the action lines.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.7. Sample makefile suitable for use on Windows 95/NT.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;cc&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=
+cl<BR>
+&nbsp;LFLAGS&nbsp;&nbsp;&nbsp;&nbsp; = -MD -LD<BR>
+&nbsp;CLASSPATH&nbsp;&nbsp;= .;$(JAVA_HOME)\lib\classes.zip<BR>
+&nbsp;<BR>
+&nbsp;CLASS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= UserInformation
+<BR>
+&nbsp;<BR>
+&nbsp;all: $(CLASS).dll $(CLASS).class main.class<BR>
+&nbsp;<BR>
+&nbsp;main.class: main.java<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javac main.java<BR>
+&nbsp;<BR>
+&nbsp;$(CLASS).class: $(CLASS).java<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javac $(CLASS).java<BR>
+&nbsp;<BR>
+&nbsp;$(CLASS).dll: $(CLASS)Imp.c $(CLASS).class<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javah -classpath $(CLASSPATH) $(CLASS)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;javah -stubs -classpath $(CLASSPATH)
+$(CLASS)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$(cc) $(CLASS)Imp.c $(CLASS).c -Fe$(CLASS).dll
+$(LFLAGS) mpr.lib javai.lib</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Once you compile your native methods into a dynamically loadable
+library, you can create a simple class to exercise this native
+method from an application. When you are testing an application
+that uses native methods, the command-line Java interpreter &quot;java&quot;
+can be a tremendous help. In this case, the class <TT><FONT FACE="Courier">main</FONT></TT>
+simply creates an instance of <TT><FONT FACE="Courier">UserInformation</FONT></TT>
+and prints the results of <TT><FONT FACE="Courier">Username()</FONT></TT>.
+Figure 19.2 shows the sequence of events that makes this happen.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&gt;java main<BR>
+Your username is: mtnygard</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Now that you have gone through the entire process one step at
+a time, you can delve into the nuts and bolts. The next sections
+will refer back to this example from time to time as they explore
+the details of the interaction between native methods and pure
+Java code.
+<H2><A NAME="TheNutsandBoltsofNativeMethods"><FONT SIZE=5 COLOR=#FF0000>The
+Nuts and Bolts of Native Methods</FONT></A></H2>
+<P>
+Because native language methods are so closely tied to a particular
+platform, the difference in procedures is more pronounced than
+with the JDK itself. For example, the compilers for different
+platforms have wildly different command-line arguments. Because
+of the possible variations and permutations, this section cannot
+present an exhaustive reference on the native compilers. Therefore,
+you should always consider the appropriate compiler reference
+as the ultimate authority. The procedures in these sections worked
+at the time this was written, using JDK 1.0.2 on the following
+platforms: SPARC Solaris 2.5, <I>x</I>86 Solaris 2.5, Microsoft
+Windows 95, Microsoft Windows NT 3.51, and Microsoft Windows NT
+4.0 Beta. The Solaris platforms use the usual &quot;cc&quot; compiler.
+The Windows platforms have been tested using Visual C++ 2.0 and
+4.0.
+<H3><A NAME="ConfiguringYourEnvironmentforSolaris">Configuring
+Your Environment for Solaris</A></H3>
+<P>
+If you have not already done so, you should modify your <TT><FONT FACE="Courier">PATH</FONT></TT>
+variable to include the <TT><FONT FACE="Courier">/java/bin</FONT></TT>
+directory. In addition, setting your <TT><FONT FACE="Courier">JAVAHOME</FONT></TT>
+and <TT><FONT FACE="Courier">CLASSPATH</FONT></TT> variables properly
+will help javah run smoothly.
+<P>
+When your class's static block calls <TT><FONT FACE="Courier">System.loadLibrary</FONT></TT>,
+the Java runtime will search for the library in the current directory.
+If you intend to install your dynamic libraries in any other directory,
+you will need to set your library search path to include that
+directory. For example, if your libraries are stored in <TT><FONT FACE="Courier">java_lib</FONT></TT>
+in your home directory, use the following command in Bourne and
+Korn shells:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">$ LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/java_lib
+<BR>
+$ export LD_LIBRARY_PATH</FONT></TT>
+</BLOCKQUOTE>
+<P>
+In C shell, use this:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">% setenv LD_LIBRARY_PATH &quot;$LD_LIBRARY_PATH:$HOME/java_lib&quot;</FONT></TT>
+</BLOCKQUOTE>
+<H3><A NAME="BuildingNativeMethodsforSolaris">Building Native
+Methods for Solaris</A></H3>
+<P>
+Use the following command to compile the code and link the dynamic
+library:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">$ cc -G UserInformation.c UserInformationImp.c
+\<BR>
+&gt; -o libUserInformation.so</FONT></TT>
+</BLOCKQUOTE>
+<P>
+You will probably need to use the <TT><FONT FACE="Courier">-I</FONT></TT>
+flag to tell the compiler where to find the Java header files:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">$ cc -G -I${JAVA_HOME}/include -I${JAVA_HOME}/include/solaris
+\<BR>
+&gt; UserInformation.c UserInformationImp.c \<BR>
+&gt; -o libUserInformation.so</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The linker will create <TT><FONT FACE="Courier">libUserInformation.so</FONT></TT>
+in your current directory. For details about the linker options,
+refer to the man pages for <TT><FONT FACE="Courier">cc</FONT></TT>
+and <TT><FONT FACE="Courier">ld</FONT></TT>. 
+<P>
+To execute <TT><FONT FACE="Courier">System.loadLibrary(&quot;libname&quot;)</FONT></TT>,
+the Solaris Java Virtual Machine will search for a library named
+<TT><FONT FACE="Courier">lib<I>libname</I>.so</FONT></TT>.
+<H3><A NAME="ConfiguringYourEnvironmentforWindows">Configuring
+Your Environment for Windows 95/NT</A></H3>
+<P>
+You should either make these changes to your <TT><FONT FACE="Courier">C:\AUTOEXEC.BAT</FONT></TT>
+file or to a batch file you will run every session.
+<P>
+Setting your <TT><FONT FACE="Courier">JAVA_HOME</FONT></TT> and
+<TT><FONT FACE="Courier">CLASSPATH</FONT></TT> variables properly
+will help javah run smoothly. In addition, if you have not already
+done so, you should modify your <TT><FONT FACE="Courier">PATH</FONT></TT>
+variable to include the <TT><FONT FACE="Courier">%JAVA_HOME%\bin</FONT></TT>
+directory.
+<P>
+When your class's static block calls <TT><FONT FACE="Courier">System.loadLibrary</FONT></TT>,
+the Java runtime will search for the library in the <TT><FONT FACE="Courier">PATH</FONT></TT>
+variable, as well as the directory in which the executable lives.
+If you intend to install your dynamic libraries in any directory
+other than these, you will need to set your path to include that
+directory.
+<P>
+To make the compile process a little easier, you might want to
+set the <TT><FONT FACE="Courier">IncLUDE</FONT></TT> and <TT><FONT FACE="Courier">LIB</FONT></TT>
+variables to point to the Java files:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">set IncLUDE=%JAVA_HOME%\include;%IncLUDE%
+<BR>
+set LIB=%JAVA_HOME%\lib;%LIB%</FONT></TT>
+</BLOCKQUOTE>
+<H3><A NAME="BuildingNativeMethodsforWindows95N">Building Native
+Methods for Windows 95/NT</A></H3>
+<P>
+Use the following command to compile and link the dynamic library:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">C:\&gt; cl UserInformation.c UserInformationImp.c
+<BR>
+-FeUserInformation.dll -MD -LD [other_libs] javai.lib<BR>
+</FONT></TT>
+</BLOCKQUOTE>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+You must use Visual C++ 2.0 or higher to compile the dynamically linked libraries. In particular, Visual C++ 1.52 or below produce 16-bit code, which will not work with Java.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The linker will create <TT><FONT FACE="Courier">UserInformation.dll</FONT></TT>
+in the current directory. For details on the linker options, refer
+to the Visual C++ online manual.
+<P>
+To execute <TT><FONT FACE="Courier">System.loadLibrary(&quot;libname&quot;)</FONT></TT>,
+the Windows 95/NT Java Virtual Machine will search for a library
+named <TT><I><FONT FACE="Courier">libname</FONT></I><FONT FACE="Courier">.dll</FONT></TT>.
+<H3><A NAME="TroubleshootingNativeMethods">Troubleshooting Native
+Methods</A></H3>
+<P>
+Here are some common exceptions you might see when you run your
+program.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">java.lang.UnsatisfiedLinkError no hello
+in LD_LIBRARY_PATH<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.Throwable.(Throwable.java)<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.Error.(Error.java)<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.LinkageError.(LinkageError.java)
+<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.UnsatisfiedLinkError.(UnsatisfiedLinkError.java)
+<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.Runtime.loadLibrary(Runtime.java)
+<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.System.loadLibrary(System.java)
+<BR>
+&nbsp;&nbsp;&nbsp;at UserInformation.(UserInformation.java:5)
+<BR>
+&nbsp;&nbsp;&nbsp;at<BR>
+java.lang.UnsatisfiedLinkError: Username<BR>
+&nbsp;&nbsp;&nbsp;at main.main(main.java:6)</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This exception appears on Solaris systems. It means that you have
+a library path set, but the particular library is not in it. You
+need to modify your library path to include the directory where
+your library lives.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">java.lang.NullPointerException<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.Runtime.loadLibrary(Runtime.java)
+<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.System.loadLibrary(System.java)
+<BR>
+&nbsp;&nbsp;&nbsp;at UserInformation.(UserInformation.java:5)
+<BR>
+&nbsp;&nbsp;&nbsp;at<BR>
+java.lang.UnsatisfiedLinkError: Username<BR>
+&nbsp;&nbsp;&nbsp;at main.main(main.java:6)</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This exception also appears on Solaris systems. It indicates that
+you do not have a library path set at all, and that the runtime
+cannot find your library without it. You should either set your
+library path or move your library to the current directory.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">Unable to load dll 'UserInformation.dll'
+(errcode = 485)<BR>
+Exception in thread &quot;main&quot; java.lang.UnsatisfiedLinkError:
+<BR>
+&nbsp;&nbsp;&nbsp;no UserInformation in shared library path<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.Runtime.loadLibrary(Runtime.java:268)
+<BR>
+&nbsp;&nbsp;&nbsp;at java.lang.System.loadLibrary(System.java:266)
+<BR>
+&nbsp;&nbsp;&nbsp;at UserInformation.&lt;clinit&gt;(UserInformation.java:3)
+<BR>
+&nbsp;&nbsp;&nbsp;at<BR>
+java.lang.UnsatisfiedLinkError: Username<BR>
+&nbsp;&nbsp;&nbsp;at main.main(main.java:6)</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This is essentially just the Windows version of the same problem.
+Again, the solution is to copy the library into a directory that
+<I>is</I> in the <TT><FONT FACE="Courier">PATH</FONT></TT>, or
+to modify the <TT><FONT FACE="Courier">PATH</FONT></TT> to include
+the library's directory.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">java.lang.UnsatisfiedLinkError: Username
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at main.main(main.java:6)</FONT></TT>
+</BLOCKQUOTE>
+<P>
+If you get this exception by itself, without a larger walkback
+above it, then your library is missing the function being called
+by this native method.
+<P>
+As you can see, when you are using native methods, most of the
+problems show up when the runtime attempts to load the library.
+Unfortunately, there is no simple solution. This is basically
+an installation and configuration management problem. Worse yet,
+there is no way for one class to catch exceptions that occur when
+the JVM is loading another class.
+<H2><A NAME="TheMethodandtheFunction"><FONT SIZE=5 COLOR=#FF0000>The
+Method and the Function</FONT></A></H2>
+<P>
+There are two parts to every native method: the Java declaration
+and the native language definition. The Java Virtual Machine provides
+enough capabilities that the native language component can do
+virtually everything that a typical Java method can. This section
+will examine the two sides of a native method: the Java declaration
+and the native language definition. The next few sections will
+examine how the native language component works with the JVM to
+make all of this work.
+<P>
+Starting with the Java declaration, consider the method signature
+from the <TT><FONT FACE="Courier">UserInformation</FONT></TT>
+example earlier in the chapter.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">public native String Username();</FONT></TT>
+</BLOCKQUOTE>
+<P>
+It looks more or less the same as any other method. The <TT><FONT FACE="Courier">native</FONT></TT>
+keyword means that the method body is not needed. (In fact, it
+is not permitted.) The <TT><FONT FACE="Courier">native</FONT></TT>
+keyword tells the compiler that the definition (the method body)
+is provided in a different language.
+<P>
+In this example, no arguments were needed. However, you can pass
+arguments to native methods and get return values from them. These
+arguments and return values can include objects. See &quot;Arguments
+and Return Values&quot; for specifics.
+<P>
+We used javah to create the header file for the native side. Take
+a look at the function signature created by javah.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">struct Hjava_lang_String *UserInformation_Username(struct
+HUserInformation *);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+By examining this piece by piece, you can see how the Java to
+C linkage works. First, the return type is declared as <TT><FONT FACE="Courier">struct
+Hjava_lang_String *</FONT></TT>. In the native language, all objects
+are accessed through a <I>handle</I>-a special structures that
+allows access to an object's instance variables and the class's
+methods (the object's vtable.) You can translate <TT><FONT FACE="Courier">Hjava_lang_String</FONT></TT>
+directly to &quot;<TT><FONT FACE="Courier">java.lang.String</FONT></TT>&quot;.
+Handles are always passed as pointers for efficiency.
+<P>
+As you can see, the function name itself is comprised of the class
+name, an underscore, and the method name itself. If you wanted
+to add a new native method to find out the user's disk quota,
+it would be named something like <TT><FONT FACE="Courier">UserInformation_DiskQuota</FONT></TT>.
+Because javah can generate all of the function declarations, there
+is rarely a need to create these names, but because the names
+are not &quot;mangled&quot; (the way early C++ to C translators
+did), the resulting code is very readable.
+<P>
+The final item in this signature is the argument <TT><FONT FACE="Courier">struct
+HUserInformation *</FONT></TT>. It is an <I>automatic parameter</I>,
+which will be explained in the next section.
+<H2><A NAME="ArgumentsandReturnValues"><FONT SIZE=5 COLOR=#FF0000>Arguments
+and Return Values</FONT></A></H2>
+<P>
+Pure Java methods can pass arguments to native methods just as
+they would to any other method call. Native methods can return
+any value that a Java method would. How does this work when two
+such vastly different languages are involved? It works because
+the Java Virtual Machine exposes some of its internals to the
+native language. At the same time, the header files that support
+native methods use features of the C preprocessor and compiler
+to shield you, the developer, from the guts of the Java implementation.
+Essentially, when you are developing a native method, you are
+hooking right into the most fundamental aspects of Java's implementation.
+As a result, you must be careful to follow the rules, or you risk
+writing fragile code and upsetting the JVM itself.
+<P>
+Simple data types map directly from Java to C. Some difficulties
+arise because arrays are first class objects in Java, whereas
+they are aggregate data types in C. Arrays appear in C code as
+Java objects. Table 19.1 shows the data type mapping from Java
+to C.<BR>
+<P>
+<CENTER><B>Table 19.1. Mapping some Java data types to C data
+types.</B></CENTER>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=139><I>Java type</I></TD><TD WIDTH=204><I>C Argument</I>
+</TD><TD WIDTH=228><I>C Structure</I></TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=3 WIDTH=571><CENTER>Primitive Types</CENTER></TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">boolean</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD>
+<TD WIDTH=228><TT><FONT FACE="Courier">long</FONT></TT></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">char</FONT></TT></TD>
+<TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD><TD WIDTH=228><TT><FONT FACE="Courier">long</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">short</FONT></TT></TD>
+<TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD><TD WIDTH=228><TT><FONT FACE="Courier">long</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">ushort</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD>
+<TD WIDTH=228><TT><FONT FACE="Courier">long</FONT></TT></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">int</FONT></TT></TD>
+<TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD><TD WIDTH=228><TT><FONT FACE="Courier">long</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">float</FONT></TT></TD>
+<TD WIDTH=204><TT><FONT FACE="Courier">float</FONT></TT></TD>
+<TD WIDTH=228><TT><FONT FACE="Courier">float</FONT></TT></TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">double</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">float</FONT></TT>
+</TD><TD WIDTH=228><TT><FONT FACE="Courier">float</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD COLSPAN=3 WIDTH=571><CENTER><B>Complex Types</B></CENTER>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">Object</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">struct Hjava_lang_Object</FONT></TT>
+</TD><TD WIDTH=228><TT><FONT FACE="Courier">struct Hjava_lang_Object</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">boolean[]</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD>
+<TD WIDTH=228><TT><FONT FACE="Courier">long</FONT></TT></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">char[]</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">unicode</FONT></TT>
+</TD><TD WIDTH=228><TT><FONT FACE="Courier">struct HArrayOfChar</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">short[]</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD>
+<TD WIDTH=228><TT><FONT FACE="Courier">struct HArrayOfLong</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">ushort[]</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">unsigned short</FONT></TT>
+</TD><TD WIDTH=228><TT><FONT FACE="Courier">unsigned short</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">int[]</FONT></TT></TD>
+<TD WIDTH=204><TT><FONT FACE="Courier">long</FONT></TT></TD><TD WIDTH=228><TT><FONT FACE="Courier">struct HArrayOfLong</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">float[]</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">float</FONT></TT>
+</TD><TD WIDTH=228><TT><FONT FACE="Courier">struct HArrayOfFloat</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">double[]</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">float</FONT></TT>
+</TD><TD WIDTH=228><TT><FONT FACE="Courier">struct HArrayOfFloat</FONT></TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=139><TT><FONT FACE="Courier">Object[]</FONT></TT>
+</TD><TD WIDTH=204><TT><FONT FACE="Courier">HArrayOfClass</FONT></TT>
+</TD><TD WIDTH=228><TT><FONT FACE="Courier">struct Hjava_lang_Object</FONT></TT>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The most important argument for any native method is the first
+parameter passed to all native methods. It is referred to as an
+automatic parameter. Look back at the example earlier in this
+chapter. The function <TT><FONT FACE="Courier">UserInformation_Username</FONT></TT>
+was passed a <TT><FONT FACE="Courier">struct HUserInformation
+*</FONT></TT> as the first (and only) argument. This pointer serves
+the same function as the implicit <TT><FONT FACE="Courier">this</FONT></TT>
+pointer in C++. That is, the first parameter passed to a native
+method points to the object instance for which that method is
+being called. You can use this pointer to access the instance
+variables of the class. With it, you can even call other methods
+of the object. This automatic parameter takes the form of a <I>handle</I>.
+(See the sidebar &quot;What are Handles, Anyway?&quot;.)
+<P>
+The confluence of handles, multithreading, and garbage collection
+leads to some interesting consequences for your C code. First
+of all, your C code <I>must</I> be fully re-entrant. Because a
+Java application can have an arbitrary number of threads, any
+one of those threads can call your native method-even if another
+thread is already executing in that method, unless you synchronize
+the method. See &quot;Multithreading and Native Methods.&quot;
+Also, remember that the garbage collection runs in an idle thread,
+but another thread may request that the garbage collector run
+immediately.
+<P>
+How does this affect your native methods? The garbage collector
+may relocate objects in memory! As long as you maintain a reference
+to your arguments, particularly your <TT><FONT FACE="Courier">this</FONT></TT>
+pointer, it will not be relocated. However, if you try to store
+the <TT><FONT FACE="Courier">obj</FONT></TT> pointer from the
+object handle (for example, <TT><FONT FACE="Courier">hUserInformation-&gt;obj</FONT></TT>)
+in a global variable, two very bad things will happen. First,
+the garbage collector may relocate or <I>even destroy </I>the
+object. This is because each object has a reference count-a count
+of the outstanding handles to that object. When the object's reference
+count hits zero, it is put into a pool that can be garbage collected
+at any time. When your method returned, the handle passed to it
+went out of scope and the object's reference count was decremented.
+Although you still have a copy of the handle, the object may get
+destroyed without warning. For instance, another thread may cause
+the reference count to hit zero, ven though your variable still
+has a pointer. Then your variable points to deallocated memory.
+The second problem with this scenario comes from the multithreading
+itself. Any function that uses global data is suspect in a multithreaded
+program. It is very difficult to prove that a function using global
+data will behave correctly when faced with re-entrant calls. Here
+again, the most likely consequence is an invalid pointer. The
+JVM is well protected, but it can still be crashed. Never believe
+anyone who tells you that it is impossible to get a core dump
+or GPF from Java! Anytime native methods are involved, the JVM
+is only as robust as those native methods.
+<P>
+In Table 19.1, all of the Java array types appear as handles in
+the object instances. Java treats arrays as first-class types
+and implements them as objects. When passing an array to a native
+method, the JVM translates it into a C-like array. However, the
+array instance variables are still (Java) arrays when accessed
+from C. Therefore, the C code must treat it as an object.
+<P>
+Returning primitive and complex data types works exactly the same
+way as primitive and complex arguments. Sometimes, as in the <TT><FONT FACE="Courier">UserInformation</FONT></TT>
+example, this may involve constructing new Java objects in C code.
+The next section explains how to accomplish this feat.
+<H2><A NAME="UsingJavaObjectsfromNativeMethods"><FONT SIZE=5 COLOR=#FF0000>Using
+Java Objects from Native Methods</FONT></A></H2>
+<P>
+In native methods, all objects appear as handles. Handles are
+at the heart of the Java object model, but you will be shielded
+from directly manipulating handles. A group of C macros and functions
+permit you to deal with handles largely as an abstract type. So
+what can you do with a handle?
+<H3><A NAME="AcessingInstanceVariablesfromNative">Accessing Instance
+Variables from Native Methods</A></H3>
+<P>
+For starters, you can access all of an object's instance variables-all
+those that are visible to your code, at least. In order for your
+native method to access the data members of your object, you dereference
+the handle with the macro <TT><FONT FACE="Courier">unhand()</FONT></TT>.
+<TT><FONT FACE="Courier">Unhand()</FONT></TT> is defined in the
+header file <TT><FONT FACE="Courier">interpreter.h</FONT></TT>,
+which is included by <TT><FONT FACE="Courier">StubPreamble.h</FONT></TT>.
+Listing 19.8 shows an example of accessing an object's instance
+variables from a native method.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.8. Using </B><TT><B><FONT FACE="Courier">unhand()</FONT></B></TT><B>
+to access instance variables.<BR>
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">typedef struct ClassUserInformation {
+<BR>
+&nbsp;&nbsp;&nbsp;long iUserID;<BR>
+} ClassUserInformation;<BR>
+HandleTo(UserInformation);<BR>
+...<BR>
+void UserInformation_SetUserID(struct HUserInformation *hUI,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long newValue)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;unhand(hUI)-&gt;iUserID = newValue;<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=590><B>What Are Handles, Anyway?</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=590>
+<BLOCKQUOTE>
+In the Java implementation, a handle is used to maintain references to objects. Handles allow the use of native languages to truly be &quot;two-way.&quot; That is, the native methods can access instance variables and call other methods, just as pure Java 
+methods can. Handles are at the very heart of the Java object model. In code, a handle is a small structure with two pointers, which together form an object instance. One points to the instance variables, the other to the method table (the vtable in C++ 
+parlance). Handles for your classes are created automatically when you create the header file. (See the sidebar &quot;Where Did <TT><FONT FACE="Courier">HUserInformation</FONT></TT> Come From?&quot;)
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+By using pointers to handles to pass objects around, Java attains great efficiency. Because object manipulations work through handles, there is a single item of interest to the garbage collector, and a natural mechanism for marking objects in use or 
+discarded.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The <TT><FONT FACE="Courier">unhand()</FONT></TT> macro returns
+a pointer to an ordinary C structure. (For handles to objects
+of your class, it returns a pointer to the structure defined in
+your header file.) In all cases, the members of the C structure
+have the same names as the members of the Java class. The types
+may be different, however. Check Table 19.1 for the type mapping.
+You can read and write to the members of the structure. In fact,
+you can even pass pointers to them as arguments to other functions.
+They behave in all ways as members of ordinary C structures, because
+that is exactly what they are. When you use <TT><FONT FACE="Courier">unhand()</FONT></TT>
+on a handle, you are actually looking at the fundamental Java
+implementation of an object. The structures you see using the
+handle are the real structures; there is no behind-the-scenes
+marshalling before the call.
+<H3><A NAME="AccessingClassVariablesfromNativeMe">Accessing Class
+Variables from Native Methods</A></H3>
+<P>
+Class variables (static variables) do not appear in the instance
+variable structure generated by javah. This is because they are
+not stored with each instance of a class, but rather with the
+class structure itself. The Java runtime provides a function that
+you can use to get a pointer to the class variable <TT><FONT FACE="Courier">getclassvariable</FONT></TT>.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">long *getclassvariable(struct ClassClass
+*cb, char *fname);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Notice that this function, like many other Java runtime functions,
+requires a pointer to the class structure. Fortunately, every
+object instance carries this pointer around. The <TT><FONT FACE="Courier">obj_classblock</FONT></TT>
+macro from <TT><FONT FACE="Courier">interpreter.h</FONT></TT>
+takes an object handle as an argument and returns a pointer to
+the class structure.
+<P>
+Why does <TT><FONT FACE="Courier">getclassvariable</FONT></TT>
+return a pointer to a long? It returns a pointer because the native
+language code should be able to modify the class variables, as
+well as see them. The return type is long, but in C, all pointers
+to data are the same size. So, it is safe to cast the returned
+pointer to a pointer to whatever type the class variable really
+is.
+<P>
+Be warned that unless your native methods are synchronized, modifying
+class variables can be problematic. Always remember that, even
+though this method is in C, it really is being called from a multithreaded
+environment. There may be other threads executing Java methods
+or native methods. They may be doing any number of things, including
+accessing the class variable at exactly the same time as the native
+method. Any time global data is involved, whether it is class-wide
+or truly global, synchronization is an issue. See &quot;Multithreading
+and Native Methods&quot; for more details.
+<P>
+Wouldn't it be nice if your native language code could also call
+Java code? Yes, it really would. Fortunately, we can do exactly
+that. It all starts with the object handle. (Where else?) You
+have to use a slightly more complicated mechanism than you might
+think at first. Calling another C function from a function pointer
+in a structure is something familiar to all of us, something like:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">hUserInformation-&gt;Username();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// DO NOT DO THIS!</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Although this would have the net effect of transferring execution
+to the other function, it is not sufficient. Here's why: When
+calling a C function, a stack frame is created with the return
+address and some arguments. (Implementations vary somewhat; this
+is necessarily a very general description.) In Java, there is
+much more <I>context</I> provided for a function call. In addition
+to the processor stack, the JVM maintains a great deal of stack
+information on its own, internal stack. (Presumably, combining
+this stack with the processor stack, both in hardware, is one
+of the benefits of a &quot;Java chip.&quot;)
+<P>
+In order to make the method call, we really have to ask the JVM
+to do the call for us. Here are the three functions declared in
+<TT><FONT FACE="Courier">interpreter.h</FONT></TT> that will make
+these calls:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">HObject *execute_java_constructor(ExecEnv
+*, char *classname,<BR>
+&nbsp;&nbsp;&nbsp;ClassClass *cb, char *signature, ...);<BR>
+long execute_java_dynamic_method(ExecEnv *, HObject *obj,<BR>
+&nbsp;&nbsp;&nbsp;char *method_name, char *signature, ...);<BR>
+long execute_java_static_method(ExecEnv *, ClassClass *cb,<BR>
+&nbsp;&nbsp;&nbsp;char *method_name, char *signature, ...);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Each function serves a specific purpose and is described separately
+in the following section.
+<H3><A NAME="CallingaJavaConstructor">Calling a Java Constructor</A>
+</H3>
+<P>
+Native language code can construct an instance of any Java class
+that is currently loaded. Here again, the native code is hooking
+directly into the implementation of Java. Therefore, the new object
+will behave exactly as it would if you had constructed it in Java
+code. The general form of a native language constructor is this:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">hNewObject = (HClassName *)execute_java_constructor(NULL,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;ClassName&quot;, NULL, &quot;ConstructorSignature&quot;,
+...);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The first parameter here is the <TT><FONT FACE="Courier">ExecEnv</FONT></TT>
+or exception environment that applies to the constructor call.
+You can safely pass a <TT><FONT FACE="Courier">NULL</FONT></TT>
+here, and the constructor will operate with the default exception
+environment. If you are using sophisticated exception handling
+in your native code, please see the section &quot;Native Methods
+and Exceptions.&quot;
+<P>
+The interesting pieces of this call are shown in italics. First
+of all, in order for the native method to use the object that
+gets constructed, it must know the object's class. Usually, this
+comes from including a header file for that class. Only a few
+classes have headers distributed with the JDK: <TT><FONT FACE="Courier">ClassLoader</FONT></TT>,
+<TT><FONT FACE="Courier">String</FONT></TT>, <TT><FONT FACE="Courier">Thread</FONT></TT>,
+and <TT><FONT FACE="Courier">ThreadGroup</FONT></TT>. However,
+by using javah, you can create header files for whatever classes
+you need. (<A HREF="ch14.htm" >See Chapter 14</A> for details.)
+If you do not need to access the object's methods or instance
+variables, you can cast the return value from <TT><FONT FACE="Courier">execute_java_constructor</FONT></TT>
+to an <TT><FONT FACE="Courier">HObject</FONT></TT> pointer. <TT><FONT FACE="Courier">HObject</FONT></TT>
+is the handle to the base class <TT><FONT FACE="Courier">Object</FONT></TT>.
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=583><B>Loading Java Classes from Native Language Code</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=583>
+<BLOCKQUOTE>
+If you need to load a class directly from native code, you can call the function:</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">int LoadFile(char *<I>filename</I>, char *<I>directory</I>, char *<I>SourceHint</I>);</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+It is safe to pass <TT><FONT FACE="Courier">NULL</FONT></TT> for <TT><FONT FACE="Courier">SourceHint</FONT></TT>. This function will cause the <TT><FONT FACE="Courier">ClassLoader</FONT></TT> to find the file and load it into memory. Once the class is 
+loaded, its static block is executed. Be aware that the static block can throw an exception.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The <TT><FONT FACE="Courier">ClassLoader</FONT></TT> also provides native code for the <TT><FONT FACE="Courier">DoImport</FONT></TT> function.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">int DoImport(char *<I>name</I>, char *<I>SourceHint</I>);</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+This will behave exactly as if the Java code had contained an &quot;<TT><FONT FACE="Courier">import <I>name</I>;</FONT></TT>&quot; line.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The next item of interest in this call is the class name. This
+is a text string that specifies what class is to be instantiated.
+This class must already be loaded, or reside on the class path.
+When you pass a class name, the Java runtime must perform a lookup
+on the class itself. However, if you have a pointer to the class
+itself, you can leave the class name argument <TT><FONT FACE="Courier">NULL</FONT></TT>
+and pass the <TT><FONT FACE="Courier">ClassClass</FONT></TT> pointer
+in the third argument. For example, if you wanted to clone an
+existing object of any class, you might use code like this:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">struct HObject *Cloner_Clone(struct HCloner
+*hCloner,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+HObject *hObj)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;HObject *hNewInst;<BR>
+&nbsp;&nbsp;&nbsp;hNewInst = execute_java_constructor(NULL, NULL,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj_classblock(hObject),
+&quot;(A)&quot;, hObj);<BR>
+&nbsp;&nbsp;&nbsp;return hNewInst;<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This native method can clone any object that has a copy constructor.
+The macro <TT><FONT FACE="Courier">obj_classblock</FONT></TT>
+is another of the handle convenience macros. For any object, it
+will return a pointer to the class structure for that object.
+Many of the built-in functions of the Java runtime require a pointer
+to the class structure &quot;<TT><FONT FACE="Courier">ClassClass</FONT></TT>&quot;.
+<P>
+The constructor signature is used to select which constructor
+to invoke. It is a character string that specifies the number
+and type of arguments to follow. Table 19.2 shows the possible
+characters and their meanings.<BR>
+<P>
+<CENTER><B>Table 19.2. Signature characters and their meanings.</B></CENTER>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER><I>Character</I></CENTER></TD><TD WIDTH=198><I>Meaning</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>A</CENTER></TD><TD WIDTH=198>Any (object)
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>[</CENTER></TD><TD WIDTH=198>Array (object)
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>B</CENTER></TD><TD WIDTH=198>Byte</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>C</CENTER></TD><TD WIDTH=198>Char</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>L</CENTER></TD><TD WIDTH=198>Class</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>;</CENTER></TD><TD WIDTH=198>End class
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>E</CENTER></TD><TD WIDTH=198>Enumeration
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>F</CENTER></TD><TD WIDTH=198>Float</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>D</CENTER></TD><TD WIDTH=198>Double</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>(</CENTER></TD><TD WIDTH=198>Function argument list start
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>)</CENTER></TD><TD WIDTH=198>Function argument list end
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>I</CENTER></TD><TD WIDTH=198>Int</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>J</CENTER></TD><TD WIDTH=198>Long</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>S</CENTER></TD><TD WIDTH=198>Short</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>V</CENTER></TD><TD WIDTH=198>Void</TD>
+</TR>
+<TR VALIGN=TOP><TD WIDTH=84><CENTER>Z</CENTER></TD><TD WIDTH=198>Boolean
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+By concatenating characters from this set, you specify what arguments
+are to follow. Two characters have special significance: the parentheses
+indicate the beginning and end of the argument list. For a constructor,
+parentheses should enclose the entire argument list. For other
+methods, the signature will also indicate the return type of the
+method. In the preceding example, the signature is &quot;(A)&quot;,
+which means the constructor must simply take one argument-an object
+instance. This implies that our constructor could receive objects
+of other classes as arguments. If we knew the class name, say
+<TT><FONT FACE="Courier">Foo</FONT></TT>, for example, we could
+write the signature as &quot;<TT><FONT FACE="Courier">(LFoo;)</FONT></TT>&quot;,
+which means the constructor must take an instance of class <TT><FONT FACE="Courier">Foo</FONT></TT>
+<I>or its subclasses</I>, as an argument. Here is a revised version
+of the <TT><FONT FACE="Courier">Clone</FONT></TT> method, which
+takes into account the class name of the argument passed in:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">struct HObject *Cloner_Clone(struct HCloner
+*hCloner,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+struct HObject *hObj)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;HObject *hNewInst;<BR>
+&nbsp;&nbsp;&nbsp;char&nbsp;&nbsp;&nbsp;&nbsp; signature[80];
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;sprintf(signature, &quot;(L%s;)&quot;, classname(obj_classblock(hObj)));
+<BR>
+&nbsp;&nbsp;&nbsp;hNewInst = execute_java_constructor(NULL, NULL,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+obj_classblock(hObject), signature, hObj);<BR>
+&nbsp;&nbsp;&nbsp;return hNewInst;<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Notice that, although &quot;<TT><FONT FACE="Courier">name</FONT></TT>&quot;
+is a simple member of struct <TT><FONT FACE="Courier">ClassClass</FONT></TT>,
+we use the <TT><FONT FACE="Courier">classname</FONT></TT> macro
+(from <TT><FONT FACE="Courier">oobj.h</FONT></TT>) instead of
+a direct access. In general, you should never access a structure
+member directly. Instead, use one of the macros provided in <TT><FONT FACE="Courier">oobj.h</FONT></TT>
+or <TT><FONT FACE="Courier">interpreter.h</FONT></TT> (both included
+by <TT><FONT FACE="Courier">StubPreamble.h</FONT></TT>). The macros
+shield you from future changes to the structures. What if there
+is no macro to access a particular member? Then you probably are
+not meant to use that member in the first place!
+<P>
+After the constructor signature, you can place a variable length
+argument list. These are the arguments that will be passed to
+your constructor. You should be careful to make sure that the
+type, number, and order of your arguments match the signature.
+Otherwise, your constructor may be called with garbage for arguments.
+<P>
+If there is an error while calling the constructor, <TT><FONT FACE="Courier">execute_java_constructor</FONT></TT>
+will return <TT><FONT FACE="Courier">NULL</FONT></TT>.
+<H3><A NAME="CallingaJavaMethod">Calling a Java Method</A></H3>
+<P>
+Now for the really good part. You can call any Java method from
+native code. It all works through the handle to the object instance.
+If the method to be called is static, see the next section. For
+dynamic methods-including final and native methods-use the <TT><FONT FACE="Courier">execute_java_dynamic_method</FONT></TT>
+function:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">long execute_java_dynamic_method(ExecEnv
+*, HObject *obj,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;char *method_name, char *signature, ...);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The first parameter is the same as the first argument to <TT><FONT FACE="Courier">execute_java_</FONT></TT>constructor-an
+exception environment. Again, it is safe to pass a <TT><FONT FACE="Courier">NULL</FONT></TT>
+for this parameter. If you require more sophisticated exception
+handling for the native code, see &quot;Native Methods and Exceptions.&quot;
+<P>
+The second parameter is the object instance itself. This can be
+any valid object handle, whether it was passed from Java code
+as an argument or constructed in the native method itself.
+<P>
+The next parameter is the name of the method to be invoked. If
+this method does not exist in the object passed, <TT><FONT FACE="Courier">execute_java_dynamic_method</FONT></TT>
+will throw an exception.
+<P>
+Finally, the fourth argument is the signature of the instance
+method. Again, the signature indicates the type and number of
+arguments to be passed to the instance method being called. This
+must be the same number and type of remaining arguments in the
+call to <TT><FONT FACE="Courier">execute_java_dynamic_method</FONT></TT>.
+<P>
+The signature for a method differs slightly from the signature
+for a constructor. A method signature needs to indicate the expected
+return type. The signature can show this with an extra character
+after the closing parenthesis. For example, consider a method
+that takes arguments of two classes and a float and returns a
+byte:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">public byte[] FunkyMethod(Object fc,
+SecondClass sc,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float
+difference);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This method would have the signature &quot;<TT><FONT FACE="Courier">(ALSecondClass;F)B</FONT></TT>&quot;.
+The call to <TT><FONT FACE="Courier">execute_java_dynamic_method</FONT></TT>
+would then have three arguments after the signature: a generic
+object, an instance of <TT><FONT FACE="Courier">SecondClass</FONT></TT>,
+and a float.
+<P>
+The return value from <TT><FONT FACE="Courier">execute_java_dynamic_method</FONT></TT>
+depends on the method being invoked. It is declared as <TT><FONT FACE="Courier">long</FONT></TT>,
+however, so you will need to cast it to the appropriate type.
+(Because <TT><FONT FACE="Courier">long</FONT></TT> is wide enough
+to hold any primitive type or a handle, it is safe to cast it
+to whatever the method really returns.) Be careful, though. Because
+you are calling the method by a function, not directly, the compiler
+cannot possibly notify you of any changes in the method definition.
+<H3><A NAME="CallingaStaticJavaMethod">Calling a Static Java Method</A>
+</H3>
+<P>
+Calling a class method from native code is similar to calling
+a dynamic method. Use the <TT><FONT FACE="Courier">execute_java_static_method</FONT></TT>
+function:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">long execute_java_static_method(ExecEnv
+*, ClassClass *cb,<BR>
+&nbsp;&nbsp;&nbsp;char *method_name, char *signature, ...);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This is entirely analogous to the <TT><FONT FACE="Courier">execute_java_dynamic_method</FONT></TT>
+function, with one crucial difference. Instead of taking an object
+instance as a parameter, <TT><FONT FACE="Courier">execute_java_static_method</FONT></TT>
+requires a class structure. This class structure can come from
+an object instance, using the <TT><FONT FACE="Courier">obj_classblock</FONT></TT>
+macro, or it can be retrieved using the <TT><FONT FACE="Courier">FindClass</FONT></TT>
+function:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">ClassClass* FindClass(ExecEnv *ee, char
+*classname, bool_t resolve);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+<TT><FONT FACE="Courier">FindClass</FONT></TT> will return a pointer
+to the class structure for any class name you pass in. This function
+may cause several things to happen. First, the named class may
+be loaded, which will in turn cause the named class's static block
+to execute. Exceptions may be thrown by <TT><FONT FACE="Courier">FindClass</FONT></TT>
+itself, if it cannot find the class, or by the static block of
+the named class, when it is loaded.
+<P>
+Like the other runtime functions that can throw exceptions, <TT><FONT FACE="Courier">FindClass</FONT></TT>
+can take an exception environment as an argument. As usual, it
+is safe to pass a <TT><FONT FACE="Courier">NULL</FONT></TT> here,
+in which case <TT><FONT FACE="Courier">FindClass</FONT></TT> will
+use the current exception environment.
+<H2><A NAME="MultithreadingandNativeMethods"><FONT SIZE=5 COLOR=#FF0000>Multithreading
+and Native Methods</FONT></A></H2>
+<P>
+Even though the native methods are written in C, they still execute
+within the context of the Java environment, including multithreading.
+Native methods will sometimes have sections of code that modify
+global (class or application) data, which modify important state
+variables, or which must call non-re-entrant functions. (Some
+platform-specific APIs fall into this category.) These sections
+are called <I>critical sections</I>, because it is critical that
+no more than one thread executes the section of code at a time.
+Critical sections are not unique to native methods: the same issues
+exist when dealing with multithreading in pure Java code.
+<P>
+In order to ensure that the native methods maintain the application
+in a consistent state, these native methods will have to be synchronized
+with other threads. The simplest way to accomplish this is to
+declare the native methods as synchronized in the Java code. Sometimes,
+however, this will be insufficient, either for performance reasons
+(for example, a method that does a long computation, but only
+changes the condition variable infrequently), or because a multithreaded
+application needs to use an existing object that does not have
+synchronized methods (most do not).
+<P>
+In these cases, your native code can perform the synchronization
+directly. In Java code, you could put the critical section inside
+a synchronized block. The native method analogue to a synchronized
+block directly uses a <I>monitor</I>.
+<P>
+Monitors prevent two threads from simultaneously executing a section
+of code. Monitors were first introduced in C.A.R. Hoare's seminal
+paper &quot;Communicating Sequential Processes&quot; (<I>Communications
+of the ACM</I>, Vol. 21, No. 8, August 1978). Typically, each
+condition variable has a monitor associated with it. The monitor
+acts as a lock on that data. Unless a thread holds the monitor,
+it cannot modify <I>or inspect</I> that data. Obviously, a thread
+should hold the monitor as briefly as possible.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+In Java, critical sections are usually methods. You can synchronize blocks of code smaller than methods. However, this leads to complex code, with many failure modes. Deadlock prevention at the method level is fairly straightforward, but it becomes rapidly 
+more difficult when dealing with many small blocks of synchronized code.</BLOCKQUOTE>
+<BLOCKQUOTE>
+Even when dealing with native methods, it is best to use synchronization at the method level.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Monitors provide the Java runtime system support for thread synchronization.
+Every object instance has a unique monitor attached to it. In
+this case, the entire object is considered a condition variable.
+Through a trio of functions, native methods can also use monitors.
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">void MonitorWait(unsigned int, int);
+<BR>
+void MonitorNotify(unsigned int);<BR>
+void MonitorNotifyAll(unsigned int);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+These functions are analogous to the <TT><FONT FACE="Courier">wait()</FONT></TT>,
+<TT><FONT FACE="Courier">notify()</FONT></TT>, and <TT><FONT FACE="Courier">notifyAll()</FONT></TT>
+functions in Java:<BR>
+
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=176><TT><FONT FACE="Courier">monitorWait</FONT></TT>
+</TD><TD WIDTH=414>This function blocks the executing thread until the monitor is notified. If you encounter a deadlock, the first place to start is to check each occurrence of <TT><FONT FACE="Courier">monitorWait()</FONT></TT>.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=176><TT><FONT FACE="Courier">monitorNotify</FONT></TT>
+</TD><TD WIDTH=414>This function awakens no more than one waiting thread. It signals that the monitor is now available. It must only be called from the thread that holds the monitor. If an unhandled exception occurs while a thread holds the monitor, any 
+threads waiting on the monitor will be blocked indefinitely.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=176><TT><FONT FACE="Courier">monitorNotifyAll</FONT></TT>
+</TD><TD WIDTH=414>This function awakens all threads waiting on the monitor. It signals that the monitor is now available.
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=590><B>Tip</B> </TD></TR>
+<TR VALIGN=TOP><TD WIDTH=590>
+<BLOCKQUOTE>
+Monitors are re-entrant, which means that a thread that already holds a monitor will not deadlock if it calls <TT><FONT FACE="Courier">monitorWait</FONT></TT> again.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Monitor operations are atomic. They are not subject to race conditions (although the code that calls them is).</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The Java implementation of monitors has a nice feature that helps
+to prevent deadlock. Consider this scenario: a synchronized native
+method calls <TT><FONT FACE="Courier">monitorWait</FONT></TT>,
+to wait for another synchronized method (native or not) to notify
+the monitor. Because the first method is synchronized, it already
+holds the monitor when <TT><FONT FACE="Courier">monitorWait</FONT></TT>
+is called. How is the second method ever supposed to execute?
+The implementation of <TT><FONT FACE="Courier">monitorWait</FONT></TT>
+makes this possible by releasing the monitor on entry. This allows
+the second method to execute and notify the monitor. Once the
+monitor is notified, the first thread awakens. On exit from <TT><FONT FACE="Courier">monitorWait</FONT></TT>,
+the first thread acquires the monitor again.
+<P>
+All three of the monitor functions are declared as receiving an
+unsigned integer. To get the monitor for an object, use the <TT><FONT FACE="Courier">obj_monitor</FONT></TT>
+macro on the object's handle.
+<P>
+Here is an example of a synchronized string. This is an example
+of a producer/consumer problem. (Most synchronization problems
+can be reduced to one of two classic examples, producer/consumer
+and the colorfully named &quot;dining philosophers problem.&quot;
+The dining philosophers problem is discussed in <A HREF="ch20.htm" >Chapter 20</A>,
+&quot;Working with Threads.&quot;) In a producer/consumer problem,
+one thread produces data items while another consumes them. Both
+operations must be synchronized so that the consumer gets each
+item exactly once. Listing 19.9 contains the Java definition of
+the synchronized string class, <TT><FONT FACE="Courier">SyncString</FONT></TT>.
+Listing 19.10 shows the native method implementations of the <TT><FONT FACE="Courier">SyncString.Set</FONT></TT>
+and <TT><FONT FACE="Courier">SyncString.Get</FONT></TT> methods.
+Note once again that this could easily have been accomplished
+without the use of native methods. You will find that native methods
+are only useful in a very small set of circumstances.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.9. Java class for </B><TT><B><FONT FACE="Courier">SyncString</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">class SyncString {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String str;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int bAvail;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public native synchronized void Set(String
+s);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public native synchronized String Get();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;static {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.loadLibrary(&quot;SyncString&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} catch (UnsatisfiedLinkError
+e) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.err.println(&quot;Cannot
+find library SyncString.&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.exit(-1);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 19.10. Native language implementation for </B><TT><B><FONT FACE="Courier">SyncString</FONT></B></TT><B>.
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">#include &lt;StubPreamble.h&gt;<BR>
+#include &quot;SyncString.h&quot;<BR>
+<BR>
+<BR>
+void SyncString_Set(struct HSyncString *this,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+Hjava_lang_String *str)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;while(unhand(this)-&gt;bAvail == TRUE)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;monitorNotify(obj_monitor(this));
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unhand(this)-&gt;bAvail = TRUE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unhand(this)-&gt;str = str;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;monitorNotify(obj_monitor(this));<BR>
+}<BR>
+<BR>
+struct Hjava_lang_String *SyncString_Get(struct HSyncString *this)
+<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Hjava_lang_String *hstrTemp;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;while(unhand(this)-&gt;bAvail == FALSE)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;monitorWait(obj_monitor(this));
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;unhand(this)-&gt;bAvail = FALSE;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hstrTemp = unhand(this)-&gt;str;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;monitorNotify(obj_monitor(this));<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return hstrTemp;<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B> </TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+There are other functions that allow native code to construct new monitors not associated with an object. Use of these functions is strongly discouraged, due to the increasing difficulty of deadlock prevention in the face of many monitors.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="NativeMethodsandExceptions"><FONT SIZE=5 COLOR=#FF0000>Native
+Methods and Exceptions</FONT></A></H2>
+<P>
+Native methods can throw exceptions just like a regular Java method.
+As with any other method that throws an exception, the native
+method in the Java class must declare the exceptions that it can
+throw. This looks exactly like the <TT><FONT FACE="Courier">throws</FONT></TT>
+clause for any other method.
+<P>
+Your native code throws the actual exception using the <TT><FONT FACE="Courier">SignalError</FONT></TT>
+function:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">void SignalError(ExecEnv *ee, char *Exception,
+char *SourceHint);</FONT></TT>
+</BLOCKQUOTE>
+<P>
+The first argument is the exception environment to use for the
+exception. Generally, you will pass a <TT><FONT FACE="Courier">NULL</FONT></TT>
+here to indicate the current environment.
+<P>
+The second argument is the fully specified exception name. This
+name includes the package in which the exception is defined. It
+should also be specified as a path, replacing the usual period
+separators with forward slashes (that is, UNIX-style path separators).
+<P>
+The third argument is a source code hint. You can pass a string
+that describes the error or provides some useful details. This
+string will appear on the walkback if the exception is not handled.
+It is safe to pass a <TT><FONT FACE="Courier">NULL</FONT></TT>
+here.
+<H2><A NAME="UsingJavaStringsfromNativeMethods"><FONT SIZE=5 COLOR=#FF0000>Using
+Java Strings from Native Methods</FONT></A></H2>
+<P>
+Because there is an &quot;impedance mismatch&quot; between Java
+strings and C strings, there are several convenience functions
+that allow C code to use the Java strings. Java strings offer
+several advantages over C strings, including reference counting,
+automatic memory management, and Unicode support. On the other
+hand, no C runtime library function or API function will expect
+a Java string. The utility functions provide a bridge between
+Java and C strings.
+<P>
+These functions are defined in <TT><FONT FACE="Courier">javaString.h</FONT></TT>,
+which will be included automatically if you include <TT><FONT FACE="Courier">StubPreamble.h</FONT></TT>:
+<UL>
+<LI>The following function will print a Java string on <TT><FONT FACE="Courier">stdout:
+<BR>
+void javaStringPrint(Hjava_lang_String *)</FONT></TT>
+<LI>The following function returns the length of the Java string,
+in characters:<BR>
+<TT><FONT FACE="Courier">int javaStringLength(Hjava_lang_String
+*)</FONT></TT>
+<LI>The following function will construct a new Java string from
+a given C string. The second argument indicates the length of
+the buffer passed in the first argument:<BR>
+<TT><FONT FACE="Courier">Hjava_lang_String *makeJavaString(char
+*, int)</FONT></TT>
+<LI>The following interesting function allocates some temporary
+memory for a C string initialized from the given Java string.
+Once all references to this storage are eliminated, the memory
+is automatically deallocated. In other words, as long as you keep
+this pointer in a variable, the memory is valid:<BR>
+<TT><FONT FACE="Courier">char *makeCString(Hjava_lang_String *)</FONT></TT>
+<LI>The following function uses &quot;malloc&quot; to allocate
+some memory for a C string initialized from the given Java string:
+<BR>
+<TT><FONT FACE="Courier">char *mallocCString(Hjava_lang_String
+*)</FONT></TT>
+<LI>The following function will convert the characters of the
+given Java string into a unicode string. It assumes that the buffer
+passed in as the second argument already exists. The third argument
+specifies the buffer length. The function returns the unicode
+string's address:<BR>
+<TT><FONT FACE="Courier">unicode *javaString2unicode(Hjava_lang_String
+*, unicode*, int)</FONT></TT>
+<LI>The following function will convert the characters of the
+given Java string into a C string. It assumes that the buffer
+passed in as the second argument already exists. The third argument
+specifies the buffer length. The function returns the C string's
+address:<BR>
+<TT><FONT FACE="Courier">char *javaString2Cstring(Hjava_lang_String
+*, char *, int)</FONT></TT>
+</UL>
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+Native methods provide a powerful means of extending the capabilities
+of the Java runtime environment. Although native methods are inherently
+platform-specific, there are certain cases where they might be
+used. By tapping directly into the implementation of the Java
+object model, the native language functions can access instance
+and class variables, construct objects, and call static and dynamic
+methods. Native methods can be synchronized like ordinary Java
+methods. They can also throw exceptions. To bridge the gap between
+Java strings and C strings, the Java runtime environment provides
+a number of utility functions.
+<P>
+The steps to constructing native methods are as follows:
+<OL>
+<LI>Define the class interface.
+<LI>Write the Java classes.
+<LI>Compile the Java classes.
+<LI>Use javah to create the header and stub files.
+<LI>Write the implementation file.
+<LI>Compile the C files into a dynamically loadable library.
+<LI>Install the dynamically loadable library on the target platform.
+</OL>
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch18.htm"><IMG SRC="http://docs.rinet.ru/JavDev/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JavDev/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JavDev/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="ch20.htm"><IMG 
+SRC="http://docs.rinet.ru/JavDev/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

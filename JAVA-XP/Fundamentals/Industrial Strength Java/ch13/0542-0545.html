@@ -1,0 +1,262 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0537-0541.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0546-0551.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-542"><P>Page 542</P></A>
+
+
+<P>Listing 13.33 Continued
+</P>
+<P>Listing 13.33 Synchronized Methods Protecting Shared Variables
+</P>
+
+<PRE>
+private Vector v;
+
+public synchronized void push(Object o) {
+        //insert this element as the last in the Vector<BR>
+
+       int s = v.size();
+        v.insertElementAt(o, s);
+}
+public synchronized Object pop() {
+        //remove the last element in the Vector
+        //and return it.
+        Object o = v.lastElement();
+        int s = v.size();
+        v.removeElementAt(s-1);
+}
+</PRE>
+
+<P>A thread entering push() or pop() locks &quot;this&quot; and therefore excludes other threads
+from entering either method.
+</P>
+
+<H4><A NAME="ch13_ 32">
+Locks and Synchronized Blocks
+</A></H4>
+
+<P>The synchronized keyword can also be used to lock and unlock an object around a
+block of code instead of using an entire method. This is useful in the following situations:
+</P>
+
+<UL>
+<LI>          Synchronizing the entire method is likely to lock the object for an
+inconvenient length of time.
+<LI>          The method doesn't return (for example, the run() method of a Thread).
+</UL>
+
+<P>When synchronizing a block, Java requires that you specify the object to be locked.
+The version of push() in listing 13.34 is equivalent to the version in listing 13.33,
+which synchronized the entire method by declaring it synchronized:
+</P>
+
+<P>Listing 13.34 The push() Method Implemented with a Synchronized Block
+</P>
+<PRE>
+public void push(Object o) {
+        synchronized(this) {
+                //insert this element as the last
+                //in the Vector
+                int s = v.size();
+                v.insertElementAt(o, s);
+</PRE>
+
+<A NAME="PAGENUM-543"><P>Page 543</P></A>
+
+<PRE>
+        }
+}
+</PRE>
+
+<P>Every Java object contains a lock; it's part of the java.lang.Object class. It often
+makes sense to lock an object other than this. For example, push() and pop() could lock
+the Vector object to protect it from access by multiple threads, as in listing 13.35:
+</P>
+
+
+<P>Listing 13.35 Synchronization on an Object
+</P>
+<PRE>
+public void push(Object o) {
+        synchronized(v) {
+                //insert this element as the last
+                //in the Vector
+                int s = v.size();
+                v.insertElementAt(o, s);
+        }
+}
+public synchronized Object pop() {
+        synchronized(v) {
+                //remove the last element in the Vector
+                //and return it.
+                Object o = v.lastElement();
+                int s = v.size();
+                v.removeElementAt(s-1);
+        }
+}
+</PRE>
+
+<P>The API for the java.util.Vector class shows that many of its methods are
+synchronized already (including insertElementAt(), removeElementAt(), and lastElement()).
+These methods lock the Vector object when called. The push() and pop() methods in listing
+13.35 also now lock the Vector object; however, if a thread attempts to lock an object that it
+has already locked, that lock is always granted; a thread can't lock itself out. Thus a
+synchronized block, such as push() or pop(), can freely call another block or method
+synchronized on the same object.
+</P>
+
+<P>To summarize, a thread that synchronizes an object locks out other threads from
+also synchronizing that object. It does not lock itself out.
+</P>
+
+<B>
+Synchronized Class Methods
+</B>
+
+<P>Class methods can also be synchronized; however, because no object is available,
+they lock the java.lang.Class object for that class. If an object method requires access to a
+class variable, synchronize on the Class object, as in listing 13.36.
+</P>
+<PRE>
+                                                                  continues
+</PRE>
+<A NAME="PAGENUM-544"><P>Page 544</P></A>
+
+<P>Listing 13.36 Continued
+</P>
+
+<P>Listing 13.36 Synchronization on the Class Object
+</P>
+<PRE>
+private static
+     Vector classVector;
+//Get the size of the classVector.  Synchronized to prevent mutual
+//access to class variables.
+public static synchronized void getSize() {
+        return classVector.size();
+}
+
+public synchronized void addObject() {
+        //access the classVector.
+        synchronized(this.getClass()) {
+                classVector.insertElementAt(this,
+                        classVector.size());
+                classVector.trimToSize();
+        }
+}
+</PRE>
+
+<P>As addObject() demonstrates, a thread can have locks on a number of objects at the
+same time. The addObject() method itself is synchronized, so this will be locked.
+The addObject() method also contains a block synchronized on this.getClass(), so the
+Class object will also be locked. The synchronizing on the Class object is necessary
+because addObject() accesses the static classVector variable, and it's possible that another
+thread might call the class method getSize() at the same time.
+</P>
+
+<B>
+Synchronization and Overriding Methods
+</B>
+
+<P>The synchronized keyword is not considered by Java when determining whether a
+method in a subclass overrides a method in the superclass. In other words, you can override
+a method that is synchronized with one that isn't (and vice versa), but this should be
+done with caution.
+</P>
+
+<P>For example, the java.lang.StringBuffer class provides a synchronized method to append
+a String to the end of the buffer. Listing 13.37 demonstrates a method that uses
+a StringBuffer.
+</P>
+
+<P>Listing 13.37 Relying on a Method's Synchronization
+</P>
+<PRE>
+public void addStringToBuffer(String s, StringBuffer sb) {
+</PRE>
+
+
+<A NAME="PAGENUM-545"><P>Page 545</P></A>
+
+
+<PRE>
+        //Add the string to the buffer. It doesn't
+        //matter if several threads all try to append
+        //at once because StringBuffer.append() is
+        //synchronized.
+        sb.append(s);
+}
+</PRE>
+
+
+<P>If a subclass of StringBuffer overrides append() with an unsynchronized version and
+that subclass is passed to addStringToBuffer(), then no synchronization protects the call
+to append(). Because two threads need to call addStringToBuffer() simultaneously
+for problems to occur, the bug might remain hidden for a long time before surfacing.
+The ensuing section about deadlock also demonstrates problems that can occur when it's
+not obvious whether a method is synchronized.
+</P>
+
+<H4><A NAME="ch13_ 33">
+Suspending Threads
+</A></H4>
+
+<P>If thread A needs to stop and wait for thread B to reach a certain point, it appears that
+the best way to achieve this is to call suspend() on A and have B later call resume() on
+it. However, calling suspend() can suspend a thread at any point, even if it's executing
+a synchronized block. Any locks held by the thread will still be held while the thread
+is suspended. This makes suspend() and resume() unsuitable for controlling the execution
+of a thread that needs to stop and wait for some condition. Instead, Java provides the
+wait() and notify() methods as described in the next section.
+</P>
+
+<H4><A NAME="ch13_ 34">
+Wait and Notify
+</A></H4>
+
+<P>Locks are sometimes called condition variables in concurrent programming
+terminology because they can be used to make a thread wait until some condition is true. To do
+this, locks can be manipulated directly via the wait() and notify() methods of
+the java.lang.Object class, as shown in listing 13.38.
+</P>
+
+<P>Listing 13.38 java.lang.Thread wait() and notify() Methods
+</P>
+<PRE>
+//Wait on this object until notified.
+public final void wait()
+        throws InterruptedException;
+
+//Wait until notified or the specified time has elapsed.
+public final void wait(long millis)
+        throws InterruptedException;
+
+</PRE>
+<PRE>
+                                                                 continues
+</PRE>
+<P><CENTER>
+<a href="0537-0541.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0546-0551.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

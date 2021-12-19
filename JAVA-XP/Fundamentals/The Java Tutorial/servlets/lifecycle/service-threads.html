@@ -1,0 +1,224 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!--NewPage-->
+<html>
+<head>
+<title>Handling Service Threads at Servlet Termination</title>
+</head>
+<body BGCOLOR="#ffffff">
+
+
+
+
+
+
+
+
+
+
+<table width="100%">
+<tr>
+<td align=left>
+<a href="destroy.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=bottom border=0 alt="Previous | "></a><a
+href="..\client-state\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=bottom border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=bottom border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=bottom border=0 alt="Servlets | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>The Life Cycle of a Servlet</em></strong></a>
+</td>
+</tr>
+</table>
+<p>
+<center>
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+<IMG SRC="http://docs.rinet.ru/Jtuta/images/shoeline2.GIF" ALIGN="BOTTOM" BORDER="0" WIDTH="202"
+    HEIGHT="25" NATURALSIZEFLAG="3">
+</center>
+<p> 
+
+<h2>
+    Handling Service Threads at Servlet Termination
+</h2>
+<p>
+<blockquote>
+
+<p>All of a servlet's service methods should be complete when a servlet is
+removed.  The server tries to ensure this by calling the
+<code>destroy</code> method only after all service requests have returned,
+or after a server-specific grace period, whichever comes first.  If your
+servlet has operations that take a long time to run (that is, operations
+that may run longer than the server's grace period), the operations could
+still be running when <code>destroy</code> is called.  You must make sure
+that any threads still handling client requests complete; the remainder of
+this section describes a technique for doing this.
+
+<p>If your servlet has potentially long-running service requests, use the
+techniques in this lesson to: <br>
+
+<ul>
+
+<li>Keep track of how many threads are currently running the
+<code>service</code> method. <br>&nbsp;
+
+<li>Provide a clean shutdown by having the <code>destroy</code> method notify
+long-running threads of the shutdown and wait for them to complete <br> &nbsp;
+
+<li>Have the long-running methods poll periodically to check for shutdown and,
+if necessary, stop working, clean up and return. <br>&nbsp;
+
+</ul>
+
+
+<h2>Tracking Service Requests</h2>
+
+<p>To track service requests, include a field in your servlet class that
+counts the number of service methods that are running.  The field should
+have access methods to increment, decrement, and return its value.  For
+example:
+
+<blockquote>
+<pre>
+public ShutdownExample extends HttpServlet {
+    private int serviceCounter = 0;
+    ...
+    //Access methods for serviceCounter
+    protected synchronized void enteringServiceMethod() {
+	serviceCounter++;
+    }
+    protected synchronized void leavingServiceMethod() {
+        serviceCounter--;
+    }
+    protected synchronized int numServices() {
+	return serviceCounter;
+    }
+}
+</pre>
+</blockquote>
+
+
+<p>The <code>service</code> method should increment the service counter
+each time the method is entered and decrement the counter each time the
+method returns.  This is one of the few times that your
+<code>HttpServlet</code> subclass should override the <code>service</code>
+method.  The new method should call <code>super.service</code> to preserve
+all the original <code>HttpServlet.service</code> method's functionality.
+
+<pre>
+    protected void service(HttpServletRequest req, HttpServletResponse resp)
+        throws ServletException, IOException
+    {
+	enteringServiceMethod();
+	try {
+            super.service(req, resp);
+        } finally {
+            leavingServiceMethod();
+        }
+    }
+</pre>
+
+<br> &nbsp;
+<h2>Providing a Clean Shutdown</h2>
+
+<p>To provide a clean shutdown, your destroy method should not destroy any
+shared resources until all the service requests have completed.  One part of
+doing this is to check the service counter.  Another part is to notify the
+long-running methods that it is time to shut down.  For this, another field is
+required along with the usual access methods.  For example:
+
+<blockquote>
+<pre>
+public ShutdownExample extends HttpServlet {
+    private boolean shuttingDown;
+    ...
+    //Access methods for shuttingDown
+    protected setShuttingDown(boolean flag) {
+	shuttingDown = flag;
+    }
+    protected boolean isShuttingDown() {
+	return shuttingDown;
+    }
+}
+</pre>
+</blockquote>
+
+<p>An example of the <code>destroy</code> method using these fields to provide
+a clean shutdown is shown below:
+
+<pre>
+    public void destroy() {
+
+        /* Check to see whether there are still service methods running,
+	 * and if there are, tell them to stop. */
+	if (numServices() > 0) {
+	    setShuttingDown(true);
+        }
+
+	/* Wait for the service methods to stop.  */
+	while(numServices() > 0) {
+            try {
+                Thread.sleep(interval);
+            } catch (InterruptedException e) {
+            }
+        }
+    }
+</pre>
+
+<br>&nbsp;
+<h2>Creating Polite Long-running Methods</h2>
+
+The final step in providing a clean shutdown is to make any long-running
+methods behave politely.  Methods that might run for a long time should
+check the value of the field that notifies them of shut downs, and
+interrupt their work if neceesary.  For example:
+
+<pre>
+    public void doPost(...) {
+        ...
+	for(i = 0; ((i < lotsOfStuffToDo) && !isShuttingDown()); i++) {
+	    try {
+		partOfLongRunningOperation(i);
+	    } catch (InterruptedException e) {
+            }
+        }
+    }
+</pre>
+
+</blockquote>
+<p>
+<hr size=4>
+<p> 
+<table width="100%">
+<tr>
+<td align=left>
+<a href="destroy.html"><img src="http://docs.rinet.ru/Jtuta/images/PreviousArrow.gif" width=26 height=26 align=top border=0 alt="Previous | "></a><a
+href="..\client-state\index.html"><img src="http://docs.rinet.ru/Jtuta/images/NextArrow.gif" width=26 height=26 align=top border=0 alt="Next | "></a><a
+href="..\..\trailmap.html"><img src="http://docs.rinet.ru/Jtuta/images/WayUpArrow.gif" width=26 height=26 align=top border=0 alt="Trail Map | "></a><a
+href="..\index.html"><img src="http://docs.rinet.ru/Jtuta/images/jdk1_1.gif" width=26 height=26 align=top border=0 alt="Servlets | "></a>
+</td>
+<td align=right>
+<a href="index.html"><strong><em>The Life Cycle of a Servlet</em></strong></a>
+</td>
+</tr>
+</table>
+</body>
+</html>

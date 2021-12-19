@@ -1,0 +1,1868 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 7 -- Concurrency and Synchronization</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 7</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Concurrency and Synchronization</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#Concurrency" >Concurrency</A>
+<LI><A HREF="#Monitors" >Monitors</A>
+<LI><A HREF="#AdvancedMonitorConcepts" >Advanced Monitor Concepts</A>
+<LI><A HREF="#Synchronization" >Synchronization</A>
+<LI><A HREF="#AThreadCoordinationExample" >A Thread Coordination Example</A>
+<LI><A HREF="#AdvancedThreadCoordination" >Advanced Thread Coordination</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+Before reading this chapter, you should be familiar with how to
+program using Java threads-how to implement <TT>Runnable</TT>
+and subclass <TT>Thread</TT>, how
+to start and stop threads, and how to wait for a thread to end.
+If you need an introduction to Java threads, take time now to
+read through <A HREF="ch6.htm" >Chapter 6</A>, &quot;Effective
+Use of Threads.&quot;
+<P>
+When you begin exploring Java's multithreading capabilities, you
+will discover that there is more to learn about concurrency than
+knowing how to use the <TT>Thread</TT>
+class API. Some of the questions you might encounter include:
+<UL>
+<LI>How do I make my classes thread-safe?
+<LI>What is a Java monitor, and how do I use it?
+<LI>How can I coordinate my threads?
+<LI><FONT COLOR=#000000>How can I put a thread to sleep and wake
+it up again when an event happens in another thread?</FONT>
+</UL>
+<P>
+This chapter takes a detailed look at concurrent programming in
+Java. It covers the essential information you need in order to
+write thread-safe classes: why thread-safety is an issue and how
+to use the <TT>synchronized</TT> keyword
+to enforce one-at-a-time access to an object. The chapter then
+elaborates on monitors, the concept behind Java's implementation
+of concurrent programming. This is followed up with a section
+on how to use monitors to coordinate the activities of your threads.
+As the theme of this book implies, special tips, techniques and
+pitfalls are discussed throughout this chapter.<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+<I>Concurrent programming</I> is at first an unfamiliar concept for most Java programmers, a concept that requires a period of adjustment. The transition from nonconcurrent programming to concurrent programming is similar in many ways to the transition 
+from writing procedural programs to writing object-oriented programs: difficult, frustrating at times, but in the end rewarding. If at first you do not understand the material in this chapter, give the material time to sink in-try running the examples on 
+your own computer.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="Concurrency"><FONT SIZE=5 COLOR=#FF0000>Concurrency</FONT></A>
+</H2>
+<P>
+One of the most powerful features of the Java programming language
+is the ability to run multiple threads of control. Performing
+multiple tasks at the same time seems natural from the human perspective-for
+example, simultaneously downloading a file from the Internet,
+performing a spreadsheet recalculation, or printing a document.
+From a programmer's point of view, however, managing concurrency
+is not as natural as it seems. Concurrency requires the programmer
+to take special precautions to ensure that Java objects are accessed
+in a thread-safe manner.
+<P>
+&quot;What is <I>unsafe</I> about running multiple threads?&quot;
+There is nothing obvious about threads that makes threaded programs
+unsafe; nevertheless, threaded programs can be subject to hazardous
+situations unless you take appropriate measures to make them safe.
+<P>
+The following is an example of how a threaded program may be unsafe:
+<BLOCKQUOTE>
+<TT>public class Counter {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private int count = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public int incr() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int n = count;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;count = n + 1;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return n;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+As Java classes go, the <TT>Counter</TT>
+class is simple, having only one attribute and one method. As
+its name implies, the <TT>Counter</TT>
+class is used to count things, such as the number of times a button
+is pressed or the number of times the user visits a particular
+Web site. The <TT>incr()</TT> method
+is the heart of the class, returning and incrementing the current
+value of the counter. However, The <TT>incr()</TT>
+method has a problem; it is a potential source of unpredictable
+behavior in a multithreaded environment.
+<P>
+Consider a situation in which a Java program has two runnable
+threads, both of which are about to execute this line of code
+(affecting the same <TT>Counter</TT>
+object):
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;int cnt = counter.incr();</TT>
+</BLOCKQUOTE>
+<P>
+The programmer is not able to predict nor control the order in
+which these two threads are run. The operating system (or Java
+virtual machine) has full authority over thread scheduling. Consequently,
+there are no guarantees about which thread will receive CPU time,
+when the threads will execute, or how long each thread will be
+allowed to execute. Either thread may be interrupted by a context
+switch to a different thread at any time. Alternately, both threads
+may run concurrently on separate processors of a multiprocessor
+machine.
+<P>
+Table 7.1 describes one possible sequence of execution of the
+two threads. In this scenario, the first thread is allowed to
+run until it completes its call to <TT>counter.incr()</TT>;
+then the second thread does the same. There are no surprises in
+this scenario. The first thread increments the <TT>Counter</TT>
+value to <TT>1</TT>, and the second
+thread increments the value to <TT>2</TT>.
+<BR>
+<P>
+<CENTER><B>Table 7.1. </B><TT><B></TT>Counter</FONT></B></TT><B>
+Scenario One.</B></CENTER>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=226><B>Thread 1</B></TD><TD WIDTH=226><B>Thread 2</B>
+</TD><TD WIDTH=61><CENTER><B>Count</B></CENTER></TD></TR>
+<TR><TD WIDTH=226><TT>cnt = counter.incr();</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><TT>n = count;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 0</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><TT>count = n + 1; // 1</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><TT>return n;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 0</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>cnt = counter.incr();</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>n = count;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 1</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>count = n + 1;&nbsp;&nbsp;// 2</TT>
+</TD><TD WIDTH=61><CENTER><TT>2</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>return n;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 1</TT>
+</TD><TD WIDTH=61><CENTER><TT>2</TT></CENTER>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Table 7.2 describes a somewhat different sequence of execution.
+In this case, the first thread is interrupted by a context switch
+during execution of the <TT>incr()</TT>
+method. The first thread remains temporarily suspended, and the
+second thread is allowed to proceed. The second thread executes
+its call to the <TT>incr()</TT> method,
+incrementing the <TT>Counter</TT>
+value to <TT>1</TT>. When the first
+thread resumes, a problem becomes evident. The <TT>Counter</TT>'s
+value is not updated to the value <TT>2</TT>,
+as you would expect, but is instead set again to the value <TT>1</TT>.
+<BR>
+<P>
+<CENTER><B>Table 7.2. </B><TT><B></TT>Counter</FONT></B></TT><B>
+Scenario Two.</B></CENTER>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=226><B>Thread 1</B></TD><TD WIDTH=226><B>Thread 2</B>
+</TD><TD WIDTH=61><CENTER><B>Count</B></CENTER></TD></TR>
+<TR><TD WIDTH=226><TT>cnt = counter.incr();</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><TT>n = count;&nbsp;&nbsp;&nbsp;&nbsp; // 0</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>cnt = counter.incr();</TT>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>n = count;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 0</TT>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>count = n + 1;&nbsp;&nbsp;// 1</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=226><TT>return n;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 0</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><TT>count = n + 1; // 1</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=226><TT>return n;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 0</TT>
+</TD><TD WIDTH=226><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+By examining Thread 1 in Table 7.2, you will see an interesting
+sequence of operations. Upon entering the <TT>incr()</TT>
+method, the value of the <TT>count</TT>
+attribute (<TT>0</TT>) is stored in
+a local variable, <TT>n</TT>. The
+thread is then suspended for a period of time while a different
+thread executes. (It is important to note that the <TT>count</TT>
+attribute is modified by the second thread during this time.)
+When Thread 1 resumes, it stores the value <TT>n
++ 1</TT> (<TT>1</TT>) back
+to the <TT>count</TT> attribute. Unfortunately,
+this is no longer a correct value for the counter, as the counter
+was already incremented to <TT>1</TT>
+by Thread 2.
+<P>
+The problem outlined by the scenario in Table 7.2 is called a
+<I>race condition</I>-the outcome of the program was affected
+by the order in which the program's threads were allocated CPU
+time. It is usually considered inappropriate to allow race conditions
+to affect the results of a program. Consider a medical device
+that monitors a patient's blood pressure. If this device were
+affected by race conditions in its software, it might report an
+incorrect reading to the physician. The physician would be basing
+medical decisions on incorrect patient information-a bad situation
+for the patient, doctor, insurance company, and software vendor!
+<P>
+All multithreaded programs, even Java programs, can suffer from
+race conditions. Fortunately, Java provides the programmer with
+the necessary tools to manage concurrency-monitors.
+<H2><A NAME="Monitors"><FONT SIZE=5 COLOR=#FF0000>Monitors</FONT></A>
+</H2>
+<P>
+Many texts on computer science and operating systems deal with
+the issue of concurrent programming. Concurrency has been the
+subject of much research over the years, and many <I>concurrency
+control</I> solutions have been proposed and implemented. These
+solutions include:
+<UL>
+<LI>Critical sections
+<LI>Semaphores
+<LI>Mutexes
+<LI>Database record locking
+<LI><FONT COLOR=#000000>Monitors</FONT>
+</UL>
+<P>
+Java implements a variant of the monitor approach to concurrency.
+<P>
+The concept of a <I>monitor</I> was introduced by C.A.R. Hoare
+in a 1974 paper published in the <I>Communications of the ACM</I>.
+Hoare described a special-purpose object, called a monitor, which
+applies the principle of mutual exclusion to groups of procedures
+(<I>mutual exclusion</I> is a fancy way of saying &quot;one thread
+at a time&quot;). In Hoare's model, each group of procedures requiring
+mutual exclusion is placed under the control of a monitor. At
+runtime, the monitor allows only one thread at a time to execute
+a procedure controlled by the monitor. If another thread tries
+to call a procedure controlled by the monitor, that thread is
+suspended until the first thread completes its call.
+<P>
+Java monitors remain true to Hoare's original concepts, with a
+few minor variations (which will not be discussed here). Monitors
+in Java enforce mutually exclusive access to methods, or more
+specifically, mutually exclusive access to <TT>synchronized</TT>
+methods.
+<P>
+When a Java <TT>synchronized</TT>
+method is invoked, a complicated process begins. First, the virtual
+machine locates the monitor associated with the object on which
+the method is being invoked (for example, if you are calling <TT>obj.method()</TT>,
+the VM finds <TT>obj</TT>'s monitor).
+Every Java object <I>can</I> have an associated monitor, although
+for performance reasons, the 1.0 VM creates and caches monitors
+only when necessary. Once the monitor is located, the VM attempts
+to assign ownership of the monitor to the thread invoking the
+<TT>synchronized</TT> method. If the
+monitor is <I>unowned</I>, ownership is assigned to the calling
+thread, which is then allowed to proceed with the method call.
+However, if the monitor is already owned by another thread, the
+monitor cannot be assigned to the calling thread. The calling
+thread will be put on hold until the monitor becomes available.
+When assignment of the monitor becomes possible, the calling thread
+is assigned ownership and will then proceed with the method call.
+<P>
+Metaphorically, a Java monitor acts as an object's gatekeeper.
+When a <TT>synchronized</TT> method
+is called, the gatekeeper allows the calling thread to pass and
+then closes the gate. While the thread is still in the <TT>synchronized</TT>
+method, subsequent <TT>synchronized</TT>
+method calls on that object from other threads are blocked. Those
+threads line up outside the gate, waiting for the first thread
+to leave. When the first thread exits the <TT>synchronized</TT>
+method, the gatekeeper opens the gate, allowing a single waiting
+thread to proceed with its <TT>synchronized</TT>
+method call. The process repeats.
+<P>
+In plain English, a Java monitor enforces a one-at-a-time approach
+to concurrency. This is also known as <I>serialization</I> (not
+to be confused with &quot;object serialization&quot;, the Java
+library for reading and writing objects on a stream).<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Programmers already familiar with multithreaded programming in a different language often confuse monitors with critical sections. Java monitors are not like traditional critical sections. Declaring a method <TT>synchronized</TT> does not imply that only 
+one thread may execute that method at a time, as would be the case with a critical section. It implies that only one thread may invoke that method (or any <TT>synchronized</TT> method) on a particular object at any given time. Java monitors are associated 
+with objects, not with blocks of code. Two threads may concurrently execute the same synchronized method, provided that the method is invoked on different objects (that is, <TT>a.method()</TT> and <TT>b.method()</TT>, where <TT>a != b</TT>).
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+To demonstrate how monitors operate, let's rewrite the <TT>Counter</TT>
+example to take advantage of monitors, using the <TT>synchronized</TT>
+keyword:
+<BLOCKQUOTE>
+<TT>public class Counter2 {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;private int count = 0;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;public synchronized int incr() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int n = count;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;count = n + 1;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return n;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+Note that the <TT>incr()</TT> method
+has not been rewritten-the method is identical to its previous
+listing of the <TT>Counter</TT> class,
+except that the <TT>incr()</TT> method
+has been declared <TT>synchronized</TT>.
+<P>
+What would happen if this new <TT>Counter2</TT>
+class were used in the scenario presented in Table 7.2 (the race
+condition)? The outcome of the same sequence of context switches
+would not be the same-having a <TT>synchronized</TT>
+method prevents the race condition. The revised scenario is listed
+in Table 7.3.<BR>
+<P>
+<CENTER><B>Table 7.3. </B><TT><B></TT>Counter</FONT></B></TT><B>
+Scenario Two, revised.</B></CENTER>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=235><B>Thread 1</B></TD><TD WIDTH=245><B>Thread 2</B>
+</TD><TD WIDTH=61><CENTER><B>Count</B></CENTER></TD></TR>
+<TR><TD WIDTH=235><TT>cnt = counter.incr();</TT>
+</TD><TD WIDTH=245><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><TT>(acquires the monitor)</TT>
+</TD><TD WIDTH=245><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><TT>n = count;&nbsp;&nbsp;&nbsp;&nbsp; // 0</TT>
+</TD><TD WIDTH=245><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=245><TT>cnt = counter.incr();</TT>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=245><TT>(can't acquire monitor)</TT>
+</TD><TD WIDTH=61><CENTER><TT>0</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><TT>count = n + 1; // 1</TT>
+</TD><TD WIDTH=245><TT>---(blocked)</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><TT>return n;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 0</TT>
+</TD><TD WIDTH=245><TT>---(blocked)</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><TT>(releases the monitor)</TT>
+</TD><TD WIDTH=245><TT>---(blocked)</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=245><TT>(acquires the monitor)</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=245><TT>n = count;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 1</TT>
+</TD><TD WIDTH=61><CENTER><TT>1</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=245><TT>count = n + 1;&nbsp;&nbsp;// 2</TT>
+</TD><TD WIDTH=61><CENTER><TT>2</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=245><TT>return n;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 1</TT>
+</TD><TD WIDTH=61><CENTER><TT>2</TT></CENTER>
+</TD></TR>
+<TR><TD WIDTH=235><CENTER><TT>---</TT></CENTER>
+</TD><TD WIDTH=245><TT>(releases the monitor)</TT>
+</TD><TD WIDTH=61><CENTER><TT>2</TT></CENTER>
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+In Table 7.3, the sequence of operations begins the same as the
+earlier scenario. Thread 1 starts executing the <TT>incr()</TT>
+method of the <TT>Counter2</TT> object,
+but it is interrupted by a context switch. In this example, however,
+when Thread 2 attempts to execute the <TT>incr()</TT>
+method on the same <TT>Counter2</TT>
+object, the thread is blocked. Thread 2 is unable to acquire ownership
+of the counter object's monitor; the monitor is already owned
+by Thread 1. Thread 2 is suspended until the monitor becomes available.
+When Thread 1 releases the monitor, Thread 2 is able to acquire
+the monitor and continue running, completing its call to the method.
+<P>
+The <TT>synchronized</TT> keyword
+is Java's single solution to the <I>concurrency control</I> problem.
+As you saw in the <TT>Counter</TT>
+example, the potential race condition was eliminated by adding
+the <TT>synchronized</TT> modifier
+to the <TT>incr()</TT> method. All
+accesses to the <TT>incr()</TT> method
+of a counter were serialized by the addition of the <TT>synchronized</TT>
+keyword. Generally speaking, the <TT>synchronized</TT>
+modifier should be applied to any method that modifies an object's
+attributes. It would be a very difficult task to examine a class's
+methods by visually scanning for thread-safety problems. It is
+much easier to mark all object-modifying methods as <TT>synchronized</TT>
+and be done with it.<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+You might be wondering when you will see an actual monitor object. Anecdotal information has been presented about monitors, but you probably want to see some official documentation about what a monitor is and how you access it. Unfortunately, that is not 
+possible. Java monitors have no official standing in the language specification, and their implementation is not directly visible to the programmer. Monitors are not Java objects-they have no attributes or methods. Monitors are a concept beneath Java's 
+implementation of threading and concurrency. It may be possible to access a Java monitor at the native code level, but this is not recommended (and it is beyond the scope of this chapter).</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>Non-<TT><FONT SIZE=4 FACE="Courier">synchronized</FONT></TT><FONT SIZE=4>
+Methods</FONT></H3>
+<P>
+Java monitors are used only in conjunction with the <TT>synchronized</TT>
+keyword. Methods that are not declared <TT>synchronized</TT>
+do not attempt to acquire ownership of an object's monitor before
+executing-they ignore monitors entirely. At any given moment,
+one thread (at most) may be executing a <TT>synchronized</TT>
+method on an object, but an arbitrary number of threads may be
+executing non-<TT>synchronized</TT>
+methods. This can lead to some surprising situations if you are
+not careful in deciding which methods need to be <TT>synchronized</TT>.
+Consider the following <TT>Account</TT>
+class:
+<BLOCKQUOTE>
+<TT>class Account {<BR>
+&nbsp;&nbsp;private int balance;<BR>
+<BR>
+&nbsp;&nbsp;public Account(int balance) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;this.balance = balance;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void transfer(int amount, Account
+destination) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;this.withdraw(amount);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread.yield();&nbsp;&nbsp;&nbsp;&nbsp;
+// force a context switch<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;destination.deposit(amount);<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void withdraw(int amount) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (amount &gt; balance) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new RuntimeException(&quot;No
+overdraft protection!&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;balance -= amount;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void deposit(int amount) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;balance += amount;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public int getBalance() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return balance;<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The attribute-modifying methods of the <TT>Account</TT>
+class are declared <TT>synchronized</TT>.
+It appears that this class has no problem with race conditions,
+but it does!
+<P>
+To understand the race condition the <TT>Account</TT>
+class is subject to, consider how a bank deals with accounts.
+To a bank, the correctness of its accounts is of the utmost importance-a
+bank that makes accounting errors or reports incorrect information
+would not have happy customers. In order to avoid reporting incorrect
+information, a bank would likely disable &quot;inquiries&quot;
+on an account while a transaction involving the account is in
+progress. This prevents the customer from viewing a partially
+complete transaction. The <TT>Account</TT>
+class <TT>getBalance()</TT> method
+is not <TT>synchronized</TT>, and
+this can lead to some problems.
+<P>
+Consider two <TT>Account</TT> objects,
+and two different threads are performing actions on these accounts.
+One thread is performing a balance transfer from one account to
+the other. The second thread is performing a balance inquiry.
+This code demonstrates the suggested activity:
+<BLOCKQUOTE>
+<TT>public class XferTest implements Runnable
+{<BR>
+&nbsp;&nbsp;public static void main(String[] args) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;XferTest xfer = new XferTest();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;xfer.a = new Account(100);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;xfer.b = new Account(100);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;xfer.amount = 50;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread t = new Thread(xfer);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;t.start();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Thread.yield();&nbsp;&nbsp;&nbsp;&nbsp;//
+force a context switch<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Inquiry: Account
+a has : $&quot; + xfer.a.getBalance());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Inquiry: Account
+b has : $&quot; + xfer.b.getBalance());<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public Account a = null;<BR>
+&nbsp;&nbsp;public Account b = null;<BR>
+&nbsp;&nbsp;public int amount = 0;<BR>
+<BR>
+&nbsp;&nbsp;public void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Before xfer:
+a has : $&quot; + a.getBalance());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;Before xfer:
+b has : $&quot; + b.getBalance());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;a.transfer(amount, b);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;After xfer: a
+has : $&quot; + a.getBalance());<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;After xfer: b
+has : $&quot; + b.getBalance());<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In this example, two <TT>Account</TT>s
+are created, each with a $100 balance. A transfer is then initiated
+to move $50 from one account to the other. The &quot;transfer&quot;
+is not an operation that should affect the total balance of the
+two accounts; that is, the sum of the balance of the two accounts
+should remain constant at $200. If the balance inquiry is performed
+at just the right time, however, it is possible that the total
+amount of funds in these accounts could be reported incorrectly.
+For example, if this program is run using the 1.0 Java Development
+Kit (JDK) for Solaris, the following output is printed:
+<BLOCKQUOTE>
+<TT>Before xfer: a has : $100<BR>
+Before xfer: b has : $100<BR>
+Inquiry: Account a has : $50<BR>
+Inquiry: Account b has : $100<BR>
+After xfer: a has : $50<BR>
+After xfer: b has : $150</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>Inquiry</TT> reports that
+the first account contains $50 and the second account contains
+$100. That's not $200! What happened to the other $50? Nothing
+has &quot;happened&quot; to the money, except that it is in the
+process of being transferred to the second account when the balance
+inquiry scans the accounts. The <TT>getBalance()</TT>
+method is not <TT>synchronized</TT>,
+so there is no problem executing this method on accounts that
+are involved in the balance transfer. This could leave some customer
+wondering why the accounts are $50 short.
+<P>
+If the <TT>getBalance()</TT> method
+is declared <TT>synchronized</TT>,
+the application has a different result. The balance inquiry is
+blocked until the balance transfer is complete. Here is the modified
+program's output:
+<BLOCKQUOTE>
+<TT>Before xfer: a has : $100<BR>
+Before xfer: b has : $100<BR>
+Inquiry: Account a has : $50<BR>
+Inquiry: Account b has : $150<BR>
+After xfer: a has : $50<BR>
+After xfer: b has : $150</TT>
+</BLOCKQUOTE>
+<H2><A NAME="AdvancedMonitorConcepts"><FONT SIZE=5 COLOR=#FF0000>Advanced
+Monitor Concepts</FONT></A></H2>
+<P>
+Monitors sound pretty simple. You add the <TT>synchronized</TT>
+modifier to your methods, and that's all there is to it? Well,
+not quite. Monitors themselves may be simple, but taken together
+with the rest of the programming environment, there are many issues
+you should understand in order to use monitors optimally. This
+section is dedicated to presenting those tips and techniques you
+must master to become expert in concurrent Java programming.
+<H3><TT><FONT SIZE=4 FACE="Courier">static</FONT></TT><FONT SIZE=4>
+</FONT><TT><FONT SIZE=4 FACE="Courier">synchronized</FONT></TT><FONT SIZE=4>
+Methods</FONT></H3>
+<P>
+Methods that are declared <TT>synchronized</TT>
+will attempt to acquire ownership of the target object's monitor.
+But what about methods that do not have an associated instance
+(<TT>static</TT> methods)?
+<P>
+The language specification is fairly clear, if brief, about <TT>static
+synchronized</TT> methods. When a <TT>static
+synchronized</TT> method is called, the monitor acquired
+is said to be a <I>per-class</I> monitor-that is, there is one
+monitor for each class that regulates access to all <TT>static</TT>
+methods of that class.  Only one <TT>static
+synchronized</TT> method in a class may be active at a
+given moment.
+<P>
+The 1.0 Java virtual machine takes this a step further. The monitor
+used to regulate access to a class's <TT>static
+synchronized</TT> methods is the same monitor that is associated
+with the <TT>java.lang.Class</TT>
+instance of that class. Run the following test to demonstrate
+this behavior:
+<BLOCKQUOTE>
+<TT>public class ClassMonitorTest implements
+Runnable {<BR>
+&nbsp;&nbsp;public static void main(String[] args) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new Thread(new
+ClassMonitorTest()).start();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static_method();
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;synchronized(getClass())
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;in
+run()&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{ Thread.sleep(5000); } catch (InterruptedException e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public static synchronized void static_method() {
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;in
+static_method()&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try { Thread.sleep(5000);
+} catch (InterruptedException e) { }<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+When running this application under Solaris or Win32, you will
+clearly see that <TT>&quot;in static_method()&quot;</TT>
+is printed on the terminal, and then there is about a five-second
+pause. Then <TT>&quot;in run()&quot;</TT>
+is displayed. The monitor used for the <TT>static
+synchronized</TT> method is the same monitor associated
+with the <TT>Class </TT>object. Whether
+this behavior can be relied on for future implementations of the
+JVM is unknown. What is certain, however, is that two <TT>static
+synchronized</TT> methods defined in the same class will
+both refer to and compete for the same monitor.
+<H3>Recursive Calls to <TT><FONT SIZE=4 FACE="Courier">synchronized</FONT></TT><FONT SIZE=4>
+Methods</FONT></H3>
+<P>
+What happens if a <TT>synchronized </TT>method
+calls itself recursively? Or if a <TT>synchronized</TT>
+method calls another <TT>synchronized</TT>
+method on the same object? A programmer not intimately familiar
+with Java monitors might assume that this would be a fatal situation,
+because a <TT>synchronized</TT> method
+&quot;can be entered only once.&quot; However, this is not the
+case.
+<P>
+The behavior of a monitor, expressed earlier in this chapter,
+can be stated again as follows: to enter a <TT>synchronized</TT>
+method, the thread must first acquire ownership of the target
+object's monitor. If a thread is recursively calling a <TT>synchronized</TT>
+method, it <I>already</I> owns the monitor (because it is in the
+middle of executing a <TT>synchronized</TT>
+method). When the virtual machine tries to assign ownership of
+the monitor, it finds that the thread already owns the monitor
+and immediately allows that thread to proceed.<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+A consequence of &quot;recursive <TT>synchronized</TT> method call&quot; is that it forces the virtual machine to count the number of times a thread has entered a particular monitor. Each time the thread enters the <TT>synchronized</TT> method, a counter 
+within the monitor is incremented. Each time the thread leaves a <TT>synchronized</TT> method, the counter is decremented. Only when the counter reaches zero is the monitor released!
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>Monitor Competition</H3>
+<P>
+A competitive situation arises when two or more threads are blocked,
+waiting to acquire the same monitor. Suppose a thread owns an
+object's monitor (it is executing a <TT>synchronized</TT>
+method on that object). If another thread attempts to call a <TT>synchronized</TT>
+method on that object, that thread will be suspended, pending
+the release of the monitor. If yet another thread attempts to
+call a <TT>synchronized</TT> method
+on the object, it will also be suspended. When the monitor becomes
+available, there are two threads waiting to acquire it.
+<P>
+When two or more threads are waiting to acquire the same monitor,
+the virtual machine must choose exactly one of the threads and
+assign ownership of the monitor to that thread. There are no guarantees
+about how the VM will make this decision. The language specification
+states only that one thread will acquire the monitor, but it does
+not specify how the VM will make the decision. In the Solaris
+1.0 virtual machine, the decision is based on thread priority
+(first come, first serve when the priorities are equal). Monitor
+ownership is assigned to the higher priority thread.  However,
+the Win32 1.0 virtual machine uses the Win32 thread scheduling
+algorithms.
+<P>
+In the 1.0 virtual machine, it is not possible to specify an order
+for assigning ownership of a monitor when multiple threads are
+waiting. You should avoid writing code that depends on this kind
+of ordering.
+<H3>The <TT><FONT SIZE=4 FACE="Courier">synchronized</FONT></TT><FONT SIZE=4>
+Statement</FONT></H3>
+<P>
+It is not possible to use <TT>synchronized</TT>
+methods on some types of objects. Java arrays, for instance, can
+declare no methods at all, much less <TT>synchronized</TT>
+methods. To get around this restriction, Java has a second syntactic
+convention that enables you to interact with an object's monitor.
+The <TT>synchronized</TT> <I>statement</I>
+is defined to have the following syntax:
+<BLOCKQUOTE>
+<TT>synchronized ( Expression ) Statement</TT>
+</BLOCKQUOTE>
+<P>
+Executing a <TT>synchronized</TT>
+statement has the same effect as calling a synchronized method-a
+monitor's ownership will be acquired before the block of code
+is executed. In the case of a <TT>synchronized</TT>
+statement, the object whose monitor is up for grabs is the object
+resulting from <I>Expression</I> (which must be an object type,
+not an elemental type).
+<P>
+One of the most important uses of the <TT>synchronized</TT>
+statement involves serializing access to array objects. The following
+example demonstrates how to use the <TT>synchronized</TT>
+statement to provide thread-safe access to an array:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;void safe_lshift(byte[] array,
+int count) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;synchronized(array) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.arraycopy(array,
+count, array, 0, array.size - count);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+Prior to modifying the array in this example, the virtual machine
+assigns ownership of <TT>array</TT>'s
+monitor to the executing thread. Other threads trying to acquire
+<TT>array</TT>'s monitor will be forced
+to wait until the array copy has been completed. Of course, accesses
+to the array that are not guarded by a <TT>synchronized</TT>
+statement will not be blocked, so be careful.
+<P>
+The <TT>synchronized</TT> statement
+is also useful when modifying an object without going through
+<TT>synchronized</TT> methods. This
+situation can arise if you modify an object's public attributes
+or call a method that is not declared <TT>synchronized</TT>
+(but should be). Here's an example:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;void call_method(SomeClass
+obj) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;synchronized(obj) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj.method_that_should_be_synchronized_but_isnt();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+</TT>
+</BLOCKQUOTE>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The <TT>synchronized</TT> <I>statement</I> makes it possible to use monitors with all Java objects.  However, code may be confusing if the <TT>synchronized</TT> statement is used where a <TT>synchronized</TT> method would have sufficed.  Adding the 
+<TT>synchronized</TT> modifier at the method level broadcasts exactly what happens when the method is called.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H3>Monitors and Exceptions</H3>
+<P>
+Exceptions create a special problem for monitors. The Java virtual
+machine must handle monitors very carefully in the presence of
+exceptions. Consider the following code:
+<BLOCKQUOTE>
+<TT>&nbsp;&nbsp;public synchronized void
+foo() throws Exception {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw new Exception();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;....<BR>
+&nbsp;&nbsp;}</TT>
+</BLOCKQUOTE>
+<P>
+While inside the method, the thread executing <TT>foo()</TT>
+owns the monitor (which should be released when the method exits
+normally). If <TT>foo()</TT>ONT></TT> exits
+because an exception is thrown, what happens to the monitor? Is
+the monitor released, or does the abnormal exit of this method
+cause the monitor ownership to be retained?
+<P>
+The Java virtual machine has the responsibility of unwinding the
+thread's stack as it passes an exception up the stack. <I>Unwinding</I>
+the stack involves cleanup at each stack frame, to include releasing
+any monitors held in that stack frame. If you find a situation
+where this is not the case, please report that situation to Sun!
+<H3>Monitors and <TT><FONT SIZE=4 FACE="Courier">public</FONT></TT><FONT SIZE=4>
+Attributes</FONT></H3>
+<P>
+There is debate within the Java community about the potential
+danger of declaring attributes to be <TT>public</TT>.
+When concurrency is considered, it becomes apparent that <TT>public</TT>
+attributes can lead to thread-unsafe code. Here's why: <TT>public</TT>
+attributes can be accessed by any thread without the benefit of
+protection by a <TT>synchronized</TT>
+method. When you declare an attribute <TT>public</TT>,
+you are relinquishing control over updates to that attribute,
+and any programmer using your code has a license to access (and
+update) <TT>public</TT> attributes
+directly.<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+Java programmers frequently define immutable symbolic constants as <TT>public final</TT> class attributes. Attributes declared this way do not have thread-safety issues (race conditions involve only objects whose value is not constant).
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+In general, it is not a good idea to declare (non-<TT>final</TT>)
+attributes to be <TT>public</TT>.
+Not only can it introduce thread-safety problems, but it can make
+your code difficult to modify and support as time goes by.
+<H3>When Not to Be <TT><FONT SIZE=4 FACE="Courier">synchronized</FONT></TT>
+</H3>
+<P>
+By now, you should be able to write thread-safe code using the
+<TT>synchronized</TT> keyword. When
+should you really use <TT>synchronized</TT>?
+Are there situations when you should not use <TT>synchronized</TT>?
+Are there drawbacks to using <TT>synchronized</TT>?
+<P>
+The most common reason developers don't use <TT>synchronized</TT>
+is that they write single-threaded, single-purpose code. For example,
+CPU-bound tasks do not benefit much from multithreading. A compiler
+does not perform much better if it is threaded. The Java compiler
+from Sun does not contain many <TT>synchronized</TT>
+methods. For the most part, it assumes that it is executing in
+its own thread of control, without having to share its resources
+with other threads.
+<P>
+Another common reason for avoiding <TT>synchronized</TT>
+methods is that they do not perform as well as non-<TT>synchronized</TT>
+methods. In simple tests, <TT>synchronized</TT>
+methods have been shown to be three to four times slower than
+their non-<TT>synchronized</TT> counterparts
+(in the 1.0.1 JDK from Sun). This doesn't mean your entire application
+will be three or four times slower, but it is a performance issue
+none the less. Some programs demand that every ounce of performance
+be squeezed out of the runtime system. In this situation, it might
+be appropriate to avoid the performance overhead associated with
+<TT>synchronized</TT> methods.
+<P>
+Although Java is currently not suitable for real-time software
+development, another possible reason to avoid using <TT>synchronized</TT>
+methods is to prevent nondeterministic blocking situations. If
+multiple threads compete for the same resource, one or more threads
+may be unable to execute for an excessive amount of time. Although
+this is acceptable for most types of applications, it is not acceptable
+for applications that must respond to events within real-time
+constraints.
+<H3>Deadlocks</H3>
+<P>
+Sometimes referred to as a <I>deadly embrace</I>, a <I>deadlock</I>
+is one of the worst situations that can happen in a multithreaded
+environment. Java programs are not immune to deadlocks, and programmers
+must take care to avoid them.
+<P>
+A deadlock is a situation that causes two or more threads to <I>hang</I>,
+unable to proceed. In the simplest case, you have two threads,
+each trying to acquire a monitor already owned by the other thread.
+Each thread goes to sleep, waiting for the desired monitor to
+become available, but it will never become available. The first
+thread waits for the monitor owned by the second thread, and the
+second thread waits for the monitor owned by the first thread.
+Because each thread is waiting, each will never release its monitor
+to the other thread.
+<P>
+This sample application should give you an understanding of how
+a deadlock happens:
+<BLOCKQUOTE>
+<TT>public class Deadlock implements Runnable
+{<BR>
+&nbsp;&nbsp;public static void main(String[] args) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Deadlock d1 =
+new Deadlock();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Deadlock d2 =
+new Deadlock();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread t1 = new
+Thread(d1);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread t2 = new
+Thread(d2);<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d1.grabIt = d2;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d2.grabIt = d1;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t1.start();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t2.start();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try { t1.join();
+t2.join(); } catch(InterruptedException e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.exit(0);
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;Deadlock grabIt;<BR>
+&nbsp;&nbsp;public synchronized void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try { Thread.sleep(2000);
+} catch(InterruptedException e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grabIt.sync_method();
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void sync_method() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try { Thread.sleep(2000);
+} catch(InterruptedException e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;in
+sync_method&quot;);<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In this class, the <TT>main()</TT>
+method launches two threads, each of which invokes the <TT>synchronized
+run()</TT> method on a <TT>Deadlock</TT>
+object. When the first thread wakes up, it attempts to call the
+<TT>sync_method()</TT> of the other
+<TT>Deadlock</TT> object. Obviously,
+the <TT>Deadlock</TT>'s monitor is
+owned by the second thread; so, the first thread begins waiting
+for the monitor. When the second thread wakes up, it tries to
+call the <TT>sync_method()</TT> of
+the first <TT>Deadlock</TT> object.
+Because that <TT>Deadlock</TT>'s monitor
+is already owned by the first thread, the second thread begins
+waiting. The threads are waiting for each other, and neither will
+ever wake up.<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+If you run the Deadlock application, you will notice that it never exits. That is understandable; after all, that is what a Deadlock is. How can you tell what is really going on inside the virtual machine? There is a trick you can use with the Solaris JDK 
+to display the status of all threads and monitors: press Ctrl+\ in the terminal window where the Java application is running. This sends the virtual machine a signal to dump the state of the VM. Here is a partial listing of the monitor table dumped several 
+seconds after launching Deadlock:</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT>Deadlock@EE300840/EE334C20 (key=0xee300840):     monitor owner: &quot;Thread-5&quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Waiting to enter:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Thread-4&quot;<BR>
+Deadlock@EE300838/EE334C18 (key=0xee300838):&nbsp;&nbsp;&nbsp;&nbsp; monitor owner: &quot;Thread-4&quot;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Waiting to enter:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Thread-5&quot;</TT>
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+There are numerous algorithms available for preventing and detecting
+deadlock situations, but those algorithms are beyond the scope
+of this chapter (many database and operating system texts cover
+deadlock detection algorithms in detail). Unfortunately, the Java
+virtual machine itself does not perform any deadlock detection
+or notification. There is nothing that would prevent the virtual
+machine from doing so, however, so this could be added to versions
+of the virtual machine in the future.
+<H3>Using <TT><FONT SIZE=4 FACE="Courier">volatile</FONT></TT>
+</H3>
+<P>
+It is worth mentioning that the <TT>volatile</TT>
+keyword is supported as a variable modifier in Java. The language
+specification states that the <TT>volatile</TT>
+qualifier instructs the compiler to generate loads and stores
+on each access to the attribute, rather than caching the value
+in a register. The intent of the <TT>volatile</TT>
+keyword is to provide thread-safe access to an attribute, but
+the virtual machine falls short of this goal.
+<P>
+In the 1.0 JDK virtual machine, the <TT>volatile</TT>
+keyword is ignored. It is unclear whether <TT>volatile</TT>
+has been abandoned in favor of monitors and <TT>synchronized</TT>
+methods or whether the keyword was included solely for C and C++
+compatibility. Regardless, <TT>volatile</TT>
+is useless-use <TT>synchronized</TT>
+methods rather than <TT>volatile</TT>.
+<H2><A NAME="Synchronization"><FONT SIZE=5 COLOR=#FF0000>Synchronization</FONT></A>
+</H2>
+<P>
+After learning how <TT>synchronized</TT>
+methods are used to make Java programs thread-safe, you might
+wonder what the big deal is about monitors. They are just object
+locks, right? Not true! Monitors are more than locks; monitors
+also can be used to coordinate multiple threads by using the <TT>wait()</TT>
+and <TT>notify()</TT> methods available
+in every Java object.
+<H3>The Need for Thread Coordination</H3>
+<P>
+What is <I>thread coordination?</I> In a Java program, threads
+are often interdependent-one thread may depend on another thread
+to complete an operation or to service a request. For example,
+a spreadsheet program may run an extensive recalculation as a
+separate thread. If a user-interface (UI) thread attempts to update
+the spreadsheet's display, the UI thread should coordinate with
+the recalculation thread, starting the screen update only when
+the recalculation thread has successfully completed.
+<P>
+There are many other situations in which it is useful to coordinate
+two or more threads. The following list identifies only some of
+the possibilities:
+<UL>
+<LI><I>Shared buffers</I> are often used to communicate data between
+threads. In this scenario, there is usually one thread writing
+to a shared buffer (the writer) and one thread reading from the
+buffer (the reader). When the reader attempts to read from the
+buffer, it should coordinate with the writer thread, retrieving
+data from the shared buffer only after it has been put there by
+the writer thread. If the buffer is empty, the reader waits for
+the data (without continuously polling!). The writer notifies
+the reader thread when it has completed filling the buffer, so
+that the reader can continue.
+<LI>If an application must be very responsive to user input, but
+needs to perform an intensive numerical analysis occasionally,
+it is a good idea to run the numerical analysis in a separate
+low-priority thread. Any higher-priority thread that needs to
+obtain the results of the analysis waits for the low-priority
+thread to complete; the low-priority thread should notify all
+interested threads when it is done.
+<LI><FONT COLOR=#000000>A thread </FONT>could be constructed in
+such a way that it performs processing only in response to asynchronous
+events delivered by other threads. When no events are available,
+the waiting thread is suspended (a thread with nothing to do should
+not consume CPU time). The threads sending events to the waiting
+thread should invoke a mechanism to notify the waiting thread
+that an event has occurred.
+</UL>
+<P>
+It is no accident that the previous examples repeatedly use the
+words &quot;wait&quot; and &quot;notify.&quot; These words express
+the two concepts central to thread coordination: a thread <I>waits</I>
+for some condition event to occur, and you <I>notify</I> a waiting
+thread that a condition or event has occurred. The words wait
+and notify are also used in Java as the names of the methods you
+will call to coordinate threads (<TT>wait()</TT>
+and <TT>notify()</TT>, in class <TT>Object</TT>).
+<P>
+As noted earlier in the chapter (in the section titled Monitors),
+every Java object has an associated monitor. That fact turns out
+to be useful at this point, because monitors are also used to
+implement Java's thread coordination primitives. Although monitors
+are not directly visible to the programmer, an API is provided
+in class <TT>Object</TT> to enable
+you to interact with an object's monitor. This API consists of
+two methods: <TT>wait()</TT> and <TT>notify()</TT>.
+<H3>Conditions, <TT><FONT SIZE=4 FACE="Courier">wait()</FONT></TT><FONT SIZE=4>,
+and </FONT><TT><FONT SIZE=4 FACE="Courier">notify()</FONT></TT>
+</H3>
+<P>
+Threads are usually coordinated using a concept known as a <I>condition</I>,
+or <I>condition variable</I>. A <I>condition</I> is a state or
+an event that a thread can not proceed without-the thread must
+wait for the condition to become true before continuing. In Java,
+this pattern is usually expressed:
+<BLOCKQUOTE>
+<TT>while ( ! the_condition_I_am_waiting_for
+) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;wait();<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+First, you check to see if the desired condition is already true.
+If it is true, there is no need to wait. If the condition is not
+yet true, then call the <TT>wait()</TT>
+method.  When <TT>wait()</TT> ends,
+recheck the condition to make sure that it is now true.
+<P>
+Invoking the <TT>wait()</TT> method
+on an object pauses the current thread until a different thread
+calls <TT>notify()</TT> on the object,
+to inform the waiting thread of a condition change. While stopped
+inside <TT>wait()</TT>, the thread
+is considered <I>not runnable</I>, and will not be assigned to
+a CPU for execution until it is awakened by a call to <TT>notify()</TT>
+from a different thread. (The <TT>notify()</TT>
+method <I>must</I> be called from a different thread; the waiting
+thread is not running, and thus is not capable of calling <TT>notify()</TT>.)
+A call to <TT>notify()</TT> will inform
+a single waiting thread that a condition of the object has changed,
+ending its call to <TT>wait()</TT>.
+<P>
+There are two additional varieties of the <TT>wait()</TT>
+method. The first version takes a single parameter-a timeout value
+(in milliseconds). The second version has two parameters-again,
+a timeout value (in milliseconds <I>and</I> nanoseconds). These
+methods are used when you do not want to wait indefinitely for
+an event. If you want to abandon the wait after a fixed period
+of time, you should use either of the following:
+<UL>
+<LI><TT>wait(long milliseconds);</TT>
+<LI><TT>wait(long milliseconds, int nanoseconds);</TT>
+</UL>
+<P>
+Unfortunately, these methods do not provide a means to determine
+how the <TT>wait()</TT> was ended-whether
+a <TT>notify()</TT> occurred or whether
+it timed out. This is not a big problem, however, because you
+can recheck the wait condition and the system time to determine
+which event has occurred.<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+The 1.0 JDK implementation from JavaSoft does not provide a full implementation for <TT>wait(long milliseconds, int nanoseconds)</TT>. This method currently rounds the <TT>nanoseconds</TT> parameter to the nearest millisecond. JavaSoft has not stated 
+whether they plan to change the behavior of this method in the future.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The <TT>wait()</TT> and <TT>notify()</TT>
+methods must be invoked either within a <TT>synchronized</TT>
+method or within a <TT>synchronized</TT>
+statement. This requirement will be discussed in further detail
+in the section Monitor Ownership, later in this chapter.
+<H2><A NAME="AThreadCoordinationExample"><FONT SIZE=5 COLOR=#FF0000>A
+Thread Coordination Example</FONT></A></H2>
+<P>
+A classic example of thread coordination used in many computer
+science texts is the <I>bounded buffer</I> problem. This problem
+involves using a fixed-size memory buffer to communicate between
+two processes or threads. (In many operating systems, interprocess
+communication buffers are allocated with a fixed size and are
+not allowed to grow or shrink.) To solve this problem, you must
+coordinate the reader and writer threads so that the following
+are true:
+<UL>
+<LI>The writer thread can continuously write to a buffer until
+the buffer becomes full, at which time the writer thread is suspended.
+<LI>When the reader thread removes items from the full buffer,
+the writer thread is notified of the buffer's changed condition
+and is activated and allowed to resume writing.
+<LI>The reader can continuously read from the buffer until it
+becomes empty, at which time the reader thread is suspended.
+<LI><FONT COLOR=#000000>When the writer adds items to the empty
+buffer, the reader thread is notified of the buffer's changed
+condition and is activated and allowed to resume reading.</FONT>
+</UL>
+<P>
+The following class listings demonstrate a Java implementation
+of the bounded buffer problem. There are three main classes in
+this example: the <TT>Producer</TT>,
+the <TT>Consumer</TT>, and the <TT>Buffer</TT>.
+Let's start with the <TT>Producer</TT>:
+<BLOCKQUOTE>
+<TT>public class Producer implements Runnable
+{<BR>
+&nbsp;&nbsp;private Buffer buffer;<BR>
+<BR>
+&nbsp;&nbsp;public Producer(Buffer b) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buffer = b;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=0; i&lt;250; i++)
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buffer.put((char)('A'
++ (i%26)));<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>Producer</TT> class implements
+the <TT>Runnable</TT> interface (which
+should give you a hint that it will be used as the main method
+in a thread). When the Producer's <TT>run()</TT>
+method is invoked, 250 characters are written in rapid succession
+to a <TT>Buffer</TT>. If the <TT>Buffer</TT>
+is not capable of storing all 250 characters, the <TT>Buffer</TT>'s
+<TT>put()</TT> method is called upon
+to perform the appropriate thread coordination (which you'll see
+in a moment).
+<P>
+The <TT>Consumer</TT> class is as
+simple as the <TT>Producer</TT>:
+<BLOCKQUOTE>
+<TT>public class Consumer implements Runnable
+{<BR>
+&nbsp;&nbsp;private Buffer buffer;<BR>
+<BR>
+&nbsp;&nbsp;public Consumer(Buffer b) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buffer = b;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for (int i=0;
+i&lt;250; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(buffer.get());
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>Consumer</TT> is also a <TT>Runnable</TT>.
+Its <TT>run()</TT> method greedily
+reads 250 characters from a <TT>Buffer</TT>.
+If the <TT>Consumer</TT> tries to
+read characters from an empty <TT>Buffer</TT>,
+the <TT>Buffer</TT>'s <TT>get()</TT>
+method is responsible for coordinating with the <TT>Consumer</TT>
+thread acting on the buffer.
+<P>
+The <TT>Buffer</TT> class has been
+mentioned a number of times already. Two of its methods, <TT>put(char)</TT>
+and <TT>get()</TT>, have been introduced.
+Here is a listing of the <TT>Buffer</TT>
+class in its entirety:
+<BLOCKQUOTE>
+<TT>public class Buffer {<BR>
+&nbsp;&nbsp;private char[] buf;&nbsp;&nbsp;&nbsp;// buffer storage
+<BR>
+&nbsp;&nbsp;private int last;&nbsp;&nbsp;&nbsp;&nbsp; // last
+occupied position<BR>
+<BR>
+&nbsp;&nbsp;public Buffer(int sz) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buf = new char[sz];
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;last = 0;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public boolean isFull()&nbsp;&nbsp;{ return (last
+== buf.length); }<BR>
+&nbsp;&nbsp;public boolean isEmpty() { return (last == 0);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void put(char c) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while(isFull())
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{ wait(); } catch(InterruptedException e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buf[last++] =
+c;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;notify();<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized char get() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while(isEmpty())
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try
+{ wait(); } catch(InterruptedException e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char c =&nbsp;&nbsp;buf[0];
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.arraycopy(buf,
+1, buf, 0, --last);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;notify();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return c;<BR>
+&nbsp;&nbsp;}<BR>
+}<BR>
+</TT>
+</BLOCKQUOTE>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD><B>Note</B></TD></TR>
+<TR><TD>
+<BLOCKQUOTE>
+When you first begin using <TT>wait()</TT> and <TT>notify()</TT>, you might notice a contradiction.  You've already learned that to call <TT>wait()</TT> or <TT>notify()</TT>, you must first acquire ownership of the object's monitor.  If you acquire the 
+monitor in one thread and then call <TT>wait()</TT>, how will a different thread acquire the monitor in order to <TT>notify()</TT> the first thread?  Isn't the monitor still owned by the first thread while it is <TT>wait()</TT>ing, preventing the second 
+thread from acquiring the monitor?
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The answer to this paradox is in the implementation of the <TT>wait()</TT> method; <TT>wait()</TT> temporarily releases ownership of the monitor when it is called, and obtains ownership of the monitor again before it returns.  By releasing the monitor, the 
+<TT>wait()</TT> method allows other threads to acquire the monitor (and maybe call <TT>notify()</TT>).
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+The <TT>Buffer</TT> class is just
+that-a storage buffer. You can <TT>put()</TT>
+items into the buffer (in this case, characters), and you can
+<TT>get()</TT> items out of the buffer.
+<P>
+Note the use of <TT>wait()</TT> and
+<TT>notify()</TT> in these methods.
+In the <TT>put()</TT> method, a <TT>wait()</TT>
+is performed while the <TT>Buffer</TT>
+is full; no more items can be added to the buffer while it is
+full. At the end of the <TT>get()</TT>
+method, the call to <TT>notify()</TT>
+ensures that any thread waiting in the <TT>put()</TT>
+method will be activated and allowed to continue adding an item
+to the <TT>Buffer</TT>.<BR>
+<p><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR><TD WIDTH=590><B>Note</B></TD></TR>
+<TR><TD WIDTH=590>
+<BLOCKQUOTE>
+Java provides two classes that are similar to the <TT>Buffer</TT> class presented in this example. These classes, <TT>java.io.PipedOutputStream</TT> and <TT>java.io.PipedInputStream</TT>, are useful in communicating streams of data between threads. If you 
+unpack the <TT>src.zip</TT> file shipped with the 1.0 JDK, you can examine these classes and see how they handle interthread coordination.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="AdvancedThreadCoordination"><FONT SIZE=5 COLOR=#FF0000>Advanced
+Thread Coordination</FONT></A></H2>
+<P>
+The <TT>wait()</TT> and <TT>notify()</TT>
+methods greatly simplify the task of coordinating multiple threads
+in a concurrent Java program. However, in order to make full use
+of these methods, there are a few additional details you should
+understand. The following sections present more detailed material
+about thread coordination in Java.
+<H3>Monitor Ownership</H3>
+<P>
+The <TT>wait()</TT> and <TT>notify()</TT>
+methods have one major restriction that you must observe: you
+may call these methods only when the current thread owns the monitor
+of the object. Most frequently, <TT>wait()</TT>
+and <TT>notify()</TT> are invoked
+from within a <TT>synchronized</TT>
+method, as in the following:
+<BLOCKQUOTE>
+<TT>public synchronized void method() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;...<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;while (!condition) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wait();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;...<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In this case, the <TT>synchronized</TT>
+modifier guarantees that the thread invoking the <TT>wait()</TT>
+call already owns the monitor when it calls <TT>wait()</TT>.
+<P>
+If you attempt to call <TT>wait()</TT>
+or <TT>notify()</TT> without first
+acquiring ownership of the object's monitor (for example, from
+a non-<TT>synchronized</TT> method),
+the virtual machine will throw an <TT>IllegalMonitorStateException</TT>.
+The following code example demonstrates what happens when you
+call <TT>wait()</TT> without first
+acquiring ownership of the monitor:
+<BLOCKQUOTE>
+<TT>public class NonOwnerTest {<BR>
+&nbsp;&nbsp;public static void main(String[] args) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NonOwnerTest not
+= new NonOwnerTest();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;not.method();
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public void method() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try { wait();
+} catch(InterruptedException e) { }<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+If you run this Java application, the following text is printed
+to the terminal:
+<BLOCKQUOTE>
+<TT>java.lang.IllegalMonitorStateException:
+current thread not owner<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at java.lang.Object.wait(Object.java)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at NonOwnerTest.method(NonOwnerTest.java:10)
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at NonOwnerTest.main(NonOwnerTest.java:5)</TT>
+</BLOCKQUOTE>
+<P>
+When you invoke the <TT>wait()</TT>
+method on an object, you must own the object's monitor in order
+to avoid this exception.
+<P>
+Unfortunately, JavaSoft's documentation of the <TT>wait()</TT>
+and <TT>notify()</TT> methods contains
+a confusing error with respect to monitor ownership. The 1.0 JDK
+API documentation for the <TT>wait()</TT>
+method-in the <TT>Object</TT> class-contains
+a factual error, stating that &quot;The method <TT>wait()</TT>
+can <I>only</I> be called from within a <TT>synchronized</TT>
+method.&quot; (The <TT>notify()</TT>
+and <TT>notifyAll() </TT>documentation
+contain similar misstatements.) The documentation continues with
+a discussion of exceptions for the <TT>wait()</TT>
+method: &quot;Throws: <TT>IllegalMonitorStateException</TT>-If
+the current thread is not the owner of the Object's monitor.&quot;
+The former quotation is incorrect in that it is overly restrictive.
+The second quotation is correct. Only monitor ownership is required,
+not a <TT>synchronized</TT> method.
+<P>
+To demonstrate that monitor ownership is the only requirement
+for calling <TT>wait()</TT> and <TT>notify()</TT>,
+look at this example class:
+<BLOCKQUOTE>
+<TT>public class NonOwnerTest2 {<BR>
+&nbsp;&nbsp;public static void main(String[] args) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NonOwnerTest2
+not2 = new NonOwnerTest2();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;not2.syncmethod();
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void syncmethod() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;method();<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;private void method() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try { wait(10);
+} catch(InterruptedException e) { }<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+In this example, <TT>wait(10);</TT>
+is invoked within a non-<TT>synchronized</TT>
+method, without any problems at runtime. At startup, <TT>main()</TT>
+calls <TT>syncmethod()</TT> on a <TT>NonOwnerTest2</TT>
+object, which implicitly assigns ownership of the monitor to the
+current thread. <TT>syncmethod()</TT>
+then calls <TT>method()</TT>, a non-<TT>synchronized</TT>
+method that performs the <TT>wait()</TT>.
+When you run this application, no exception is thrown, and the
+application exits after a ten-millisecond wait.
+<P>
+You might argue that the previous example does not justify nit-picking
+Java's API documentation. After all, the example still uses a
+<TT>synchronized</TT> method. <TT>wait()</TT>
+is called in a method that is called by a <TT>synchronized</TT>
+method, so the <TT>wait()</TT> could
+be considered to be &quot;within&quot; the <TT>synchronized</TT>
+method. But <TT>synchronized</TT>
+methods are <I>not</I> the only way to acquire a monitor in Java,
+however. Recall the <TT>synchronized(obj)</TT>
+statement, presented earlier in the chapter. The <TT>synchronized()</TT>
+statement can be used to acquire monitor ownership, just like
+a <TT>synchronized</TT> method.
+<P>
+The <TT>synchronized()</TT> statement
+can be useful in some situations related to thread coordination.
+For example, let's take a look at a variation of the <TT>Counter</TT>
+class, presented earlier in the chapter. The <TT>NotifyCounter</TT>
+class notifies a waiting thread when the counter reaches a specific
+value. Here is the code:
+<BLOCKQUOTE>
+<TT>public class NotifyCounter {<BR>
+&nbsp;&nbsp;private int count = -1;<BR>
+&nbsp;&nbsp;private int notifyCount = -1;<BR>
+<BR>
+&nbsp;&nbsp;public synchronized int incr() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (++count ==
+notifyCount) { notify(); }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (count);
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void notifyAt(int i) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;notifyCount =
+i;<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+This <TT>Counter</TT> class will call
+<TT>notify()</TT> when the counter
+reaches a programmer-specified value, but the class does not contain
+code that calls the <TT>wait()</TT>
+method. How is a thread to be notified? By calling <TT>wait()</TT>
+on the <TT>NotifyCounter</TT> object
+itself, as in the following application:
+<BLOCKQUOTE>
+<TT>import NotifyCounter;<BR>
+<BR>
+public class NotifyCounterTest implements Runnable {<BR>
+&nbsp;&nbsp;public static void main(String[] args) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;NotifyCounterTest nct = new NotifyCounterTest();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nct.counter = new NotifyCounter();<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;synchronized(nct.counter) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(new Thread(nct)).start();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nct.counter.notifyAt(25);
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nct.counter.wait();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// wait here<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;NotifyCounter
+reached 25&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} catch (InterruptedException
+e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;private NotifyCounter counter = null;<BR>
+&nbsp;&nbsp;public void run() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for (int i=0; i&lt;50; i++) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int n = counter.incr();<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println(&quot;counter:
+&quot; + n);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<H3>Multiple Waiters</H3>
+<P>
+It is possible for multiple threads to be <TT>wait()</TT>ing
+on the same object. This might happen if multiple threads are
+waiting for the same event, or if many threads are competing for
+a single system resource. For example, recall the <TT>Buffer</TT>
+class described earlier in this section. The <TT>Buffer</TT>
+was operated on by a single <TT>Producer</TT>
+and a single <TT>Consumer</TT>. What
+would happen if there were multiple <TT>Producers</TT>?
+If the <TT>Buffer</TT> filled, different
+<TT>Producers</TT> might attempt to
+<TT>put()</TT> items into the buffer;
+both would block inside the <TT>put()</TT>
+method, waiting for a <TT>Consumer</TT>
+to come along and free up space in the <TT>Buffer</TT>.
+<P>
+When you call <TT>notify()</TT>, there
+may be zero, one, or more threads blocked in a <TT>wait()</TT>
+on the monitor. If there are no threads waiting, the call to <TT>notify()</TT>
+is a <I>no-op</I>-it will not affect any other threads. If there
+is a single thread in <TT>wait()</TT>,
+that thread will be notified and will begin waiting for the monitor
+to be released by the thread that called <TT>notify()</TT>.
+If two or more threads are in a <TT>wait()</TT>,
+the virtual machine will pick a single waiting thread and will
+notify that thread.
+<P>
+How does the virtual machine pick a waiting thread if multiple
+threads are <TT>wait()</TT>ing on
+the same monitor? As with threads waiting to enter a <TT>synchronized</TT>
+method, the behavior of the virtual machine is not specified.
+Current implementations of the virtual machine, however, are well-defined.
+The Solaris 1.0 JDK virtual machine will select the highest-priority
+thread and will notify that thread. If more than one waiting thread
+has the same high priority, the thread that executed <TT>wait()</TT>
+first will be notified. Windows 95 and Windows NT are a little
+more complicated-the Win32 system handles the prioritization of
+the notification.
+<P>
+Although it may be possible to predict which thread will be notified,
+this behavior should not be trusted. JavaSoft has left the behavior
+unspecified to allow for change in future implementations. The
+only behavior you can reliably depend on is that exactly one waiting
+thread will be notified when you call <TT>notify()</TT>-that
+is, if there are any waiting threads.
+<H3>Using <TT><FONT SIZE=4 FACE="Courier">notifyAll()</FONT></TT>
+</H3>
+<P>
+In some situations, you may wish to notify <I>every</I> thread
+currently <TT>wait()</TT>ing on an
+object. The <TT>Object</TT> API provides
+a method to do this: <TT>notifyAll()</TT>.
+Whereas the <TT>notify()</TT> method
+wakes a single waiting thread, the <TT>notifyAll()</TT>
+method will wake every thread currently stopped in a <TT>wait()</TT>
+on the object.
+<P>
+When would you want to use <TT>notifyAll()</TT>?
+As an example, consider the <TT>java.awt.MediaTracker</TT>
+class. This class is used to track the status of images that are
+being loaded over the network. Multiple threads may <TT>wait()</TT>
+on the same <TT>MediaTracker</TT>
+object, waiting for all the images to be loaded. When the <TT>MediaTracker</TT>
+detects that all images have been loaded, <TT>notifyAll()</TT>
+is called to inform every waiting thread that the images have
+been loaded. <TT>notifyAll()</TT>
+is used because the <TT>MediaTracker</TT>
+does not know how many threads are waiting; if <TT>notify()</TT>
+were used, some of the waiting threads might not receive notification
+that transfer was completed. These threads would continue waiting,
+probably hanging the entire applet.
+<P>
+An example presented earlier in this chapter could also benefit
+from the use of <TT>notifyAll()</TT>.
+The <TT>Buffer</TT> class used the
+<TT>notify()</TT> method to send a
+notification to a single thread waiting on an empty or a full
+buffer. There was no guarantee that only a single thread was waiting,
+however; multiple threads may have been waiting for the same condition.
+Here is a modified version of the <TT>Buffer</TT>
+class (named <TT>Buffer2</TT>) that
+uses <TT>notifyAll()</TT>:
+<BLOCKQUOTE>
+<TT>public class Buffer2 {<BR>
+&nbsp;&nbsp;private char[] buf;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//
+storage<BR>
+&nbsp;&nbsp;private int last = 0;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+// last occupied position<BR>
+&nbsp;&nbsp;private int writers_waiting = 0;&nbsp;&nbsp;// # of
+threads waiting in put()<BR>
+&nbsp;&nbsp;private int readers_waiting = 0;&nbsp;&nbsp;// # of
+threads waiting in get()<BR>
+<BR>
+&nbsp;&nbsp;public Buffer2(int sz) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buf = new char[sz];
+<BR>
+}<BR>
+<BR>
+&nbsp;&nbsp;public boolean isFull()&nbsp;&nbsp;{ return (last
+== buf.length); }<BR>
+&nbsp;&nbsp;public boolean isEmpty() { return (last == 0);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void put(char c) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while(isFull())
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try&nbsp;&nbsp;&nbsp;&nbsp;
+{ writers_waiting++;&nbsp;&nbsp;wait(); }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch&nbsp;&nbsp;&nbsp;(InterruptedException
+e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally
+{ writers_waiting--; }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buf[last++] =
+c;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (readers_waiting
+&gt; 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;notifyAll();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized char get() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while(isEmpty())
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try&nbsp;&nbsp;&nbsp;&nbsp;
+{ readers_waiting++;&nbsp;&nbsp;wait(); }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch&nbsp;&nbsp;&nbsp;(InterruptedException
+e) { }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally
+{ readers_waiting--; }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char c =&nbsp;&nbsp;buf[0];
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.arraycopy(buf,
+1, buf, 0, --last);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (writers_waiting
+&gt; 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;notifyAll();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return c;<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>get()</TT> and <TT>put()</TT>
+methods have been made more intelligent. They now check to see
+whether any notification is necessary and then use <TT>notifyAll()</TT>
+to broadcast an event to all waiting threads.
+<H3>Using <TT><FONT SIZE=4 FACE="Courier">InterruptedException</FONT></TT>
+</H3>
+<P>
+Throughout this chapter, the examples have contained a reference
+to the exception class <TT>InterruptedException</TT>.
+If you examine the declaration of the <TT>wait()</TT>
+methods in <TT>Object</TT>, you will
+see why:
+<BLOCKQUOTE>
+<TT>public final void wait() throws InterruptedException</TT>
+</BLOCKQUOTE>
+<P>
+The <TT>wait()</TT> method declares
+that it might throw an <TT>InterruptedException</TT>.
+The documentation for <TT>wait()</TT>
+states: &quot;Throws: <TT>InterruptedException</TT>-Another
+thread has interrupted this thread.&quot;
+<P>
+What does this mean? A different thread has interrupted this thread.
+How? This is not made clear by the documentation. In fact, this
+is not made clear by examining the source code for <TT>Object</TT>.
+The <TT>wait()</TT> method does not
+throw an <TT>InterruptedException</TT>,
+nor does any other code in the 1.0 JDK.
+<P>
+The <TT>InterruptedException</TT>
+is part of JavaSoft's future plan for the language. This exception
+is intended to be used by the <TT>Thread</TT>
+method <TT>interrupt()</TT>. In future
+versions of the language, it will be possible to throw an <TT>InterruptedException</TT>
+in a different thread by calling the <TT>interrupt()</TT>
+method on its <TT>Thread</TT> object.
+If the thread happens to be blocked inside a <TT>wait()</TT>,
+the <TT>wait()</TT> will be ended,
+and the <TT>InterruptedException</TT>
+will be thrown.
+<H3>Mutexes, Condition Variables, and Critical Sections</H3>
+<P>
+Monitors are the only form of concurrency control directly available
+in Java. However, monitors are a powerful enough concept to enable
+the expression of other types of concurrency control in user-defined
+classes. Mutexes, condition variables, and critical sections can
+all be expressed as Java classes-implemented using monitors.
+<P>
+The following is an example of a <TT>Mutex</TT>
+class, implemented in Java using monitors:
+<BLOCKQUOTE>
+<TT>public class Mutex {<BR>
+&nbsp;&nbsp;private Thread owner = null;<BR>
+&nbsp;&nbsp;private int wait_count = 0;<BR>
+<BR>
+&nbsp;&nbsp;public synchronized boolean lock(int millis) throws
+InterruptedException {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (owner == Thread.currentThread())&nbsp;&nbsp;{
+return true; }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while (owner !=
+null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try&nbsp;&nbsp;&nbsp;&nbsp;
+{ wait_count++; wait(millis); }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally
+{ wait_count--; }<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if
+(millis != 0 &amp;&amp; owner != null) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+false;&nbsp;&nbsp;&nbsp;// timed out<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;owner = Thread.currentThread();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return true;<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized boolean lock() throws InterruptedException
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return lock(0);
+<BR>
+&nbsp;&nbsp;}<BR>
+<BR>
+&nbsp;&nbsp;public synchronized void unlock() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (owner != Thread.currentThread())
+{<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;throw
+new RuntimeException(&quot;thread not Mutex owner&quot;);<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;owner = null;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (wait_count
+&gt; 0) {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;notify();
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;}<BR>
+}</TT>
+</BLOCKQUOTE>
+<P>
+If you are familiar with mutexes, you undoubtedly see how easily
+this concept is expressed in Java. It is an academic exercise
+(left to the reader) to use this <TT>Mutex</TT>
+class to implement condition variables, critical sections, and
+so forth.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+A lot of information is presented in this chapter! By now, you
+probably feel like a concurrency and synchronization guru. You've
+learned the following:
+<UL>
+<LI>Why thread-safety can be a problem when programming with multiple
+threads
+<LI>How to make classes thread-safe using <TT>synchronized</TT>
+methods and the <TT>synchronized</TT>
+statement
+<LI>Many details about how monitors work in Java (probably more
+than you wanted to know!)
+<LI>Some situations when you might not want to use <TT>synchronized</TT>
+methods
+<LI>How Monitors, used in incorrect ways, can cause your application
+to freeze-a situation known as a deadlock
+<LI>How to coordinate threads using the <TT>wait()</TT>
+and <TT>notify()</TT> methods
+<LI>When and why to use <TT>notifyAll()</TT>
+<LI><FONT COLOR=#000000>How to implement other forms of concurrency
+control using Java monitor</FONT>s
+</UL>
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch6.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/pc.gif" BORDER=0 HEIGHT=88
+WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JaTricks/cc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/hb.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A><A HREF="ch8.htm"><IMG SRC="http://docs.rinet.ru/JaTricks/nc.gif" BORDER=0
+HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

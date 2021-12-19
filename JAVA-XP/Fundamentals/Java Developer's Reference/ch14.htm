@@ -1,0 +1,665 @@
+<HTML>
+
+<HEAD>
+   <TITLE>Chapter 14 -- Using javah</TITLE>
+   <META NAME="GENERATOR" CONTENT="Mozilla/3.0b5aGold (WinNT; I) [Netscape]">
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+
+
+
+
+
+
+
+
+
+
+<H1><FONT COLOR=#FF0000>Chapter 14</FONT></H1>
+<H1><B><FONT SIZE=5 COLOR=#FF0000>Using javah</FONT></B>
+</H1>
+<P>
+<HR WIDTH="100%"></P>
+<P>
+<H3 ALIGN=CENTER><FONT COLOR="#000000"><FONT SIZE=+2>CONTENTS<A NAME="CONTENTS"></A>
+</FONT></FONT></H3>
+<UL>
+<LI><A HREF="#TheHeaderFile" >The Header File</A>
+<LI><A HREF="#TheStub" >The Stub</A>
+<LI><A HREF="#Usage" >Usage</A>
+<LI><A HREF="#Example" >Example</A>
+<LI><A HREF="#Summary" >Summary</A>
+</UL>
+<HR>
+<P>
+One of the lesser known tools provided in the JDK is <I>javah</I>.
+This specialized tool creates two C files from your Java classes.
+These C files can be used to implement <I>native methods</I>.
+Native methods are discussed fully in <A HREF="ch19.htm" >Chapter 19</A>,
+&quot;Extending Your Programs with Native Methods.&quot; javah
+creates a header file and a &quot;stub&quot; file for the native
+methods of a class. The header file declares the functions that
+will implement the class methods. The stub file provides the glue
+that binds the Java method invocation and object references to
+the C code. It is up to you to provide another C file (called
+the <I>implementation file</I>) with the functions declared in
+the header. These three C files allow a Java class to call C functions.
+In turn, the C functions can reference the object's instance variables.
+Ultimately, these files (possibly with others) are compiled into
+a dynamically loadable library. This process is shown pictorially
+in Figure 14.1.
+<P>
+<A HREF="http://docs.rinet.ru/JavDev/f14-1.gif" ><B>Figure 14.1 : </B><I>Using javah to create native method files.</I></A>
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=554><B>Should I Use Native Methods?</B></TD></TR>
+<TR VALIGN=TOP><TD WIDTH=554>
+<BLOCKQUOTE>
+Before you decide to use native methods, there are some things you should consider carefully. First of all, the native methods are in pure C code, not C++. The function prototypes provided by javah are in an object-oriented style of C, but they are still 
+not really object methods. You will lose the benefits of inheritance and polymorphism. The stubs create some data structures that provide weak encapsulation, but it is up to you to enforce it.</BLOCKQUOTE>
+<BLOCKQUOTE>
+Second, native methods can only be called from applications. Applets are prevented from calling native methods for security reasons.</BLOCKQUOTE>
+<BLOCKQUOTE>
+Third, and most importantly, native methods are inherently platform-specific. You will have to build the dynamically loadable library for each platform your application targets. Of course, that means any system-specific code has to be ported, too. (I know, 
+C is <I>supposed </I>to be a portable language, but isn't that why you are using Java?)
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+On the other hand, native methods are the only way to use any system features not provided by the Java Virtual Machine.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="TheHeaderFile"><FONT SIZE=5 COLOR=#FF0000>The Header
+File</FONT></A></H2>
+<P>
+When you create a header file from a Java class, the header contains
+two things: declarations for the C implementation functions and
+a structure definition. The layout of the structure matches the
+layout of the Java class. A pointer to an instance of the structure
+is passed to the implementation functions. By using the fields
+of the structure, the C functions can access the instance variables
+of the Java class.
+<P>
+Because of this mapping, whenever you change the instance variables
+of the Java class, you should regenerate the header file. Of course,
+that also means it will be best if you do not modify the header
+manually.
+<P>
+The Java class name determines the header filename and the name
+of the structure declaration. javah appends &quot;.h&quot; to
+the class name for the header filename. For the structure name,
+javah uses the class name with the word &quot;<TT><FONT FACE="Courier">Class</FONT></TT>&quot;
+prepended. For example, if you run javah on a class named <TT><FONT FACE="Courier">HelloWorld</FONT></TT>,
+it will produce a header file named <TT><FONT FACE="Courier">HelloWorld.h</FONT></TT>
+with a structure in it called <TT><FONT FACE="Courier">ClassHelloWorld</FONT></TT>.
+<H2><A NAME="TheStub"><FONT SIZE=5 COLOR=#FF0000>The Stub</FONT></A>
+</H2>
+<P>
+The stub filename is just the class name with &quot;.c&quot; appended.
+For the sample class <TT><FONT FACE="Courier">HelloWorld</FONT></TT>,
+javah would create a stub file named <TT><FONT FACE="Courier">HelloWorld.c</FONT></TT>.
+At this point, just think of the stub functions as glue between
+the C implementation functions and the Java method invocations.
+<P>
+javah creates the stub functions directly from the class native
+methods, just as it creates the structure declaration in the header
+file from the instance variables. So, be sure to regenerate the
+stub file any time you change a native method in the class.
+<P>
+In this case, it is not just inconvenient to modify the stub file-it's
+a bad idea. Any changes you might want to make are probably best
+done in the Java code or in the implementation file, anyway. It
+really is best if you put the stub file aside because any changes
+you make here are likely to break the Java-to-C linkage.
+<H2><A NAME="Usage"><FONT SIZE=5 COLOR=#FF0000>Usage</FONT></A>
+</H2>
+<P>
+The synopsis for javah is as follows:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">javah [ <I>options</I> ] <I>classname</I>
+&#133;<BR>
+javah_g [ <I>options</I> ] <I>classname</I> &#133;</FONT></TT>
+</BLOCKQUOTE>
+<P>
+javah uses slightly different options for the two platforms. In
+all cases, javah accepts multiple class names on the command line.
+javah_g produces files suitable for use with debuggers like jdb.
+It accepts identical options to javah.
+<P>
+Here are the command-line options for the Windows 95/NT version
+of javah and javah_g. (These are from version 1.0.2 of the JDK.)
+<BR>
+
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD COLSPAN=2 WIDTH=590>Windows 95/NT</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><I>Option</I></TD><TD WIDTH=424><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-o outputfile</FONT></TT>
+</TD><TD WIDTH=424>This option will force all of the headers or stubs for all of the classes to be placed into <TT><FONT FACE="Courier">outputfile</FONT></TT>. Without this option, javah will create a separate file for each class.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-d directory</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to put all output files in <TT><FONT FACE="Courier">directory</FONT></TT>.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-td directory</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to use <TT><FONT FACE="Courier">directory</FONT></TT> for temporary files. Otherwise, javah checks the environment variable <TT><FONT FACE="Courier">%TEMP%</FONT></TT>. If <TT><FONT FACE="Courier">%TEMP%</FONT></TT> is not 
+set, then javah checks <TT><FONT FACE="Courier">%TMP%</FONT></TT>. If <TT><FONT FACE="Courier">%TMP%</FONT></TT> is not set, javah falls back on <TT><FONT FACE="Courier">C:\tmp</FONT></TT>, creating it if necessary.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-stubs</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to create the stub files. By default, javah creates the header files.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-verbose</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to print messages to <TT><FONT FACE="Courier">stdout</FONT></TT> regarding the output files.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-classpath path</FONT></TT>
+</TD><TD WIDTH=424>Overrides the default class path and the environment variable <TT><FONT FACE="Courier">%CLASSPATH%</FONT></TT>. Path uses the same syntax as the <TT><FONT FACE="Courier">CLASSPATH</FONT></TT> environment variable.
+</TD></TR>
+</TABLE></CENTER>
+<P>
+
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD COLSPAN=2 WIDTH=590>Windows 95/NT</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><I>Environment Variable</I></TD><TD WIDTH=425><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">CLASSPATH</FONT></TT>
+</TD><TD WIDTH=425>You can set the environment variable <TT><FONT FACE="Courier">CLASSPATH</FONT></TT> to provide the JDK a path to your user-defined classes. You can specify multiple directories separated by semicolons. Use the DOS-style backslash as the 
+path component separator. Under JDK 1.0.2 and higher, the class path can include an archive file <TT><FONT FACE="Courier">classes.zip</FONT></TT>, which will be searched for the classes given on the command line. It is a good idea to always start the class 
+path with the current directory (for example, set <TT><FONT FACE="Courier">CLASSPATH=.;C:\Java\Lib\classes.zip</FONT></TT>).
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">TEMP</FONT></TT>, <TT><FONT FACE="Courier">TMP</FONT></TT>
+</TD><TD WIDTH=425>If you do not use the <TT><FONT FACE="Courier">-td</FONT></TT> option, javah uses <TT><FONT FACE="Courier">%TEMP%</FONT></TT> and <TT><FONT FACE="Courier">%TMP%</FONT></TT> to determine where to store temporary files. See the discussion 
+of the <TT><FONT FACE="Courier">-td</FONT></TT> option.
+</TD></TR>
+</TABLE></CENTER>
+<P>
+
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD COLSPAN=2 WIDTH=590>SPARC Solaris</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><I>Option</I></TD><TD WIDTH=424><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-o outputfile</FONT></TT>
+</TD><TD WIDTH=424>This option will force all of the headers or stubs for all of the classes to be placed into <TT><FONT FACE="Courier">outputfile</FONT></TT>. Without this option, javah will create a separate file for each class.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-d directory</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to put all output files in <TT><FONT FACE="Courier">directory</FONT></TT>.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-td directory</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to use <TT><FONT FACE="Courier">directory</FONT></TT> for its temporary files, instead of <TT><FONT FACE="Courier">/tmp</FONT></TT>.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-stubs</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to create the stubs files. By default, javah creates the header files.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-verbose</FONT></TT>
+</TD><TD WIDTH=424>Tells javah to print messages to <TT><FONT FACE="Courier">stdout</FONT></TT> regarding the output files.
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">-classpath path</FONT></TT>
+</TD><TD WIDTH=424>Overrides the default class path and the environment variable <TT><FONT FACE="Courier">$CLASSPATH</FONT></TT>. <TT><FONT FACE="Courier">path</FONT></TT> uses the same syntax as the <TT><FONT FACE="Courier">CLASSPATH</FONT></TT> 
+environment variable.
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Here are the command-line options for the Solaris version of <TT><FONT FACE="Courier">javah</FONT></TT>
+and <TT><FONT FACE="Courier">javah</FONT></TT>_<TT><FONT FACE="Courier">g</FONT></TT>.
+(These are from version 1.0.2 of the JDK.)<BR>
+
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD COLSPAN=2 WIDTH=590>SPARC Solaris</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><I>Environment Variable</I></TD><TD WIDTH=425><I>Description</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=166><TT><FONT FACE="Courier">CLASSPATH</FONT></TT>
+</TD><TD WIDTH=425>You can set the environment variable <TT><FONT FACE="Courier">CLASSPATH</FONT></TT> to provide the JDK a path to your user-defined classes. You can specify multiple directories separated by colons. Under JDK 1.0.2 and higher, the class 
+path can include an archive file <TT><FONT FACE="Courier">classes.zip</FONT></TT>, which will be searched for the classes given on the command line. It is a good idea to always start the class path with the current directory &quot;.&quot; (for example, 
+<TT><FONT FACE="Courier">CLASSPATH=&quot;.:/java/lib/classes.zip&quot;</FONT></TT>).
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<H2><A NAME="Example"><FONT SIZE=5 COLOR=#FF0000>Example</FONT></A>
+</H2>
+<P>
+Now create a class and see how javah translates it into a header
+and stub file. For now, disregard the implementation file. (<A HREF="ch19.htm" >See Chapter 19</A>
+for details on creating implementation files.) Listing 14.1 shows
+a class that might be used as part of a stock portfolio charting
+application. The exact output may vary slightly depending on your
+target platform and the version of the JDK you use.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.1. Initial </B><TT><B><FONT FACE="Courier">PortfolioEntry</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">class PortfolioEntry {<BR>
+&nbsp;&nbsp;&nbsp;String  TickerSymbol;<BR>
+&nbsp;&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NumberOfShares;
+<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastQuote;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;BoughtAtPrice;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastDividends;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastEPS;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public native void  FetchQuote();<BR>
+&nbsp;&nbsp;&nbsp;public native float CurrentValue();<BR>
+&nbsp;&nbsp;&nbsp;public native float NetGain();<BR>
+&nbsp;&nbsp;&nbsp;public native float Yield();<BR>
+};</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT><FONT FACE="Courier">PortfolioEntry</FONT></TT> class
+has attributes for the current stock quote, number of shares owned,
+the buy price for these shares, the dividends paid last quarter,
+and the earnings per share reported for last quarter. It has methods
+to calculate the current value of the shares, the net profit or
+loss based on the current value, and the yield of the lot (net
+profit or loss per share as a percentage). It also has one crucial
+method to retrieve the latest quote for this stock. (For the sake
+of this example, assume that the dozens of Web-based quote services
+do not exist.) Notice the use of the <TT><FONT FACE="Courier">native</FONT></TT>
+keyword. Without this modifier, this class will not compile, because
+we have not provided any method bodies.<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=581><B>Use and Abuse of the <TT><B><FONT FACE="Courier">native</FONT></B></TT> Keyword</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=581>
+<BLOCKQUOTE>
+The keyword <TT><FONT FACE="Courier">native</FONT></TT> modifies a method declaration. It indicates to javac that the body of the method will be provided by code native to the current platform. You can compose <TT><FONT FACE="Courier">native</FONT></TT> 
+with other method declaration modifiers such as <TT><FONT FACE="Courier">static</FONT></TT> and <TT><FONT FACE="Courier">abstract</FONT></TT>. How does javac interpret an abstract, native method? Not very well. Although you can provide a method body for an 
+abstract native method, that body will never be called. A static native method behaves exactly as you would expect. Be careful about the object instance pointer passed to the native method, however. A static, native method is always passed a <TT><FONT 
+FACE="Courier">NULL</FONT></TT> for its argument.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+Native methods that are overridden in a subclass work just as you would expect. In fact, you can override a native method with a Java method, or a Java method with a native method, or a native method with a native method. (Whew!)</BLOCKQUOTE>
+<BLOCKQUOTE>
+You cannot make a constructor native, but then again, you cannot make a constructor static, synchronized, abstract, or final.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+All commands in this example follow the syntax for the Windows
+95/NT JDK version 1.0.
+<P>
+First, compile the Java code:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&gt;javac PortfolioEntry.java</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This will create the usual <TT><FONT FACE="Courier">PortfolioEntry.class</FONT></TT>
+file. Now, use javah to create the header file:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&gt;javah PortfolioEntry</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Note that javah only expects class names, not filenames. Therefore,
+you do not need to add <TT><FONT FACE="Courier">.java</FONT></TT>
+or <TT><FONT FACE="Courier">.class</FONT></TT> to the command-line
+arguments. (If your <TT><FONT FACE="Courier">CLASSPATH</FONT></TT>
+environment variable does not include the current directory, you
+will need to use a command line like 
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">javah -classpath .;C:\Java\lib\classes.zip
+PortfolioEntry)</FONT></TT>
+</BLOCKQUOTE>
+<P>
+Now take a look at the output file <TT><FONT FACE="Courier">PortfolioEntry.h</FONT></TT>.
+You should see something like List-ing 14.2.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.2. First </B><TT><B><FONT FACE="Courier">PortfolioEntry.h</FONT></B></TT><B>
+file.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">/* DO NOT EDIT THIS FILE - it is machine
+generated */<BR>
+#include &lt;native.h&gt;<BR>
+/* Header for class PortfolioEntry */<BR>
+<BR>
+#ifndef _Included_PortfolioEntry<BR>
+#define _Included_PortfolioEntry<BR>
+struct Hjava_lang_String;<BR>
+<BR>
+typedef struct ClassPortfolioEntry {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;struct Hjava_lang_String *TickerSymbol;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long NumberOfShares;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float LastQuote;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float BoughtAtPrice;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float LastDividends;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float LastEPS;<BR>
+} ClassPortfolioEntry;<BR>
+HandleTo(PortfolioEntry);<BR>
+<BR>
+#ifdef __cplusplus<BR>
+extern &quot;C&quot; {<BR>
+#endif<BR>
+extern void PortfolioEntry_FetchQuote(struct HPortfolioEntry *);
+<BR>
+extern float PortfolioEntry_CurrentValue(struct HPortfolioEntry
+*);<BR>
+extern float PortfolioEntry_NetGain(struct HPortfolioEntry *);
+<BR>
+extern float PortfolioEntry_Yield(struct HPortfolioEntry *);<BR>
+#ifdef __cplusplus<BR>
+}<BR>
+#endif<BR>
+#endif</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+You can see how the class <TT><FONT FACE="Courier">PortfolioEntry</FONT></TT>
+maps directly to the structure <TT><FONT FACE="Courier">ClassPortfolioEntry</FONT></TT>.
+The class methods map directly to the C function declarations.
+<BR>
+<P><CENTER><TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=590><B>Where Did <TT><B><FONT FACE="Courier">HPortfolioEntry</FONT></B></TT> Come From?</B>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=590>
+<BLOCKQUOTE>
+The structure <TT><FONT FACE="Courier">HPortfolioEntry</FONT></TT>, which is passed to each of the C functions, is declared as a result of the <TT><FONT FACE="Courier">HandleTo()</FONT></TT> macro, which is defined in <TT><FONT 
+FACE="Courier">\java\include\oobj.h</FONT></TT> as
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">#define HandleTo(T) typedef struct H##T { Class##T *obj; \</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct methodtable *methods;} H##T</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+So, <TT><FONT FACE="Courier">HandleTo(PortfolioEntry);</FONT></TT> expands to
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">typedef struct HPortfolioEntry {</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;&nbsp;&nbsp;ClassPortfolioEntry *obj;</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&nbsp;&nbsp;&nbsp;struct methodtable *methods;</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">} HPortfolioEntry;</FONT></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+This structure provides the bookkeeping that will allow C functions to behave like class methods. To access an instance variable from your native method, follow the <TT><FONT FACE="Courier">obj</FONT></TT> pointer to the instance variable structure 
+declared by the header file. For example, one of the native methods for <TT><FONT FACE="Courier">PortfolioEntry</FONT></TT> would access the <TT><FONT FACE="Courier">NumberOfShares</FONT></TT> attribute by dereferencing <TT><FONT 
+FACE="Courier">hPortfolioEntry-&gt;obj-&gt;NumberOfShares</FONT></TT>.
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The <TT><FONT FACE="Courier">methods</FONT></TT> pointer also allows your native method to get information about, and even invoke, the other methods of your class. Until you are quite conversant with the Java object model, you should probably avoid this 
+feature.
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE></CENTER>
+<P>
+<P>
+Now, create the stub file:
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">&gt;javah -stubs -classpath .;C:\JAVA\LIB\CLASSES.ZIP
+PortfolioEntry</FONT></TT>
+</BLOCKQUOTE>
+<P>
+This creates the rather obfuscated file in Listing 14.3. You should
+never need to modify the stub file. In fact, it is best to ignore
+it completely after you have created it.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.3. Stub file for </B><TT><B><FONT FACE="Courier">PortfolioEntry</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">/* DO NOT EDIT THIS FILE - it is machine
+generated */<BR>
+#include &lt;StubPreamble.h&gt;<BR>
+<BR>
+/* Stubs for class PortfolioEntry */<BR>
+/* SYMBOL: &quot;PortfolioEntry/FetchQuote()V&quot;,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Java_PortfolioEntry_FetchQuote_stub
+*/<BR>
+__declspec(dllexport) stack_item *<BR>
+&nbsp;&nbsp;Java_PortfolioEntry_FetchQuote_stub(stack_item *_P_,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+execenv *_EE_)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;extern void PortfolioEntry_FetchQuote(void *);
+<BR>
+&nbsp;&nbsp;&nbsp;(void) PortfolioEntry_FetchQuote(_P_[0].p);
+<BR>
+&nbsp;&nbsp;&nbsp;return _P_;<BR>
+}<BR>
+/* SYMBOL: &quot;PortfolioEntry/CurrentValue()F&quot;,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Java_PortfolioEntry_CurrentValue_stub
+*/<BR>
+__declspec(dllexport) stack_item *<BR>
+&nbsp;&nbsp;Java_PortfolioEntry_CurrentValue_stub(stack_item *_P_,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+execenv *_EE_)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;extern float PortfolioEntry_CurrentValue(void
+*);<BR>
+&nbsp;&nbsp;&nbsp;_P_[0].f = PortfolioEntry_CurrentValue(_P_[0].p);
+<BR>
+&nbsp;&nbsp;&nbsp;return _P_ + 1;<BR>
+}<BR>
+/* SYMBOL: &quot;PortfolioEntry/NetGain()F&quot;,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Java_PortfolioEntry_NetGain_stub
+*/<BR>
+__declspec(dllexport) stack_item *<BR>
+&nbsp;&nbsp;Java_PortfolioEntry_NetGain_stub(stack_item *_P_,
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+execenv *_EE_)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;extern float PortfolioEntry_NetGain(void *);
+<BR>
+&nbsp;&nbsp;&nbsp;_P_[0].f = PortfolioEntry_NetGain(_P_[0].p);
+<BR>
+&nbsp;&nbsp;&nbsp;return _P_ + 1;<BR>
+}<BR>
+/* SYMBOL: &quot;PortfolioEntry/Yield()F&quot;,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Java_PortfolioEntry_Yield_stub
+*/<BR>
+__declspec(dllexport) stack_item *<BR>
+&nbsp;&nbsp;Java_PortfolioEntry_Yield_stub(stack_item *_P_,<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct
+execenv *_EE_)<BR>
+{<BR>
+&nbsp;&nbsp;&nbsp;extern float PortfolioEntry_Yield(void *);<BR>
+&nbsp;&nbsp;&nbsp;_P_[0].f = PortfolioEntry_Yield(_P_[0].p);<BR>
+&nbsp;&nbsp;&nbsp;return _P_ + 1;<BR>
+}</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Looking back at the class definition, it seems that most of the
+methods could be implemented in Java alone. Suppose that the function
+to retrieve the latest quote used a third-party C library. Now
+modify the class definition to include some native and some Java
+methods, as shown in Listing 14.4.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.4. Revised </B><TT><B><FONT FACE="Courier">PortfolioEntry</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">class PortfolioEntry {<BR>
+&nbsp;&nbsp;&nbsp;String&nbsp;&nbsp;TickerSymbol;<BR>
+&nbsp;&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NumberOfShares;
+<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastQuote;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;BoughtAtPrice;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastDividends;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastEPS;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;public native void&nbsp;&nbsp;FetchQuote();
+<BR>
+&nbsp;&nbsp;&nbsp;public float CurrentValue() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (NumberOfShares * LastQuote);
+<BR>
+&nbsp;&nbsp;&nbsp;};<BR>
+&nbsp;&nbsp;&nbsp;public float NetGain() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (CurrentValue() - NumberOfShares
+* BoughtAtPrice);<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;public float Yield() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (100 * (NetGain() /
+NumberOfShares * BoughtAtPrice));<BR>
+&nbsp;&nbsp;&nbsp;};<BR>
+};</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Now, recompile the class and regenerate the header file. Notice
+the change in the declarations section of the header file in Listing
+14.5.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.5. Header file for revised </B><TT><B><FONT FACE="Courier">PortfolioEntry</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">/* DO NOT EDIT THIS FILE - it is machine
+generated */<BR>
+#include &lt;native.h&gt;<BR>
+/* Header for class PortfolioEntry */<BR>
+<BR>
+#ifndef _Included_PortfolioEntry<BR>
+#define _Included_PortfolioEntry<BR>
+struct Hjava_lang_String;<BR>
+<BR>
+typedef struct ClassPortfolioEntry {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;struct Hjava_lang_String *TickerSymbol;
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;long NumberOfShares;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float LastQuote;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float BoughtAtPrice;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float LastDividends;<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;float LastEPS;<BR>
+} ClassPortfolioEntry;<BR>
+HandleTo(PortfolioEntry);<BR>
+<BR>
+#ifdef __cplusplus<BR>
+extern &quot;C&quot; {<BR>
+#endif<BR>
+extern void PortfolioEntry_FetchQuote(struct HPortfolioEntry *);
+<BR>
+#ifdef __cplusplus<BR>
+}<BR>
+#endif<BR>
+#endif</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+Because only one method is declared as native this time, that
+is the only method mapped to a C function. This also implies that
+your C code will not be able to call any Java methods in the class,
+although the C functions can call each other freely. Keep in mind
+that the javah-generated header file only declares the C functions
+that the Java runtime system can call. In your implementation
+file, you can create as many C functions as you need. You are
+free to modularize your native methods as much as necessary. The
+C functions have access to the instance variables of the calling
+object. To encourage encapsulation, you should give any additional
+C functions you create file scope, by declaring them as <TT><FONT FACE="Courier">static</FONT></TT>.
+That way, they cannot be called inadvertently by other C modules.
+Likewise, if you need to use any global variables in your implementation
+file, you should give them file scope, too. (Look carefully at
+any global variables in the implementation file. Most of the time,
+you will find that they should really be instance variables.)
+<P>
+One last thing you want to add to your Java class is a static
+code block to load the dynamically loadable library. Recall that
+the Java runtime executes a class's static block the first time
+that class is loaded. Think of it as an initializer for the class.
+Assume that the example's native methods are compiled and linked
+into a library called &quot;PortfolioEntry.&quot; The static code
+block shown in Listing 14.6 loads the library when the class is
+loaded.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 14.6. Final revision of the </B><TT><B><FONT FACE="Courier">PortfolioEntry</FONT></B></TT><B>
+class.<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><FONT FACE="Courier">class PortfolioEntry {<BR>
+&nbsp;&nbsp;&nbsp;String  TickerSymbol;<BR>
+&nbsp;&nbsp;&nbsp;int&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NumberOfShares;
+<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastQuote;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;BoughtAtPrice;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastDividends;<BR>
+&nbsp;&nbsp;&nbsp;float&nbsp;&nbsp;&nbsp;LastEPS;<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;static {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.loadLibrary(&quot;PortfolioEntry&quot;);
+<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;public native void  FetchQuote();<BR>
+&nbsp;&nbsp;&nbsp;public float CurrentValue() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (NumberOfShares * LastQuote);
+<BR>
+&nbsp;&nbsp;&nbsp;};<BR>
+&nbsp;&nbsp;&nbsp;public float NetGain() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (CurrentValue() - NumberOfShares
+* BoughtAtPrice);<BR>
+&nbsp;&nbsp;&nbsp;}<BR>
+&nbsp;&nbsp;&nbsp;public float Yield() {<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (100 * (NetGain() /
+NumberOfShares * BoughtAtPrice));<BR>
+&nbsp;&nbsp;&nbsp;};<BR>
+};</FONT></TT>
+</BLOCKQUOTE>
+<HR>
+<P>
+(See <TT><FONT FACE="Courier">java.lang.System</FONT></TT> for
+details about the <TT><FONT FACE="Courier">System.loadLibrary</FONT></TT>
+method.) You should know that <TT><FONT FACE="Courier">System.loadLibrary</FONT></TT>
+will throw an exception if it cannot find the specified library.
+Because this exception will be thrown when the Java runtime loads
+the class, before your application starts, you will not be able
+to catch it. You do not need to explicitly unload the library-the
+Java runtime system will handle that for you.
+<H2><A NAME="Summary"><FONT SIZE=5 COLOR=#FF0000>Summary</FONT></A>
+</H2>
+<P>
+javah creates C header files and C stubs for Java classes. It
+exists to support the use of native methods to extend Java classes
+beyond the capabilities built into the Java Virtual Machine. Along
+with the header and stub files, you must provide an implementation
+file to define the C functions declared in the header file. javah
+maps the class attributes to a C structure definition, which is
+passed to the methods, thus allowing a C function to access the
+object's instance variables. javah only creates declarations for
+those methods declared as <TT><FONT FACE="Courier">native</FONT></TT>
+in the Java class.
+<P>
+Before deciding to implement your application's functionality
+as native methods, you should answer several questions:
+<UL>
+<LI><FONT COLOR=#000000>Am I writing an application or an applet?
+Native method calls are allowed only from applications.</FONT>
+<LI><FONT COLOR=#000000>Can I tolerate losing cross-platform compatibility?
+Or, can I tolerate creating multiple versions of my native methods?</FONT>
+<LI><FONT COLOR=#000000>Will distribution and installation of
+the native methods be a problem?</FONT>
+</UL>
+<P>
+<HR WIDTH="100%"></P>
+
+<CENTER><P><A HREF="ch13.htm"><IMG SRC="http://docs.rinet.ru/JavDev/pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="#CONTENTS"><IMG SRC="http://docs.rinet.ru/JavDev/cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="index.htm"><IMG SRC="http://docs.rinet.ru/JavDev/hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A><A HREF="ch15.htm"><IMG 
+SRC="http://docs.rinet.ru/JavDev/nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A></P></CENTER>
+
+<P>
+<HR WIDTH="100%"></P>
+
+</BODY>
+</HTML>
+

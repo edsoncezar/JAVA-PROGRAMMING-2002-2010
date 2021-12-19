@@ -1,0 +1,528 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>How To use the Timer MBean and Scheduler Service on JBoss 3</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s55.html" title="How To use the Timer MBean"><link rel="next" href="ch13s72.html" title="Deployment on JBoss"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s55.html"><img src="images\prev.gif" border="0"></a><a href="ch13s72.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="howto.timer.II"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="howto.timer.II"></a>How To use the Timer MBean and Scheduler Service on JBoss 3</h2></div></div><p>Author:
+      <span class="author">Andreas Schaefer</span>
+      <tt>&lt;<a href="mailto:andreas@jboss.org">andreas@jboss.org</a>&gt;</tt>
+   </p><div class="section"><a name="Introduction"></a><div class="titlepage"><div><h3 class="title"><a name="Introduction"></a>Introduction</h3></div></div><p>
+         As part of the JMX specification each JMX compliant agent must provide a timer service to trigger
+         notifications sent at a certain time, in a certain interval and/or number of occurrences.
+         Therefore you can check for mails, check for changes on a target (auto deployer) or notify the
+         client about a date.
+      </p><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10181"></a>Note</h3>
+         The Time Service only notifies the client that time is up and does not start any script or does
+         anything else. It is up to the client implementation to perform whatever he/she has in mind.
+         This is the big difference to other timely services like CRON etc.
+      </div><div class="variablelist"><dl><dt><a name="d0e10184"></a><span class="term">Timer Service, </span><span class="term">Timer MBean</span></dt><dd><p><a name="d0e10189"></a>
+                  The Timer Service in a JMX Agent is implemented by the Timer MBean.
+                  In this HowTo it means the same whereas Timer Service more stresses the
+                  fact of being an Agent Service and Timer MBean more stresses the fact of
+                  being an MBean.
+               </p></dd><dt><a name="d0e10192"></a><span class="term">Event Item</span></dt><dd><p><a name="d0e10195"></a>
+                  An Event-Item is an added "Notification" on the Timer MBean. Please note
+                  that this is not the same as the adding of a Notification Listener on the
+                  JMX Agent which is also the reason to name it differently here. Whenever
+                  a client creates a new Event-Item through the various <tt>addNotification</tt>
+                  methods it will send one or more notifications to the registered notification
+                  listener of the Timer MBean.
+               </p></dd><dt><a name="d0e10201"></a><span class="term">Timer Notification Listener</span></dt><dd><p><a name="d0e10204"></a>
+                  Every client who wants to receive notification about an "Event Item" must
+                  register a Notification Listener. The Notification Listener can belong to another
+                  client than the one adding the Event Item(s). Each Notification Listener will
+                  without filtering receiver all the notifications triggered by all added Event Items
+                  on this Timer MBean. As example two clients added one Event Item and one Notification
+                  Listener. Now both Notification Listeners will receive all the notifications triggered
+                  by the two Event Items and not only the notifications trigger from their Event Item.
+                  <div class="important" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10207"></a>Important</h3>
+                     Always deliver a Notification Filter to receive only the notifications you are
+                     interested into because the filter reduces the traffic to the client and the
+                     Notification Listener does not have to figure out which is "his" Notifications
+                     and which not.
+                  </div>
+               </p></dd><dt><a name="d0e10210"></a><span class="term">Time Notification</span></dt><dd><p><a name="d0e10213"></a>
+                  A notification triggered by an added Event Item and without filtering sent to all
+                  Notification Listener of this Timer MBean.
+               </p></dd></dl></div><p>
+         Just to make it perfectly clear: Each Timer MBean manages a list of Event Items which
+         forces the Timer MBean to send Notifications at the given time and as many times as
+         specified to all the Notification Listener registered to listen for Notification from
+         this Timer MBean instance. Please use a Notification Filter to reduce the Timer
+         Notification to what you are interested into especially when you are on a remote server.
+      </p><div class="itemizedlist"><ul><li><p><a name="d0e10219"></a>
+					<a href="ch13s58.html#timer-preparation" title="Preparation">Preparation</a>
+				</p></li><li><p><a name="d0e10225"></a>
+					<a href="ch13s58.html#timer-setup" title="Timer - Setup">Setup of the Timer Service</a>
+				</p></li><li><p><a name="d0e10231"></a>
+					<a href="ch13s58.html#timer-usage" title="Usage of a Timer MBean">Using the Timer Service</a>
+				</p></li><li><p><a name="d0e10237"></a>
+					<a href="ch13s58.html#scheduler-preparation" title="Scheduler Preparation">Preparation of the Scheduler</a>
+				</p></li><li><p><a name="d0e10243"></a>
+					<a href="ch13s58.html#scheduler-usage" title="Using the Scheduler">Using the Scheduler</a>
+				</p></li><li><p><a name="d0e10249"></a>
+					<a href="ch13s58.html#timer-conclusion" title="Conclusion">Conclusion</a>
+				</p></li></ul></div></div><div class="section"><a name="timer-preparation"></a><div class="titlepage"><div><h3 class="title"><a name="timer-preparation"></a>Preparation</h3></div></div><p>
+         To use the Timer Service we have to prepare the environment. Whenever you are using the JBoss
+         application server you can skip this section and jump to <a href="ch13s58.html#timer-setup" title="Timer - Setup">
+         Timer Setup</a>. If not then you have to do one of the following steps:
+      </p><div class="itemizedlist"><ul><li><p><a name="d0e10265"></a>Create a MBeanServer</p></li><li><p><a name="d0e10268"></a>Find and select the appropriate MBeanServer</p></li><li><p><a name="d0e10271"></a>Connect to a remote MBeanServer</p></li></ul></div><div class="section"><a name="d0e10274"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10274"></a>Create a MBeanServer</h4></div></div><p>
+            Whenever your application does not create a MBeanServer beforehand you have to
+            create one now. Note that you can have more than one MBeanServer running in the
+            same JVM at the same time but normally you only need one MBeanServer instance.
+            Therefore when you are sure that you don't have one now or you need a new one
+            create a MBeanServer this way:
+            <pre class="programlisting">
+   MBeanServer lServer = MBeanServerFactory.createMBeanServer();
+            </pre>              
+         </p></div><div class="section"><a name="d0e10282"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10282"></a>Find and select a MBeanServer</h4></div></div><p>
+            Whenever there is already a MBeanServer running to find and select a
+            MBeanServer by:
+            <pre class="programlisting">
+   // Get a list of all locally registered MBeanServers
+   List lServers = MBeanServerFactory.findMBeanServer( null );
+   // Select one. Here it is just the first one
+   MBeanServer lServer = (MBeanServer) lServers.get( 0 );
+            </pre>              
+         </p></div><div class="section"><a name="d0e10290"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10290"></a>Connect to a remote MBeanServer</h4></div></div><p>
+            You can also use the Timer on a remote site but then you have to connect
+            to the remote MBeanServer by using a Connector. Using the RMI-Connector 
+            would look like this:
+            <pre class="programlisting">
+   // Connect to a remote MBeanServer by using the RMI-Connector (RMI-Adaptor must be looked up beforehand)
+   RemoteMBeanServer lServer = new RMIConnectorImpl( lRMIAdaptor );
+            </pre>              
+            Using the EJB-Connector would look like this:
+            <pre class="programlisting">
+   // Connect to a remote MBeanServer by using the EJB-Connector (EJB-Adaptor must be looked up beforehand)
+   RemoteMBeanServer lServer = new EJBConnector( lEJBAdaptor );
+            </pre>              
+         </p></div></div><div class="section"><a name="timer-setup"></a><div class="titlepage"><div><h3 class="title"><a name="timer-setup"></a>Timer - Setup</h3></div></div><p>
+         To use the Timer service a Timer MBean must be created, registered and activated. There is no need
+         to create a Timer MBean each time you want to use the Timer Service but in order to receive the
+         Timer Notifications you have to register a Notification Listner on this Timer MBean which in
+         turn sends you all the Timer Notifications triggered by any Event Item. But you can supply a
+         Notification Filter to receive only Time Notifications you want to receive.
+         <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10306"></a>Note</h3>
+            Each client listening for notifications from a Timer MBean gets all notifications from all
+            added time notifications. Therefore the client has to figure out which notification is
+            for which Event Item.
+         </div>
+         <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10309"></a>Note</h3>
+            You only have to create a Timer MBean when there is no Timer MBean registered on the
+            actual MBeanServer.
+         </div>
+         To create a Timer MBean you have 3 choices. The first two only work when used in conjunction
+         with a JBoss application server 3. The last one works always.
+      </p><div class="itemizedlist"><ul><li><p><a name="d0e10313"></a>Add it to jboss-service.xml</p></li><li><p><a name="d0e10316"></a>Use a Timer service.xml file</p></li><li><p><a name="d0e10319"></a>Create the Timer through the MBeanServer</p></li></ul></div><div class="section"><a name="d0e10322"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10322"></a>Add it to jboss-service.xml</h4></div></div><p>
+            The Timer MBean should always be started when JBoss is started then add it to the
+            jboss-service.mxl file in the current configuration directory (under /conf). Please add
+            this line but keep in mind that you can change the value of attribute "name" whenever
+            you like but it must be unique on the current MBeanServer:
+            <pre class="programlisting">
+   &lt;mbean code="javax.management.timer.Timer" name="DefaultDomain:service=timer"/&gt;
+            </pre>
+            <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10330"></a>Note</h3>
+               There is no need to add any classes to the classpath or classloader because
+               the class is part of the JMX-Reference Implementation.
+            </div>
+         </p></div><div class="section"><a name="d0e10333"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10333"></a>Use a Timer service.xml file</h4></div></div><p>
+            The other approach with JBoss is to create your own service.xml giving you the chance to
+            deploy it at runtime and don't have the burden to change the root jboss-service.xml file.
+            <div class="important" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10338"></a>Important</h3>
+               Ensure that the name of the service.xml is unique within all your deployment
+               directories (by default "/deploy" and "/deploy/lib").
+            </div>
+            The timer-service.xml would look like this
+            <pre class="programlisting">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+
+&lt;server&gt;
+
+  &lt;!-- ==================================================================== --&gt;
+  &lt;!-- JMX Timer MBean                                                      --&gt;
+  &lt;!-- ==================================================================== --&gt;
+
+   &lt;mbean code="javax.management.timer.Timer" name="DefaultDomain:service=timer"/&gt;
+
+&lt;/server&gt;
+            </pre>
+            <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10344"></a>Note</h3>
+               Keep in mind that there will be no notification about the startup. To check use the JMX
+               HTML-Adaptor on port 8082 by default. The timer is loaded from the jmxri.jar file in /lib
+               directory.
+            </div>
+         </p></div><div class="section"><a name="d0e10347"></a><div class="titlepage"><div><h4 class="title"><a name="d0e10347"></a>Create the Timer through the MBeanServer</h4></div></div><p>
+            When you don't have the JBoss application server running then you have to create, register
+            and start the Timer MBean by your own using the MBeanServer or RemoteMBeanSErver interface.
+            To create and register the Timer MBean:
+            <pre class="programlisting">
+   ObjectInstance lTimer = lServer.createMBean(
+      "javax.management.timer.Timer",
+      new ObjectName( "DefaultDomain", "service", "timer" )
+   ); 
+            </pre>
+            To start the Timer MBean which is always necessary here (JBoss is doing this for you):
+            <pre class="programlisting">
+   lServer.invoke(
+      lTimer.getObjectName(), 
+      "start", 
+      new Object[] {},
+      new String[] {}
+   ); 
+            </pre>
+            Of course you can also use an Adaptor like the HTML-Adaptor to create and setup the
+            Timer MBean.
+         </p></div></div><div class="section"><a name="timer-usage"></a><div class="titlepage"><div><h3 class="title"><a name="timer-usage"></a>Usage of a Timer MBean</h3></div></div><p>
+         <div class="procedure"><p><a name="d0e10363"></a><b>Procedure 13.2. Procedure to use the Timer Service</b></p><p>
+               Now we are ready to configure the Timer Service and to finally use it. Both steps
+               could be done without an order but for the Notification Filter we need the ID number of
+               the Event Item. Therefore the Event Item should be added first. If you don't use
+               the Notification Filter or filter on the client side then you can perform the second
+               step as the first step, too.
+            </p><ol type="1"><li><a name="d0e10368"></a><p>
+                  First add the Event Item to the Timer Service. Keep the number of the Event Item
+                  because it is necessary for the Notification Filter. Because there are different
+                  ways to register an Event Item let us go through them one by one.
+               </p><div class="itemizedlist"><ul><li><p><a name="d0e10372"></a>
+                        This code just adds an Event Item which sends a Time Notification once
+                        after one minute from now.
+                     </p><pre class="programlisting">
+   Date lNext = new Date( new Date().getTime() + Timer.ONE_MINUTE );
+   Integer lOneMinuteTimer = (Integer) lServer.invoke(
+      lTimer.getObjectName(),
+      "addNotification",
+      new Object[] { 
+         "IDoNotKnowWhatTypeIs",
+         "I call you with this timer once",
+         // No user object
+         null,
+         // In one minute from now
+         lNext,
+      },
+      new String[] {
+         "".getClass().getName(),
+         "".getClass().getName(),
+         "java.lang.Object",
+         Date.class.getName()
+      }
+   );
+                     </pre></li><li><p><a name="d0e10377"></a>
+                        This code sets up an Event Item which sends ten Time Notifications one minute
+                        apart starting after one hour from now.
+                     </p><pre class="programlisting">
+   Date lNext = new Date( new Date().getTime() + Timer.ONE_HOUR );
+   Integer lOneHourTimer = (Integer) lServer.invoke(
+      lTimer.getObjectName(),
+      "addNotification",
+      new Object[] { 
+         "IDoNotKnowWhatTypeIs", 
+         "I call you with this timer ten times",
+         // No user object
+         null,
+         // In one hour from now
+         lNext,
+         new Long( Timer.ONE_MINUTE ),
+         new Long( 10 )
+      },
+      new String[] {
+         "".getClass().getName(),
+         "".getClass().getName(),
+         "java.lang.Object",
+         Date.class.getName(),
+         Long.TYPE.getName(),
+         Long.TYPE.getName()
+      } 
+   );
+                     </pre></li><li><p><a name="d0e10382"></a>
+                        This will remove an Event Item by its ID
+                     </p><pre class="programlisting"> 
+   lServer.invoke(
+      lTimer.getObjectName(), 
+      "removeNotification", 
+      new Object[] {
+         // You could also use the type: "IDoNotKnowWhatTypeIs"
+         lOneHourTimer
+      },
+      new String[] {
+         // If you remove by type: String.getClass().getName()
+         Integer.TYPE.getName() 
+      }
+   );
+                     </pre></li></ul></div></li><li><a name="d0e10387"></a><p>
+                  Now we have to register a Notification Listener at the JMX Agent to retrieve
+                  the Time Notifications. The Notification Filter should be used whenever you
+                  have more than one Event Item added to the Timer Service. The filter should only
+                  pass Time Notification the client is interested into (it is assumed here that
+                  the Id of the Event Item (above it would be "lOneMinuteTimer" or "lOneHourTimer")
+                  is stored in the class variable "mTimerId").
+               </p><pre class="programlisting"> 
+   lServer.addNotificationListener(
+      lTimer.getObjectName(),
+      // Notification Listener
+      new NotificationListener() {
+         public void handleNotification(
+            Notification pNotification,
+            Object pHandback 
+         ) {
+            // Add here you call any code or application or perform whatever you want to
+            System.out.println( "You got a Notification: " + pNotification );
+         }
+      },
+      // Filter Listener
+      new NotificationFilter() {
+         public boolean isNotificationEnabled( Notification pNotification ) {
+            if( pNotification instanceof TimerNotification ) {
+               TimerNotification lTimerNotification = (TimerNotification) pNotification;
+               return lTimerNotification.getNotificationID().equals( mTimerId );
+            }
+            return false;
+         }
+      },
+      // No object handback necessary
+      null
+   );
+               </pre><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10392"></a>Note</h3>
+                  Here both listener as well as filter are implemented as anonymous classes but
+                  this is not necessary. Have a look at the Scheduler to see how regular classes
+                  can be used.
+               </div></li></ol></div>
+      </p></div><div class="section"><a name="scheduler-preparation"></a><div class="titlepage"><div><h3 class="title"><a name="scheduler-preparation"></a>Scheduler Preparation</h3></div></div><p>
+         The JBoss Scheduler service enables you to use the Timer Service easier and to call any
+         instance implementing the Schedulable interface.
+         <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10400"></a>Note</h3>
+            One Scheduler Instance is to schedule one task. Therefore to schedule more than one
+            task create more than one Scheduler MBeans.
+         </div>
+         <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10403"></a>Note</h3>
+            Every Scheduler Instance can be reused by reseting the MBean attributes but your old
+            schedule is then lost.
+         </div>
+      </p><p>
+         To use the Scheduler you need a target which the Scheduler will call when the Timer sends
+         a notification based on your settings. This can be either an instance of a class implementing
+         the Schedulable interface (which will be created by the Scheduler) or another MBean available
+         in the JMX MBeanServer of JBoss. From now on we will call this a Schedulable (class / instance
+         or MBean).
+      </p><div class="orderedlist"><ol type="1"><li><p><a name="d0e10409"></a>
+               One way to use the Scheduler service is to provide a class that implements the
+               Schedulable interface. When the Scheduler receives a Notification from the Timer
+               it will call the Schedulable's <tt>perform()</tt> method. This method
+               takes 2 paramaters: the first is the time that the notification was sent; the second
+               is the number of the remain occurences(where -1 means no limit).
+            </p><p>
+               The example coming with the Scheduler what a Schedulable class should look like is
+               the internal class SchedulableExample. It just takes a name and a value used to identify
+               the log when a timed call comes in. To create a Schedulable class just build a Constructor
+               taking basic data types, String or any other class having a constructor taking a single String
+               as parameter. Then implement the <tt>perform</tt> method where you can use the
+               given date of call, number of remaining repetitions and the value set by the constructor.
+               The <tt>perform</tt> method can start backups, nightly data transfers, purge old
+               data from the DB etc. The default example looks like this:
+               <pre class="programlisting">
+   public static class SchedulableExample
+      implements Schedulable
+   {
+      private String mName;
+      private int mValue;
+
+      public SchedulableExample(
+         String pName,
+         int pValue
+      ) {
+         mName = pName;
+         mValue = pValue;
+      }
+
+      /**
+       * Just log the call
+       **/
+      public void perform(
+         Date pTimeOfCall,
+         long pRemainingRepetitions
+      ) {
+         System.out.println( "Schedulable Examples is called at: " + pTimeOfCall +
+            ", remaining repetitions: " + pRemainingRepetitions +
+            ", test, name: " + mName + ", value: " + mValue );
+      }
+   }
+               </pre>
+            </p><p>
+               The last step of the preparation is that all the new classes coming along with
+               your Schedulable must be made available to the JMX agent. Therefore you have to add
+               it to the classpath or with JBoss 3 reference the JAR file in the service.xml file.
+            </p></li><li><p><a name="d0e10428"></a>
+               The other way is to tell the Scheduler which method on which MBean schould be
+               called by the Scheduler service when it receives a Notification from the Timer.
+               The MBean must be loaded, created and started when the Scheduler calls the
+               MBean for the first time. If not available the Scheduler will count this call
+               (decrease the remaining repetitions if not endless) but the call is not performed.
+            </p></li></ol></div></div><div class="section"><a name="scheduler-usage"></a><div class="titlepage"><div><h3 class="title"><a name="scheduler-usage"></a>Using the Scheduler</h3></div></div><p>
+         The Scheduler is programmed in a way that you only have to configure and start it
+         to use it. The next code snippet can be used to add it to jboss-service.xml file or
+         create your own scheduler-service.xml file. When you use a JMX Connector then you
+         can create the Scheduler MBean, set the Attributes and then invoke the <tt>
+         init</tt> and <tt>start</tt> methods (please have a look at the
+         timer-usage above for more informations). The Scheduler can be setup in two ways.
+         <div class="orderedlist"><ol type="1"><li><p><a name="d0e10443"></a>
+                  To setup a Scheduler in a service.xml file using a Schedulable class add
+                  this code snippet and adjust it to your needs:
+                  <pre class="programlisting">
+  &lt;mbean code="org.jboss.util.Scheduler" name=":service=Scheduler"&gt;
+    &lt;attribute name="SchedulableClass"&gt;org.jboss.util.Scheduler$SchedulableExample&lt;/attribute&gt;
+    &lt;attribute name="SchedulableArguments"&gt;Schedulabe Test,12345&lt;/attribute&gt;
+    &lt;attribute name="SchedulableArgumentTypes"&gt;java.lang.String,int&lt;/attribute&gt;
+    &lt;attribute name="InitialStartDate"&gt;0&lt;/attribute&gt;
+    &lt;attribute name="SchedulePeriod"&gt;10000&lt;/attribute&gt;
+    &lt;attribute name="InitialRepetitions"&gt;-1&lt;/attribute&gt;
+    &lt;attribute name="StartAtStartup"&gt;true&lt;/attribute&gt;
+  &lt;/mbean&gt;
+                  </pre>
+               </p></li><li><p><a name="d0e10449"></a>
+                  To setup a Scheduler in a service.xml file using a Schedulable MBean add
+                  this code snippet and adjust it to your needs:
+                  <pre class="programlisting">
+  &lt;mbean code="org.jboss.util.SchedulableExample" name="jboss:type=example,name=schedulable"&gt;
+  &lt;/mbean&gt;
+  &lt;mbean code="org.jboss.util.Scheduler" name="jboss:service=Scheduler"&gt;
+    &lt;attribute name="StartAtStartup"&gt;true&lt;/attribute&gt;
+    &lt;attribute name="SchedulableMBean"&gt;jboss:type=example,name=schedulable&lt;/attribute&gt;
+    &lt;attribute name="SchedulableMBeanMethod"&gt;hit( NOTIFICATION, DATE, REPETITIONS, SCHEDULER_NAME, java.lang.String )&lt;/attribute&gt;
+    &lt;attribute name="InitialStartDate"&gt;NOW&lt;/attribute&gt;
+    &lt;attribute name="SchedulePeriod"&gt;10000&lt;/attribute&gt;
+    &lt;attribute name="InitialRepetitions"&gt;10&lt;/attribute&gt;
+  &lt;/mbean&gt;
+                  </pre>
+                  Note that the first MBean is the target (Schedulable) MBean which is created
+                  before the Scheduler. This is not necessary especially when you want to use
+                  JBoss MBeans but they should be available when the first hit (see initial start
+                  date) from the Timer is in.
+               </p></li></ol></div>
+         <div class="important" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10456"></a>Important</h3><p>
+               Do NOT mix these two types. The last call to either <tt>setSchedulableClass</tt>
+               or <tt>setSchedulableMBean</tt> will determine if a Schedulable Class or
+               MBean is used.
+            </p></div>
+         <div class="variablelist"><dl><dt><a name="d0e10467"></a><span class="term">SchedulableClass</span></dt><dd><p><a name="d0e10470"></a>
+                     Full qualified path to the class implementing the Schedulable interface. Whenever
+                     a Time Notification is sent to the Scheduler the Schedulable's <tt>perform</tt>
+                     method will be called. Your Schedulable instance can then peform any necessary steps
+                     you have to perform at a certain time.
+                  </p></dd><dt><a name="d0e10476"></a><span class="term">InitArguments</span></dt><dd><p><a name="d0e10479"></a>
+                     Contains the text representation of the attributes to create the Schedulable
+                     instance. If the needs arise I will also add a way to create a Schedulable MBean
+                     and pass the JMX Object Name instead (see J2eeDeployer) instead.
+                     <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10482"></a>Note</h3>
+                        Only basic data types, Strings and objects taking a String a single argument
+                        of the constructor are supported now. Objects are created with respect to the
+                        given argument types below.
+                     </div>
+                     <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10485"></a>Note</h3>
+                        Arguments are separated by a comma and therefore you must not use commas in
+                        the attribute value (escaping is not supported yet).
+                     </div>
+                  </p></dd><dt><a name="d0e10488"></a><span class="term">InitTypes</span></dt><dd><p><a name="d0e10491"></a>
+                     Data types of the constructor you want to use to create the Schedulable instance.
+                     The number and type must match with the given InitArguments above. It contains
+                     Name of the basic data type (int, long, byte, char, float, double) or the fully
+                     qualified path of a class like java.lang.String which must have a constructor
+                     taking a single String argument.
+                  </p></dd><dt><a name="d0e10494"></a><span class="term">SchedulableMBean</span></dt><dd><p><a name="d0e10497"></a>
+                     Object Name of the MBean you want to be called when timer send a notification.
+                     Note that this must not be null and must be a valid JMX Object Name.
+                  </p></dd><dt><a name="d0e10500"></a><span class="term">SchedulableMBeanMethod</span></dt><dd><p><a name="d0e10503"></a>
+                     Can contain two parts. The first is the method name which must be in front of
+                     the opening bracket. The second is inside the opening and closing bracket. There
+                     must not be any other characters after the closing bracket except white spaces
+                     which will be trimmed away with <tt>java.lang.String.trim()</tt>.
+                     The second part must be a comma seperated list of the following items (if written
+                     in uppercase then this literal without the colon):
+                     <div class="itemizedlist"><ul><li><p><a name="d0e10510"></a>
+                              NOTIFICATION: Timer Notification object sent by the Timer. The signature
+                              is: javax.management.Notification.
+                           </p></li><li><p><a name="d0e10513"></a>
+                              DATE: Date instance when the timer sent the call. The signature is:
+                              java.util.Date.
+                           </p></li><li><p><a name="d0e10516"></a>
+                              REPETITIONS: Number of remaining repetitions. The signature is: long.
+                           </p></li><li><p><a name="d0e10519"></a>
+                              SCHEDULER_NAME: Object Name of the Scheduler calling the MBean. With
+                              this Object Name you can call back and investigate the Scheduler. The
+                              signature is: javax.management.ObjectName.
+                           </p></li><li><p><a name="d0e10522"></a>
+                              Anything else will be treated as fully qualified Class name where the
+                              Scheduler send a "null" as value but this Class as signature. This
+                              method is here to satisfy your method signature.
+                           </p></li></ul></div>
+                     When you omit the method name "perform" will be set. If you omit the parameter
+                     list (second part) then the same signature as <tt>perform</tt> of
+                     the Schedulable instance will be assumed.
+                  </p></dd><dt><a name="d0e10529"></a><span class="term">InitialStartDate</span></dt><dd><p><a name="d0e10532"></a>
+                     You have now 3 ways to set the Initial Start Date:
+                     <div class="itemizedlist"><ul><li><a name="d0e10536"></a>
+                           NOW: Current date when the Scheduler is started
+                        </li><li><a name="d0e10538"></a>
+                           Milliseconds since 1/1/1970: Date (in milliseconds since 1/1/1970) when the
+                           Timer sends the first Time Notification.
+                        </li><li><a name="d0e10540"></a>
+                           Date Pattern as String: Date as a String understood by the
+                           java.text.SimpleDateFormat (please check your environment). For US this
+                           looks like this: 2/5/02 11:15 am (Fith of February 2002, eleven fifeteen
+                           in the morning).
+                        </li></ul></div>
+                     Note that when a date is set in the past the Scheduler will see if the Schedule
+                     would have a hit in the future with the given period and number of repetitions.
+                     If the number of repetitions is endless the Scheduler will start at the first
+                     scheduled time in the future with respect to the start date and period. Otherwise
+                     if a hit is in the future the Schedule will schedule this one but also reduce
+                     the number of hits which were in the past. If no hit is in the future the Schedule
+                     will be inactive even thought it is started.
+                  </p><p>
+                     The reason to do so is to allow an administrator to restart the JBoss application
+                     server without adjusting the Scheduler every time. If for example you started a
+                     Scheduler on Monday to run every day at 12:00pm for a week (7 times) and you
+                     restart JBoss on Thursday after 12:00pm the same week then the Scheduler will
+                     run for Friday, Saturday and Sunday at 12:00pm.
+                  </p></dd><dt><a name="d0e10545"></a><span class="term">NrOfRepetitions</span></dt><dd><p><a name="d0e10548"></a>
+                     You can define the number of repetitions of timed calls. If you specify -1 then
+                     there is no limit. When all the calls are sent the Scheduler falls into hibernation
+                     because when no Time Notification is sent nothing is going to happen. But then
+                     you can either reuse the Scheduler or remove the MBean from the JMX Agent.
+                  </p></dd><dt><a name="d0e10551"></a><span class="term">StartAtStartup</span></dt><dd><p><a name="d0e10554"></a>
+                     Either "true" or "false" indicats if the Scheduler should be started after
+                     creation or it should wait until you are ready and start the Scheduler by
+                     hand (HTML-Adaptor), another JMX MBean or a client using JMX Connector/Adaptor.
+                  </p></dd></dl></div>
+         <div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10558"></a>Note</h3>
+            The first version of the Scheduler passed these values as constructor arguments instead of using
+            the named attributes here. In this new version it is not necessary but you can still pass
+            the arguments to the constructor directly.
+         </div>
+      </p><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10561"></a>Note</h3>
+         The Scheduler can be reused when the original schedule is not used anymore or the number of
+         repetitions felt to 0 meaning no Time Notifications are sent anyhow. But whenever you change
+         the attributes of the Scheduler you have to restart the Scheduler thus the
+         change becomes effective. To restart use the <tt>stopScheduler</tt> and <tt>
+         startSchedule</tt> methods. The <tt>stopScheduler</tt> method needs a boolean
+         argument indicating if Scheduler should be stopped immediately or wait until the next hit is
+         performed. Whenever you stop the Scheduler with argument "false" the <tt>isRestartPending
+         </tt> returns "true" until the Scheduler is stopped. The other <tt>stopService</tt>
+         belongs to the life-cycle of the MBean and should only be used in this context.
+      </div><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title"><a name="d0e10578"></a>Note</h3>
+         The Scheduler is showing this message when the Scheduler remaining repetitions went to 0
+         and became inActive:
+         <pre class="programlisting">
+02:12:00,908 ERROR [Default] java.lang.NullPointerException
+02:12:00,908 ERROR [Default]    at javax.management.timer.Timer.updateTimerTable(Timer.java:984)
+02:12:00,908 ERROR [Default]    at javax.management.timer.Timer.notifyAlarmClock(Timer.java:1093)
+02:12:00,918 ERROR [Default]    at javax.management.timer.TimerAlarmClock.run(Timer.java:1165)
+         </pre>
+         Please just ignore this message because it is catched and then reported inside JMX. It seems
+         to be a bug from a bug fix of Sun.
+      </div></div><div class="section"><a name="timer-conclusion"></a><div class="titlepage"><div><h3 class="title"><a name="timer-conclusion"></a>Conclusion</h3></div></div><p>
+         The Timer MBean is not that difficult to use as soon as you understand what the differences
+         are compared to other scheduling services like CRON. If you are just interested to get the hit after
+         a certain time with a certain number of repetitions the Scheduler is an easy way to use the
+         Timer MBean. The Scheduler hides all the details of the Timer and you can focus on the
+         implementation of what you have to perform when time is up.
+      </p><p>
+         If anything is wrong or not correct please contact me at andreas@jboss.org. Also if
+         you want to know more in detail or have a request for further infos.
+      </p></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s55.html"><img src="images\prev.gif" border="0"></a><a href="ch13s72.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

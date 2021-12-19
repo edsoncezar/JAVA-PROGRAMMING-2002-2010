@@ -1,0 +1,148 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Using JavaMail in JBoss</title><link rel="stylesheet" href="styles.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets Vimages/callouts/"><link rel="home" href="index.html" title="JBoss 3.0 Documentation"><link rel="up" href="ch13.html" title="Chapter 13. HOWTO"><link rel="previous" href="ch13s78.html" title="JAAS Based Security in JBoss"><link rel="next" href="ch13s101.html" title="EJX/AWT Development HowTo"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\jboss.gif" border="0"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s78.html"><img src="images\prev.gif" border="0"></a><a href="ch13s101.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table><div class="section"><a name="howto.javamail"></a><div class="titlepage"><div><h2 class="title" style="clear: both"><a name="howto.javamail"></a>Using JavaMail in JBoss</h2></div></div><p>
+	  Author:
+		<span class="author">Michel de Groot</span>
+		<tt>&lt;<a href="mailto:michel.anke@wolmail.nl">michel.anke@wolmail.nl</a>&gt;</tt>
+	</p><p>
+	  JBoss 2.2.2 compliance checked by:
+		<span class="author">Francois Charoy</span>
+		<tt>&lt;<a href="mailto:Francois.Charoy@loria.fr">Francois.Charoy@loria.fr</a>&gt;</tt>
+	</p><div class="section"><a name="d0e11250"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11250"></a>Introduction</h3></div></div><p>JBoss has a built-in implementation of the <a href="http://java.sun.com/products/javamail/1.2/docs/javadocs/index.html" target="_top">JavaMail API</a>. You can use this 
+service from inside and outside EJBs. We
+describe here how to use the service. </p></div><div class="section"><a name="d0e11258"></a><div class="titlepage"><div><h3 class="title"><a name="d0e11258"></a>Installation &amp; Configuration</h3></div></div><div class="orderedlist"><ol type="1"><li><p><a name="d0e11262"></a>Edit conf/&lt;yourconfig&gt;/jboss.jcml and find Mail 
+Service MBean (almost on the bottom).</p><p>     a) Replace the User and Password attributes values with the user name and 
+password used to connect to your
+     mail server. You can find these values in your mail program. The mail 
+service will use this account to send mails,
+     so be sure that this mail account works properly (test it with your mail 
+program for example).</p><p>     b) Replace the ConfigurationFile attribute value with the file containing 
+the mail settings. Default is
+     "mail.properties", which is also in the conf/&lt;yourconfig&gt; 
+directory. This file will be edited in step 2.</p><p>     c) Replace the JNDIName attribute value with the JNDI name for your mail 
+session. The default is "Mail". This
+     JNDI name will be used in jboss.xml to identify the resource. This is 
+explained in more detail in step 4.</p></li><li><p><a name="d0e11271"></a>Edit the mail properties file you identified in step 1b. By 
+default, this is conf/&lt;yourconfig&gt;/mail.properties.</p><p>     Edit the following lines:
+     <pre class="programlisting"> 
+     mail.user = sa005697    // the user to connect with; same as in step 1a
+     mail.pop3.host = pop3.wolmail.nl        // the pop host to store the mail on
+     mail.smtp.host = smtp.wolmail.nl        // the smtp host to send the mail to 
+     mail.from = Memoirs@gamesphere.com      // the 'from' field that is filled in by default in e-mails
+     </pre> 
+     
+				</p><p> 
+     You can find most value in your mail program. You might want to inspect 
+the JavaMail specification for more
+     details.</p><p>  
+     The last line, mail.debug, should be set to 'true' for now. This will 
+provide you with verbose debugging
+     information. Once you have everything running correctly, you can set it 
+to false.</p></li><li><p><a name="d0e11283"></a>Edit the ejb-jar.xml of the EJB that uses the mail service. 
+In your EJB, specify a &lt;resource-ref&gt; like this: 
+     <pre class="programlisting">
+&lt;ejb-jar&gt;
+     &lt;description&gt;JBoss JavaMail Sample Application&lt;/description&gt;
+     &lt;display-name&gt;Mailer EJB&lt;/display-name&gt;
+     &lt;enterprise-beans&gt;
+       &lt;session&gt;
+         &lt;ejb-name&gt;Mailer&lt;/ejb-name&gt;
+         &lt;home&gt;org.jboss.docs.javamail.MailerHome&lt;/home&gt;
+         &lt;remote&gt;org.jboss.docs.javamail.Mailer&lt;/remote&gt;
+         &lt;ejb-class&gt;org.jboss.docs.javamail.MailerBean&lt;/ejb-class&gt;
+         &lt;session-type&gt;Stateless&lt;/session-type&gt;
+         &lt;transaction-type&gt;Container&lt;/transaction-type&gt;
+       &lt;/session&gt;
+     &lt;/enterprise-beans&gt;
+     &lt;resource-ref&gt;
+       &lt;res-ref-name&gt;mail/Mail&lt;/res-ref-name&gt; 
+       &lt;res-type&gt;javax.mail.Session&lt;/res-type&gt; 
+       &lt;res-auth&gt;Container&lt;/res-auth&gt; 
+     &lt;/resource-ref&gt; 
+&lt;/ejb-jar&gt;
+     </pre>  
+     
+				</p><p>     This will tell the EJB container that the EJB uses a javax.mail.Session 
+resource named mail/MyMail and that authorization is container managed.</p><p>     You can change the name if you like, but be sure to use the same name in 
+step 6, in the code example. </p></li><li><p><a name="d0e11293"></a>Edit the jboss.xml of the EJB that uses the mail service. 
+If you don't have this file, create it and place it in the same directory as the ejb-jar.xml of the EJB. This file is JBoss specific and tells JBoss how to map the mail resource to the mail service provider in JBoss.
+
+     In this file, specify a  &lt;resource-manager&gt; like this: 
+     <pre class="programlisting"> 
+&lt;jboss&gt;
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;ejb-name&gt;Mailer&lt;/ejb-name&gt;
+      &lt;jndi-name&gt;Mailer&lt;/jndi-name&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+  &lt;resource-managers&gt;
+    &lt;resource-manager&gt;
+      &lt;res-name&gt;mail/Mail&lt;/res-name&gt; 
+      &lt;res-jndi-name&gt;Mail&lt;/res-jndi-name&gt; 
+    &lt;/resource-manager&gt; 
+  &lt;/resource-managers&gt; 
+&lt;/jboss&gt;
+     </pre>     
+				</p><p>     The name that you specify here is the name that you specified in step 3. 
+The JNDI name that you specify here is
+     the name that you specified in step 1c.</p></li><li><p><a name="d0e11301"></a>Code example
+     This code example assumes that you are working from inside a JBoss 
+container. For example, this is the case if
+     the code is placed in a JBoss managed SessionBean.</p><pre class="programlisting"> 
+package org.jboss.docs.javamail;
+import java.util.Date;
+import javax.ejb.SessionBean;
+import javax.naming.InitialContext;
+import javax.mail.Session;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.InternetAddress;
+import javax.mail.Transport;
+import javax.mail.Address;
+import javax.mail.Message;
+import javax.rmi.PortableRemoteObject;
+
+public class MailerBean implements SessionBean {
+    public void ejbCreate() {}
+    
+    public void ejbPostCreate() {}
+    
+    public void sendMail(String address) throws java.rmi.RemoteException {
+	Session session = null;
+	try {
+	    session = (Session)PortableRemoteObject.narrow(new InitialContext().lookup("java:Mail"), Session.class);
+	} catch (javax.naming.NamingException e) {
+	    e.printStackTrace();
+	}
+                             
+	try {
+	    MimeMessage m = new MimeMessage(session);
+	    m.setFrom();
+	    Address[] to = new InternetAddress[] {
+		new InternetAddress(address)
+	    };
+	    m.setRecipients(Message.RecipientType.TO, to);
+	    m.setSubject("JavaMail Test");
+	    m.setSentDate(new Date());
+	    m.setContent("Test from inside EJB Using JBoss", 
+			 "text/plain");
+	    Transport.send(m);
+	} catch (javax.mail.MessagingException e) {
+	    e.printStackTrace();
+	}               
+    }
+
+    public void ejbActivate() {}
+    public void ejbPassivate() {}
+    public void ejbRemove() {}
+    public void setSessionContext(javax.ejb.SessionContext ec) {}
+}
+   </pre></li><li><p><a name="d0e11306"></a>Using the JavaMail service with mail servers that require 
+POP authentication before SMTP
+     You can do this by using: </p><pre class="programlisting"> 
+             import javax.mail.Store;
+
+             Store s = session.getStore();
+             s.connect(); // POP authentication
+             Transport.send(m);
+             </pre></li></ol></div></div></div><table border="0" cellpadding="0" cellspacing="0" height="65"><tr height="65"><td rowspan="2"><img src="images\gbar.gif" width="432" height="79"></td><td rowspan="2" background="images\gbar.gif" width="100%" align="right" valign="top"><a href="index.html"><img src="images\doc.gif" border="0"></a><a href="ch13.html"><img src="images\toc.gif" border="0"></a><a href="ch13s78.html"><img src="images\prev.gif" border="0"></a><a href="ch13s101.html"><img src="images\next.gif" border="0"></a></td></tr><tr></tr></table></body></html>

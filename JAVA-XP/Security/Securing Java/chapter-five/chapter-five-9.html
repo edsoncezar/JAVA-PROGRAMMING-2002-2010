@@ -1,0 +1,183 @@
+<html>
+<head>
+<title>Casting Caution to the Wind (Ch. 5, Sec. 9) [Securing Java]</title>
+<META NAME="description" CONTENT="Securing Java: Getting Down to Business with Mobile Code.  This is the online version of the print book, featuring a searchable index, java links, and the full text of the book."> 
+
+<META NAME="keywords" CONTENT="java security,mobile code,sandbox,applets,smart cards,Gary McGraw,Edward Felten">
+
+</head>
+<body background="..\images\back-poss.jpg" bgcolor="#FFFFFF" text="#37371C" link="#FF0000" vlink="#820000" alink="#008080">
+
+<center>
+<table width="90%" bgcolor="#F5F5F5" cellspacing=0 cellpadding=0>
+<tr><td> 
+<a href="..\order.html"><img src="..\images\buyit.gif" width=100 height=45 border=0 alt="BUY IT!"></a>
+
+<center>
+
+
+<img src="..\images\chapt-five.gif" width=593 height=63 border=0 alt="Securing Java">
+</center>
+<br clear=all>
+<center>
+<table border=0 width=100%><tr><td width=60 align=center>
+<a href="chapter-five-8.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center><font size="+2" color="#000000"><b>Attack Applets: Exploiting Holes in the Security Model
+</b></font><br>
+
+<b>CHAPTER SECTIONS:</b> <a href="chapter-five-1.html">1</a> / <a href="chapter-five-2.html">2</a> / <a href="chapter-five-3.html">3</a> / <a href="chapter-five-4.html">4</a> / <a href="chapter-five-5.html">5</a> / <a href="chapter-five-7.html">6</a> / <a href="chapter-five-7.html">7</a> / <a href="chapter-five-8.html">8</a> / <b>9</b> / <a href="chapter-five-10.html">10</a> / <a href="chapter-five-11.html">11</a> / <a href="chapter-five-12.html">12</a> / <a href="chapter-five-13.html">13</a> / <a href="chapter-five-14.html">14</a> / <a href="chapter-five-15.html">15</a> / <a href="chapter-five-16.html">16</a> / <a href="chapter-five-17.html">17</a> / <a href="chapter-five-18.html">18</a> / <a href="chapter-five-19.html">19</a> / <a href="chapter-five-20.html">20</a><p>
+
+<font size="+2" color="#000000"><b>Section 9 -- Casting Caution to the Wind</b></font>
+</td><td width=60 align=center>
+<a href="chapter-five-10.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center><p>
+
+
+Software consultant Tom Cargill has discovered two security flaws related to the way in which Java handles interface types. Both flaws involve a rare case in which Java fails to check whether a method is private. Both also use type-casting operations on Java's interface types. By exploiting these flaws, an attacker can call private methods normally prohibited by Java's security rules. Since some of the security-critical values inside the Java system are protected by private methods, a complete security breach using this attack is possible.<p><br>
+
+
+<center><font size="+1"><b>Simple Interface Casting</b></font></center><p>
+
+The core of Cargill's first discovery is shown in the following code:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>interface Inter {
+  void f(); 
+}
+class Secure implements Inter {
+  private void f(); 
+}
+class Dummy extends Secure implements Inter {
+  public void f();
+  Dummy() {
+     Secure s = new Secure();
+     Inter i = (Inter) s;
+     i.f();          // should be illegal
+  }
+}</pre>
+</td></tr></table></center><p>
+
+This code allows the private f method of class Secure to be called illegally. The Java interpreter fails to determine if f is private when i.f() is called.<p>
+
+The Princeton team figured out how to use this flaw to achieve full system penetration. This was done by exploiting the fix to the class loader bug. The class loader bug was fixed by splitting the critical defineClass method into a private method and a public method. The private method, defineClass0, did the work. The public method checked the initialized flag and called defineClass0 only if the flag was true. Since the private defineClass0 method couldn't be called directly by an applet, this was supposed to fix the class loader bug.<p>
+
+Unfortunately, a variant of the interface-casting trick shown here allows an applet to call the private defineClass0 method directly, bypassing the check. This meant that the attack could create a class loader by exploiting the Verifier bug. The initialized flag would be false, but that wouldn't matter. A programmer could bypass the flag-check by exploiting the interface-casting trick to call the private defineClass0 method directly.<p>
+
+By using this trick, an attacker could gain full system penetration under Netscape Navigator 2.02.<p><br>
+
+
+<center><font size="+1"><b>The Full Fix</b></font></center><p>
+
+Netscape fixed this problem in two ways. First, it fixed the flaw in its Java Virtual Machine that allowed the interface-casting trick to work. Second, Netscape began storing and checking the initialized flag inside the Java Virtual Machine, rather than in programmer-generated Java code. Netscape eliminated the dangerous defineClass0 operation by integrating everything into the VM's implementation of defineClass. This change took effect in Navigator 3.0beta3.<p>
+
+In reaction to the interface-casting bug, Netscape changed its Java implementation to protect itself more generally against an attacker who had the ability to call private methods. By going beyond a simple bug fix to improve the structure of the system, Netscape practiced good security engineering. Its decision paid off when the next bug was discovered.<p><br>
+
+
+<center><font size="+1"><b>Advanced Interface Casting</b></font></center><p>
+
+Here is the core of Cargill's second discovery:<p>
+
+<center><table width=85% border=0><tr><td>
+<pre>  interface Inter {
+     void f(); 
+  }
+
+
+  class Secure implements Inter {
+     private void f(); 
+  }
+
+
+  class Dummy implements Inter {
+     public void f();
+
+
+     static void attack() {
+        Inter inter[2] = {new Dummy(), new Secure() };
+        for(int j=0; j&lt;2; ++j)     inter[j].f();
+     }
+  }</pre>
+</td></tr></table></center><p>
+  
+The first call, inter[0].f(), is legal since Dummy's f method is public. The next time around the loop, inter[1].f() is illegal since Secure's f method is private.<p>
+
+In this case, Java was too smart for its own good. In order to improve performance, it only checked for legality the first time through the loop. Theoretically, what was legal the first time would be legal the next time. (See <a href="..\chapter-two\index.html">Chapter 2</a>.) Though this is often a correct assumption, it broke down for the code just shown.<p>
+
+This trick allows an attacker to call private methods in violation of Java's security rules. Had Netscape not improved the structure of their system after the previous bug was reported, this bug would have once again allowed the class-loader attack to work. However, because Netscape had protected their system against private method attacks, this flaw was not easy to exploit.<p>
+
+
+<center>
+<table width=95%>
+<tr>
+<td width=60 align=center>
+<a href="chapter-five-8.html">
+<img src="..\images\arrow6.gif" width=60 height=60 border=0 align="middle" alt="Previous Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Previous Page</font></a>
+</td><td align=center>
+<center>
+<FORM METHOD=post ACTION="/cgi-bin/texis/webinator/newsearch/">
+<font size="-1" face="Helvetica">
+<INPUT TYPE="text" NAME="arg" SIZE=25></font><br>
+<INPUT TYPE="hidden" NAME=proximity VALUE="rank">
+<INPUT TYPE="hidden" NAME=suffixproc VALUE="max">
+<INPUT TYPE="hidden" NAME="db" value="db9">
+<INPUT NAME=cmd TYPE=submit VALUE="Search the Book"><br>
+<font size="-1" face="Arial">
+<a href="http://www.rstcorp.com/searchhelp.html">Search Help</a></font></FORM>
+</center>
+
+</td><td width=60 align=center>
+<a href="chapter-five-10.html">
+<img src="..\images\arrow7.gif" width=60 height=60 border=0 align="middle" alt="Next Page"><br>
+<font size="-2" face="Helvetica,sans-serif">Next Page</font></a>
+</td></tr></table>
+</center>
+
+<hr>
+<p><br>
+
+<map name="menu">
+<area shape="RECT" coords="4,16,116,35" href="..\toc.html">
+<area shape="RECT" coords="11,37,105,57" href="..\preface.html">
+<area shape="RECT" coords="198,13,218,50" href="..\chapter-one\index.html">
+<area shape="RECT" coords="226,12,248,41" href="..\chapter-two\index.html">
+<area shape="RECT" coords="253,17,274,50" href="..\chapter-three\index.html">
+<area shape="RECT" coords="279,27,301,59" href="..\chapter-four\index.html">
+<area shape="RECT" coords="308,16,329,49" href="index.html">
+<area shape="RECT" coords="335,9,357,41" href="..\chapter-six\index.html">
+<area shape="RECT" coords="362,17,381,48" href="..\chapter-seven\index.html">
+<area shape="RECT" coords="387,27,410,59" href="..\chapter-eight\index.html">
+<area shape="RECT" coords="414,17,438,50" href="..\chapter-nine\index.html">
+<area shape="RECT" coords="519,11,593,32" href="..\..\www.securingjava[1].com\index.html">
+<area shape="RECT" coords="538,36,593,58" href="..\help.html">
+</map>
+
+<center>
+<img src="..\images\menumap3.gif" width=600 height=75 border=0 alt="Menu Map -- Text links below" usemap="#menu" ismap><p>
+<font size="-1" face="Helvetica,Arial">
+Chapter... <a href="..\preface.html">Preface</a> -- <a href="..\chapter-one\index.html">1</a> -- <a href="..\chapter-two\index.html">2</a> -- <a href="..\chapter-three\index.html">3</a> -- <a href="..\chapter-four\index.html">4</a> -- <a href="index.html">5</a> -- <a href="..\chapter-six\index.html">6</a> -- <a href="..\chapter-seven\index.html">7</a> -- <a href="..\chapter-eight\index.html">8</a> -- <a href="..\chapter-nine\index.html">9</a> -- <a href="..\appdx-a\index.html">A</a> -- <a href="..\appdx-b\index.html">B</a> -- <a href="..\appdx-c\index.html">C</a> -- <a href="..\references\index.html">Refs</a><br>
+
+<a href="..\..\www.securingjava[1].com\index.html">Front</a> -- <a href="..\toc.html">Contents</a> -- <a href="..\help.html">Help</a>
+</font>
+</center>
+
+<p align=right>
+<font size="-7" face="Helvetica,Arial,sans-serif">
+Copyright &copy;1999 Gary McGraw and Edward Felten.<br>
+All rights reserved.<br>
+Published by <a href="http://www.wiley.com/">John Wiley &amp; Sons, Inc.</a>
+</font>
+
+</td>
+</tr></table>
+
+
+</body>
+</html>
+
+

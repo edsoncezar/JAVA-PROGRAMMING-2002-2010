@@ -1,0 +1,76 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:What Are Messaging and the Java Messaging Service?</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch18\18-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="19-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<H2><A NAME="Heading1"></A><FONT COLOR="#000077">CHAPTER 19<BR>What Are Messaging and the Java Messaging Service?
+</FONT></H2>
+<P><I>Messaging</I> is a mechanism for programs to communicate with each other. In one sense, messaging is like RMI or even sockets, in that all three allow programs to communicate with each other. However, messaging is based on a fundamental entity called a <I>message.</I> A message represents the content of a single communication between two or more programs. Programs that use messaging send and receive messages. In this respect, messaging is more like using TCP/IP packets or even UDP datagrams than it is like sockets. In effect, messaging is the process of communicating between programs by creating, sending, and receiving messages.</P>
+<P>Normally, messaging support is provided via a library, server, or some other middleware. The term <I>message-oriented-middleware</I>, or MOM, is often used to refer to an infrastructure that supports messaging. MOM defines what a message looks like to the program, how a program sends a message, and how a program receives a message. The Java Messaging Service (JMS) provides a standard Java-based interface to the messaging services of a MOM or some other provider.</P>
+<P>There are two basic designs for a messaging provider. The first, pictured in Figure 19.1, uses messages to communicate between applications but still connects the two applications that are communicating.</P>
+<P>The second design, pictured in Figure 19.2, uses a server to support messaging. In this case, clients connect to a server that distributes messages for them. Clients that want to receive messages register with the server for notification. This design is more like the post office, where a central entity manages message delivery.</P>
+<P><A NAME="Fig1"></A><A HREF="images\19-01.jpg"><IMG SRC="images\19-01t.jpg"></A>
+<BR><A HREF="images\19-01.jpg"><FONT COLOR="#000077"><B>Figure 19.1</B></FONT></A>&nbsp;&nbsp;Client-based messaging.</P>
+<P>The advantage of the server approach is that services such as load balancing, message persistence, and security can be administered and upgraded in a single location. This brings up an important point: Messaging providers can include a variety of services on top of the basic ability to send and receive messages. When considering a provider, ask the following questions:
+</P>
+<DL>
+<DD><B>What happens to a message if the intended receiver is not available?</B> Many providers either store messages for later delivery or if specified, ignore these messages.
+<DD><B>What happens when the server goes down?</B> Obviously, messages won&#146;t go anywhere, but how does the client figure this out?
+<DD><B>Do all clients receive all messages?</B> Providers normally define the concept of a message destination. Clients that want to receive messages indicate the destination to which they are listening.
+<DD><B>Can any client send messages to any other client?</B> Providers can provide mechanisms for limiting the targets for a client&#146;s message. Often, the target for a message is called a <I>destination</I> because it could represent one or more other programs. The messaging provider can provide limitations on the destinations to which a client can send or at least require clients to choose a destination to limit the receivers for a message.
+<P><A NAME="Fig2"></A><A HREF="images\19-02.jpg"><IMG SRC="images\19-02t.jpg"></A>
+<BR><A HREF="images\19-02.jpg"><FONT COLOR="#000077"><B>Figure 19.2</B></FONT></A>&nbsp;&nbsp;Server-based messaging.</P>
+<DD><B>What can a message include?</B> On top of the basic design for a messaging system, there is the definition of the messages themselves. Depending on a provider&#146;s goals, it might support binary messages, text messages, messages that have key-value pairs, or even messages that support objects as the message body. The limitations on message content are often driven by the systems that a provider supports and the performance constraints that the provider places on their products. For example, sending arbitrary objects can be a performance nightmare because it involves an arbitrary format and size. On the other hand, saying that all messages are 10-character strings allows the provider to optimize their software for these messages. In general, the actual choices available to a messaging programmer lie somewhere toward the arbitrary side of these two extremes, with a performance cost associated with message size and complexity.
+</DL>
+<P>Hopefully, these questions help you determine your requirements and the provider that can fulfill them.
+</P>
+<P>At this point, you may be asking yourself, So what? What do I get for using these messages? The answer is, It depends. For some applications, RMI, HTTP, or sockets are the right solution. For example, if you just want to talk to your Oracle database, you probably don&#146;t need to add the messaging abstraction in the middle of that relationship. The time when messaging is useful is when you want to separate the destination or networking from the client&#146;s code. For example, a messaging service might ensure the arrival of the insert statements that you want to make for that database. If the database is unavailable now&#151;because, for example, you are using a laptop on an airplane&#151;the service will deliver the insert messages later. The messaging service decouples the sender and receiver, allowing them to work together without being designed to specifically and only work with each other. This decoupling has advantages in a number of areas, which are discussed later in the chapter. First, we need to address a few core concepts of messaging.</P>
+<H3><A NAME="Heading2"></A><FONT COLOR="#000077">Messaging Domains</FONT></H3>
+<P>The simple concept of messaging can be further specialized into several domains. These domains are used to define which client receives a message. The most common of domains are:
+</P>
+<DL>
+<DD><B>&#149;</B>&nbsp;&nbsp;Point-to-point
+<DD><B>&#149;</B>&nbsp;&nbsp;Publish-subscribe
+<DD><B>&#149;</B>&nbsp;&nbsp;Request-reply
+</DL>
+<P>Each of these domains defines different models for the programs that are communicating. Not all MOM providers provide all of these models.
+</P>
+<P><FONT SIZE="+1"><B><I>Point-to-Point Messaging</I></B></FONT></P>
+<P><I>Point-to-point messaging</I> is designed to allow one client to send messages to another client. This may or may not be a one-way relationship. In other words, a client to the messaging system might only send messages, only receive messages, or send and receive messages. Another client can also send and/or receive messages. So, in the simplest case, a client sends messages to another client. In the more complete case, both clients send and receive messages to each other.</P>
+<P>There are two basic models for point-to-point messaging. The simplest is to have a client directly send a message to another client. This is similar to RMI and may be equivalent, depending on the messaging provider&#146;s implementation. For example, a messaging interface might hide some of the mechanics of sending a message, such as making sure the network is available or saving messages to a database to make sure that they are sent.</P>
+<P>The more common point-to-point model is based on the concept of a queue, as pictured in Figure 19.3. Senders put messages into a queue. The receiver takes messages out of the queue. Often, this queue is stored on the messaging server and may even be stored in a relational database for reliable persistence. The Java Messaging Service uses the queue approach to point-to-point messaging, although it doesn&#146;t prohibit the implementation from using direct messaging.</P>
+<P>The defining factor in point-to-point messaging is that there is a single receiver for the messages. For example, an HR system might send messages to the financial system indicating a required change in the company financials. These messages are intended only for the financials system; other applications in the enterprise should not receive them.</P>
+<P><FONT SIZE="+1"><B><I>Publish-Subscribe Messaging</I></B></FONT></P>
+<P><I>Publish-subscribe messaging</I> is designed for situations in which multiple programs should receive the same messages. JMS defines publish-subscribe around the concept of a topic. Publishers send messages to a topic, and subscribers receive all of the messages sent to that topic. This model is especially useful in situations in which a group of programs want to notify each other of a particular occurrence. For example, the HR system could publish a message indicating a new hire to a topic called newHire. All of the applications that want to receive a notification when a new person is hired would subscribe to the newHire topic. Through this subscription, the financial applications could use the notification to update the payroll database, and the facilities system could generate a new phone number.</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="..\ch18\18-07.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="19-02.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

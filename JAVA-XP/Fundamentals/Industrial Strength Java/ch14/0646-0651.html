@@ -1,0 +1,689 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Interfacing C/C++ and Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0642-0645.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0652-0656.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-646"><P>Page 646</P></A>
+
+
+
+
+
+
+
+<P><a href="images\ch14fg03.jpg"><img src="images\tn_ch14fg03.jpg"></a><BR>
+
+Figure 14.3
+
+The classes used to implement the Peer pattern.
+
+</P>
+
+
+
+<UL>
+
+<DL>port receives data. It can be used to wait for token events such as
+
+CONNECT, which is returned when a modem connects.</DL>
+
+<LI>     Action. This class is used by the WaitForTokens class to execute a
+
+specified function depending on the specified token.
+
+<LI>     SerialPortMonitor. This class monitors the serial port and calls observers
+
+when data is received.
+
+<LI>     SerialData. The SerialData class is used by SerialPortMonitor to pass serial
+
+port data and any serial event information.
+
+</UL>
+
+
+
+<P>The following sections describe the classes in the native serial port example.
+
+</P>
+
+<A NAME="PAGENUM-647"><P>Page 647</P></A>
+
+
+
+
+
+
+
+<H4><A NAME="ch14_ 41">
+
+Accessing the Serial Port: NativeSerial.Java
+
+</A></H4>
+
+
+
+<P>The steps required to use a serial device are quite simple. You start serial access
+
+by opening a serial device and configring the device to support the hardware that is
+
+connected. The client can now read or write to the serial port. The serial device can wait
+
+on certain signals, such as Data Ready, that can be used to suspend operations on the
+
+serial port until they occur.
+
+</P>
+
+
+
+<P>The following listing is an example of how the SerialDevices package is used. It enables
+
+a user to open a serial port number via a pull-down menu. After the port is open, the
+
+user may type data into an input window and monitor the serial port through the
+
+output window. The WaitForTokens class monitors the serial port for connect strings and the
+
+OK acknowledgment from a modem.
+
+</P>
+
+
+
+<P>The basic GUI functionality is created in listing 14.39a. An input window is created
+
+to capture keystrokes, and an output window is created to capture input characters from
+
+the mode. A field is used to specify the serial port, as well as open and close port buttons.
+
+</P>
+
+
+
+<P>Listing 14.39a Class NativeSerial: GUI Initialization
+
+</P>
+
+
+<PRE>
+
+import SerialDevices.*;
+
+import java.awt.*;
+
+import java.util.Observer;
+
+import java.util.Observable;
+
+public class NativeSerial extends Frame implements Observer, Action{
+
+
+
+    public static void main(String args[]) {
+
+          new NativeSerial();
+
+    }// End of main()
+
+
+
+    public NativeSerial() {
+
+          super(&quot;NativeSerial window&quot;);
+
+          // INIT_CONTROLS
+
+          setLayout(null);
+
+          addNotify();
+
+          resize(insets().left + insets().right + 405, insets().top +
+
+                    &Acirc;insets().bottom + 349);
+
+          label1=new Label(&quot;Read Window&quot;, Label.CENTER);
+
+          add(label1);
+
+          label1.reshape(insets().left + 47,insets().top + 150,306,13);
+
+          label2=new Label(&quot;Write Window&quot;, Label.CENTER);
+
+          add(label2);
+
+          label2.reshape(insets().left + 47,insets().top + 23,306,13);
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-648"><P>Page 648</P></A>
+
+
+
+
+
+
+
+<P>Listing 14.39a Continued
+
+</P>
+
+
+<PRE>
+
+          outputWindow=new TextArea(5,36);
+
+          add(outputWindow);
+
+          outputWindow.reshape(insets().left + 47,insets().top +
+
+                    &Acirc;47,304,91);
+
+          inputWindow=new TextArea(5,36);
+
+          inputWindow.disable();
+
+          add(inputWindow);
+
+          inputWindow.reshape(insets().left + 47,insets().top +
+
+                    &Acirc;172,304,91);
+
+          openPort=new Button(&quot;Open Port&quot;);
+
+          add(openPort);
+
+          openPort.reshape(insets().left + 228,insets().top +
+
+                    &Acirc;293,78,26);
+
+          closePort=new Button(&quot;Close Port&quot;);
+
+          add(closePort);
+
+          closePort.reshape(insets().left + 312,insets().top +
+
+                    &Acirc;293,78,26);
+
+          portNumber=new TextField(7);
+
+          add(portNumber);
+
+          portNumber.reshape(insets().left + 150,insets().top +
+
+                    &Acirc;293,60,26);
+
+          label3=new Label(&quot;Port Number&quot;, Label.RIGHT);
+
+          add(label3);
+
+          label3.reshape(insets().left + 18,insets().top + 297,126,22);
+
+          // Set up the serial port functions
+
+        portNumber.setText(&quot;2&quot;);
+
+            show();
+
+    }//End of NativeSerial() Constructor
+
+
+
+    public synchronized void show() {
+
+      move(50, 50);
+
+      super.show();
+
+    }//End of show()
+
+</PRE>
+
+
+
+
+<P>Listing 14.39b shows the event handling for the class. This code is where the button
+
+events and keystroke events are monitored.
+
+</P>
+
+
+
+<P>Listing 14.39b Class NativeSerial: GUI Event Handling
+
+</P>
+
+
+<PRE>
+
+    public boolean handleEvent(Event event) {
+
+          if (event.id == Event.ACTION_EVENT &amp;&amp; event.target ==
+
+                    &Acirc;openPort) {
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-649"><P>Page 649</P></A>
+
+
+
+
+
+
+<PRE>
+
+                    clickedOpenPort();
+
+                    return true;
+
+          }
+
+          else
+
+          if (event.id == Event.ACTION_EVENT &amp;&amp; event.target ==
+
+                     &Acirc;closePort) {
+
+                    clickedClosePort();
+
+                    return true;
+
+          }
+
+          else
+
+          if (event.id == Event.KEY_PRESS &amp;&amp; event.target ==
+
+                      &Acirc;outputWindow) {
+
+                keyPressOutputWindow(event);
+
+                return false;
+
+          }
+
+          else
+
+
+
+          if (event.id == Event.WINDOW_DESTROY) {
+
+              if (monitor != null){
+
+                  monitor.stop();
+
+              }
+
+          hide();             // hide the Frame
+
+          dispose();          // tell windowing system to free resources
+
+              System.exit(0); // exit
+
+              return true;
+
+          }
+
+          return super.handleEvent(event);
+
+    } //End of handleEvent()
+
+</PRE>
+
+
+
+
+<P>The next section of code is where the serial port is opened. As a precaution, the first
+
+thing done is to call clickedClosePort() to ensure that the port monitor thread is stopped and
+
+the serial port is closed. The actual SerialDevice is created next. After that, the peer is
+
+created for the specific machine and used to set up the serial device to run.
+
+</P>
+
+
+
+<P>Listing 14.39c Class NativeSerial: clickedOpenPort()
+
+</P>
+
+
+
+
+<PRE>
+
+    public void clickedOpenPort() {
+
+        // Kill the monitor thread if it is running
+
+          clickedClosePort();
+
+        // Create a new SerialDevice
+
+        serial = new SerialDevice();
+
+        // Create the Win32 Peer
+
+          Win32sSerialPeer nativeSerial = new Win32sSerialPeer();
+
+        // Attach the Win32 Peer
+
+</PRE>
+
+
+
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-650"><P>Page 650</P></A>
+
+
+
+
+
+
+
+<P>Listing 14.39c Continued
+
+</P>
+
+
+<PRE>
+
+        serial.setSerialPeer((SerialPeer)nativeSerial);
+
+
+
+          if(serial.openSerialPort((new
+
+                     &Acirc;Integer(portNumber.getText())).intValue() )){
+
+              monitor = new
+
+                      &Acirc;SerialPortMonitor(this,serial,SerialPortMonitor.INPUT);
+
+          }else{
+
+              System.out.println(&quot;Error opening the port&quot;);
+
+          }
+
+</PRE>
+
+
+
+
+<P>The second half of clickedOpenPort() sets up the communication between the
+
+SerialPort object and this class. The communication is accomplished with the Observer
+
+Observable pattern. Additionally, a second observer is added to parse modem tokens and send
+
+events if they occur.
+
+</P>
+
+
+
+<P>Listing 14.39d Class NativeSerial: clickedOpenPort()
+
+</P>
+
+
+<PRE>
+
+      // Create a monitor to capture input.
+
+      // Use this class as the default observer interested in input.
+
+        monitor = new
+
+                 &Acirc;SerialPortMonitor(this,serial,SerialPortMonitor.INPUT);
+
+        //Create an input tokenizer and add modem commands to it.
+
+        toker = new WaitForTokens();
+
+        toker.addKeyAction(&quot;OK&quot;,this,0);
+
+        toker.addKeyAction(&quot;CONNECT&quot;,this,1);
+
+      toker.addKeyAction(&quot;CARRIER&quot;,this,2);
+
+      toker.addKeyAction(&quot;NO&quot;,this,3);
+
+      // Add tokenizer to the monitor.
+
+      monitor.addObserver(toker);
+
+
+
+    } //End of clickedOpenPort()
+
+</PRE>
+
+
+
+
+<P>The next method, clickedOpenPort(), in listing 14.39e, is used to stop the serial
+
+port monitor and close the serial port. This method is called either when the close port button
+
+is pressed or when clickedOpenPort() is called.
+
+</P>
+
+
+
+<P>Listing 14.39e Class NativeSerial: clickedOpenPort()
+
+</P>
+
+
+<PRE>
+
+    public void clickedClosePort() {
+
+        if (monitor != null){
+
+</PRE>
+
+
+
+
+<A NAME="PAGENUM-651"><P>Page 651</P></A>
+
+
+
+
+
+
+<PRE>
+
+               monitor.stop();
+
+serial.closeSerialPort();
+
+}
+
+} //End of clickedClosePort()
+
+</PRE>
+
+
+
+
+<P>The keyPressOutputWindow() method is used to capture key presses coming from
+
+the input window, as shown in listing 14.39f. Note the special handling to convert the
+
+\n character to \r so that most modems will understand that a carriage return has been
+
+hit. After the conversion is complete, the key pressed is written to the serial port via
+
+the portOut() method.
+
+</P>
+
+
+
+<P>Listing 14.39f Class NativeSerial: keyPressOutputWindow()
+
+</P>
+
+
+<PRE>
+
+    public void keyPressOutputWindow(Event ev) {
+
+        byte [] buffer = new byte [1];
+
+        // Translate \n to \r for modem
+
+        // AT commands will not work without it
+
+        if (ev.key == `\n'){
+
+            buffer[0] = `\r';
+
+        }else{
+
+            buffer[0] = (byte)ev.key;
+
+        }
+
+        System.out.print(ev.key);
+
+        if(serial.portOut(buffer,1)==1){
+
+            System.out.println(&quot;Write to port OK&quot;);
+
+        }else{
+
+            System.out.println(&quot;failed to write to port&quot;);
+
+        }
+
+    } //End of keyPressOutputWindow(Event ev)
+
+</PRE>
+
+
+
+
+<P>The update() method is the implementation of the observer interface (see listing
+
+14.39g). This function is called by the serial port monitor every time an event or character is
+
+read from the serial port. The update() method appends any character to the output window.
+
+If the character is \r, it is converted to \n before the character is appended to the
+
+output window.
+
+</P>
+
+
+
+<P>Listing 14.39g Class NativeSerial: The update() Method
+
+</P>
+
+
+<PRE>
+
+    //Observer implementation
+
+    public void update(Observable o, Object arg){
+
+        if (o == monitor){
+
+            String input =new String(((SerialData)arg).buffer,0);
+
+</PRE>
+
+
+<PRE>
+
+                                                                             continues
+
+</PRE>
+
+
+
+
+<P><CENTER>
+
+<a href="0642-0645.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0652-0656.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

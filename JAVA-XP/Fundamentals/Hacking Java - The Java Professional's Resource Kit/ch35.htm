@@ -1,0 +1,1109 @@
+<HTML>
+<HEAD>
+<TITLE>Chapter 35 -- Adding Additional Protocols to HotJava</TITLE>
+
+<META>
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#0000EE" VLINK="#551A8B" ALINK="#CE2910">
+<H1><FONT SIZE=6 COLOR=#FF0000>Chapter 35</FONT></H1>
+<H1><FONT SIZE=6 COLOR=#FF0000>Adding Additional Protocols to
+HotJava</FONT></H1>
+<P>
+<I><B>by David Baker</B></I>
+<HR>
+<P>
+<CENTER><B><FONT SIZE=5><A NAME="CONTENTS">CONTENTS</A></FONT></B></CENTER>
+<UL>
+<LI><A HREF="#WritingaProtocolHandler">
+Writing a Protocol Handler</A>
+<UL>
+<LI><A HREF="#StepOneDecideUponaPackageName">
+Step One: Decide Upon a Package Name</A>
+<LI><A HREF="#StepTwoCreatetheDirectories">
+Step Two: Create the Directories</A>
+<LI><A HREF="#StepThreeSetYourCLASSPATH">
+Step Three: Set Your CLASSPATH</A>
+<LI><A HREF="#StepFourImplementtheProtocol">
+Step Four: Implement the Protocol</A>
+<LI><A HREF="#StepFiveCreatetheHandlerClass">
+Step Five: Create the Handler Class</A>
+<LI><A HREF="#StepSixCompiletheSources">
+Step Six: Compile the Sources</A>
+</UL>
+<LI><A HREF="#UsingProtocolHandlerswithHotJava">
+Using Protocol Handlers with HotJava</A>
+<UL>
+<LI><A HREF="#StepOneUpdatethepropertiesFile">
+Step One: Update the properties File</A>
+<LI><A HREF="#StepTwoRunHotJava">
+Step Two: Run HotJava</A>
+</UL>
+<LI><A HREF="#UsingProtocolHandlerswithYourOwnApplications">
+Using Protocol Handlers with Your Own Applications</A>
+<UL>
+<LI><A HREF="#ThemainMethodStartingFetchWhois">
+The main() Method: Starting FetchWhois</A>
+<LI><A HREF="#TheFetchWhoisConstructorWheretheWorkGetsDone">
+The FetchWhois Constructor: Where the Work Gets Done</A>
+<LI><A HREF="#ThewhoisUSHFactoryClassRegisteringtheProtocolHandler">
+The whoisUSHFactory Class: Registering the Protocol Handler
+</A>
+<LI><A HREF="#RunningFetchWhois">
+Running FetchWhois</A>
+</UL>
+<LI><A HREF="#MoreonTTFONTSIZEFACECourierURLStreamHandlerFactoryFONTTT">
+More on <TT>URLStreamHandlerFactory</TT>
+</A>
+</UL>
+
+<HR>
+<P>
+<FONT COLOR=#000000>Anessential feature that Java attempts to
+impart to computing is extensibility. Over time, newer and better
+means of communicating will be created. Application protocols
+will evolve and programs must be able to adapt. Support for new
+protocols can be added to Java and the HotJava browser through
+<I>protocol handlers</I>.
+<P>
+Protocol handlers are a key tool for maintaining an adaptable
+environment with Java. They extend support to new URL schemes,
+which can access new application protocols, or present existing
+ones in new ways.
+<H2><A NAME="WritingaProtocolHandler"><FONT SIZE=5 COLOR=#FF0000>
+Writing a Protocol Handler</FONT></A></H2>
+<P>
+Protocol handlers enable you to accomplish two tasks: first, you
+can implement a client for a defined network application protocol,
+as demonstrated in the previous chapters; second, you can associate
+this implementation with a new URL scheme. Thus, you can create
+the code necessary to assign meaning to a new URL scheme.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+All URLs are classified into schemes. The scheme is the label prior to the first colon. Common schemes are http, ftp, and gopher.</BLOCKQUOTE>
+<BLOCKQUOTE>
+A scheme generally identifies an application protocol, and thus Java references often describe the scheme as being the protocol portion of the URL. However, a scheme need not identify a particular protocol.</BLOCKQUOTE>
+<BLOCKQUOTE>
+The distinction is important when you implement more complex protocol handlers that implement new URL schemes built upon existing protocols. For instance, a useful protocol handler would be one that created a search scheme, which connected to various Web 
+search engines and returned a unified hit list.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+HotJava can make use of new protocol handlers; this is part of
+the vision guiding HotJava's ongoing development. The intention
+is that programs like HotJava should have very little core intelligence,
+providing only a framework for extensibility. When new protocols
+are invented, HotJava will transparently download a new handler
+and the user can then access the resource.
+<P>
+You can also utilize protocol handlers in your own applications.
+By installing a new protocol handler and using a registration
+facility termed a <I>factory</I>, URL objects can use these handlers
+just as the standard protocols are used.
+<P>
+Protocol handlers are not a factor new to your Java programming.
+In fact, any time an URL object was used to obtain a resource
+in the previous chapters, a handler inherent in the JDK was used.
+With the steps that follow, you can create your own handlers to
+build on this existing set.
+<P>
+The examples within this chapter implement the NICNAME/WHOIS protocol,
+defined in RFC 954. WHOIS is used by Internic, the domain name
+registration and directory project, to enable individuals to query
+their database. WHOIS can be used at <B>rs.internic.net</B>, but
+other sites utilize this service. By opening a TCP socket to the
+standard port 43, a query can be entered and the response read.
+<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Tip</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+More information on this protocol is available at<BR>
+<TT><B><A HREF="http://www.cis.ohio-state.edu/htbin/rfc/rfc954.html">http://www.cis.ohio-state.edu/htbin/rfc/rfc954.html</A></B></TT>
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Caution</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+Java is case-sensitive. Even if your system doesn't treat upper and lower case characters within directory names differently, use the case of the letters as shown within these instructions.</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="StepOneDecideUponaPackageName">
+Step One: Decide Upon a Package Name</A></H3>
+<P>
+A protocol handler must be placed into a clearly-defined package.
+This package must end in <TT>protocol.<I>scheme</I></TT>
+where <TT><I>scheme</I></TT> is the
+new URL scheme. Generally, new packages also include the domain
+name and author identifier of the distributor. Thus, in this example
+the following package will be used:
+<BLOCKQUOTE>
+<PRE>
+ORG.netspace.dwb.protocol.whois</FONT>
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="StepTwoCreatetheDirectories">
+Step Two: Create the Directories</A></H3>
+<P>
+The necessary code for the protocol handler must be placed into
+a directory named in correlation to the package name identified.
+This directory should reside within a directory into which your
+own Java code is placed, usually called <TT>classes</TT>
+within your home directory.
+<P>
+Listing 35.1 shows an example for creating these directories under
+Windows NT and Windows 95.
+<HR>
+<BLOCKQUOTE>
+<B>Lising 35.1&nbsp;&nbsp;Creating the Directories Under Windows
+NT and Windows 95<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+%HOMEDRIVE%
+cd %HOMEPATH%
+mkdir classes
+mkdir classes\ORG
+mkdir classes\ORG\netspace
+mkdir classes\ORG\netspace\dwb
+mkdir classes\ORG\netspace\dwb\protocol
+mkdir classes\ORG\netspace\dwb\protocol\whois
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The process is similar under the UNIX operating system, as shown
+in Listing 35.2.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 35.2&nbsp;&nbsp;Creating the Directories Under UNIX
+<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+cd ~
+mkdir classes
+mkdir classes/ORG
+mkdir classes/ORG/netspace
+mkdir classes/ORG/netspace/dwb
+mkdir classes/ORG/netspace/dwb/protocol
+mkdir classes/ORG/netspace/dwb/protocol/whois
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="StepThreeSetYourCLASSPATH">
+Step Three: Set Your CLASSPATH</A></H3>
+<P>
+The <TT>CLASSPATH</TT> environment
+variable tells the Java compiler and interpreter where to find
+Java classes, enabling the dynamic linking feature of the Java
+execution environment. When installing the JDK, HotJava, or a
+Java-aware browser, you may have set the <TT>CLASSPATH</TT>
+environment variable. If this is so, it is critical that you avoid
+overwriting that data. First, you must find out what your <TT>CLASSPATH</TT>
+current setting is. Under Windows NT/95, just type the following
+command:
+<BLOCKQUOTE>
+<PRE>
+<B><FONT FACE="Courier">SET</FONT></B>
+</PRE>
+</BLOCKQUOTE>
+<P>
+Look for the <TT>CLASSPATH</TT> value.
+Under UNIX systems, you can display the <TT>CLASSPATH</TT>
+value with this command:
+<BLOCKQUOTE>
+<PRE>
+<B><FONT FACE="Courier">ECHO $CLASSPATH</FONT></B>
+</PRE>
+</BLOCKQUOTE>
+<P>
+Now you need to reset your <TT>CLASSPATH</TT>,
+including the previous data, if any. Under Windows 95, if your
+<TT>CLASSPATH</TT> was <TT>.;C:\JAVA\LIB\CLASSES.ZIP,</TT>
+you can add the following line to your <TT>AUTOEXEC.BAT</TT>
+and reboot:
+<BLOCKQUOTE>
+<PRE>
+SET CLASSPATH=.;%HOMEDRIVE%%HOMEPATH%\CLASSES;C:\JAVA\LIB\CLASSES.ZIP</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+Under Windows NT, presuming that the <TT>CLASSPATH</TT>
+value was the same as under the Windows 95 example, use the System
+Control Panel to add a <TT>CLASSPATH</TT>
+environment variable with the value <TT>.;</TT>
+<TT>%HOMEDRIVE%%HOMEPATH%\CLASSES;C:\JAVA\LIB\CLASSES.ZIP</TT>.
+<P>
+Under UNIX, assume that your old <TT>CLASSPATH</TT>
+was <TT>.:/usr/java/lib</TT>. If you
+are using the C shell, place the following into your .cshrc file:
+<BLOCKQUOTE>
+<PRE>
+setenv CLASSPATH .:${HOME}:/usr/java/lib</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+If you are on a UNIX system using the Korn or a POSIX-compliant
+shell, add the following line to whatever file your <TT>ENV</TT>
+environment variable points. If <TT>ENV</TT>
+is unset, then you could add the line to your <TT>~/.profile</TT>
+file:
+<BLOCKQUOTE>
+<PRE>
+CLASSPATH=.:${HOME}:/usr/java/lib
+export CLASSPATH
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="StepFourImplementtheProtocol">
+Step Four: Implement the Protocol</A></H3>
+<P>
+Within the directory created in Step Two, create a class that
+extends <TT>URLConnection</TT>. This
+class should have a constructor that takes an URL object as an
+argument and calls its superclass with that object. In addition,
+most protocol handlers should extend the following methods:
+<BLOCKQUOTE>
+<PRE>
+public void connect() throws IOException;</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+This method should connect to the remote resource and perform
+the network transaction, as appropriate.
+<BLOCKQUOTE>
+<PRE>
+public String getContentType();</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+This method should indicate the MIME content type of the data
+returned by the object.
+<BLOCKQUOTE>
+<PRE>
+public synchronized InputStream getInputStream() 
+   throws IOException;
+</PRE>
+</BLOCKQUOTE>
+<P>
+This returns an <TT>InputStream</TT>
+containing the data from the remote system.
+<P>
+Listing 35.3 shows the class used to implement the WHOIS protocol.
+This class supports the URL formats shown in Table 35.1.<BR>
+<P>
+<CENTER><B>Table 35.1&nbsp;&nbsp;WHOIS URL Syntax</B></CENTER>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD WIDTH=244><I>URL</I></TD><TD WIDTH=346><I>Meaning</I>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=244><TT>whois:<I>query</I></TT>
+</TD><TD WIDTH=346>Connect to <TT>rs.internic.net</TT> and submit <TT>query.</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=244><TT>Whois:/<I>query</I></TT>
+</TD><TD WIDTH=346>Identical to &quot;<TT>whois:query.</TT>&quot;
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=244><TT>Whois://<I>host</I>/<I>query</I></TT>
+</TD><TD WIDTH=346>Instead of connecting to <TT>rs.internic.net</TT>, connect to WHOIS service on <TT>host</TT> and submit <TT>query.</TT>
+</TD></TR>
+<TR VALIGN=TOP><TD WIDTH=244><TT>Whois://<I>host</I>:<I>port</I>/<I>query</I></TT>
+</TD><TD WIDTH=346>Instead of using port 43, connect to <TT>host</TT> at the specified <TT>port</TT> and submit <TT>query.</TT>
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<HR>
+<BLOCKQUOTE>
+<B>Listing 35.3&nbsp;&nbsp; whoisURLConnection.java<BR>
+</B>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This is the package identified for this protocol handler.
+package ORG.netspace.dwb.protocol.whois;
+
+import java.io.*;    // Import the package names used.
+import java.net.*;
+
+/**
+ * This class implements a connection to the new &quot;whois&quot;
+ * URL scheme.
+ * @author David W. Baker
+ * @version 1.0
+ */
+class whoisURLConnection extends URLConnection {
+   // Some defaults for the WHOIS protocol implementation:
+   //    site defaults to rs.internic.net
+   //    port defaults to 43
+   //    query defaults to QUIT
+   private static final String DEF_SITE = &quot;rs.internic.net&quot;;
+   private static final int DEF_PORT = 43;
+   private static final String DEF_QUERY = &quot;QUIT&quot;;
+   private static final String CONT_TYPE = &quot;text/html&quot;;
+   static final int URL_BASE = 16;
+   InputStream fromHandler;   // Input from the handler
+   Socket whoisSocket;        // Socket for communication
+   boolean gotQuery = false;  // Did we get the data?
+
+   /**
+    * Given a URL will instantiate a whoisURLConnection 
+    * object.
+    * @param getURL The URL to contact.
+    */
+   whoisURLConnection(URL getURL) {
+      super(getURL); // Call superclass with the URL.
+   }
+
+   /**
+    * Connect to the WHOIS server, obtain, and format the
+    * data.
+    * @exception java.io.IOException Indicates a problem 
+    *    connecting to URL.
+    */
+   public void connect() throws IOException {
+      String whoisSite;
+      int whoisPort;
+      String whoisQuery;
+      PrintStream toApp;   // Send data to app using handler.
+      DataInputStream fromWhois = null;
+      PrintStream toWhois = null;
+      String dataLine;
+
+      // Set up piped streams for communication between
+      // this handler and the application using it.
+      PipedOutputStream pipe = new PipedOutputStream();
+      toApp = new PrintStream(pipe);
+      fromHandler = new PipedInputStream(pipe);
+    
+      // Get host from the URL, using default if omitted.
+      if (url.getHost().length() == 0) {
+         whoisSite = DEF_SITE;
+      } else {
+         whoisSite = url.getHost();
+      }
+      // Get port from the URL, using default if omitted.
+      if (url.getPort() &lt; 1) {
+         whoisPort = DEF_PORT;
+      } else {
+         whoisPort = url.getPort();
+      }
+      // Get file from the URL, using default is &quot;/&quot;
+      if (url.getFile().equals(&quot;/&quot;)) {
+         whoisQuery = DEF_QUERY;
+      } else {
+         whoisQuery = url.getFile().substring(1);
+      }
+      // Decode the query from the URL.
+      whoisQuery = decodeURL(whoisQuery);
+      // Open a socket to the whois server.
+      whoisSocket = new Socket(whoisSite,whoisPort);
+      // Open streams to communicate with the whois server.
+      fromWhois = 
+         new DataInputStream(whoisSocket.getInputStream());
+      toWhois = 
+         new PrintStream(whoisSocket.getOutputStream());
+      // Send the query to the server.
+      toWhois.println(whoisQuery);
+      // Print out some HTML.
+      toApp.println(&quot;&lt;!DOCTYPE HTML PUBLIC \&quot;-//IETF//DTD &quot;
+                     + &quot;HTML//EN\&quot;&gt;&quot;);
+      toApp.println(&quot;&lt;HTML&gt;&quot;);
+      toApp.println(&quot;&lt;HEAD&gt;&quot;);
+      toApp.println(&quot;&lt;TITLE&gt;Whois Query for: &quot; + url 
+                     + &quot;&lt;/TITLE&gt;&quot;);
+      toApp.println(&quot;&lt;/HEAD&gt;&quot;);
+      toApp.println(&quot;&lt;BODY&gt;&quot;);
+      toApp.println(&quot;&lt;H1&gt;Whois Query for : &quot; + url 
+                     + &quot;&lt;/H1&gt;&quot;);
+      toApp.println(&quot;&lt;PRE&gt;&quot;);
+      // Loop through the data from the whois server,
+      // printing it all out within the preformatted
+      // text section.
+      while ((dataLine = fromWhois.readLine()) != null) {
+         toApp.println(dataLine);
+      }
+      // Some last HTML.
+      toApp.println(&quot;&lt;/PRE&gt;&quot;);
+      toApp.println(&quot;&lt;/BODY&gt;&quot;);
+      toApp.println(&quot;&lt;/HTML&gt;&quot;);
+      toApp.flush();       // Flush the pipe.
+      toWhois.close();     // Close the streams.
+      fromWhois.close();
+      whoisSocket.close(); // Close the socket.
+      toApp.close();       // Close one end of the pipe.
+      gotQuery = true;     // Data has been obtained.
+   }
+
+   /**
+    * Determine the content type of the data returned.
+    * @return The content type.
+    */
+   public String getContentType() {
+      return CONT_TYPE;
+   }
+
+   /**
+    * Obtain a stream to get data from this protocol handler.
+    * @return The stream to read data.
+    */
+   public synchronized InputStream getInputStream() 
+      throws IOException {
+      // If where has not been obtained, connect()
+      if (!gotQuery) {
+         connect();
+      }
+      // Return the stream.
+      return fromHandler;
+   }
+
+   /**
+    * This method decodes the URL encoded format.
+    * i.e. %XX -&gt; char and + to space
+    * @param decode The String to decode.
+    * @return The decoded String.
+    */
+   protected String decodeURL(String decode) {
+      StringBuffer decoded = new StringBuffer();
+      char nextChar;
+      String encString;
+      Integer encInteger;
+
+      // Go through the String character by character.
+      for(int index=0; index &lt; decode.length(); index++) {
+         // Get the next character in the String.
+         nextChar = decode.charAt(index);
+         // If the character is +, then convert it to
+         // a space.
+         if (nextChar == '+') {
+            decoded.append(&quot; &quot;);
+         }
+         // If the character is a %, then the next two
+         // characters store the value of the encoded
+         // character.
+         else if (nextChar == '%') {
+            // Create an Integer object containing the
+            // integer value of the next two characters
+            // in the string, assuming a base 16 notation.
+            encInteger = Integer.valueOf(
+               decode.substring(index+1,index+3),URL_BASE);
+            // Increment our counter by 2 - we just read
+            // two characters.
+            index += 2;
+            // Return the int value within the Integer
+            // and then cast that into a char type.
+            nextChar = (char)encInteger.intValue();
+            // Add the coded character.
+            decoded.append(nextChar);
+         }
+         // Otherwise, just add the character.
+         else {
+            decoded.append(nextChar);
+         }
+      }
+      // Return the decoded string.
+      return decoded.toString();
+   }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+The <TT>whoisURLConnection</TT> constructor
+merely makes the appropriate call to the <TT>URLConnection</TT>
+superclass, passing it the URL object. The <TT>connect()</TT>
+method is where all of the work is done. First, it creates a number
+of streams for reading in data and passing it back to your Java
+application. Next, it uses various URL class methods to parse
+the URL, supporting the formats identified in Table 35.1. The
+default values of the host (for example, &quot;<TT>rs.internic.net</TT>&quot;)
+and port (i.e., &quot;<TT>35</TT>&quot;)
+are stored within static final variables. Then, the <TT>connect()</TT>
+method opens a TCP socket connection to the remote system, sends
+the query, and prepares to read the response. It reads in the
+query response, embedding it within HTML. Finally, <TT>connect()</TT>
+closes the streams and TCP socket.
+<P>
+The <TT>getContentType()</TT> method
+is used to indicate that the returned data is an HTML document.
+<TT>getInputStream()</TT> returns
+the <TT>PipedOutputStream</TT>, into
+which this protocol handler has pushed the formatted data. The
+Java application uses this stream to access the data obtained
+by the new protocol handler.
+<P>
+The <TT>whoisURLConnection</TT> has
+an additional protected method called <TT>decodeURL()</TT>.
+Certain characters, such as spaces and other special characters,
+cannot be represented literally within URLs, and these characters
+are encoded with a special format. For example, a space is encoded
+as <TT>%20</TT>. Since your WHOIS
+query may need to use such characters, the WHOIS protocol handler
+must have a method to decode this data. <TT>decodeURL()</TT>
+is called from the <TT>connect()</TT>
+method, and examines a string byte-by-byte. When it encounters
+a percent-sign, it uses the next two characters as the Unicode
+value to the encoded char-acter.
+<H3><A NAME="StepFiveCreatetheHandlerClass">
+Step Five: Create the Handler Class</A></H3>
+<P>
+Within the same directory, you must create a file called <TT>Handler.java</TT>.
+The <TT>Handler</TT> class must extend
+the <TT>URLStreamHandler</TT> class
+and return an instance of the class created in Step Four. Listing
+35.4 shows the <TT>Handler</TT> class
+for the WHOIS protocol.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 35.4&nbsp;&nbsp;</B><TT><B>Handler.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+// This is the package identified for this protocol handler.
+package ORG.netspace.dwb.protocol.whois;
+
+import java.net.*;   // Import the package names used.
+
+/**
+ * This class is a subclass of URLStreamHandler and provides
+ * an implementation of the abstract openConnection() method
+ * to support the &quot;whois&quot; scheme.
+ * @author David W. Baker
+ * @version 1.0
+ */
+public class Handler extends URLStreamHandler {
+  /**
+   * Given a URL return an appropriate URLConnection.
+   * @param requestedURL The URL instance to contact.
+   * @return The connection to the resource.
+   */
+   public synchronized URLConnection 
+      openConnection(URL requestedURL) {
+      return new whoisURLConnection(requestedURL);
+   }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="StepSixCompiletheSources">
+Step Six: Compile the Sources</A></H3>
+<P>
+Use <TT>javac</TT> to compile the
+sources created in Steps Four and Five, leaving the compiled class
+files in the originating directory.
+<H2><A NAME="UsingProtocolHandlerswithHotJava"><FONT SIZE=5 COLOR=#FF0000>
+Using Protocol Handlers with HotJava</FONT></A></H2>
+<P>
+Eventually, as part of HotJava's vision, protocol handlers will
+be dynamically downloaded and utilized. At the time of this writing,
+this feature is not yet supported by HotJava. Protocol handlers
+must be manually installed, as previously described, in order
+for HotJava to utilize them.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+The Netscape Navigator supports a different mechanism for extending the browser. A Netscape <FONT FACE="I Helvetica Oblique">plug-in</FONT> can implement a new application protocol using a special API. No specific plans seem to have been stated by Netscape 
+
+regarding the support of protocol handlers such as HotJava. More information on Netscape Plug-ins is available from:
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><B><A HREF="http://home.netscape.com/eng/mozilla/3.0/handbook/plugins/">http://home.netscape.com/eng/mozilla/3.0/handbook/plugins/</A></B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+The Microsoft Explorer also supports add-ins and ActiveX, OLE Controls. ActiveX can accomplish many of the same tasks as Netscape Plug-ins and Java can. As with Netscape, no stated plans are apparent with respect to protocol handlers and the Explorer. More 
+
+information on ActiveX is available from:</BLOCKQUOTE>
+<BLOCKQUOTE>
+<TT><B><A HREF="http://www.microsoft.com/intdev/controls/controls-f.htm">http://www.microsoft.com/intdev/controls/controls-f.htm</A></B></TT>
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<P>
+Once a protocol handler has been installed, the following additional
+steps are necessary to use it within your HotJava browser.<BR>
+<P>
+<CENTER>
+<TABLE BORDERCOLOR=#000000 BORDER=1 WIDTH=80%>
+<TR VALIGN=TOP><TD><B>Note</B></TD></TR>
+<TR VALIGN=TOP><TD>
+<BLOCKQUOTE>
+JavaSoft makes the HotJava browser and instructions for its installation available at &lt;URL<TT><B>:<A 
+HREF="http://www.javasoft.com/java.sun.com/HotJava/CurrentRelease/installation.html">http://www.javasoft.com/java.sun.com/HotJava/CurrentRelease/installation.html</A>&gt;.</B></TT>
+</BLOCKQUOTE>
+
+</TD></TR>
+</TABLE>
+</CENTER>
+<P>
+<H3><A NAME="StepOneUpdatethepropertiesFile">
+Step One: Update the properties File</A></H3>
+<P>
+You must instruct HotJava to load additional protocol handlers.
+This is done by updating the <TT>properties</TT>
+file, which is located within the <TT>.hotjava</TT>
+directory in your home directory.
+<P>
+Within this file, you must set the <TT>java.protocol.handler.pkgs</TT>
+property to include the new protocol package. The value to add
+should be everything from the <TT>protocol</TT>
+token leftward. Thus, you want to add the following line for your
+WHOIS protocol handler:
+<BLOCKQUOTE>
+<PRE>
+java.protocol.handler.pkgs=ORG.netspace.dwb.protocol</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+If you already have this property set within your HotJava properties
+file, append a pipe character (i.e., |) to the end of the line
+and then add <TT>ORG.netspace.dwb.protocol</TT>.
+This syntax enables you to install several new protocol handlers,
+like the following:
+<BLOCKQUOTE>
+<PRE>
+java.protocol.handler.pkgs=COM.company.protocol</FONT><FONT FACE="1Stone Serif">|</FONT><FONT FACE="Courier">ORG.netspace.dwb.protocol</FONT>
+</PRE>
+</BLOCKQUOTE>
+<H3><A NAME="StepTwoRunHotJava">
+Step Two: Run HotJava</A></H3>
+<P>
+Start up HotJava and test out the new protocol handler. Go under
+the File menu, select Open Page, and type the following text into
+the URL field:
+<BLOCKQUOTE>
+<PRE>
+<B><FONT FACE="Courier">whois:internic.net</FONT></B>
+</PRE>
+</BLOCKQUOTE>
+<P>
+Figure 35.1 shows what should be displayed within the HotJava
+window.
+<P>
+<A HREF="f35-1.gif"><B>Figure 35.1 : </B><I>HotJava using the WHOIS protocol handler</I>.</A>
+<H2><A NAME="UsingProtocolHandlerswithYourOwnApplications"><FONT SIZE=5 COLOR=#FF0000>
+Using Protocol Handlers with Your Own Applications</FONT></A></H2>
+<P>
+The usefulness of new protocol handlers extends beyond the HotJava
+browser. They can also be utilized within your own applications;
+the key step being a method to register the new protocol handler
+using a concept known as a factory.
+<P>
+As an example, a simple application will be developed to make
+use of the WHOIS protocol handler. FetchWhois will take its arguments
+and send them as a query to the WHOIS service at <TT>rs.internic.net</TT>.
+The source of this example is shown in Listing 35.5.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 35.5&nbsp;&nbsp;</B><TT><B>FetchWhois.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.net.*;   // Import the package names used.
+import java.io.*;
+
+/**
+ * This is an application which uses our new whois
+ * protocol handler to obtain information.
+ * @author David W. Baker
+ * @version 1.1
+ */
+public class FetchWhois {
+
+   /**
+    * The method launches the application.
+    * @param args Arguments which are the query string.
+    */
+   public static void main (String args[]) {
+      if (args.length &lt; 1) {
+         System.err.println(
+            &quot;usage: java FetchWhois query string&quot;);
+         System.exit(1);
+      }
+      FetchWhois app = new FetchWhois(args);
+   }
+
+   /**
+    * This constructor does all of the work of obtaining
+    * the data from the server.
+    * @param args The tokens of the query string.
+    */
+   public FetchWhois(String args[]) {
+      String encodedString;   // Hold the URL encoded query.
+      String nextLine;        // Line from the handler.
+      URL whoisURL;           // URL to whois resource
+      URLConnection whoisAgent;  // Connection to whois.
+      DataInputStream input;     // Stream from whois.
+
+      // Create a buffer to place in all of the query
+      // string tokens.
+      StringBuffer buffer = new StringBuffer();
+      // Append all of the tokens to the buffer.
+      for(int index = 0; index &lt; args.length; index++) {
+         buffer.append(args[index]);
+         if (index &lt; args.length-1) {
+            buffer.append(&quot; &quot;);
+         }   
+      }
+      // URL encode the query buffer.
+      encodedString = URLEncoder.encode(buffer.toString());
+      // Set the factory to register the whois handler.
+      URL.setURLStreamHandlerFactory(new whoisUSHFactory());
+      try {
+         // Create the whois URL object.
+         whoisURL = new URL(&quot;whois:&quot; + encodedString);
+         // Open the connection.
+         whoisAgent = whoisURL.openConnection();
+         // Get an input stream from the whois server.
+         input = 
+            new DataInputStream(whoisAgent.getInputStream());
+         // Print out the data line-by-line.
+         while((nextLine = input.readLine()) != null) {
+            System.out.println(nextLine);
+         }
+         input.close(); // Close the stream.
+      } catch(MalformedURLException excpt) {
+         System.err.println(&quot;Mailformed URL: &quot; + excpt);
+      } catch(IOException excpt) {
+         System.err.println(&quot;Failed I/O: &quot; + excpt);
+      }
+   }
+}
+
+/**
+ * This class implements the URLStreamHandlerFactory
+ * interface to register the whois protocol handler.
+ * @see java.net.URLStreamHandlerFactory
+ */
+class whoisUSHFactory implements URLStreamHandlerFactory {
+   /** 
+    * This method returns the protocol handler to the
+    * calling object.
+    * @param scheme The URL scheme to be obtained.
+    * @return The protocol handler.
+    * @see java.net.URLStreamHandlerFactory#createURLStreamHandler
+    */
+   public URLStreamHandler 
+      createURLStreamHandler(String scheme) {
+      // Make sure that this is for a whois URL
+      if (scheme.equalsIgnoreCase(&quot;whois&quot;)) {
+         // If so, create the handler and return it.
+         return 
+            new ORG.netspace.dwb.protocol.whois.Handler();
+      // Otherwise print an error message and return null.
+      } else {
+         System.err.println(&quot;Unknown protocol: &quot; + scheme);
+         return null;
+      }
+   }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<H3><A NAME="ThemainMethodStartingFetchWhois">
+The main() Method: Starting FetchWhois</A></H3>
+<P>
+The simple <TT>main()</TT> method
+checks to see that the program was invoked properly. It then creates
+a <TT>FetchWhois</TT> object, passing
+it the array of command line arguments.
+<H3><A NAME="TheFetchWhoisConstructorWheretheWorkGetsDone">
+The FetchWhois Constructor: Where the Work Gets Done</A></H3>
+<P>
+The constructor is where the connection to <TT>rs.internic.net</TT>
+is opened through the use of your new protocol handler. The key
+line is where it uses the <TT>setURLSreamHandlerFactory()</TT>
+static method from the URL class. This is where <TT>FetchWhois</TT>
+directs new URL instances to the new WHOIS protocol handler, using
+the <TT>whoisUSHFactory</TT> described
+later.
+<P>
+The constructor uses a <TT>StringBuffer</TT>
+to consolidate the array of command line arguments into a single
+<TT>String</TT>, and then uses the
+static <TT>encode()</TT> method of
+<TT>URLEncoder</TT> to properly format
+the data. Then, it creates an URL object with the new whois URL
+scheme. Finally, it opens a connection to the URL and receives
+the WHOIS data.
+<H3><A NAME="ThewhoisUSHFactoryClassRegisteringtheProtocolHandler">
+The whoisUSHFactory Class: Registering the Protocol Handler
+</A></H3>
+<P>
+The URL class uses a <TT>URLStreamHandlerFactory</TT>
+implementation to choose an appropriate protocol handler. In order
+to use the WHOIS protocol handler, you must implement the <TT>URLStreamHandlerFactory</TT>
+interface. The constructor should take a <TT>String</TT>
+that contains the scheme of the URL object being instantiated.
+<TT>whoisUSHFactory</TT> checks to
+ensure that the scheme is <TT>whois</TT>,
+and if so, returns an instance of the WHOIS <TT>Handler</TT>.
+Otherwise, it returns <TT>null</TT>.
+<H3><A NAME="RunningFetchWhois">
+Running FetchWhois</A></H3>
+<P>
+Compile <TT>FetchWhois</TT> with <TT>javac</TT>
+and then try running it by using the following command. The program
+should print an HTML document that contains the same data as when
+you used the <TT>whois</TT> URL within
+HotJava.
+<BLOCKQUOTE>
+<PRE>
+java FetchWhois internic.net</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+HotJava will soon support dynamically downloaded protocol handlers,
+enabling a much more flexible use of this feature. Manually installing
+these extensions will continue to be a useful alternative.
+<H2><A NAME="MoreonTTFONTSIZEFACECourierURLStreamHandlerFactoryFONTTT"><FONT SIZE=5 COLOR=#FF0000>
+More on <TT>URLStreamHandlerFactory</TT></FONT>
+</A></H2>
+<P>
+The <TT>URLStreamHandlerFactory</TT>
+class is a means of passing out specific protocol handlers for
+each supported protocol handler. In Listing 35.5, you used a custom
+factory called <TT>whoisUSHFactory</TT>.
+This factory supported only one scheme, <TT>whois</TT>.
+However, factories can be much more general, and can support both
+custom protocol handlers and those provided within the JDK.
+<P>
+Listing 35.6 shows another application, <TT>ParseURL</TT>,
+which uses its own <TT>URLStreamHandlerFactory</TT>
+implementation. This application will take a series of URLs, including
+new URL schemes, as command line arguments and then print out
+how the URL class parses them. This demonstrates how the URL class
+deals with different forms of URLs.
+<HR>
+<BLOCKQUOTE>
+<B>Listing 35.6&nbsp;&nbsp;</B><TT><B>ParseURL.java
+<BR>
+</B></TT>
+</BLOCKQUOTE>
+<BLOCKQUOTE>
+<PRE>
+import java.net.*;
+
+/*
+ * This simple application demonstrates how a custom 
+ * URLStreamHandlerFactory can be used to provide custom-
+ * written protocol handlers as well as those within the 
+ * JDK. This program uses a dummy protocol handler so that
+ * it can construct a URL object to unknown protocols and
+ * parse out that URL.
+ * @author David W. Baker
+ * @version 1.0
+ */
+public class ParseURL {
+
+  /**
+   * This method allows ParseURL to be executed as a 
+   * stand-alone application. It takes a series of URLs
+   * as arguments and then prints out the various portions
+   * of those URLs.
+   * @param args The command-line arguments.
+   */
+  public static void main(String[] args) {
+    URL urlToParse;   // We use this to parse each URL.
+    
+    // First, we must use the custom URLStreamHandlerFactory
+    // which is included below.
+    URL.setURLStreamHandlerFactory(new ParseURLFactory());
+    // Go through each command-line argument.
+    for(int index = 0; index &lt; args.length; index++) {
+      try {
+        // Create the URL object.
+        urlToParse = new URL(args[index]);
+        // Print the URL to be parsed.
+        System.out.println(&quot;Parsing URL: &quot; + args[index]);
+        // Print out the various portions of the URL.
+        System.out.println(&quot;\tScheme:\t&quot; + 
+                           urlToParse.getProtocol());
+        System.out.println(&quot;\tHost:\t&quot; + 
+                           urlToParse.getHost());
+        System.out.println(&quot;\tPort:\t&quot; + 
+                           urlToParse.getPort());
+        System.out.println(&quot;\tFile:\t&quot; + 
+                           urlToParse.getFile());
+        System.out.println(&quot;\tRef:\t&quot; + urlToParse.getRef());
+        System.out.println(&quot;==============================&quot;);
+      } catch(MalformedURLException excpt) {
+        // We should catch this exception, but our custom
+        // URLStreamHandlerFactory will ensure such is
+        // never thrown.
+        System.err.println(&quot;Malformed URL: &quot; + args[index]);
+        System.err.println(excpt);
+      }
+    }
+  }
+}
+      
+/**
+ * This custom URLStreamHandlerFactory allows us to create
+ * URL objects that will use the JDK protocol handlers for
+ * known schemes. If the scheme is not one of those within
+ * the JDK, we create an instance of our DummyHandler and 
+ * return that. If this factory returned null instead, 
+ * a MalformedURLException would be thrown for unknown
+ * schemes.
+ */
+class ParseURLFactory implements URLStreamHandlerFactory {
+  public URLStreamHandler createURLStreamHandler(String 
+                                                 scheme) {
+    // First, go through the JDK's protocol handlers for
+    // known URL schemes. All of these protocol handlers
+    // reside within sun.net.www.protocol.&lt;scheme&gt;.
+    if (scheme.equalsIgnoreCase(&quot;http&quot;)) {
+      return new sun.net.www.protocol.http.Handler();
+    }
+    if (scheme.equalsIgnoreCase(&quot;ftp&quot;)) {
+      return new sun.net.www.protocol.ftp.Handler();
+    }
+    if (scheme.equalsIgnoreCase(&quot;gopher&quot;)) {
+      return new sun.net.www.protocol.gopher.Handler();
+    }
+    if (scheme.equalsIgnoreCase(&quot;file&quot;)) {
+      return new sun.net.www.protocol.file.Handler();
+    }
+    if (scheme.equalsIgnoreCase(&quot;mailto&quot;)) {
+      return new sun.net.www.protocol.mailto.Handler();
+    }
+    // If it is none of the above, create an instance of our 
+    // dummy URLStreamHandler.
+    return new DummyHandler();
+  }
+}
+
+/**
+ * This is a dummy protocol handler. This handler will allow
+ * us to create a URL object for this scheme, but we won't
+ * be able to retrieve any data through it.
+ */
+class DummyHandler extends URLStreamHandler {
+  /**
+   * This method will only return null. Data cannot be 
+   * obtained from this handler.
+   * @param u The URL to obtain data from.
+   * @return A null URLConnection.
+   */
+  public URLConnection openConnection(URL u) {
+    return null;
+  }
+}
+</PRE>
+</BLOCKQUOTE>
+<HR>
+<P>
+<TT>ParseURL</TT> also elucidates
+how the <TT>MalformedURLException</TT>
+is created for unknown schemes. If the factory being used with
+your application doesn't return a protocol handler for a scheme,
+any attempt to create an URL instance with such a scheme will
+throw a <TT>MalformedURLException</TT>.
+In <TT>ParseURL</TT>, however, you
+prevent this from occurring so that you can see how new URLs are
+parsed.
+<P>
+<TT>ParseURL</TT> has three classes,
+<TT>ParseURL</TT>, <TT>ParseURLFactory</TT>,
+and <TT>DummyHandler</TT>. The first
+is the only public class and is used to invoke the application.
+The <TT>main()</TT> method within
+the <TT>ParseURL</TT> class sets the
+<TT>URLStreamHandlerFactory</TT> to
+your custom one, <TT>ParseURLFactory</TT>.
+It then iterates through the command line arguments, creating
+URL instances for each and then printing out the portions of each
+URL.
+<P>
+The <TT>ParseURLFactory</TT> is your
+custom factory. It inspects the scheme of the URL instance to
+be created. If the scheme happens to be one of the standard schemes
+supported within the JDK, it returns the corresponding protocol
+handler. All of these protocol handlers within the JDK are contained
+within the package <TT>sun.net.www.protocol.<I>scheme</I></TT>.
+If the <TT>scheme</TT> is not one
+of the standard ones, <TT>ParseURLFactory</TT>
+returns an instance of <TT>DummyHandler</TT>,
+rather than <TT>null</TT>. If <TT>null</TT>
+were returned, a <TT>MalformedURLException</TT>
+would be thrown if you attempted to create any URLs with non-standard
+schemes.
+<P>
+The <TT>DummyHandler</TT> class does
+very little, as its name suggests. This class allows you to create
+URL instances for non-standard schemes. You can then parse such
+URLs with methods like <TT>getHost()</TT>
+and <TT>getFile()</TT> without having
+to create a protocol handler for each new scheme. However, <TT>DummyHandler</TT>
+does not implement any connection mechanism. Thus, you will not
+be able to obtain any data through non-standard URL instances
+that use the <TT>DummyHandler</TT>.
+<P>
+To test your <TT>ParseURL</TT> application,
+first compile it with the Java compiler. Then execute it with
+the Java interpreter with one or more URLs as arguments. For instance,
+invoking it with:
+<BLOCKQUOTE>
+<PRE>
+java ParseURL http://www.yahoo.com/ newscheme:newstuff</FONT>
+</PRE>
+</BLOCKQUOTE>
+<P>
+returns the following information:
+<BLOCKQUOTE>
+<PRE>
+Parsing URL: http://www.yahoo.com/
+        Scheme: http
+        Host:   www.yahoo.com
+        Port:   -1
+        File:   /
+        Ref:    null
+==============================
+Parsing URL: newscheme:newstuff
+        Scheme: newscheme
+        Host:
+        Port:   -1
+        File:   /newstuff
+        Ref:    null
+==============================
+</PRE>
+</BLOCKQUOTE>
+<HR>
+
+<CENTER><P><A HREF="ch34.htm"><IMG SRC="pc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="#CONTENTS"><IMG SRC="cc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="index.htm"><IMG SRC="hb.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<A HREF="ch36.htm"><IMG SRC="nc.gif" BORDER=0 HEIGHT=88 WIDTH=140></A>
+<HR WIDTH="100%"></P></CENTER>
+</BODY>
+</HTML>

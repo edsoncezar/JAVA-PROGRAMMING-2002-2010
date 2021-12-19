@@ -1,0 +1,560 @@
+<HTML>
+
+<HEAD>
+
+
+
+<TITLE>Industrial Strength Java:Thinking in Terms of Threads:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<P><CENTER>
+
+<a href="0518-0521.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0526-0528.html">Next</A>
+
+</CENTER></P>
+
+
+
+<A NAME="PAGENUM-522"><P>Page 522</P></A>
+
+
+
+
+
+<P>object is a member.
+
+</P>
+
+<P>The Thread.stop() method operates by throwing a ThreadDeath object. java.lang.
+
+</P>
+
+
+
+<P>ThreadDeath is not a subclass of Exception but rather of java.lang.Error. ThreadDeath is
+
+a special case of Throwable that generates no error message or stack trace, if it is
+
+not caught. ThreadDeath can be caught in a run() method, though this isn't usually
+
+necessary. If caught, it must be rethrown after handling to ensure that the thread is properly stopped.
+
+</P>
+
+
+
+<P>When a run() method exits a try because of a ThreadDeath (or any other exception),
+
+any applicable &quot;finally&quot; blocks are executed. Throwing a ThreadDeath via stop() is therefore
+
+a safe and preferred way to stop a thread. For example, when an application quits, it
+
+may use stop() on all its running threads. Placing cleanup code in &quot;finally&quot; blocks enables
+
+a threaded object to exit cleanly because the Thread is stopped or because of any
+
+other Exception. Listing 13.13 shows a code outline that catches ThreadDeath and allows
+
+some cleanup to occur before the thread exits.
+
+</P>
+
+
+
+<P>Listing 13.13 Catching ThreadDeath in a run() Method
+
+</P>
+
+
+<PRE>
+
+public void run() {
+
+        try {
+
+                //do work
+
+        }
+
+        catch(ThreadDeath td) {
+
+                //clean up
+
+                throw td; //re-throw ThreadDeath
+
+        }
+
+}
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Exiting run()
+
+</B>
+
+</P>
+
+<P>Instead of explicitly calling stop() to stop a thread, a variable can be used as a flag
+
+(a variable set by some code to indicate to any other code that a particular condition is
+
+true) to request that the run() method should exit at the next convenient point. For example,
+
+a run() method containing a loop might check the flag at the end of each iteration and
+
+jump out of the loop if the flag is set true. The run() method of FileChecksum can easily
+
+be modified to operate this way, as shown in listing 13.14.
+
+</P>
+
+
+
+<A NAME="PAGENUM-523"><P>Page 523</P></A>
+
+
+
+
+
+
+
+<P>Listing 13.14 The FileChecksum run() Method Modified to Stop when a
+
+Flag is Set
+
+</P>
+
+
+
+
+<PRE>
+
+private boolean stopFlag = false;
+
+
+
+public void stopThread() {
+
+        stopFlag = true;
+
+}
+
+
+
+public void run() {
+
+
+
+        //Loop through all of the bytes in the file
+
+        //and generate a checksum.
+
+        try {
+
+                for(int i=0; i&lt;length; i++) {
+
+                        //if the flag is set, exit the
+
+                        //loop (and the run() method).
+
+                        if(stopFlag)
+
+                                break;
+
+                        sum += (long)fis.read();
+
+                }
+
+        }
+
+
+
+        catch(IOException e) { }
+
+
+
+        finally {
+
+                finished = true;
+
+                try {
+
+                        fis.close();
+
+                }
+
+                catch(IOException e) { }
+
+        }
+
+}
+
+</PRE>
+
+
+<P>
+
+<B>
+
+Destroying a Thread
+
+</B>
+
+</P>
+
+<P>One final way to completely stop a thread remains. The
+
+destroy() method, defined in listing 13.15, kills a thread in a non-catchable manner. This is not a safe or usual way to stop
+
+a thread, and it should be used as a last resort. For example, a large Java application with
+
+many threads, one of which detects an irrevocable error, might need to kill off all threads in
+
+the system before halting the Java VM. If some threads catch ThreadDeath and refuse to
+
+respond to stop() calls, the only way to kill those threads is through the destroy() call.
+
+</P>
+
+
+
+<A NAME="PAGENUM-524"><P>Page 524</P></A>
+
+
+
+
+
+
+
+<P>Listing 13.15 The java.lang.Thread destroy() Method
+
+</P>
+
+
+
+
+<PRE>
+
+//Destroy a thread, without any cleanup. A last resort.
+
+public void destroy();
+
+</PRE>
+
+
+
+
+<P>In the java.lang.Thread class, this method just throws
+
+java.lang.NoSuchMethodError. Subclasses of Thread might override destroy() to handle special cases. For example,
+
+a thread that handles a low-level interface to a device driver or allocates native
+
+resources might implement a destroy() method. This ensures a graceful exit for however the thread
+
+is stopped.
+
+</P>
+
+
+
+<H4><A NAME="ch13_ 18">
+
+Waiting for Threads to Die
+
+</A></H4>
+
+
+
+<P>The Thread.join() method is useful when one thread is required to stop() another and
+
+wait until the stop is complete. This method has three forms, as shown in listing 13.16:
+
+</P>
+
+
+
+<P>Listing 13.16 The java.lang.Thread Join Methods
+
+</P>
+
+
+<PRE>
+
+  //wait forever for thread to die
+
+  public final void join() throws InterruptedException
+
+
+
+  //millis is number of milliseconds to wait
+
+  public final synchronized void join(long millis)
+
+          throws InterruptedException;
+
+
+
+  //millis is number of whole milliseconds to wait
+
+  //nanos is more precise specification of time.
+
+  public final synchronized void join(long millis,
+
+                                      int nanos)
+
+          throws InterruptedException;
+
+</PRE>
+
+
+
+
+<P>It's often necessary for one thread to wait for another to complete.
+
+In the case of the FileChecksum example, for instance, a thread
+
+might want to wait until the checksum calculation has completed, which
+
+could be done by calling isAlive() for the other thread, sleeping if it
+
+returns true and then checking again, and repeating this until isAlive()
+
+returns false, indicating that the thread has died. However, Java provides
+
+the join() method to simplify this.
+
+</P>
+
+
+
+<P>The join() method for a Thread object suspends the current thread
+
+until that Thread object dies (isAlive() returns false). For example,
+
+because the thread used in FileChecksum is public, it's easy to use the
+
+stopFlag mechanism and wait for the thread to die, as shown in listing 13.17:<BR>
+
+</P>
+
+<P>
+
+
+
+<CENTER>
+
+<TABLE BGCOLOR="#FFFF99">
+
+<TR><TD><B>
+
+NOTE
+
+</B></TD></TR>
+
+<TR><TD>
+
+<BLOCKQUOTE>
+
+The System.exit() call deserves attention here. When exit()
+
+is called, all running threads are killed and the Java VM
+
+exits. This does not guarantee to call stop() or destroy() or even
+
+to finalize Threads. The bottom line here is that exit() should
+
+only be called in response to a fatal error of
+
+some kind. Even then, it's often preferable to invoke stop() to
+
+stop the entire ThreadGroup hierarchy (see the
+
+later section on Thread Grouping). This enables Threads
+
+to clean up and exit gracefully.
+
+</BLOCKQUOTE></TD></TR>
+
+</TABLE></CENTER>
+
+</P>
+
+
+
+<A NAME="PAGENUM-525"><P>Page 525</P></A>
+
+
+
+
+
+
+
+<P>Listing 13.17 Calling join() on a Thread
+
+</P>
+
+
+<PRE>
+
+FileChecksum fc = new FileChecksum(ourFile);
+
+
+
+//...
+
+
+
+//stop the checksum
+
+fc.stopThread();
+
+fc.thread.join();      //wait for thread to die
+
+</PRE>
+
+
+
+
+<H3><A NAME="ch13_ 19">
+
+Thread Scheduling and Priority
+
+</A></H3>
+
+
+
+<P>The Java VM scheduler can choose any thread in the Running state for execution;
+
+however there are a few simple constraints. When a processor is available to run a thread,
+
+the scheduler chooses one for execution (&quot;schedules&quot; a thread) from among the
+
+eligible Threads, based on their priority.
+
+</P>
+
+
+
+<P>A Thread's priority is defined by an integer value between Thread.MIN_PRIORITY
+
+and Thread.MAX_PRIORITY. Threads are prioritized by calling the setPriority() method
+
+and are read with getPriority(). A newly created thread inherits the priority from the
+
+Thread object of its creator thread. Thread.NORM_PRIORITY is the default priority level.
+
+</P>
+
+
+
+<P>You would set a thread's priority to be larger than NORM_PRIORITY if you intended
+
+that thread to be given more processor time than others. For example, in a
+
+word-processing application that performs background spell checking, a thread that handles user
+
+keystrokes would be given a higher priority than the thread that performs checking so that the
+
+application responds quickly to text being typed and only checks spelling when the user pauses.
+
+</P>
+
+
+
+<P>Also, the Java VM garbage collector is sometimes implemented as a Thread with a
+
+lower-than-normal priority. This is intended to prevent the garbage collector from slowing
+
+the response of the system by taking up processor time at the expense of threads running
+
+at normal priority.
+
+</P>
+
+
+
+<H4><A NAME="ch13_ 20">
+
+Setting and Checking Thread Priority
+
+</A></H4>
+
+
+
+<P>A Thread object's priority is set and checked via these methods:
+
+</P>
+
+
+
+<P>Listing 13.18 java.lang.Thread Methods that Operate on a Thread's Priority
+
+</P>
+
+
+<PRE>
+
+//Set a Thread's priority.  If the newPriority is
+
+//not between MIN_PRIORITY and MAX_PRIORITY (inclusive)
+
+//then throw the exception.
+
+</PRE>
+
+
+<PRE>
+continues
+</PRE>
+
+
+
+
+<P><CENTER>
+
+<a href="0518-0521.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0526-0528.html">Next</A>
+
+</CENTER></P>
+
+
+
+
+
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+
+
+
+
+

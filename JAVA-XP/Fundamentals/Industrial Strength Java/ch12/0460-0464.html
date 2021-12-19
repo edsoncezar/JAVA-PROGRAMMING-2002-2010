@@ -1,0 +1,298 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Industrial Strength Java:Distributed Computing with Java:EarthWeb Inc.-</TITLE>
+
+
+
+
+
+<P><CENTER>
+<a href="0457-0459.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0465-0469.html">Next</A>
+</CENTER></P>
+
+<A NAME="PAGENUM-460"><P>Page 460</P></A>
+
+
+<P>
+of the example, which is purely local, you will see how it is converted into a
+distributed application, with part running on a server machine and part locally. Seeing RMI in
+action should provide a strong basis for the more detailed discussion which follows.
+</P>
+
+<B>
+The Client Interface
+</B>
+
+<P>The example program is a simple address book. A simple GUI client allows
+Address objects to be added, edited, viewed, and removed from the AddressBook. The GUI code
+is trivial; the main panel displays a list of the names whose addresses are stored in
+the address book. The list is used to select an address, and four buttons are used to select
+the action to be performed:
+</P>
+
+<UL>
+<LI>          Add. Displays an empty address dialog box, allowing a new entry to be created.
+<LI>          Edit. Brings up an address dialog box containing the address corresponding to
+the name selected in the list. Fields may be modified, and the resulting address may
+be saved or discarded.
+<LI>          View. Brings up an address dialog box containing the address corresponding to
+the name selected in the list.
+<LI>     Remove. Deletes the address entry for the selected name.
+</UL>
+
+<P>The classes that implement the Address and AddressBook are shown in listing 12.1.
+</P>
+
+<P>Listing 12.1 Implementation of the Local Version of the Address Book
+</P>
+
+<PRE>
+import java.util.*;
+
+class Address {
+    public Address( String iName
+                  , String iStreet
+                  , String iCity
+                  , String iState
+                  , String iPhone) {
+        name   = iName;
+        street = iStreet;
+        city   = iCity;
+        state  = iState;
+        phone  = iPhone;
+    }
+
+    public String getName()  {return name;}
+    public String getStreet(){return street;}
+</PRE>
+
+
+<A NAME="PAGENUM-461"><P>Page 461</P></A>
+
+
+<PRE>
+    public String getCity()  {return city;}
+    public String getState() {return state;}
+    public String getPhone() {return phone;}
+
+    private String name;
+    private String street;
+    private String city;
+    private String state;
+    private String phone;
+}
+
+class AddressBook {
+
+    public AddressBook(){}
+
+    public void add(Address iAddress) {
+        addresses.put(iAddress.getName(), iAddress);
+    }
+
+    public Address getAddress(String name) {
+        return (Address)addresses.get(name);
+    }
+
+    public void delete(String iName) {
+        addresses.remove(iName);
+    }
+
+    public String [] getNames() {
+        int i = 0;
+        String [] array = new String[addresses.size()];
+
+        Enumeration e = addresses.keys();
+        while (e.hasMoreElements()) {
+            array[i] = (String)e.nextElement();
+            i++;
+        }
+        return array;
+    }
+
+    private Hashtable addresses = new Hashtable();
+}
+</PRE>
+
+<P>The essentials of the AddressBook interface are the calls to add and remove entries&#133;
+</P>
+<PRE>
+void add(Address iAddress);
+void delete(String iName);
+</PRE>
+
+<A NAME="PAGENUM-462"><P>Page 462</P></A>
+
+
+
+<P>&#133;plus the calls to enumerate the names stored, and to retrieve a particular address,
+given the name, as follows.
+</P>
+<PRE>
+String [] getNames();
+Address getAddress(String name);
+</PRE>
+
+<P>The AddressBook class is essentially a wrapper for the Hashtable class. The choice of
+a single call to retrieve the list of names rather than an enumeration style call was
+made because the object was destined to become remote. Making a call for each name
+could become quite expensive over a slow network connection. By moving the enumeration
+to the server code, the overhead is avoided  (at the expense of a possible reduction
+in generality). There is no Name class because names are simply stored as strings.
+The structure of the application is shown in figure 12.2.<BR>
+</P>
+
+
+<P><a href="images\ch12fg02.jpg"><img src="images\tn_ch12fg02.jpg"></a><BR>
+Figure 12.2
+The local version of the Address Book application.
+</P>
+
+<P>As with many first attempts at a solution, the structure of the preceding code is not
+ideal. An improvement would be to formalize the expectations of the GUI client with respect
+to the AddressBook class by introducing an abstract interface. Any class that implements
+the interface can then be used with the same GUI. Although not strictly necessary for a
+purely local application, this does improve the structure. Only the operations relevant to the
+client are exposed in the interface. The refined structure is shown in figure 12.3.
+</P>
+
+<P><a href="images\ch12fg03.jpg"><img src="images\tn_ch12fg03.jpg"></a><BR>
+Figure 12.3
+The restructured local address book application.
+</P>
+
+<B>
+Moving AddressBookImpl to the Server
+</B>
+
+<P>RMI provides much of its support for distribution via inheritance. The classes that are
+to be situated on a remote platform inherit from base classes in the RMI package.
+</P>
+
+
+<A NAME="PAGENUM-463"><P>Page 463</P></A>
+
+
+
+<P>The AddressBook interface seen by the client is known as a
+Remote Interface. As such, it must extend java.rmi.Remote, which is itself an interface without any methods.
+The remote AddressBook interface is declared in listing 12.2.
+</P>
+
+<P>Listing 12.2 The AddressBook Remote Interface
+</P>
+<PRE>
+public interface AddressBook extends java.rmi.Remote {
+    void     add (Address iAddress)   throws java.rmi.RemoteException;
+    void     delete (String iName)    throws java.rmi.RemoteException;
+    Address  getAddress (String name) throws java.rmi.RemoteException;
+    String[] getNames ()              throws java.rmi.RemoteException;
+    }
+</PRE>
+
+<P>The main change to note is the addition of the
+&quot;throws remoteException&quot; clauses to each
+of the methods. Users of this interface must handle remote exceptions, or declare that they
+pass them on, so this is one place where the client code requires modification. Note that
+the interface must be public, or the client will be unable to access the remote implementation.
+</P>
+
+<P>Next, the implementation class containing the code has to derive from an RMI class
+which supplies server functionality. We derive from the UnicastRemoteObject class,
+whose resulting structure is shown in figure 12.4.
+</P>
+
+
+<P><a href="images\ch12fg04.jpg"><img src="images\tn_ch12fg04.jpg"></a><BR>
+Figure 12.4
+The resultant structure of the
+UnicastRemoteObject class.
+</P>
+
+<P>By simply changing the derivation of the AddressBook interface and
+AddressBookImpl implementation, much of the server-side work has been done. The remaining server
+side modifications are to add exception clauses methods and to add a main() routine to
+the AddressBookImpl class.
+</P>
+<B>
+Modification to Remote Methods
+</B>
+
+
+<P>The remotely invoked methods must be declared with &quot;throws
+java.rmi.RemoteException&quot; clauses to match the interface. Not so obviously, the constructor must also have such
+a clause, even though the body is empty in the case of the AddressBookImpl class!
+This
+</P>
+
+<A NAME="PAGENUM-464"><P>Page 464</P></A>
+
+
+
+<P>situation occurs because there is an implicit call to the constructor of the
+ UnicastRemoteObject super class (remember that super classes are created first), and
+this might throw the exception.
+</P>
+<B>
+Adding a main() Routine
+</B>
+
+
+<P>The remote version of the address book differs from the original in that
+the AddressBookImpl class is running as a separate process and so must have its own
+main() routine (see listing 12.3). This class is responsible for the following:
+</P>
+
+<UL>
+<LI>          Creating and installing a security manager. The security manager controls
+class loading and must be present for RMI to allow even local classes to be
+loaded. AddressBookImpl uses the default RMISecurityManager class.
+<LI>          Creating an instance of the AddressBookImpl class. When the
+AddressBookImpl instance is created, the UnicastRemoteServer super class starts listening
+for requests to the object on an anonymous TCP port.
+<LI>          Binding the instance to a name. The Naming class binds the instance to a
+name, making it possible for remote clients to obtain a reference to the object in order
+to call its methods. The name is stored in a registry on the server.
+</UL>
+
+<P>Listing 12.3 The New main() Method
+</P>
+<PRE>
+public static void main(String args[]) {
+    System.setSecurityManager(new RMISecurityManager());
+    try {
+        AddressBookImpl impl = new AddressBookImpl();
+        System.out.println(&quot;Binding AddressBook1&quot;);
+        Naming.rebind(&quot;rmi://servername/AddressBook1&quot;, impl);
+        System.out.println(&quot;AddressBook1 available ...&quot;);
+    }
+    catch (Exception e){
+        System.out.println(&quot;AddressBookImpl.main: exception!:&quot;
+                            + e.getMessage());
+        e.printStackTrace();
+    }
+}
+</PRE>
+
+<P>The server is compiled with javac. The final step before running the server is to
+generate the underlying code that supports the remote AddressBook interface. The
+rmic tool performs this function. It is similar to the IDL compiler which is used by RPC to
+generate its stubs, but in this case there is no separate IDL, and the compiler works directly at
+the level of the compiled classes.
+</P>
+<P><CENTER>
+<a href="0457-0459.html">Previous</A> | <a href="..\ewtoc.html">Table of Contents</A> | <a href="0465-0469.html">Next</A>
+</CENTER></P>
+
+
+
+
+
+
+</BODY>
+</HTML>
+
+
+

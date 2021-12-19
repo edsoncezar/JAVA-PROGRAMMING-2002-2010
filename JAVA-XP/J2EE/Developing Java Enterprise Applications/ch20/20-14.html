@@ -1,0 +1,274 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Programming with the Java Messaging Service</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<P>The setQueue method creates a sender for the administered queue with the specified name. Remember that MiniJMS provides the default queues: testqueue and errorqueue.
+</P>
+<PRE>
+    public void setQueue(String name)
+    {
+        Queue queue=null;
+
+        try
+        {
+            messages.removeAllElements();
+
+            if(sender != null) sender.close();
+
+            queue
+             = (Queue) MiniJMSUtils.context.lookup(name);
+
+            sender = session.createSender(queue);
+
+            if((queue == null)
+                ||(sender==null)) throw new Exception();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+    }
+</PRE>
+<P>The sendMessage method is called when the user sends a message. This method creates a TextMessage, sets its contents, and sets the JMSReplyTo field before sending it.
+</P>
+<PRE>
+    public void sendMessage(String text)
+    {
+        TextMessage msg;
+
+        try
+        {
+                <B>msg = session.createTextMessage();
+                msg.setText(text);
+                msg.setJMSReplyTo(tempQ);
+                sender.send(msg);</B>
+        }
+        catch(Exception exp)
+        {
+            JOptionPane.showMessageDialog(this
+                                     ,exp.toString()
+                                     ,&#147;Receive Error&#148;
+                                     ,JOptionPane.ERROR_MESSAGE);
+        }
+    }
+</PRE>
+<P>The onMessage method is called when a message arrives in the temporary queue, indicating a reply to a message.
+</P>
+<PRE>
+    public void onMessage(Message msg)
+    {
+        try
+        {
+            messages.addElement(msg.toString());
+        }
+        catch(Exception exp)
+        {
+            JOptionPane.showMessageDialog(this
+                                     ,exp.toString()
+                                     ,&#147;Send Error&#148;
+                                     ,JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    ... Event Handling Code ...
+</PRE>
+<P>The close method closes the JMS entities and deletes the temporary queue.
+</P>
+<PRE>
+    public void close()
+    {
+        try
+        {
+                <B>tempQ.delete();</B>
+                sender.close();
+            receiver.close();
+            session.close();
+            conn.close();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+        }
+    }
+
+    public static void main(String s[])
+    {
+        ... Create the UI and display it ...
+    }
+}
+</PRE>
+<P>The Echo program is similar to the QueueWatcher example. The main difference is in the run method. This method sends messages to the reply-to field of the messages that it receives. In order to send these messages, the Echo object creates a QueueSender from its session.
+</P>
+<PRE>
+    public void setQueue(String name)
+    {
+        Queue queue=null;
+
+        try
+        {
+            <B>queue
+             = (Queue) MiniJMSUtils.context.lookup(name);
+
+            receiver = session.createReceiver(queue);
+            sender = session.createSender(queue);</B>
+
+            if((queue == null)
+                ||(receiver==null)
+                ||(sender==null)) throw new Exception();
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+
+    }
+
+    public void run()
+    {
+        Message msg;
+        long interval=3000;
+        Queue replyTo;
+        TextMessage newMsg=null;
+
+        while(true)
+        {
+            try
+            {
+                <B>msg = receiver.receive(interval);
+                    newMsg = null;</B>
+
+                if(msg != null)
+                {
+                        <B>replyTo = (Queue) msg.getJMSReplyTo();</B>
+
+                        if(replyTo != null)
+                        {
+                                <B>newMsg = session.createTextMessage();
+                                newMsg.setText(&#147;Reply: &#148;&#43;msg);
+
+                                sender.send(replyTo,newMsg);</B>
+                        }
+
+                    System.out.println(&#147;Message: &#148;&#43;msg);
+                    if(newMsg!=null) System.out.println(newMsg);
+                }
+                else
+                    System.out.println(&#147;No message in &#148;
+                                        &#43;interval&#43;&#147;msec&#148;);
+            }
+            catch(Exception exp)
+            {
+                System.out.println(exp);
+            }
+        }
+    }
+</PRE>
+<P>The complete code for this example is available on the CD-ROM.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading21"></A><FONT COLOR="#000077">The QueueRequester Utility Class</FONT></H4>
+<P>JMS provides a class called QueueRequester that encapsulates the code used to send a message and receive a reply. This requester object creates a temporary queue and handles the message-receiving code. To use the requestor, you create it with a Queue and a QueueSession. Then you use the method:
+</P>
+<PRE>
+public Message request(Message message) throws JMSException
+</PRE>
+<P>to send messages and wait for the reply.
+</P>
+<P>The QueueRequestorTest example on the CD-ROM shows a requester in action. The following to methods from this example show how the requester is used. The remaining code is similar to the ReplyToTest example and creates the same user interface.</P>
+<PRE>
+public void setQueue(String name)
+    {
+        Queue queue=null;
+
+        try
+        {
+            messages.removeAllElements();
+
+            if(requestor != null) requestor.close();
+
+            <B>//requestor closes the session
+            session
+             = conn.createQueueSession(false
+                   ,Session.AUTO_ACKNOWLEDGE);
+
+            queue
+             = (Queue) MiniJMSUtils.context.lookup(name);
+
+            requestor = new QueueRequestor(session,queue);
+
+            if((queue == null)
+                ||(requestor==null)) throw new Exception();</B>
+        }
+        catch(Exception exp)
+        {
+            exp.printStackTrace();
+            System.exit(0);
+        }
+    }
+
+    public void sendMessage(String text)
+    {
+        TextMessage msg;
+
+        try
+        {
+                msg = session.createTextMessage();
+                msg.setText(text);
+
+                <B>msg = (TextMessage) requestor.request(msg);</B>
+
+                messages.addElement(msg.toString());
+
+        }
+        catch(Exception exp)
+        {
+            JOptionPane.showMessageDialog(this
+                                     ,exp.toString()
+                                     ,&#147;Send Error&#148;
+                                     ,JOptionPane.ERROR_MESSAGE);
+        }
+    }
+</PRE>
+<P>Notice that the requester is used synchronously. If no reply occurs, the user will be unable to use the program. In the ReplyToTest example, the user is not waiting for replies before proceeding. The semantics of this send-reply relationship will depend on your application.
+</P>
+<H3><A NAME="Heading22"></A><FONT COLOR="#000077">Publish-Subscribe Messaging with Topics</FONT></H3>
+<P>JMS defines the publish-subscribe messaging model to support situations in which multiple clients want to receive the same set of messages. Publish-subscribe messaging, as defined by JMS, uses the concept of a topic to represent a destination. A <I>topic</I> is a sequence of messages that may or may not be persistent, depending on their delivery mode. Topics are created by an administrator and registered with a JNDI context. Clients can send messages to a topic or receive messages from a topic. Unlike Queues, topics are expected to have multiple subscribers listening for messages.</P>
+<P>Topics are represented by objects that implement the Topic interface. This interface defines a single method:</P>
+<PRE>
+public String getTopicName() throws JMSException
+</PRE>
+<P>that returns the name of the topic. The provider is also expected to override the toString method and return a &#147;pretty&#148; version of the name. Topic is a subinterface of Destination, so a Topic is a full-fledged destination for sending and receiving messages.
+</P><P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="20-13.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="20-15.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,144 @@
+<HTML>
+<HEAD>
+
+
+<TITLE>Developing Java Enterprise Applications:Introduction to Java RMI</TITLE>
+
+
+
+
+
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+<P><BR></P>
+<TABLE WIDTH="100%">
+<TD CAPTION ALIGN="LEFT" COLSPAN="2"><B>Table 13.5</B> java.rmi.Naming Methods
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TH VALIGN="TOP" ALIGN="LEFT" WIDTH="45%">METHOD
+<TH VALIGN="TOP" ALIGN="LEFT" WIDTH="30%">DESCRIPTION
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="45%"><SMALL>public static Remote lookup(String name) Throws NotBoundException, MalformedURLException, RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="30%">Look up a remote object by URL and return it or throw an exception if a problem occurs.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="45%"><SMALL>public static void bind(String name, Remote obj) Throws AlreadyBoundException, MalformedURLException, RemoteException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="30%">Bind an object to a specific URL or throw an exception if a problem occurs.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="45%"><SMALL>public static voidunbind(String name) Throws RemoteException, NotBoundException, MalformedURLException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="30%">Unbind an object from a specific URL or throw an exception if a problem occurs.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="45%"><SMALL>public static void rebind(String name, Remote obj) throws RemoteException, MalformedURLException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="30%">Replace the object currently bound to a URL with a new one.
+<TR>
+<TD COLSPAN="2"><HR>
+<TR>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="45%"><SMALL>public static String[] list(String name) Throws RemoteException, MalformedURLException</SMALL>
+<TD VALIGN="TOP" ALIGN="LEFT" WIDTH="30%">Retrieve a list of the URLs from the registry specified by the URL in the argument.
+<TR>
+<TD COLSPAN="2"><HR>
+</TABLE>
+<H4 ALIGN="LEFT"><A NAME="Heading6"></A><FONT COLOR="#000077">Creating an RMI Application</FONT></H4>
+<P>The general steps for creating a client/server application using Java RMI are as follows:
+</P>
+<DL>
+<DD><B>1.</B>&nbsp;&nbsp;Create and compile a remote object interface that extends java.rmi.Remote.
+<DD><B>2.</B>&nbsp;&nbsp;Implement a server application that contains a remote object class that implements your interface.
+<DD><B>3.</B>&nbsp;&nbsp;Compile the server application and run rmic to generate the necessary stub classes.
+<DD><B>4.</B>&nbsp;&nbsp;Install the class files in a known location, such as your Web server&#146;s classes directory. Actually, RMI doesn&#146;t require the use of a Web server, but this is the preferred mechanism for sharing classes between applications on different machines.
+<DD><B>5.</B>&nbsp;&nbsp;Run rmiregistry on the server machine so that it can manage remote objects.
+<DD><B>6.</B>&nbsp;&nbsp;Run the server application and have it install an instance of the remote object with a unique name in the registry.
+<DD><B>7.</B>&nbsp;&nbsp;Implement a client application that connects to the server and looks up the remote object by name in a remote object registry.
+<DD><B>8.</B>&nbsp;&nbsp;Compile the client application.
+<DD><B>9.</B>&nbsp;&nbsp;Run the client.
+</DL>
+<P>The next few sections show the implementation of several client/server applications.
+</P>
+<H3><A NAME="Heading7"></A><FONT COLOR="#000077">A Simple Client/Server Application</FONT></H3>
+<P>This section walks you through the steps to build a simple client/server application that uses RMI to perform the communication.
+</P>
+<P>The application is implemented in three packages. The client package contains the definition of a client application that allows you to type in string messages on a console, then send the messages to the server. The server package contains the definition of the server implementation that can receive messages from multiple clients, then print them on its console. The message package contains the interface that describes the remote messages the server can receive. The message package is shared by both client and server. Figure 13.2 shows the final directory structure.</P>
+<H4 ALIGN="LEFT"><A NAME="Heading8"></A><FONT COLOR="#000077">Creating the Remote Interface</FONT></H4>
+<P>The first step in building the application is to define the methods or services the remote object will provide to its clients. To do this, create an interface that extends java.rmi.Remote. The Remote interface declares no methods, but it serves to identify interfaces whose methods may be invoked from a non-local virtual machine. Every remote object must directly or indirectly implement this interface. Only methods specified in an interface that extends java.rmi.Remote are available remotely.
+</P>
+<P><A NAME="Fig2"></A><A HREF="images\13-02.jpg"><IMG SRC="images\13-02t.jpg"></A>
+<BR><A HREF="images\13-02.jpg"><FONT COLOR="#000077"><B>Figure 13.2</B></FONT></A>&nbsp;&nbsp;Directory structure.</P>
+<P>Here is the code for the MessageServer interface that is located in the package called message. Every method declared in the interface should throw RemoteException to indicate that it represents a network message. The String SERVER_NAME is the default name that is used to register the server in the registry. It is declared in this class so that the server that implements this interface can register using the name and the client using this interface can find the server using the default name. The interface defines a single remote method called send, which takes two parameters. The parameter name is an identifier of the client so that the server can print the client name. The second parameter is a message that the client wants to display on the server.
+</P>
+<PRE>
+package message;
+
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface MessageServer extends Remote
+{
+    static String SERVER_NAME = &#147;Message_Server&#148;;
+
+    void send(String name, String message)
+     throws RemoteException;
+}
+</PRE>
+<P>To compile this interface, access a command line, change the current directory appropriately, and type:
+</P>
+<PRE>
+javac message/MessageServer.java
+</PRE>
+<P>The class file created will need to be available to the client and server. One way to make the interface available is to put it in a Jar file and add it to the client&#146;s and server&#146;s CLASSPATHs. If the client is an applet, install it in the same directory as the applet or download it using the browser.
+</P>
+<H4 ALIGN="LEFT"><A NAME="Heading9"></A><FONT COLOR="#000077">Implementing the Server</FONT></H4>
+<P>Once the interface is defined, you can create a server called Server.java that implements the MessageServer interface. The code for this discussion is broken down by method. First, let&#146;s look at the class declaration. The class is declared in the server package. It includes the required rmi packages and the message package. The Server listed in the code that follows extends the most common RemoteObject subclass, UnicastRemoteObject.
+</P>
+<PRE>
+package server;
+
+import java.rmi.*;
+import java.rmi.server.*;
+import java.rmi.registry.*;
+import message.*;
+
+public class Server extends UnicastRemoteObject
+                  implements MessageServer
+{
+</PRE>
+<P>The constructor for the remote object must throw RemoteException. This is because it is a subclass of UnicastRemoteObject, which could throw this exception if the remote object could not be created for some reason, such as a stub not being available. The UnicastRemoteObject also registers the server instance with the RMI system upon construction. In the following code example, the constructor of Server simply calls the superclass constructor to perform the necessary network configuration.
+</P>
+<PRE>
+    public Server() throws RemoteException
+    {
+     super();
+    }
+</PRE>
+<P><BR></P>
+<CENTER>
+<TABLE BORDER>
+<TR>
+<TD><A HREF="13-04.html">Previous</A></TD>
+<TD><A HREF="..\ewtoc.html">Table of Contents</A></TD>
+<TD><A HREF="13-06.html">Next</A></TD>
+</TR>
+</TABLE>
+</CENTER>
+
+
+
+
+
+</BODY>
+</HTML>
+
